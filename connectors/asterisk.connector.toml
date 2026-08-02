@@ -10,3 +10,353 @@ base_url = "https://{host}:8089/ari"
 api_version = "22.10.1"
 module = "asterisk.flux"
 operations = ["asterisk-ari-applications-list", "asterisk-ari-asterisk-ping", "asterisk-ari-bridges-list", "asterisk-ari-bridges-create", "asterisk-ari-bridges-destroy", "asterisk-ari-channels-list", "asterisk-ari-channels-originate", "asterisk-ari-channels-hangup", "asterisk-ari-device-states-list", "asterisk-ari-endpoints-list", "asterisk-ari-mailboxes-list", "asterisk-ari-playbacks-get", "asterisk-ari-playbacks-stop", "asterisk-ari-recordings-list-stored", "asterisk-ari-sounds-list", "asterisk-ari-applications-get", "asterisk-ari-applications-filter", "asterisk-ari-applications-subscribe", "asterisk-ari-applications-unsubscribe", "asterisk-ari-asterisk-get-object", "asterisk-ari-asterisk-update-object", "asterisk-ari-asterisk-delete-object", "asterisk-ari-asterisk-get-info", "asterisk-ari-asterisk-list-log-channels", "asterisk-ari-asterisk-add-log", "asterisk-ari-asterisk-delete-log", "asterisk-ari-asterisk-rotate-log", "asterisk-ari-asterisk-list-modules", "asterisk-ari-asterisk-get-module", "asterisk-ari-asterisk-load-module", "asterisk-ari-asterisk-reload-module", "asterisk-ari-asterisk-unload-module", "asterisk-ari-asterisk-get-global-var", "asterisk-ari-asterisk-set-global-var", "asterisk-ari-bridges-get", "asterisk-ari-bridges-create-with-id", "asterisk-ari-bridges-add-channel", "asterisk-ari-bridges-start-moh", "asterisk-ari-bridges-stop-moh", "asterisk-ari-bridges-play", "asterisk-ari-bridges-play-with-id", "asterisk-ari-bridges-record", "asterisk-ari-bridges-remove-channel", "asterisk-ari-bridges-get-bridge-var", "asterisk-ari-bridges-set-bridge-var", "asterisk-ari-bridges-get-bridge-vars", "asterisk-ari-bridges-set-bridge-vars", "asterisk-ari-bridges-clear-video-source", "asterisk-ari-bridges-set-video-source", "asterisk-ari-channels-create", "asterisk-ari-channels-external-media", "asterisk-ari-channels-get", "asterisk-ari-channels-originate-with-id", "asterisk-ari-channels-answer", "asterisk-ari-channels-continue-in-dialplan", "asterisk-ari-channels-dial", "asterisk-ari-channels-send-dtmf", "asterisk-ari-channels-hold", "asterisk-ari-channels-unhold", "asterisk-ari-channels-start-moh", "asterisk-ari-channels-stop-moh", "asterisk-ari-channels-move", "asterisk-ari-channels-mute", "asterisk-ari-channels-unmute", "asterisk-ari-channels-play", "asterisk-ari-channels-play-with-id", "asterisk-ari-channels-progress", "asterisk-ari-channels-record", "asterisk-ari-channels-redirect", "asterisk-ari-channels-ring", "asterisk-ari-channels-ring-stop", "asterisk-ari-channels-rtpstatistics", "asterisk-ari-channels-start-silence", "asterisk-ari-channels-stop-silence", "asterisk-ari-channels-snoop-channel", "asterisk-ari-channels-snoop-channel-with-id", "asterisk-ari-channels-transfer_progress", "asterisk-ari-channels-get-channel-var", "asterisk-ari-channels-set-channel-var", "asterisk-ari-channels-get-channel-vars", "asterisk-ari-channels-set-channel-vars", "asterisk-ari-device-states-get", "asterisk-ari-device-states-update", "asterisk-ari-device-states-delete", "asterisk-ari-endpoints-refer", "asterisk-ari-endpoints-send-message", "asterisk-ari-endpoints-list-by-tech", "asterisk-ari-endpoints-get", "asterisk-ari-endpoints-refer-to-endpoint", "asterisk-ari-endpoints-send-message-to-endpoint", "asterisk-ari-events-claim-channel", "asterisk-ari-events-user-event", "asterisk-ari-mailboxes-get", "asterisk-ari-mailboxes-update", "asterisk-ari-mailboxes-delete", "asterisk-ari-playbacks-control", "asterisk-ari-recordings-get-live", "asterisk-ari-recordings-cancel", "asterisk-ari-recordings-mute", "asterisk-ari-recordings-unmute", "asterisk-ari-recordings-pause", "asterisk-ari-recordings-unpause", "asterisk-ari-recordings-stop", "asterisk-ari-recordings-get-stored", "asterisk-ari-recordings-delete-stored", "asterisk-ari-recordings-copy-stored", "asterisk-ari-recordings-get-stored-file", "asterisk-ari-sounds-get"]
+
+[[auth]]
+name = "asterisk.password"
+scheme = "basic"
+env = ["ASTERISK_ARI_PASSWORD"]
+user_env = ["ASTERISK_ARI_USERNAME"]
+description = "Asterisk ARI Basic authentication password, paired with the deployment's ARI username"
+
+[[default_auth]]
+credentials = ["asterisk.password"]
+
+[[config]]
+name = "host"
+label = "Asterisk host"
+help = "The hostname of the TLS-enabled Asterisk HTTP service without a scheme, port, or `/ari`"
+example = "pbx.example.com"
+binds = "endpoint.host"
+
+[[config]]
+name = "username"
+label = "ARI username"
+help = "The username configured for ARI in Asterisk's `ari.conf`"
+example = "flux"
+binds = "username.asterisk.password"
+
+[[config]]
+name = "password"
+label = "ARI password"
+help = "The password configured beside the ARI username in Asterisk's `ari.conf`"
+format = "token"
+secret = true
+binds = "credential.asterisk.password"
+
+[[config]]
+name = "app"
+label = "Stasis application"
+help = "The ARI Stasis application whose events this connection receives"
+example = "flux"
+binds = "channel.ari-events.query.app"
+
+[[config]]
+name = "subscribe_all"
+label = "Subscribe to all applications"
+help = "Whether ARI should deliver events for every application instead of only the named Stasis application"
+example = "false"
+required = false
+default = "false"
+binds = "channel.ari-events.query.subscribeAll"
+
+[[events]]
+name = "device-state-changed"
+wire_value = "DeviceStateChanged"
+oip = "org.asterisk.ari:22.10.1#device-state-changed"
+description = "Notification that a device state has changed."
+
+[[events]]
+name = "playback-started"
+wire_value = "PlaybackStarted"
+oip = "org.asterisk.ari:22.10.1#playback-started"
+description = "Event showing the start of a media playback operation."
+
+[[events]]
+name = "playback-continuing"
+wire_value = "PlaybackContinuing"
+oip = "org.asterisk.ari:22.10.1#playback-continuing"
+description = "Event showing the continuation of a media playback operation from one media URI to the next in the list."
+
+[[events]]
+name = "playback-finished"
+wire_value = "PlaybackFinished"
+oip = "org.asterisk.ari:22.10.1#playback-finished"
+description = "Event showing the completion of a media playback operation."
+
+[[events]]
+name = "recording-started"
+wire_value = "RecordingStarted"
+oip = "org.asterisk.ari:22.10.1#recording-started"
+description = "Event showing the start of a recording operation."
+
+[[events]]
+name = "recording-finished"
+wire_value = "RecordingFinished"
+oip = "org.asterisk.ari:22.10.1#recording-finished"
+description = "Event showing the completion of a recording operation."
+
+[[events]]
+name = "recording-failed"
+wire_value = "RecordingFailed"
+oip = "org.asterisk.ari:22.10.1#recording-failed"
+description = "Event showing failure of a recording operation."
+
+[[events]]
+name = "application-move-failed"
+wire_value = "ApplicationMoveFailed"
+oip = "org.asterisk.ari:22.10.1#application-move-failed"
+description = "Notification that trying to move a channel to another Stasis application failed."
+
+[[events]]
+name = "application-registered"
+wire_value = "ApplicationRegistered"
+oip = "org.asterisk.ari:22.10.1#application-registered"
+description = "Notification that a Stasis app has been registered."
+
+[[events]]
+name = "application-unregistered"
+wire_value = "ApplicationUnregistered"
+oip = "org.asterisk.ari:22.10.1#application-unregistered"
+description = "Notification that a Stasis app has been unregistered."
+
+[[events]]
+name = "application-replaced"
+wire_value = "ApplicationReplaced"
+oip = "org.asterisk.ari:22.10.1#application-replaced"
+description = """
+Notification that another WebSocket has taken over for an application.
+
+An application may only be subscribed to by a single WebSocket at a time. If multiple WebSockets attempt to subscribe to the same application, the newer WebSocket wins, and the older one receives this event."""
+
+[[events]]
+name = "bridge-created"
+wire_value = "BridgeCreated"
+oip = "org.asterisk.ari:22.10.1#bridge-created"
+description = "Notification that a bridge has been created."
+
+[[events]]
+name = "bridge-destroyed"
+wire_value = "BridgeDestroyed"
+oip = "org.asterisk.ari:22.10.1#bridge-destroyed"
+description = "Notification that a bridge has been destroyed."
+
+[[events]]
+name = "bridge-merged"
+wire_value = "BridgeMerged"
+oip = "org.asterisk.ari:22.10.1#bridge-merged"
+description = "Notification that one bridge has merged into another."
+
+[[events]]
+name = "bridge-blind-transfer"
+wire_value = "BridgeBlindTransfer"
+oip = "org.asterisk.ari:22.10.1#bridge-blind-transfer"
+description = "Notification that a blind transfer has occurred."
+
+[[events]]
+name = "bridge-attended-transfer"
+wire_value = "BridgeAttendedTransfer"
+oip = "org.asterisk.ari:22.10.1#bridge-attended-transfer"
+description = "Notification that an attended transfer has occurred."
+
+[[events]]
+name = "bridge-video-source-changed"
+wire_value = "BridgeVideoSourceChanged"
+oip = "org.asterisk.ari:22.10.1#bridge-video-source-changed"
+description = "Notification that the source of video in a bridge has changed."
+
+[[events]]
+name = "channel-created"
+wire_value = "ChannelCreated"
+oip = "org.asterisk.ari:22.10.1#channel-created"
+description = "Notification that a channel has been created."
+
+[[events]]
+name = "channel-destroyed"
+wire_value = "ChannelDestroyed"
+oip = "org.asterisk.ari:22.10.1#channel-destroyed"
+description = "Notification that a channel has been destroyed."
+
+[[events]]
+name = "channel-entered-bridge"
+wire_value = "ChannelEnteredBridge"
+oip = "org.asterisk.ari:22.10.1#channel-entered-bridge"
+description = "Notification that a channel has entered a bridge."
+
+[[events]]
+name = "channel-left-bridge"
+wire_value = "ChannelLeftBridge"
+oip = "org.asterisk.ari:22.10.1#channel-left-bridge"
+description = "Notification that a channel has left a bridge."
+
+[[events]]
+name = "channel-state-change"
+wire_value = "ChannelStateChange"
+oip = "org.asterisk.ari:22.10.1#channel-state-change"
+description = "Notification of a channel's state change."
+
+[[events]]
+name = "channel-dtmf-received"
+wire_value = "ChannelDtmfReceived"
+oip = "org.asterisk.ari:22.10.1#channel-dtmf-received"
+description = """
+DTMF received on a channel.
+
+This event is sent when the DTMF ends. There is no notification about the start of DTMF"""
+
+[[events]]
+name = "channel-dialplan"
+wire_value = "ChannelDialplan"
+oip = "org.asterisk.ari:22.10.1#channel-dialplan"
+description = "Channel changed location in the dialplan."
+
+[[events]]
+name = "channel-caller-id"
+wire_value = "ChannelCallerId"
+oip = "org.asterisk.ari:22.10.1#channel-caller-id"
+description = "Channel changed Caller ID."
+
+[[events]]
+name = "channel-userevent"
+wire_value = "ChannelUserevent"
+oip = "org.asterisk.ari:22.10.1#channel-userevent"
+description = "User-generated event with additional user-defined fields in the object."
+
+[[events]]
+name = "channel-hangup-request"
+wire_value = "ChannelHangupRequest"
+oip = "org.asterisk.ari:22.10.1#channel-hangup-request"
+description = "A hangup was requested on the channel."
+
+[[events]]
+name = "channel-varset"
+wire_value = "ChannelVarset"
+oip = "org.asterisk.ari:22.10.1#channel-varset"
+description = "Channel variable changed."
+
+[[events]]
+name = "channel-tone-detected"
+wire_value = "ChannelToneDetected"
+oip = "org.asterisk.ari:22.10.1#channel-tone-detected"
+description = "Tone was detected on the channel."
+
+[[events]]
+name = "channel-talking-started"
+wire_value = "ChannelTalkingStarted"
+oip = "org.asterisk.ari:22.10.1#channel-talking-started"
+description = "Talking was detected on the channel."
+
+[[events]]
+name = "channel-talking-finished"
+wire_value = "ChannelTalkingFinished"
+oip = "org.asterisk.ari:22.10.1#channel-talking-finished"
+description = "Talking is no longer detected on the channel."
+
+[[events]]
+name = "channel-hold"
+wire_value = "ChannelHold"
+oip = "org.asterisk.ari:22.10.1#channel-hold"
+description = "A channel initiated a media hold."
+
+[[events]]
+name = "channel-unhold"
+wire_value = "ChannelUnhold"
+oip = "org.asterisk.ari:22.10.1#channel-unhold"
+description = "A channel initiated a media unhold."
+
+[[events]]
+name = "contact-status-change"
+wire_value = "ContactStatusChange"
+oip = "org.asterisk.ari:22.10.1#contact-status-change"
+description = "The state of a contact on an endpoint has changed."
+
+[[events]]
+name = "endpoint-state-change"
+wire_value = "EndpointStateChange"
+oip = "org.asterisk.ari:22.10.1#endpoint-state-change"
+description = "Endpoint state changed."
+
+[[events]]
+name = "dial"
+wire_value = "Dial"
+oip = "org.asterisk.ari:22.10.1#dial"
+description = "Dialing state has changed."
+
+[[events]]
+name = "stasis-end"
+wire_value = "StasisEnd"
+oip = "org.asterisk.ari:22.10.1#stasis-end"
+description = "Notification that a channel has left a Stasis application."
+
+[[events]]
+name = "stasis-start"
+wire_value = "StasisStart"
+oip = "org.asterisk.ari:22.10.1#stasis-start"
+description = "Notification that a channel has entered a Stasis application."
+
+[[events]]
+name = "text-message-received"
+wire_value = "TextMessageReceived"
+oip = "org.asterisk.ari:22.10.1#text-message-received"
+description = "A text message was received from an endpoint."
+
+[[events]]
+name = "channel-connected-line"
+wire_value = "ChannelConnectedLine"
+oip = "org.asterisk.ari:22.10.1#channel-connected-line"
+description = "Channel changed Connected Line."
+
+[[events]]
+name = "peer-status-change"
+wire_value = "PeerStatusChange"
+oip = "org.asterisk.ari:22.10.1#peer-status-change"
+description = "The state of a peer associated with an endpoint has changed."
+
+[[events]]
+name = "channel-transfer"
+wire_value = "ChannelTransfer"
+oip = "org.asterisk.ari:22.10.1#channel-transfer"
+description = "transfer on a channel."
+
+[[events]]
+name = "rest-response"
+wire_value = "RESTResponse"
+oip = "org.asterisk.ari:22.10.1#rest-response"
+description = "REST over Websocket Response."
+
+[[events]]
+name = "call-broadcast"
+wire_value = "CallBroadcast"
+oip = "org.asterisk.ari:22.10.1#call-broadcast"
+description = "Notification that a channel is being broadcast to ARI applications for claiming."
+
+[[events]]
+name = "call-claimed"
+wire_value = "CallClaimed"
+oip = "org.asterisk.ari:22.10.1#call-claimed"
+description = "Notification that a broadcast channel has been successfully claimed by an ARI application."
+
+[[channels]]
+name = "ari-events"
+oip = "org.asterisk.ari:22.10.1#ari-events"
+description = "Receive the complete stream of events for an ARI Stasis application"
+transport = "socket"
+events = ["device-state-changed", "playback-started", "playback-continuing", "playback-finished", "recording-started", "recording-finished", "recording-failed", "application-move-failed", "application-registered", "application-unregistered", "application-replaced", "bridge-created", "bridge-destroyed", "bridge-merged", "bridge-blind-transfer", "bridge-attended-transfer", "bridge-video-source-changed", "channel-created", "channel-destroyed", "channel-entered-bridge", "channel-left-bridge", "channel-state-change", "channel-dtmf-received", "channel-dialplan", "channel-caller-id", "channel-userevent", "channel-hangup-request", "channel-varset", "channel-tone-detected", "channel-talking-started", "channel-talking-finished", "channel-hold", "channel-unhold", "contact-status-change", "endpoint-state-change", "dial", "stasis-end", "stasis-start", "text-message-received", "channel-connected-line", "peer-status-change", "channel-transfer", "rest-response", "call-broadcast", "call-claimed"]
+payload_root = true
+
+[channels.connect]
+path = "/events"
+
+[channels.connect.query]
+app = "{app}"
+subscribeAll = "{subscribe_all}"
+
+[[channels.connect.auth]]
+credentials = ["asterisk.password"]
+
+[channels.verification]
+kind = "connection"
+verified = true
+
+[channels.discriminator]
+source = "body"
+name = "type"

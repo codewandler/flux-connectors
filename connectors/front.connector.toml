@@ -8,3 +8,21 @@ runtime = "http"
 base_url = "https://api2.frontapp.com"
 module = "front.flux"
 operations = ["front-verify", "front-conversation-list", "front-conversation-get", "front-conversation-message-list", "front-conversation-reply", "front-conversation-tag-add"]
+
+[[auth]]
+name = "front.api_token"
+scheme = "bearer"
+env = ["FRONT_API_TOKEN"]
+description = "Front API token sent as a bearer"
+
+[[default_auth]]
+credentials = ["front.api_token"]
+
+[[config]]
+name = "api_token"
+label = "API token"
+help = "In Front, open Settings → API & Integrations → API, and create a new token. A token is scoped to the teammate who creates it and to the scopes granted when it is created — replying and tagging require write scopes, not just read ones"
+format = "token"
+secret = true
+docs_url = "https://dev.frontapp.com/docs/authentication"
+binds = "credential.front.api_token"

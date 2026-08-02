@@ -10,3 +10,29 @@ base_url = "https://api.bitbucket.org/2.0"
 api_version = "2.0"
 module = "bitbucket.flux"
 operations = ["bitbucket-repository-list", "bitbucket-repository-get", "bitbucket-pull-request-list", "bitbucket-pull-request-get", "bitbucket-pull-request-create", "bitbucket-pull-request-comment", "bitbucket-pull-request-approve"]
+
+[[auth]]
+name = "bitbucket.access_token"
+scheme = "bearer"
+env = ["BITBUCKET_ACCESS_TOKEN"]
+description = "Bitbucket Cloud Access Token, sent as a bearer token. A Workspace Access Token is valid for exactly one workspace, which is the same boundary this connector's pinned `workspace` describes; scope it to repository:read plus pullrequest:write for the writes below"
+
+[[default_auth]]
+credentials = ["bitbucket.access_token"]
+
+[[config]]
+name = "access_token"
+label = "Bitbucket access token"
+help = "Create one in the workspace's settings under Security -> Access tokens -> Create Workspace Access Token, with the Repositories: Read and Pull requests: Write scopes. Bitbucket shows the token once. Create it in the same workspace you name below, so the token reaches no further than this connection does"
+format = "token"
+secret = true
+docs_url = "https://support.atlassian.com/bitbucket-cloud/docs/using-access-tokens/"
+binds = "credential.bitbucket.access_token"
+
+[[config]]
+name = "workspace"
+label = "Bitbucket workspace"
+help = "The workspace this connection manages, as its slug — the single path segment right after bitbucket.org/ in any of its URLs. In https://bitbucket.org/acme-engineering/widget-service the workspace is acme-engineering, not acme-engineering/widget-service and not the full URL. Find it under Workspace settings -> Overview. One connection manages one workspace"
+example = "acme-engineering"
+docs_url = "https://support.atlassian.com/bitbucket-cloud/docs/what-is-a-workspace/"
+binds = "path.workspace"

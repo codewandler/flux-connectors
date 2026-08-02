@@ -10,3 +10,12 @@ base_url = "https://{domain}/api/v2"
 api_version = "v2"
 module = "freshdesk.flux"
 operations = ["freshdesk-test", "freshdesk-ticket-list", "freshdesk-ticket-get", "freshdesk-ticket-create", "freshdesk-ticket-update", "freshdesk-ticket-note-add", "freshdesk-contact-list", "freshdesk-contact-get", "freshdesk-contact-create"]
+
+[[config]]
+name = "domain"
+label = "Freshdesk domain"
+help = "Your full Freshdesk host, as it appears in the address bar — `acme.freshdesk.com`, including the `.freshdesk.com` part"
+example = "acme.freshdesk.com"
+format = "hostname"
+docs_url = "https://support.freshdesk.com/en/support/solutions/articles/50000004820"
+binds = "endpoint.domain"

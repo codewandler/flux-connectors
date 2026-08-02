@@ -10,3 +10,30 @@ base_url = "https://{dc}.api.mailchimp.com/3.0"
 api_version = "3.0"
 module = "mailchimp.flux"
 operations = ["mailchimp-ping", "mailchimp-audience-list", "mailchimp-audience-get", "mailchimp-audience-member-list", "mailchimp-audience-member-get", "mailchimp-audience-member-upsert", "mailchimp-campaign-list"]
+
+[[auth]]
+name = "mailchimp.api_key"
+scheme = "bearer"
+env = ["MAILCHIMP_API_KEY"]
+description = "Mailchimp Marketing API key, granting whatever the account that issued it can do. Travels as `Authorization: Bearer <key>`, the alternative Mailchimp documents beside its Basic form. The key's trailing `-us14`-style suffix names the account's datacentre; that value is asked for separately as configuration and is never read back out of this credential"
+
+[[default_auth]]
+credentials = ["mailchimp.api_key"]
+
+[[config]]
+name = "server_prefix"
+label = "Mailchimp datacentre"
+help = "The short region code in front of `api.mailchimp.com` for your account, like us14 or us6. Find it three ways, whichever is easiest: it is the first part of the URL on your Mailchimp API keys page; it is the last part of your API key, after the final - character; or, on an OAuth connection, the OAuth metadata endpoint returns it. Enter the code alone, not a full URL"
+example = "us14"
+format = "subdomain"
+docs_url = "https://mailchimp.com/developer/marketing/docs/fundamentals/"
+binds = "endpoint.dc"
+
+[[config]]
+name = "api_key"
+label = "Mailchimp API key"
+help = "Generate one under Account & billing, Extras, API keys in your Mailchimp account. It grants everything your Mailchimp user can do, so treat it as a password. Copy the datacentre code above from the same page before you leave it"
+format = "token"
+secret = true
+docs_url = "https://mailchimp.com/developer/marketing/guides/quick-start/"
+binds = "credential.mailchimp.api_key"

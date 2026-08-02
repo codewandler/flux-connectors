@@ -570,7 +570,7 @@ pub(crate) enum Slot {
 
 impl Slot {
     /// The word a refusal calls this position by.
-    fn word(self) -> &'static str {
+    pub(crate) fn word(self) -> &'static str {
         match self {
             Self::Host => "host",
             Self::Path => "path segment",
@@ -611,7 +611,7 @@ impl Slot {
     /// # Errors
     ///
     /// The reason, phrased for the operator who supplied the value.
-    fn validate(self, value: &str) -> Result<String, String> {
+    pub(crate) fn validate(self, value: &str) -> Result<String, String> {
         if value.trim().is_empty() {
             return Err("a configuration value must not be empty or all whitespace".to_owned());
         }

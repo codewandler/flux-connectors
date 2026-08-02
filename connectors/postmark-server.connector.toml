@@ -9,3 +9,24 @@ runtime = "http"
 base_url = "https://api.postmarkapp.com"
 module = "postmark-server.flux"
 operations = ["postmark-email-send", "postmark-deliverystats-get", "postmark-bounce-list", "postmark-bounce-get"]
+
+[[auth]]
+name = "postmark.server_token"
+env = ["POSTMARK_SERVER_TOKEN"]
+description = "Postmark Server API token, scoped to one server. Authenticates sending and that server's own message history; cannot list or manage servers"
+
+[auth.scheme.header]
+name = "X-Postmark-Server-Token"
+
+[[default_auth]]
+credentials = ["postmark.server_token"]
+
+[[config]]
+name = "server_token"
+service = "server"
+label = "Postmark Server Token"
+help = "Find it on the server's API Tokens tab in the Postmark dashboard. Grants sending and that server's own message history only — it cannot list or manage servers"
+format = "token"
+secret = true
+docs_url = "https://postmarkapp.com/support/article/1008-what-are-the-account-server-api-tokens"
+binds = "credential.postmark.server_token"

@@ -43,7 +43,33 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ir::{default_service, is_default_service, JsonSchema};
+use crate::{
+    ir::{default_service, is_default_service, JsonSchema},
+    AuthRequirement,
+};
+
+/// The declarative RFC 6455 handshake for a [`Transport::Socket`] binding.
+///
+/// Every value is inert data. A host may turn it into a prepared plan, but this crate never resolves
+/// a host, reads a credential or opens a socket.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SocketConnectSpec {
+    /// A path relative to the binding service's `base_url`.
+    pub path: String,
+    /// Query parameter name → fixed value or `{configuration_field}` template.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub query: BTreeMap<String, String>,
+    /// Fixed, non-secret request headers. Handshake-owned and authentication headers are refused.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub headers: BTreeMap<String, String>,
+    /// Authentication alternatives, with the same AND/OR meaning as operation authentication.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub auth: Vec<AuthRequirement>,
+    /// WebSocket subprotocols, in preference order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subprotocols: Vec<String>,
+}
 
 /// How an inbound event reaches flux.
 ///
@@ -264,6 +290,9 @@ pub struct EventDecl {
     /// The event name, e.g. `issues.opened`. Unique across **all three member kinds** of its service,
     /// and the label a flux `trigger { on = … }` matches.
     pub name: String,
+    /// The exact value carried by the binding discriminator when it differs from [`name`](Self::name).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wire_value: Option<String>,
     /// The [`Service`](crate::Service) this event belongs to — exactly one, always a concrete name,
     /// with the same reasoning [`Operation::service`](crate::Operation::service) records.
     #[serde(
@@ -389,6 +418,12 @@ pub struct ChannelBinding {
     pub description: String,
     /// How events reach flux.
     pub transport: Transport,
+    /// The generic RFC 6455 handshake, valid only for [`Transport::Socket`].
+    ///
+    /// Socket bindings without this block are vendor-specific transports such as Slack Socket Mode
+    /// and remain the consuming runtime's explicit responsibility.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connect: Option<SocketConnectSpec>,
     /// The [`EventDecl`] names this binding carries, all from the same service.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub events: Vec<String>,
@@ -421,6 +456,9 @@ pub struct ChannelBinding {
     /// request bodies. One path grammar in the repository, not two.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub payload: BTreeMap<String, String>,
+    /// Deliver the complete decoded JSON event rather than projecting fields from it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub payload_root: bool,
     /// The operation that answers an event on this binding, if any.
     ///
     /// Absent for a fire-and-forget binding — a poll, or a webhook whose vendor expects only a 200.
@@ -505,6 +543,10 @@ fn default_selected() -> bool {
 /// `skip_serializing_if` for [`EventDecl::default`], so the common case adds nothing to the encoding.
 fn is_true(value: &bool) -> bool {
     *value
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// The placeholders [`HmacSpec::signed`] may interpolate.

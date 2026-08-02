@@ -11,3 +11,12 @@ base_url = "https://services.babelforce.com"
 api_version = "v3"
 module = "babelforce-task-schedule.flux"
 operations = ["babelforce-get-task-schedules", "babelforce-submit-task-schedule", "babelforce-get-task-schedule", "babelforce-delete-schedule-task"]
+
+[[auth]]
+name = "babelforce.access_token"
+scheme = "bearer"
+env = ["BABELFORCE_ACCESS_TOKEN"]
+description = "SSO-issued babelforce access token, minted outside flux and supplied through the environment"
+
+[[default_auth]]
+credentials = ["babelforce.access_token"]

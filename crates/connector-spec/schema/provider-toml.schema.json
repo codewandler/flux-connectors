@@ -114,6 +114,10 @@
           "type": "string",
           "description": "The event name, in the vendor's own spelling — `issues.opened`, `app_mention`. Lowercase ASCII letters, digits, `-`, `_` and `.`; wider than an operation id because nothing is emitted for an event, so it need not be a declarable Flux symbol. This is the label a flux `trigger { on = … }` matches."
         },
+        "wire_value": {
+          "type": "string",
+          "description": "The exact discriminator value carried on the wire when it differs from the stable local event name."
+        },
         "service": {
           "type": "string",
           "description": "The `[[services]]` entry this event belongs to. Omit it for a provider with a single API surface."
@@ -161,6 +165,10 @@
           "description": "What the binding is for, in one line."
         },
         "transport": { "$ref": "#/$defs/transport" },
+        "connect": {
+          "$ref": "#/$defs/socketConnect",
+          "description": "The generic RFC 6455 handshake. Valid only for socket transport; absence leaves an explicitly vendor-specific transport such as Slack Socket Mode."
+        },
         "events": {
           "type": "array",
           "description": "The `[[events]]` names this binding carries, all from its own service. Required for `webhook` and `socket`; a `poll` binding may omit them, because its `cursor` operation is what it carries.",
@@ -183,6 +191,10 @@
           "description": "Flow symbol → dotted source path into the inbound envelope. Keys are what a journey reads (`$text`) and must be snake case; values address the vendor's envelope with the same dotted grammar `wire` uses for request bodies.",
           "additionalProperties": { "type": "string" }
         },
+        "payload_root": {
+          "type": "boolean",
+          "description": "Deliver the complete decoded JSON event. Mutually exclusive with a payload field projection."
+        },
         "reply": {
           "$ref": "#/$defs/reply",
           "description": "The operation that answers an event on this binding. Omit for a fire-and-forget binding."
@@ -202,6 +214,40 @@
         "interval": {
           "type": "string",
           "description": "The suggested poll interval (`5m`), for `poll` only. Advisory: the operator writes the actual schedule in their own program, and flux's cron drops ticks across a restart."
+        }
+      }
+    },
+
+    "socketConnect": {
+      "type": "object",
+      "title": "A declarative RFC 6455 handshake",
+      "description": "Inert socket connection facts. The service base URL owns the authority; this block adds only a relative path, query parameters, fixed public headers, existing connector auth requirements and optional subprotocols.",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "A path rooted at and resolved against the binding service base URL."
+        },
+        "query": {
+          "type": "object",
+          "description": "Query parameter name to a fixed literal or a {configuration_field} template.",
+          "additionalProperties": { "type": "string" }
+        },
+        "headers": {
+          "type": "object",
+          "description": "Fixed non-secret headers. Handshake-owned and authentication headers are refused.",
+          "additionalProperties": { "type": "string" }
+        },
+        "auth": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/authRequirement" },
+          "description": "Authentication alternatives with the same OR-of-AND meaning as operation auth."
+        },
+        "subprotocols": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "WebSocket subprotocol tokens in preference order."
         }
       }
     },
@@ -399,6 +445,10 @@
         "required": {
           "type": "boolean",
           "description": "Whether the connector cannot function without it. Defaults to true: a connector declaring a field it does not need is the rarer case, and the safe default is to ask."
+        },
+        "default": {
+          "type": "string",
+          "description": "A literal sent when an optional value is absent. Refused for required or secret fields and validated like a supplied value."
         },
         "secret": {
           "type": "boolean",

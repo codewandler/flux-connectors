@@ -10,3 +10,21 @@ base_url = "https://api.sendgrid.com"
 api_version = "v3"
 module = "sendgrid.flux"
 operations = ["sendgrid-template-list", "sendgrid-template-get", "sendgrid-suppression-bounce-list", "sendgrid-email-validate"]
+
+[[auth]]
+name = "sendgrid.api_key"
+scheme = "bearer"
+env = ["SENDGRID_API_KEY"]
+description = "SendGrid API key sent as a bearer"
+
+[[default_auth]]
+credentials = ["sendgrid.api_key"]
+
+[[config]]
+name = "api_key"
+label = "SendGrid API key"
+help = "Create one under Settings → API Keys in the SendGrid dashboard. Restrict it to only the scopes this connector needs — Mail Send is unnecessary, since this connector never sends mail"
+format = "token"
+secret = true
+docs_url = "https://www.twilio.com/docs/sendgrid/ui/account-and-settings/api-keys"
+binds = "credential.sendgrid.api_key"

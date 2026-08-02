@@ -10,3 +10,12 @@ base_url = "https://api.openai.com"
 api_version = "v1"
 module = "openai.flux"
 operations = ["openai-models-list", "openai-model-get", "openai-chat-completion", "openai-embeddings-create", "openai-response-get", "openai-response-input-item-list", "openai-file-list", "openai-batch-list"]
+
+[[auth]]
+name = "openai.api_key"
+scheme = "bearer"
+env = ["OPENAI_API_KEY"]
+description = "OpenAI API key, sent as a bearer token"
+
+[[default_auth]]
+credentials = ["openai.api_key"]

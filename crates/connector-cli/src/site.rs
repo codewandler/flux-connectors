@@ -51,9 +51,9 @@ use anyhow::Result;
 use serde::Serialize;
 
 use connector_spec::{
-    AuthScheme, ChannelBinding, Connector, EventDecl, HttpMethod, Idempotency, JsonSchema,
-    ManualSetup, Operation, OperationSpecSource, Param, Reply, Risk, Selector, Subscription,
-    VerificationScheme,
+    AuthScheme, ChannelBinding, ConfigField, Connector, EventDecl, HttpMethod, Idempotency,
+    JsonSchema, ManualSetup, Operation, OperationSpecSource, Param, Reply, Risk, Selector,
+    SocketConnectSpec, Subscription, VerificationScheme,
 };
 
 use crate::catalog::{self, OperationRendering};
@@ -145,6 +145,8 @@ pub struct ProviderEntry {
     /// here is a URL, a schedule or a secret: the endpoint is the operator's deployment detail and
     /// every credential is a name the host resolves.
     channels: Vec<ChannelEntry>,
+    /// The complete configuration declaration. Stored values never appear in catalogue data.
+    config: Vec<ConfigField>,
     /// **Every configuration field whose value comes from a closed set** (C-225). `[]` for the
     /// connectors that declare none, which is nearly all of them.
     ///
@@ -193,6 +195,8 @@ struct ChoiceEntry {
 struct EventEntry {
     /// The event name, in the vendor's spelling — `app_mention`, `issues.opened`. Never respelled.
     name: String,
+    /// Exact discriminator spelling, or `null` when it is identical to `name`.
+    wire_value: Option<String>,
     /// The [`ServiceEntry::name`] it belongs to — exactly one, like every other member.
     service: String,
     /// The rendered address, `com.slack.api:v1#app_mention`, or `null` when the connector declares
@@ -227,6 +231,8 @@ struct ChannelEntry {
     description: String,
     /// `webhook`, `socket` or `poll` — flux owns the transport, the connector owns the binding.
     transport: &'static str,
+    /// Generic RFC 6455 handshake facts, or `null` for other/vendor-specific transports.
+    connect: Option<SocketConnectSpec>,
     /// The [`EventEntry::name`]s this binding carries, all from the same service.
     events: Vec<String>,
     /// How a delivery proves it came from the vendor. **Always present**, and always naming its
@@ -239,6 +245,8 @@ struct ChannelEntry {
     /// Flow symbol → dotted path into the vendor's envelope, in the grammar `Param::wire` already
     /// uses. `{}` when the binding maps nothing.
     payload: BTreeMap<String, String>,
+    /// Whether the complete decoded JSON event is delivered.
+    payload_root: bool,
     /// The operation that answers an event on this binding, or `null` for a fire-and-forget one.
     reply: Option<ReplyEntry>,
     /// The cursor operation a `poll` binding calls — required for that transport, `null` otherwise.
@@ -630,6 +638,7 @@ pub fn provider_entry(
             .iter()
             .map(|channel| channel_entry(connector, channel))
             .collect(),
+        config: connector.config.clone(),
         config_choices: connector
             .config
             .iter()
@@ -662,6 +671,7 @@ fn config_choices_entry(field: &connector_spec::ConfigField) -> Option<ConfigCho
 fn event_entry(connector: &Connector, event: &EventDecl) -> EventEntry {
     EventEntry {
         name: event.name.clone(),
+        wire_value: event.wire_value.clone(),
         service: event.service.clone(),
         oip: member_oip(connector, &event.service, &event.name),
         description: event.description.clone(),
@@ -680,11 +690,13 @@ fn channel_entry(connector: &Connector, channel: &ChannelBinding) -> ChannelEntr
         oip: member_oip(connector, &channel.service, &channel.name),
         description: channel.description.clone(),
         transport: inbound::transport_token(channel.transport),
+        connect: channel.connect.clone(),
         events: channel.events.clone(),
         verification: verification_entry(channel),
         discriminator: channel.discriminator.as_ref().map(selector_entry),
         delivery_id: channel.delivery_id.as_ref().map(selector_entry),
         payload: channel.payload.clone(),
+        payload_root: channel.payload_root,
         reply: channel
             .reply
             .as_ref()

@@ -10,3 +10,12 @@ base_url = "https://api.hubapi.com"
 api_version = "v3"
 module = "hubspot.flux"
 operations = ["hubspot-contact-get", "hubspot-contact-create", "hubspot-contact-update", "hubspot-company-get", "hubspot-deal-get"]
+
+[[auth]]
+name = "hubspot.access_token"
+scheme = "bearer"
+env = ["HUBSPOT_ACCESS_TOKEN"]
+description = "HubSpot private-app access token (pat-…) with crm.objects.contacts.read/write, crm.objects.companies.read and crm.objects.deals.read"
+
+[[default_auth]]
+credentials = ["hubspot.access_token"]

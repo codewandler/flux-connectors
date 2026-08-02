@@ -396,6 +396,92 @@ pub struct Credential {
     pub place: Placement,
 }
 
+/// One string pair in a generated declaration (query, header or payload mapping).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pair {
+    pub name: &'static str,
+    pub value: &'static str,
+}
+
+/// How an event reaches a connector binding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChannelTransport {
+    Webhook,
+    Socket,
+    Poll,
+}
+
+/// One event declaration, including the local/wire identity split.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Event {
+    pub name: &'static str,
+    pub service: &'static str,
+    pub description: &'static str,
+    pub wire_value: Option<&'static str>,
+    pub default: bool,
+    pub group: &'static str,
+    /// Canonical JSON Schema text, or `None` when the vendor publishes none.
+    pub schema: Option<&'static str>,
+    /// Canonical JSON for the complete source declaration, including narrowing rules.
+    pub declaration_json: &'static str,
+}
+
+/// The generic RFC 6455 handshake facts for one socket binding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SocketConnect {
+    pub path: &'static str,
+    pub query: &'static [Pair],
+    pub headers: &'static [Pair],
+    pub auth: &'static [&'static [&'static str]],
+    pub subprotocols: &'static [&'static str],
+}
+
+/// One selector into an inbound envelope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Selector {
+    pub source: &'static str,
+    pub name: &'static str,
+}
+
+/// One generated channel binding. Verification/reply/setup remain available in the manifest and
+/// public catalogue; this embedded shape carries every fact the zero-I/O socket planner and generic
+/// event router require.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Channel {
+    pub name: &'static str,
+    pub service: &'static str,
+    /// The service base URL against which [`SocketConnect::path`] is derived.
+    pub base_url: &'static str,
+    pub description: &'static str,
+    pub transport: ChannelTransport,
+    pub events: &'static [&'static str],
+    pub connect: Option<SocketConnect>,
+    pub discriminator: Option<Selector>,
+    pub payload: &'static [Pair],
+    pub payload_root: bool,
+    /// Canonical JSON for the complete binding declaration, including verification and reply.
+    pub declaration_json: &'static str,
+}
+
+/// One complete configuration field, with no stored value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfigField {
+    pub name: &'static str,
+    pub service: &'static str,
+    pub label: &'static str,
+    pub help: &'static str,
+    pub example: Option<&'static str>,
+    pub format: &'static str,
+    pub required: bool,
+    pub default: Option<&'static str>,
+    pub secret: bool,
+    pub docs_url: Option<&'static str>,
+    pub binds: &'static str,
+    pub also_binds: &'static [&'static str],
+    /// Canonical JSON for the complete form declaration, including choices.
+    pub declaration_json: &'static str,
+}
+
 /// **How a connector executes** — flux's runtime axis, as the catalogue publishes it (C-405).
 ///
 /// The vocabulary mirrors flux's `docs/designs/ecosystem.md`, which replaces the plugin-versus-
@@ -488,6 +574,12 @@ pub struct Provider {
     /// Every operation, in the order the provider declares them — which is also the order they
     /// appear in `connectors/<id>.flux`.
     pub operations: &'static [Operation],
+    /// Complete configuration declarations, never values.
+    pub config: &'static [ConfigField],
+    /// Inbound events in declaration order.
+    pub events: &'static [Event],
+    /// Channel bindings in declaration order.
+    pub channels: &'static [Channel],
     /// **Every configuration field whose value comes from a closed set** — C-225.
     ///
     /// Empty for most connectors. Present for the ones whose value is a *choice* rather than a
@@ -553,6 +645,11 @@ impl Provider {
     /// needs it preserved.
     pub fn credential(&self, name: &str) -> Option<&'static Credential> {
         self.auth.iter().find(|credential| credential.name == name)
+    }
+
+    /// One declared channel binding, by its service-local name.
+    pub fn channel(&self, name: &str) -> Option<&'static Channel> {
+        self.channels.iter().find(|channel| channel.name == name)
     }
 
     /// The closed set governing one configuration slot, addressed exactly as the runtime port

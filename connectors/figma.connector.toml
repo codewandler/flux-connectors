@@ -10,3 +10,23 @@ base_url = "https://api.figma.com"
 api_version = "v1"
 module = "figma.flux"
 operations = ["figma-user-me", "figma-file-get", "figma-file-nodes-get", "figma-image-render-get", "figma-project-files-list", "figma-file-comments-list"]
+
+[[auth]]
+name = "figma.token"
+env = ["FIGMA_TOKEN"]
+description = "Figma personal access token, sent as the whole value of X-Figma-Token. Grants read access to whatever files, projects and comments the token's account can see"
+
+[auth.scheme.header]
+name = "X-Figma-Token"
+
+[[default_auth]]
+credentials = ["figma.token"]
+
+[[config]]
+name = "token"
+label = "Personal access token"
+help = "From your Figma account settings, under Personal access tokens. Figma shows it once, at creation time"
+format = "token"
+secret = true
+docs_url = "https://www.figma.com/developers/api"
+binds = "credential.figma.token"

@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.vercel.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,48 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "token",
+        service: "default",
+        label: "Access token",
+        help: "Create one at vercel.com/account/tokens (personal) or via an Integration's OAuth flow. Scope it to the narrowest team or project you can",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://vercel.com/docs/rest-api#creating-an-access-token"),
+        binds: "credential.vercel.token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"token\",\"label\":\"Access token\",\"help\":\"Create one at vercel.com/account/tokens (personal) or via an Integration's OAuth flow. Scope it to the narrowest team or project you can\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://vercel.com/docs/rest-api#creating-an-access-token\",\"binds\":\"credential.vercel.token\"}",
+    },
+    crate::ConfigField {
+        name: "team_id",
+        service: "default",
+        label: "Vercel team id",
+        help: "The team this connection acts on behalf of. Find it under Team Settings -> General -> Team ID, or in the URL of your team's dashboard. Every call this connector makes is scoped to it; a personal (non-team) account is not supported",
+        example: Some("team_1a2b3c4d5e6f7g8h9i0j"),
+        format: "text",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: Some("https://vercel.com/docs/rest-api/reference/welcome#authentication"),
+        binds: "query.teamId",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"team_id\",\"label\":\"Vercel team id\",\"help\":\"The team this connection acts on behalf of. Find it under Team Settings -> General -> Team ID, or in the URL of your team's dashboard. Every call this connector makes is scoped to it; a personal (non-team) account is not supported\",\"example\":\"team_1a2b3c4d5e6f7g8h9i0j\",\"docs_url\":\"https://vercel.com/docs/rest-api/reference/welcome#authentication\",\"binds\":\"query.teamId\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

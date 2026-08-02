@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://app.launchdarkly.com/api/v2",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "" },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "api_token",
+        service: "default",
+        label: "LaunchDarkly API access token",
+        help: "Create one under Account settings → Authorization → Access tokens in LaunchDarkly. Give it at least reader access to the projects this connection should reach, and writer access if launchdarkly-flag-toggle will be used. LaunchDarkly shows the token once",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://docs.launchdarkly.com/home/account/api"),
+        binds: "credential.launchdarkly.api_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_token\",\"label\":\"LaunchDarkly API access token\",\"help\":\"Create one under Account settings → Authorization → Access tokens in LaunchDarkly. Give it at least reader access to the projects this connection should reach, and writer access if launchdarkly-flag-toggle will be used. LaunchDarkly shows the token once\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://docs.launchdarkly.com/home/account/api\",\"binds\":\"credential.launchdarkly.api_token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

@@ -10,3 +10,12 @@ base_url = "https://api.airtable.com"
 api_version = "v0"
 module = "airtable.flux"
 operations = ["airtable-record-get", "airtable-record-create", "airtable-record-update", "airtable-record-delete"]
+
+[[auth]]
+name = "airtable.access_token"
+scheme = "bearer"
+env = ["AIRTABLE_ACCESS_TOKEN"]
+description = "Airtable access token sent as a bearer — a personal access token or an OAuth-issued one"
+
+[[default_auth]]
+credentials = ["airtable.access_token"]

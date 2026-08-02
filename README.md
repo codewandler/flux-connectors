@@ -17,7 +17,7 @@ queryable Rust catalogue, and a flux Tool pack.
 > actually sent bytes to a vendor. See [Current limitations](#current-limitations).
 
 The repository currently contains **841 curated connector operations across 55 providers and 66
-services**, plus 8 events and 4 channel bindings. It also publishes 77 Flux-owned core operations, node
+services**, plus 53 events and 5 channel bindings. It also publishes 77 Flux-owned core operations, node
 kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **1114
 committed, reviewable artifacts** without contacting a vendor. Browse them in the
 [catalogue explorer](https://flux.codewandler.org/explorer).

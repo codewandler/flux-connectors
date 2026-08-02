@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://{account_host}/restapi/v2.1/accounts/{account_id}",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,63 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "account_host",
+        service: "default",
+        label: "DocuSign account API host",
+        help: "The host portion of this account's own API server, without the https:// prefix — read it from the base_uri field of the accounts[] entry in DocuSign's OAuth UserInfo response (https://account-d.docusign.com/oauth/userinfo in the developer sandbox, https://account.docusign.com/oauth/userinfo in production) for the account you are connecting. If that field reads https://demo.docusign.net, enter demo.docusign.net",
+        example: Some("demo.docusign.net"),
+        format: "hostname",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: None,
+        binds: "endpoint.account_host",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"account_host\",\"label\":\"DocuSign account API host\",\"help\":\"The host portion of this account's own API server, without the https:// prefix — read it from the base_uri field of the accounts[] entry in DocuSign's OAuth UserInfo response (https://account-d.docusign.com/oauth/userinfo in the developer sandbox, https://account.docusign.com/oauth/userinfo in production) for the account you are connecting. If that field reads https://demo.docusign.net, enter demo.docusign.net\",\"example\":\"demo.docusign.net\",\"format\":\"hostname\",\"binds\":\"endpoint.account_host\"}",
+    },
+    crate::ConfigField {
+        name: "account_id",
+        service: "default",
+        label: "DocuSign account id",
+        help: "This account's id (a GUID), from the same accounts[] entry of DocuSign's OAuth UserInfo response that account_host came from",
+        example: Some("00000000-0000-0000-0000-000000000000"),
+        format: "text",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: None,
+        binds: "endpoint.account_id",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"account_id\",\"label\":\"DocuSign account id\",\"help\":\"This account's id (a GUID), from the same accounts[] entry of DocuSign's OAuth UserInfo response that account_host came from\",\"example\":\"00000000-0000-0000-0000-000000000000\",\"binds\":\"endpoint.account_id\"}",
+    },
+    crate::ConfigField {
+        name: "access_token",
+        service: "default",
+        label: "Access token",
+        help: "An OAuth2 access token for this account — minted by DocuSign's own login flow or an integration key's JWT/authorization-code grant, and pasted here already-minted. It is short-lived; a call that starts failing with 401 usually means this needs refreshing",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: None,
+        binds: "credential.docusign.access_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"access_token\",\"label\":\"Access token\",\"help\":\"An OAuth2 access token for this account — minted by DocuSign's own login flow or an integration key's JWT/authorization-code grant, and pasted here already-minted. It is short-lived; a call that starts failing with 401 usually means this needs refreshing\",\"format\":\"token\",\"secret\":true,\"binds\":\"credential.docusign.access_token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

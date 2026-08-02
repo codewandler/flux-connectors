@@ -9,7 +9,9 @@
 //! plausible-but-wrong output `AGENTS.md` requires the pipeline to refuse rather than emit, and it is
 //! why almost every test below asserts on a refusal.
 
-use connector_spec::{provider, Connector, TimestampFormat, Transport, VerificationScheme};
+use connector_spec::{
+    provider, Binding, Connector, TimestampFormat, Transport, VerificationScheme,
+};
 
 #[path = "support/shipped_provider.rs"]
 mod shipped_provider;
@@ -98,6 +100,120 @@ result = "text"
 room = "room"
 parent = "body"
 "#;
+
+const GENERIC_SOCKET: &str = r#"
+[[config]]
+name = "app"
+label = "ARI application"
+help = "The Stasis application whose events this connection receives"
+example = "support"
+binds = "channel.hook.query.app"
+
+[[config]]
+name = "subscribe_all"
+label = "Subscribe to all events"
+help = "Whether ARI should send events for every application"
+example = "false"
+required = false
+default = "false"
+binds = "channel.hook.query.subscribeAll"
+
+[[channels]]
+name = "hook"
+transport = "socket"
+events = ["thing.created"]
+payload_root = true
+
+[channels.connect]
+path = "/events"
+auth = [{ credentials = ["acme.token"] }]
+subprotocols = ["ari"]
+
+[channels.connect.query]
+app = "{app}"
+subscribeAll = "{subscribe_all}"
+
+[channels.connect.headers]
+X-Acme-Mode = "events"
+"#;
+
+#[test]
+fn a_generic_socket_round_trips_every_connect_event_payload_and_config_fact() {
+    let source = fixture(GENERIC_SOCKET).replace(
+        "name = \"thing.created\"",
+        "name = \"thing.created\"\nwire_value = \"ThingCreated\"",
+    );
+    let connector = load(&source);
+    let event = connector.event("thing.created").expect("event loads");
+    let channel = connector.channel("hook").expect("channel loads");
+    let connect = channel.connect.as_ref().expect("socket connect loads");
+
+    assert_eq!(event.wire_value.as_deref(), Some("ThingCreated"));
+    assert!(channel.payload_root);
+    assert_eq!(connect.path, "/events");
+    assert_eq!(connect.query["app"], "{app}");
+    assert_eq!(connect.query["subscribeAll"], "{subscribe_all}");
+    assert_eq!(connect.headers["X-Acme-Mode"], "events");
+    assert_eq!(connect.subprotocols, ["ari"]);
+    assert_eq!(connect.auth.len(), 1);
+
+    let subscribe_all = connector
+        .config
+        .iter()
+        .find(|field| field.name == "subscribe_all")
+        .expect("optional socket setting loads");
+    assert_eq!(subscribe_all.default.as_deref(), Some("false"));
+    assert!(matches!(
+        subscribe_all.binding(),
+        Some(Binding::ChannelQuery {
+            channel: "hook",
+            parameter: "subscribeAll"
+        })
+    ));
+}
+
+#[test]
+fn socket_connect_declarations_fail_closed_at_load() {
+    for (source, expected) in [
+        (
+            fixture(GENERIC_SOCKET)
+                .replace("path = \"/events\"", "path = \"wss://evil.example/events\""),
+            "relative WebSocket path",
+        ),
+        (
+            fixture(GENERIC_SOCKET).replace("transport = \"socket\"", "transport = \"poll\""),
+            "only the `socket` transport",
+        ),
+        (
+            fixture(GENERIC_SOCKET).replace(
+                "payload_root = true",
+                "payload_root = true\n\n[channels.payload]\nbody = \"event\"",
+            ),
+            "payload_root",
+        ),
+        (
+            fixture(GENERIC_SOCKET).replace("X-Acme-Mode = \"events\"", "Host = \"evil.example\""),
+            "handshake-owned header",
+        ),
+        (
+            fixture(GENERIC_SOCKET).replace(
+                "subprotocols = [\"ari\"]",
+                "subprotocols = [\"ari events\"]",
+            ),
+            "subprotocol",
+        ),
+        (
+            fixture(GENERIC_SOCKET).replace(
+                "binds = \"channel.hook.query.app\"",
+                "binds = \"channel.missing.query.app\"",
+            ),
+            "no channel binding",
+        ),
+    ] {
+        let error = refuse(&source);
+        assert!(error.contains(expected), "expected {expected:?}:\n{error}");
+    }
+}
 
 #[test]
 fn a_complete_binding_loads_and_composes_an_event_with_a_reply() {

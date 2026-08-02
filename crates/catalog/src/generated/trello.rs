@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.trello.com/1",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -31,6 +34,48 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Query { name: "token" },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "api_key",
+        service: "default",
+        label: "Trello API key",
+        help: "Generate one at trello.com/power-ups/admin: open (or create) a Power-Up, then the API Key tab. Do this first — the token below is minted against this key and only works with it",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/"),
+        binds: "credential.trello.key",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_key\",\"label\":\"Trello API key\",\"help\":\"Generate one at trello.com/power-ups/admin: open (or create) a Power-Up, then the API Key tab. Do this first — the token below is minted against this key and only works with it\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/\",\"binds\":\"credential.trello.key\"}",
+    },
+    crate::ConfigField {
+        name: "api_token",
+        service: "default",
+        label: "Trello API token",
+        help: "From the same API Key page, follow the manual token link and click Allow. The token grants access to everything your Trello account can see, so treat it as a password",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/"),
+        binds: "credential.trello.token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_token\",\"label\":\"Trello API token\",\"help\":\"From the same API Key page, follow the manual token link and click Allow. The token grants access to everything your Trello account can see, so treat it as a password\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/\",\"binds\":\"credential.trello.token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

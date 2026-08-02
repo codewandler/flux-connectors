@@ -8,3 +8,28 @@ runtime = "http"
 base_url = "https://{instance}.my.salesforce.com"
 module = "salesforce.flux"
 operations = ["salesforce-whoami", "salesforce-record-get", "salesforce-record-create", "salesforce-record-update", "salesforce-sobject-describe"]
+
+[[auth]]
+name = "salesforce.access_token"
+scheme = "bearer"
+env = ["SALESFORCE_ACCESS_TOKEN"]
+description = "Salesforce OAuth2 access token sent as a bearer; already minted, supplied through the environment"
+
+[[default_auth]]
+credentials = ["salesforce.access_token"]
+
+[[config]]
+name = "instance"
+label = "Salesforce My Domain name"
+help = "The subdomain of your org's My Domain URL — if you log in at acme.my.salesforce.com, this is acme. Find it under Setup → Company Settings → My Domain, or read it off the instance_url your org's login flow returns"
+example = "acme"
+format = "subdomain"
+binds = "endpoint.instance"
+
+[[config]]
+name = "access_token"
+label = "Access token"
+help = "An OAuth2 access token for this org — minted by Salesforce's own login flow, or by a Connected App's client-credentials or JWT-bearer flow, and pasted here already-minted. It is short-lived; a call that starts failing with 401 usually means this needs refreshing"
+format = "token"
+secret = true
+binds = "credential.salesforce.access_token"

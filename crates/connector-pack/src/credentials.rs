@@ -265,6 +265,74 @@ impl Credentials {
         })
     }
 
+    /// Resolve one channel handshake's declared alternatives without constructing transport state.
+    pub(crate) async fn resolve_channel(
+        &self,
+        channel: &str,
+        provider: &'static catalog::Provider,
+        requirements: &'static [&'static [&'static str]],
+        settings: &Snapshot,
+    ) -> Result<Vec<Assembled>, Error> {
+        if requirements.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut unmet = Vec::new();
+        for mechanism in requirements {
+            let mut assembled = Vec::with_capacity(mechanism.len());
+            let mut missing = None;
+            for name in *mechanism {
+                let credential =
+                    provider
+                        .credential(name)
+                        .ok_or_else(|| Error::UndeclaredCredential {
+                            operation: channel.to_owned(),
+                            credential: (*name).to_owned(),
+                            provider: provider.id.to_owned(),
+                        })?;
+                if matches!(credential.place, catalog::Placement::Inbound) {
+                    return Err(Error::InboundCredential {
+                        operation: channel.to_owned(),
+                        credential: credential.name.to_owned(),
+                    });
+                }
+                let reference = self.reference(channel, provider, credential)?;
+                let secret = match self.store.get(&reference).await {
+                    Ok(secret) => secret,
+                    Err(source) if source.is_not_found() => {
+                        missing = Some(not_found_path(&source));
+                        break;
+                    }
+                    Err(source) => {
+                        return Err(Error::CredentialStore {
+                            operation: channel.to_owned(),
+                            credential: credential.name.to_owned(),
+                            source,
+                        });
+                    }
+                };
+                let user = user_half(channel, credential, settings)?;
+                assembled.push(Assembled {
+                    credential: credential.name,
+                    value: auth::acquire(credential, secret.expose_secret(), user.as_deref()),
+                    place: credential.place,
+                });
+            }
+            if let Some(path) = missing {
+                unmet.push(path);
+            } else {
+                return Ok(assembled);
+            }
+        }
+        Err(Error::MissingCredential {
+            operation: channel.to_owned(),
+            path: unmet
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "<no address>".to_owned()),
+            alternatives: unmet.len(),
+        })
+    }
+
     /// One mechanism: every credential in it, all or nothing.
     async fn resolve_mechanism(
         &self,

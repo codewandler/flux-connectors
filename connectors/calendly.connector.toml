@@ -8,3 +8,21 @@ runtime = "http"
 base_url = "https://api.calendly.com"
 module = "calendly.flux"
 operations = ["calendly-user-me", "calendly-event-type-list", "calendly-scheduled-event-list", "calendly-scheduled-event-get", "calendly-invitee-list"]
+
+[[auth]]
+name = "calendly.access_token"
+scheme = "bearer"
+env = ["CALENDLY_ACCESS_TOKEN"]
+description = "Calendly access token sent as a bearer — a personal access token or an OAuth-issued one"
+
+[[default_auth]]
+credentials = ["calendly.access_token"]
+
+[[config]]
+name = "access_token"
+label = "Calendly access token"
+help = "Create one under Integrations & apps → API & Webhooks → Personal access tokens in Calendly. Calendly shows it once"
+format = "token"
+secret = true
+docs_url = "https://developer.calendly.com/getting-started"
+binds = "credential.calendly.access_token"

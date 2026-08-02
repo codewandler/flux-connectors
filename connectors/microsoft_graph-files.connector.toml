@@ -11,3 +11,12 @@ base_url = "https://graph.microsoft.com"
 api_version = "v1.0"
 module = "microsoft_graph-files.flux"
 operations = ["microsoft_graph-files-item-get", "microsoft_graph-files-item-update"]
+
+[[auth]]
+name = "microsoft_graph.access_token"
+scheme = "bearer"
+env = ["MICROSOFT_GRAPH_ACCESS_TOKEN"]
+description = "Microsoft Entra ID OAuth2 access token sent as a bearer; short-lived, minted outside flux (delegated sign-in or application client-credentials), and refreshed by the host rather than by generated Flux"
+
+[[default_auth]]
+credentials = ["microsoft_graph.access_token"]

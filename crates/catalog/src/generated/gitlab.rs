@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://gitlab.com/api/v4",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "token",
+        service: "default",
+        label: "GitLab personal access token",
+        help: "Create one at User Settings -> Access Tokens (gitlab.com/-/user_settings/personal_access_tokens). Grant the read_api scope for every read below, or api if you also want gitlab-issue-create to work. This connector only reaches gitlab.com; a self-managed GitLab instance is not supported yet",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"),
+        binds: "credential.gitlab.token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"token\",\"label\":\"GitLab personal access token\",\"help\":\"Create one at User Settings -> Access Tokens (gitlab.com/-/user_settings/personal_access_tokens). Grant the read_api scope for every read below, or api if you also want gitlab-issue-create to work. This connector only reaches gitlab.com; a self-managed GitLab instance is not supported yet\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html\",\"binds\":\"credential.gitlab.token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

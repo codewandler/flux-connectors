@@ -11,3 +11,50 @@ base_url = "https://{subdomain}.zendesk.com"
 api_version = "v2"
 module = "zendesk-help-center.flux"
 operations = ["zendesk-help-center-category-list", "zendesk-help-center-section-list", "zendesk-help-center-article-list", "zendesk-help-center-article-get", "zendesk-help-center-translation-list", "zendesk-help-center-article-incremental-list", "zendesk-help-center-article-create"]
+
+[[auth]]
+name = "zendesk.api_token"
+scheme = "basic"
+env = ["ZENDESK_API_TOKEN"]
+user_env = ["ZENDESK_USER"]
+user_suffix = "/token"
+description = "Zendesk API token; the user half is the agent email with Zendesk's /token marker"
+
+[[auth]]
+name = "zendesk.messaging_key"
+scheme = "basic"
+env = ["ZENDESK_MESSAGING_KEY_SECRET"]
+user_env = ["ZENDESK_MESSAGING_KEY_ID"]
+description = "App-scoped Zendesk Messaging API key id and secret"
+
+[[default_auth]]
+credentials = ["zendesk.api_token"]
+
+[[config]]
+name = "help_center_subdomain"
+service = "help-center"
+label = "Zendesk subdomain"
+help = "The part of your Zendesk URL before `.zendesk.com` — the same account subdomain used by Support"
+example = "acme"
+format = "subdomain"
+docs_url = "https://support.zendesk.com/hc/en-us/articles/4409381383578"
+binds = "endpoint.subdomain"
+
+[[config]]
+name = "help_center_email"
+service = "help-center"
+label = "Agent email"
+help = "The Zendesk agent email used by the shared Support and Help Center API token; Zendesk appends `/token` on the wire"
+example = "agent@acme.com"
+format = "email"
+binds = "username.zendesk.api_token"
+
+[[config]]
+name = "help_center_api_token"
+service = "help-center"
+label = "API token"
+help = "Reuse the Zendesk API token created under Admin Center → Apps and integrations → Zendesk API"
+format = "token"
+secret = true
+docs_url = "https://support.zendesk.com/hc/en-us/articles/4408889192858"
+binds = "credential.zendesk.api_token"

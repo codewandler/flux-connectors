@@ -10,3 +10,32 @@ base_url = "https://{app_id}.algolia.net"
 api_version = "1"
 module = "algolia.flux"
 operations = ["algolia-index-list", "algolia-index-search", "algolia-object-get", "algolia-object-save", "algolia-object-delete"]
+
+[[auth]]
+name = "algolia.api_key"
+env = ["ALGOLIA_API_KEY"]
+description = "An Algolia API key with the ACLs this connector needs: `search` and `browse` for the reads, `addObject` and `deleteObject` for the writes. Scope it to the indices this connection should reach rather than using the Admin key"
+
+[auth.scheme.header]
+name = "X-Algolia-API-Key"
+
+[[default_auth]]
+credentials = ["algolia.api_key"]
+
+[[config]]
+name = "api_key"
+label = "Algolia API key"
+help = "Create one under API Keys in the Algolia dashboard, with the search, browse, addObject and deleteObject ACLs restricted to the indices this connection should reach. Algolia shows the full key in the dashboard; the Admin key is deliberately not what this asks for"
+format = "token"
+secret = true
+docs_url = "https://dashboard.algolia.com/account/api-keys/"
+binds = "credential.algolia.api_key"
+
+[[config]]
+name = "app_id"
+label = "Algolia application id"
+help = "The ten-character application id shown at the top of the API Keys page in your Algolia dashboard, e.g. B1G2GM9NG0. It identifies your Algolia application, forms the hostname every call goes to, and is sent as a header on every request — you supply it once here and this connector puts it in both places. It is not a secret; Algolia publishes it in client-side code"
+example = "B1G2GM9NG0"
+docs_url = "https://dashboard.algolia.com/account/api-keys/"
+binds = "endpoint.app_id"
+also_binds = ["header.X-Algolia-Application-Id"]

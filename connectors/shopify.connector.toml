@@ -10,3 +10,32 @@ base_url = "https://{shop}.myshopify.com"
 api_version = "2024-10"
 module = "shopify.flux"
 operations = ["shopify-order-get", "shopify-product-get", "shopify-product-update", "shopify-customer-get", "shopify-inventory-level-list"]
+
+[[auth]]
+name = "shopify.access_token"
+env = ["SHOPIFY_ACCESS_TOKEN"]
+description = "Shopify Admin API access token, sent as the whole value of X-Shopify-Access-Token, with read_orders, read_products, write_products, read_customers and read_inventory scopes"
+
+[auth.scheme.header]
+name = "X-Shopify-Access-Token"
+
+[[default_auth]]
+credentials = ["shopify.access_token"]
+
+[[config]]
+name = "shop"
+label = "Shop name"
+help = "The part of your `myshopify.com` address before the dot — for `acme.myshopify.com`, this is `acme`. Not your custom storefront domain"
+example = "acme"
+format = "subdomain"
+docs_url = "https://help.shopify.com/en/manual/domains"
+binds = "endpoint.shop"
+
+[[config]]
+name = "access_token"
+label = "Admin API access token"
+help = "From your custom app's API credentials page in the Shopify admin. Starts with `shpat_`, and Shopify shows it once"
+format = "token"
+secret = true
+docs_url = "https://help.shopify.com/en/manual/apps/app-types/custom-apps"
+binds = "credential.shopify.access_token"

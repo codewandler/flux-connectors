@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://slack.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -30,6 +33,64 @@ static AUTH: &[crate::Credential] = &[
         leaf: "signing_secret",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Inbound,
+    },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+    crate::Event {
+        name: "app_mention",
+        service: "default",
+        description: "Someone @-mentioned the app in a channel it is a member of",
+        wire_value: None,
+        default: true,
+        group: "Messages",
+        schema: Some("{\"properties\":{\"channel\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"thread_ts\":{\"type\":\"string\"},\"ts\":{\"type\":\"string\"},\"type\":{\"const\":\"app_mention\"},\"user\":{\"type\":\"string\"}},\"required\":[\"type\",\"user\",\"text\",\"channel\",\"ts\"],\"type\":\"object\"}"),
+        declaration_json: "{\"name\":\"app_mention\",\"description\":\"Someone @-mentioned the app in a channel it is a member of\",\"group\":\"Messages\",\"schema\":{\"properties\":{\"channel\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"thread_ts\":{\"type\":\"string\"},\"ts\":{\"type\":\"string\"},\"type\":{\"const\":\"app_mention\"},\"user\":{\"type\":\"string\"}},\"required\":[\"type\",\"user\",\"text\",\"channel\",\"ts\"],\"type\":\"object\"}}",
+    },
+    crate::Event {
+        name: "message",
+        service: "default",
+        description: "A message was posted in a channel the app is a member of. Fires for every human message, so a program that triggers on it should expect volume",
+        wire_value: None,
+        default: false,
+        group: "Messages",
+        schema: Some("{\"properties\":{\"bot_id\":{\"type\":\"string\"},\"channel\":{\"type\":\"string\"},\"subtype\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"thread_ts\":{\"type\":\"string\"},\"ts\":{\"type\":\"string\"},\"type\":{\"const\":\"message\"},\"user\":{\"type\":\"string\"}},\"required\":[\"type\",\"channel\",\"ts\"],\"type\":\"object\"}"),
+        declaration_json: "{\"name\":\"message\",\"description\":\"A message was posted in a channel the app is a member of. Fires for every human message, so a program that triggers on it should expect volume\",\"default\":false,\"group\":\"Messages\",\"schema\":{\"properties\":{\"bot_id\":{\"type\":\"string\"},\"channel\":{\"type\":\"string\"},\"subtype\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"thread_ts\":{\"type\":\"string\"},\"ts\":{\"type\":\"string\"},\"type\":{\"const\":\"message\"},\"user\":{\"type\":\"string\"}},\"required\":[\"type\",\"channel\",\"ts\"],\"type\":\"object\"}}",
+    },
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
+    crate::Channel {
+        name: "socket",
+        service: "default",
+        base_url: "https://slack.com",
+        description: "Socket Mode — flux opens an outbound WebSocket and Slack pushes events down it. No public URL, and no signature: the connection is authenticated by the app-level token that opened it",
+        transport: crate::ChannelTransport::Socket,
+        events: &["app_mention", "message"],
+        connect: None,
+        discriminator: Some(crate::Selector { source: "body", name: "event.type" }),
+        payload: &[crate::Pair { name: "channel", value: "event.channel" }, crate::Pair { name: "conversation", value: "event.thread_ts" }, crate::Pair { name: "text", value: "event.text" }, crate::Pair { name: "thread", value: "event.thread_ts" }, crate::Pair { name: "user", value: "event.user" }],
+        payload_root: false,
+        declaration_json: "{\"name\":\"socket\",\"description\":\"Socket Mode — flux opens an outbound WebSocket and Slack pushes events down it. No public URL, and no signature: the connection is authenticated by the app-level token that opened it\",\"transport\":\"socket\",\"events\":[\"app_mention\",\"message\"],\"discriminator\":{\"source\":\"body\",\"name\":\"event.type\"},\"delivery_id\":{\"source\":\"body\",\"name\":\"event_id\"},\"payload\":{\"channel\":\"event.channel\",\"conversation\":\"event.thread_ts\",\"text\":\"event.text\",\"thread\":\"event.thread_ts\",\"user\":\"event.user\"},\"reply\":{\"operation\":\"slack-chat-post-message\",\"result\":\"text\",\"bind\":{\"channel\":\"channel\",\"thread_ts\":\"thread\"}}}",
+    },
+    crate::Channel {
+        name: "events-api",
+        service: "default",
+        base_url: "https://slack.com",
+        description: "The Events API — Slack POSTs to an endpoint the operator exposes, signing each request. Use it when an outbound WebSocket is not an option; it needs a public URL and the signing secret",
+        transport: crate::ChannelTransport::Webhook,
+        events: &["app_mention", "message"],
+        connect: None,
+        discriminator: Some(crate::Selector { source: "body", name: "event.type" }),
+        payload: &[crate::Pair { name: "channel", value: "event.channel" }, crate::Pair { name: "conversation", value: "event.thread_ts" }, crate::Pair { name: "text", value: "event.text" }, crate::Pair { name: "thread", value: "event.thread_ts" }, crate::Pair { name: "user", value: "event.user" }],
+        payload_root: false,
+        declaration_json: "{\"name\":\"events-api\",\"description\":\"The Events API — Slack POSTs to an endpoint the operator exposes, signing each request. Use it when an outbound WebSocket is not an option; it needs a public URL and the signing secret\",\"transport\":\"webhook\",\"events\":[\"app_mention\",\"message\"],\"verification\":{\"hmac\":{\"algorithm\":\"sha256\",\"encoding\":\"hex\",\"header\":\"X-Slack-Signature\",\"prefix\":\"v0=\",\"signed\":\"v0:{timestamp}:{body}\",\"timestamp\":{\"source\":\"header\",\"name\":\"X-Slack-Request-Timestamp\"},\"secret\":\"slack.signing_secret\",\"tolerance\":\"5m\"}},\"discriminator\":{\"source\":\"body\",\"name\":\"event.type\"},\"delivery_id\":{\"source\":\"body\",\"name\":\"event_id\"},\"payload\":{\"channel\":\"event.channel\",\"conversation\":\"event.thread_ts\",\"text\":\"event.text\",\"thread\":\"event.thread_ts\",\"user\":\"event.user\"},\"reply\":{\"operation\":\"slack-chat-post-message\",\"result\":\"text\",\"bind\":{\"channel\":\"channel\",\"thread_ts\":\"thread\"}},\"setup\":{\"docs_url\":\"https://docs.slack.dev/apis/events-api/\",\"steps\":[\"Open your app at api.slack.com/apps, or create one for this workspace\",\"Under Event Subscriptions, turn on Enable Events\",\"Paste the Request URL shown above and wait for Slack's `url_verification` challenge to pass\",\"Under Subscribe to bot events, add the events you selected here\",\"Copy the Signing Secret from Basic Information into this connection's signing secret field\",\"Reinstall the app to the workspace so the new event scopes take effect\"]}}",
     },
 ];
 

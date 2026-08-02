@@ -10,3 +10,30 @@ base_url = "https://api.statuspage.io/v1/pages/{page_id}"
 api_version = "v1"
 module = "statuspage.flux"
 operations = ["statuspage-incident-list", "statuspage-incident-get", "statuspage-incident-create", "statuspage-incident-update", "statuspage-component-list"]
+
+[[auth]]
+name = "statuspage.api_key"
+env = ["STATUSPAGE_API_KEY"]
+description = "Statuspage API key, sent as the Authorization header after the literal scheme word `OAuth ` — a static key from the account's own API settings, not an OAuth2 access token"
+
+[auth.scheme.header]
+name = "Authorization"
+prefix = "OAuth "
+
+[[default_auth]]
+credentials = ["statuspage.api_key"]
+
+[[config]]
+name = "page_id"
+label = "Status page id"
+help = "The id of the status page this connection administers. Statuspage shows it in the address bar of the page's own management screen (manage.statuspage.io/pages/<page id>) and on the API keys screen. One connection administers one page: an account with several status pages needs one installation per page"
+binds = "endpoint.page_id"
+
+[[config]]
+name = "api_key"
+label = "Statuspage API key"
+help = "Create one under your Statuspage user account's API keys screen. The key carries the permissions of the account that created it, so an account that should only read incidents must not be the one that mints this key. Statuspage shows the key once"
+format = "token"
+secret = true
+docs_url = "https://developer.statuspage.io/"
+binds = "credential.statuspage.api_key"

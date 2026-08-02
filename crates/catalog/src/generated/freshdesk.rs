@@ -14,11 +14,41 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://{domain}/api/v2",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
 #[rustfmt::skip]
 static AUTH: &[crate::Credential] = &[
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "domain",
+        service: "default",
+        label: "Freshdesk domain",
+        help: "Your full Freshdesk host, as it appears in the address bar — `acme.freshdesk.com`, including the `.freshdesk.com` part",
+        example: Some("acme.freshdesk.com"),
+        format: "hostname",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: Some("https://support.freshdesk.com/en/support/solutions/articles/50000004820"),
+        binds: "endpoint.domain",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"domain\",\"label\":\"Freshdesk domain\",\"help\":\"Your full Freshdesk host, as it appears in the address bar — `acme.freshdesk.com`, including the `.freshdesk.com` part\",\"example\":\"acme.freshdesk.com\",\"format\":\"hostname\",\"docs_url\":\"https://support.freshdesk.com/en/support/solutions/articles/50000004820\",\"binds\":\"endpoint.domain\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

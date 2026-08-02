@@ -8,3 +8,40 @@ runtime = "http"
 base_url = "https://api.datadoghq.com"
 module = "datadog.flux"
 operations = ["datadog-monitor-list", "datadog-monitor-get", "datadog-incident-list", "datadog-incident-get"]
+
+[[auth]]
+name = "datadog.api_key"
+env = ["DATADOG_API_KEY"]
+description = "Datadog API key. Identifies the organization; required on every request together with the Application Key — neither key alone authenticates a call"
+
+[auth.scheme.header]
+name = "DD-API-KEY"
+
+[[auth]]
+name = "datadog.application_key"
+env = ["DATADOG_APPLICATION_KEY"]
+description = "Datadog Application Key, scoped to the user who created it. Required on every request together with the API Key — neither key alone authenticates a call"
+
+[auth.scheme.header]
+name = "DD-APPLICATION-KEY"
+
+[[default_auth]]
+credentials = ["datadog.api_key", "datadog.application_key"]
+
+[[config]]
+name = "api_key"
+label = "Datadog API Key"
+help = "Organization Settings > API Keys in the Datadog app. Sent as DD-API-KEY on every request, always together with the Application Key"
+format = "token"
+secret = true
+docs_url = "https://docs.datadoghq.com/account_management/api-app-keys/"
+binds = "credential.datadog.api_key"
+
+[[config]]
+name = "application_key"
+label = "Datadog Application Key"
+help = "Organization Settings > Application Keys in the Datadog app, scoped to the user who creates it. Sent as DD-APPLICATION-KEY on every request, always together with the API Key"
+format = "token"
+secret = true
+docs_url = "https://docs.datadoghq.com/account_management/api-app-keys/"
+binds = "credential.datadog.application_key"

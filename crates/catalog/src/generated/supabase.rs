@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://{project_ref}.supabase.co",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,48 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "apikey", prefix: "" },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "project_ref",
+        service: "default",
+        label: "Supabase project ref",
+        help: "The reference id of your project, from Project Settings → General, or the first label of your project's URL. Paste only that label — not the full `https://…` URL and not anything with an `@` in it: the ref becomes the hostname every request goes to, so a value carrying an `@` would send this project's key to a host you did not name",
+        example: Some("abcdefghijklmnopqrst"),
+        format: "subdomain",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: Some("https://supabase.com/docs/guides/api"),
+        binds: "endpoint.project_ref",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"project_ref\",\"label\":\"Supabase project ref\",\"help\":\"The reference id of your project, from Project Settings → General, or the first label of your project's URL. Paste only that label — not the full `https://…` URL and not anything with an `@` in it: the ref becomes the hostname every request goes to, so a value carrying an `@` would send this project's key to a host you did not name\",\"example\":\"abcdefghijklmnopqrst\",\"format\":\"subdomain\",\"docs_url\":\"https://supabase.com/docs/guides/api\",\"binds\":\"endpoint.project_ref\"}",
+    },
+    crate::ConfigField {
+        name: "anon_key",
+        service: "default",
+        label: "Supabase anon (publishable) key",
+        help: "From Project Settings → API, copy the key labelled `anon` / `public` (newer projects spell it `sb_publishable_…`). Do NOT paste the `service_role` key, even though it also works: `service_role` bypasses row-level security completely, so a connector holding it can read and change every row in your database regardless of the policies you wrote. The anon key is the one Supabase publishes as safe to expose, and it is all this connector needs",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://supabase.com/docs/guides/api/api-keys"),
+        binds: "credential.supabase.anon_key",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"anon_key\",\"label\":\"Supabase anon (publishable) key\",\"help\":\"From Project Settings → API, copy the key labelled `anon` / `public` (newer projects spell it `sb_publishable_…`). Do NOT paste the `service_role` key, even though it also works: `service_role` bypasses row-level security completely, so a connector holding it can read and change every row in your database regardless of the policies you wrote. The anon key is the one Supabase publishes as safe to expose, and it is all this connector needs\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://supabase.com/docs/guides/api/api-keys\",\"binds\":\"credential.supabase.anon_key\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

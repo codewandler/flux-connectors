@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.anthropic.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -31,6 +34,48 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "x-api-key", prefix: "" },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "api_key",
+        service: "models",
+        label: "API key",
+        help: "Create a key in the Anthropic Console (console.anthropic.com), under API Keys. This is the standard key used for the model catalogue",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://docs.anthropic.com/en/api/getting-started"),
+        binds: "credential.anthropic.api_key",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_key\",\"service\":\"models\",\"label\":\"API key\",\"help\":\"Create a key in the Anthropic Console (console.anthropic.com), under API Keys. This is the standard key used for the model catalogue\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://docs.anthropic.com/en/api/getting-started\",\"binds\":\"credential.anthropic.api_key\"}",
+    },
+    crate::ConfigField {
+        name: "admin_key",
+        service: "admin",
+        label: "Admin API key",
+        help: "Create an Admin API key in the Anthropic Console — only an organization member with the admin role can provision one. Required only for the Admin API operations, which read organization info, members, workspaces, workspace members, API keys and invites; the model catalogue works with the API key above alone",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://docs.anthropic.com/en/docs/manage-claude/admin-api-keys"),
+        binds: "credential.anthropic.admin_key",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"admin_key\",\"service\":\"admin\",\"label\":\"Admin API key\",\"help\":\"Create an Admin API key in the Anthropic Console — only an organization member with the admin role can provision one. Required only for the Admin API operations, which read organization info, members, workspaces, workspace members, API keys and invites; the model catalogue works with the API key above alone\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://docs.anthropic.com/en/docs/manage-claude/admin-api-keys\",\"binds\":\"credential.anthropic.admin_key\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

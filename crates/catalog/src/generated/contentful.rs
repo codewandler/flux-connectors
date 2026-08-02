@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.contentful.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -31,6 +34,108 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "delivery_space_id",
+        service: "delivery",
+        label: "Contentful space ID",
+        help: "Found on the space's Settings > General settings page in the Contentful web app. Identifies which space the delivery token reads from",
+        example: Some("a1b2c3d4e5f6"),
+        format: "text",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: Some("https://www.contentful.com/developers/docs/references/authentication/"),
+        binds: "endpoint.space_id",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"delivery_space_id\",\"service\":\"delivery\",\"label\":\"Contentful space ID\",\"help\":\"Found on the space's Settings > General settings page in the Contentful web app. Identifies which space the delivery token reads from\",\"example\":\"a1b2c3d4e5f6\",\"docs_url\":\"https://www.contentful.com/developers/docs/references/authentication/\",\"binds\":\"endpoint.space_id\"}",
+    },
+    crate::ConfigField {
+        name: "delivery_environment_id",
+        service: "delivery",
+        label: "Contentful environment",
+        help: "The environment within the space to read from — commonly `master` unless this space uses staged environments",
+        example: Some("master"),
+        format: "text",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: Some("https://www.contentful.com/developers/docs/concepts/multiple-environments/"),
+        binds: "endpoint.environment_id",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"delivery_environment_id\",\"service\":\"delivery\",\"label\":\"Contentful environment\",\"help\":\"The environment within the space to read from — commonly `master` unless this space uses staged environments\",\"example\":\"master\",\"docs_url\":\"https://www.contentful.com/developers/docs/concepts/multiple-environments/\",\"binds\":\"endpoint.environment_id\"}",
+    },
+    crate::ConfigField {
+        name: "delivery_token",
+        service: "delivery",
+        label: "Contentful Delivery API token",
+        help: "Create a Content Delivery API access token in the space under Settings > API keys. Read-only: published content in this space only",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://www.contentful.com/developers/docs/references/authentication/"),
+        binds: "credential.contentful.delivery_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"delivery_token\",\"service\":\"delivery\",\"label\":\"Contentful Delivery API token\",\"help\":\"Create a Content Delivery API access token in the space under Settings > API keys. Read-only: published content in this space only\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://www.contentful.com/developers/docs/references/authentication/\",\"binds\":\"credential.contentful.delivery_token\"}",
+    },
+    crate::ConfigField {
+        name: "management_space_id",
+        service: "management",
+        label: "Contentful space ID",
+        help: "Found on the space's Settings > General settings page in the Contentful web app. Identifies which space the management token writes to",
+        example: Some("a1b2c3d4e5f6"),
+        format: "text",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: Some("https://www.contentful.com/developers/docs/references/content-management-api/"),
+        binds: "endpoint.space_id",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"management_space_id\",\"service\":\"management\",\"label\":\"Contentful space ID\",\"help\":\"Found on the space's Settings > General settings page in the Contentful web app. Identifies which space the management token writes to\",\"example\":\"a1b2c3d4e5f6\",\"docs_url\":\"https://www.contentful.com/developers/docs/references/content-management-api/\",\"binds\":\"endpoint.space_id\"}",
+    },
+    crate::ConfigField {
+        name: "management_environment_id",
+        service: "management",
+        label: "Contentful environment",
+        help: "The environment within the space to write to — commonly `master` unless this space uses staged environments",
+        example: Some("master"),
+        format: "text",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: Some("https://www.contentful.com/developers/docs/concepts/multiple-environments/"),
+        binds: "endpoint.environment_id",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"management_environment_id\",\"service\":\"management\",\"label\":\"Contentful environment\",\"help\":\"The environment within the space to write to — commonly `master` unless this space uses staged environments\",\"example\":\"master\",\"docs_url\":\"https://www.contentful.com/developers/docs/concepts/multiple-environments/\",\"binds\":\"endpoint.environment_id\"}",
+    },
+    crate::ConfigField {
+        name: "management_token",
+        service: "management",
+        label: "Contentful Management API token",
+        help: "Create a Content Management API token (a Personal Access Token) in the space under Settings > API keys > Content management tokens. Grants create and publish access in this space — never reuse the Delivery token here",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://www.contentful.com/developers/docs/references/content-management-api/"),
+        binds: "credential.contentful.management_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"management_token\",\"service\":\"management\",\"label\":\"Contentful Management API token\",\"help\":\"Create a Content Management API token (a Personal Access Token) in the space under Settings > API keys > Content management tokens. Grants create and publish access in this space — never reuse the Delivery token here\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://www.contentful.com/developers/docs/references/content-management-api/\",\"binds\":\"credential.contentful.management_token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

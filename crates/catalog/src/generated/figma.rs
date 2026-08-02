@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.figma.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "X-Figma-Token", prefix: "" },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "token",
+        service: "default",
+        label: "Personal access token",
+        help: "From your Figma account settings, under Personal access tokens. Figma shows it once, at creation time",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://www.figma.com/developers/api"),
+        binds: "credential.figma.token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"token\",\"label\":\"Personal access token\",\"help\":\"From your Figma account settings, under Personal access tokens. Figma shows it once, at creation time\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://www.figma.com/developers/api\",\"binds\":\"credential.figma.token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

@@ -10,3 +10,12 @@ base_url = "https://sentry.io"
 api_version = "0"
 module = "sentry.flux"
 operations = ["sentry-issue-get", "sentry-issue-update", "sentry-project-get", "sentry-issue-event-latest"]
+
+[[auth]]
+name = "sentry.auth_token"
+scheme = "bearer"
+env = ["SENTRY_AUTH_TOKEN"]
+description = "Sentry auth token sent as a bearer — an organization, user or internal-integration token"
+
+[[default_auth]]
+credentials = ["sentry.auth_token"]

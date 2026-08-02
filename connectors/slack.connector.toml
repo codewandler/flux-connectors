@@ -11,6 +11,21 @@ api_version = "v1"
 module = "slack.flux"
 operations = ["slack-chat-post-message", "slack-conversations-history", "slack-users-info", "slack-reactions-add"]
 
+[[auth]]
+name = "slack.bot_token"
+scheme = "bearer"
+env = ["SLACK_BOT_TOKEN"]
+description = "Slack bot user OAuth token (xoxb-…) with chat:write, channels:history, users:read and reactions:write"
+
+[[auth]]
+name = "slack.signing_secret"
+scheme = "signing"
+env = ["SLACK_SIGNING_SECRET"]
+description = "Slack app signing secret, used to verify inbound Events API requests. Never sent to Slack"
+
+[[default_auth]]
+credentials = ["slack.bot_token"]
+
 [[events]]
 name = "app_mention"
 oip = "com.slack.api:v1#app_mention"

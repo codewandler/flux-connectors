@@ -10,3 +10,23 @@ base_url = "https://api.clickup.com/api/v2"
 api_version = "v2"
 module = "clickup.flux"
 operations = ["clickup-team-list", "clickup-space-folder-list", "clickup-list-task-list", "clickup-task-get", "clickup-task-create", "clickup-task-update"]
+
+[[auth]]
+name = "clickup.token"
+env = ["CLICKUP_TOKEN"]
+description = "ClickUp personal API token, sent as the raw value of the Authorization header with no scheme word. Grant access to the workspaces, spaces and lists the operations below need to read or write"
+
+[auth.scheme.header]
+name = "Authorization"
+
+[[default_auth]]
+credentials = ["clickup.token"]
+
+[[config]]
+name = "token"
+label = "ClickUp personal API token"
+help = "Copy it from ClickUp under your avatar -> Settings -> Apps. ClickUp shows the full token there each time; treat it like a password — it is sent raw, with no scheme word, on every request"
+format = "token"
+secret = true
+docs_url = "https://developer.clickup.com/docs/authentication"
+binds = "credential.clickup.token"

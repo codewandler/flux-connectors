@@ -10,3 +10,24 @@ base_url = "https://discord.com/api/v10"
 api_version = "v10"
 module = "discord.flux"
 operations = ["discord-current-user", "discord-guild-list", "discord-guild-get", "discord-guild-channels", "discord-channel-messages", "discord-message-create"]
+
+[[auth]]
+name = "discord.bot_token"
+env = ["DISCORD_BOT_TOKEN"]
+description = "Discord bot token, sent as `Authorization: Bot <token>`. The `Bot ` scheme word is supplied by the connector; the token is the value alone. `Bearer ` is a valid Discord scheme word for a different credential — an OAuth2 user token — so sending this token with that prefix yields a 401 indistinguishable from a revoked token"
+
+[auth.scheme.header]
+name = "Authorization"
+prefix = "Bot "
+
+[[default_auth]]
+credentials = ["discord.bot_token"]
+
+[[config]]
+name = "bot_token"
+label = "Discord bot token"
+help = "From the Discord Developer Portal: open your application, go to the Bot tab, and use Reset Token to reveal one — Discord shows a token exactly once and resetting invalidates the previous one. The bot must then be invited to each server you want to reach, with at least View Channels, Read Message History and Send Messages. Paste the token alone: the `Bot ` prefix Discord's documentation shows is added for you, and pasting it as part of the value breaks the header"
+format = "token"
+secret = true
+docs_url = "https://discord.com/developers/docs/reference#authentication"
+binds = "credential.discord.bot_token"

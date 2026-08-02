@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.box.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "access_token",
+        service: "default",
+        label: "Access token",
+        help: "Create an app at box.com/developers/console. For a quick connection, generate a Developer Token from the app's Configuration tab — it lasts 60 minutes and is meant for testing. For a token that keeps working, complete the app's OAuth2 authorization flow and supply the resulting access token",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://developer.box.com/guides/authentication/"),
+        binds: "credential.box.access_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"access_token\",\"label\":\"Access token\",\"help\":\"Create an app at box.com/developers/console. For a quick connection, generate a Developer Token from the app's Configuration tab — it lasts 60 minutes and is meant for testing. For a token that keeps working, complete the app's OAuth2 authorization flow and supply the resulting access token\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.box.com/guides/authentication/\",\"binds\":\"credential.box.access_token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

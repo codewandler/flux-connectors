@@ -10,3 +10,21 @@ base_url = "https://api.webflow.com/v2"
 api_version = "v2"
 module = "webflow.flux"
 operations = ["webflow-site-list", "webflow-collection-list", "webflow-collection-get", "webflow-collection-item-list", "webflow-collection-item-get", "webflow-site-publish"]
+
+[[auth]]
+name = "webflow.token"
+scheme = "bearer"
+env = ["WEBFLOW_TOKEN"]
+description = "Webflow API token (a Site API token or an OAuth2 access token), sent as a bearer token, scoped to read sites, collections and items, and to publish"
+
+[[default_auth]]
+credentials = ["webflow.token"]
+
+[[config]]
+name = "token"
+label = "Webflow API token"
+help = "Generate a Site API token from your site's Settings -> Apps & Integrations -> API access, or register an OAuth app at developers.webflow.com for a token scoped across sites. A Site API token only ever sees the one site it was generated for; supply a per-site token for a single-site connection or an OAuth token for one that must span several"
+format = "token"
+secret = true
+docs_url = "https://developers.webflow.com/data/reference/authentication"
+binds = "credential.webflow.token"

@@ -125,6 +125,13 @@ pub enum Field<'a> {
     /// declared data (`Acquisition::BasicJoin::user_suffix`) and is appended by the pack, so a host
     /// binds the plain account identifier and cannot get the join wrong.
     Username(&'a str),
+    /// One connection-time query value of one socket binding.
+    ChannelQuery {
+        /// The channel binding name.
+        channel: &'a str,
+        /// The vendor query parameter name.
+        parameter: &'a str,
+    },
 }
 
 impl Field<'_> {
@@ -147,6 +154,7 @@ impl Field<'_> {
         match self {
             Field::Endpoint(_) => "endpoint",
             Field::Username(_) => "username",
+            Field::ChannelQuery { .. } => "channel_query",
         }
     }
 
@@ -154,12 +162,18 @@ impl Field<'_> {
     fn name(&self) -> &str {
         match self {
             Field::Endpoint(name) | Field::Username(name) => name,
+            Field::ChannelQuery { parameter, .. } => parameter,
         }
     }
 
     /// How the field is spelled in a diagnostic, and in the design's `binds` vocabulary.
     fn binding(&self) -> String {
-        format!("{}.{}", self.kind(), self.name())
+        match self {
+            Self::ChannelQuery { channel, parameter } => {
+                format!("channel.{channel}.query.{parameter}")
+            }
+            _ => format!("{}.{}", self.kind(), self.name()),
+        }
     }
 
     /// The field as a [`Snapshot`] key: the kind, and the name owned.
@@ -167,7 +181,11 @@ impl Field<'_> {
     /// The kind is `&'static str` and only the name is allocated, which is what lets a snapshot
     /// outlive the borrowed `Field` it was taken for.
     fn key(&self) -> (&'static str, String) {
-        (self.kind(), self.name().to_owned())
+        let name = match self {
+            Self::ChannelQuery { channel, parameter } => format!("{channel}\0{parameter}"),
+            _ => self.name().to_owned(),
+        };
+        (self.kind(), name)
     }
 }
 
@@ -306,6 +324,51 @@ impl Configuration {
             values,
         }
     }
+
+    /// Snapshot every setting a channel handshake may read, applying declared optional defaults.
+    pub(crate) fn channel_snapshot(
+        &self,
+        provider: &'static catalog::Provider,
+        channel: &'static catalog::Channel,
+    ) -> Snapshot {
+        let mut values = BTreeMap::new();
+        for declaration in provider
+            .config
+            .iter()
+            .filter(|field| field.service == channel.service)
+        {
+            let field = if let Some(variable) = declaration.binds.strip_prefix("endpoint.") {
+                Some(Field::Endpoint(variable))
+            } else if let Some(credential) = declaration.binds.strip_prefix("username.") {
+                Some(Field::Username(credential))
+            } else {
+                declaration
+                    .binds
+                    .strip_prefix("channel.")
+                    .and_then(|rest| rest.split_once(".query."))
+                    .filter(|(binding, _)| *binding == channel.name)
+                    .map(|(binding, parameter)| Field::ChannelQuery {
+                        channel: binding,
+                        parameter,
+                    })
+            };
+            let Some(field) = field else { continue };
+            let value = self
+                .values
+                .get(&self.tenant, provider.id, channel.service, field)
+                .filter(|value| !value.trim().is_empty())
+                .or_else(|| declaration.default.map(str::to_owned));
+            if let Some(value) = value {
+                values.insert(field.key(), value);
+            }
+        }
+        Snapshot {
+            tenant: self.tenant.clone(),
+            provider: provider.id.to_owned(),
+            service: channel.service.to_owned(),
+            values,
+        }
+    }
 }
 
 /// **One operation's connection settings, resolved once and frozen.**
@@ -435,6 +498,26 @@ impl MemoryConfig {
             provider,
             service,
             Field::Username(credential),
+            value,
+        )
+    }
+
+    /// Bind one query parameter used only while opening a declared socket channel.
+    #[must_use]
+    pub fn with_channel_query(
+        self,
+        tenant: &str,
+        provider: &str,
+        service: &str,
+        channel: &str,
+        parameter: &str,
+        value: &str,
+    ) -> Self {
+        self.with(
+            tenant,
+            provider,
+            service,
+            Field::ChannelQuery { channel, parameter },
             value,
         )
     }

@@ -10,3 +10,21 @@ base_url = "https://api.box.com"
 api_version = "2.0"
 module = "box.flux"
 operations = ["box-user-me", "box-folder-get", "box-folder-items-list", "box-file-get", "box-folder-create", "box-file-copy"]
+
+[[auth]]
+name = "box.access_token"
+scheme = "bearer"
+env = ["BOX_ACCESS_TOKEN"]
+description = "Box access token sent as a bearer — an OAuth2 access token or a Developer Console token"
+
+[[default_auth]]
+credentials = ["box.access_token"]
+
+[[config]]
+name = "access_token"
+label = "Access token"
+help = "Create an app at box.com/developers/console. For a quick connection, generate a Developer Token from the app's Configuration tab — it lasts 60 minutes and is meant for testing. For a token that keeps working, complete the app's OAuth2 authorization flow and supply the resulting access token"
+format = "token"
+secret = true
+docs_url = "https://developer.box.com/guides/authentication/"
+binds = "credential.box.access_token"

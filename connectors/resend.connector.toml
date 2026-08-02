@@ -8,3 +8,12 @@ runtime = "http"
 base_url = "https://api.resend.com"
 module = "resend.flux"
 operations = ["resend-email-send", "resend-email-get", "resend-domain-list", "resend-domain-get"]
+
+[[auth]]
+name = "resend.api_key"
+scheme = "bearer"
+env = ["RESEND_API_KEY"]
+description = "Resend API key, sent as a bearer token on every request. Minted in the Resend dashboard and scoped there to full access or sending only; this repository holds the reference, never the value"
+
+[[default_auth]]
+credentials = ["resend.api_key"]

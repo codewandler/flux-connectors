@@ -8,3 +8,12 @@ runtime = "http"
 base_url = "https://api.github.com"
 module = "github.flux"
 operations = ["github-repo-get", "github-issue-get", "github-pull-get", "github-issue-create", "github-issue-comment-add", "github-issue-list", "github-pull-files-list", "github-workflow-run-list", "github-commit-list"]
+
+[[auth]]
+name = "github.token"
+scheme = "bearer"
+env = ["GITHUB_TOKEN"]
+description = "GitHub token sent as a bearer — a GitHub App installation token, a fine-grained PAT, or a classic PAT"
+
+[[default_auth]]
+credentials = ["github.token"]

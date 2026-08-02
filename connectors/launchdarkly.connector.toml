@@ -10,3 +10,23 @@ base_url = "https://app.launchdarkly.com/api/v2"
 api_version = "v2"
 module = "launchdarkly.flux"
 operations = ["launchdarkly-project-list", "launchdarkly-environment-list", "launchdarkly-flag-list", "launchdarkly-flag-get", "launchdarkly-flag-toggle"]
+
+[[auth]]
+name = "launchdarkly.api_token"
+env = ["LAUNCHDARKLY_API_TOKEN"]
+description = "LaunchDarkly API access token, sent as the entire value of the Authorization header with no scheme word in front of it — LaunchDarkly rejects a `Bearer `-prefixed value"
+
+[auth.scheme.header]
+name = "Authorization"
+
+[[default_auth]]
+credentials = ["launchdarkly.api_token"]
+
+[[config]]
+name = "api_token"
+label = "LaunchDarkly API access token"
+help = "Create one under Account settings → Authorization → Access tokens in LaunchDarkly. Give it at least reader access to the projects this connection should reach, and writer access if launchdarkly-flag-toggle will be used. LaunchDarkly shows the token once"
+format = "token"
+secret = true
+docs_url = "https://docs.launchdarkly.com/home/account/api"
+binds = "credential.launchdarkly.api_token"

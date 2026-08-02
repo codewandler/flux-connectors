@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://{domain}/api/v1",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,48 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "SSWS " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "domain",
+        service: "default",
+        label: "Okta domain",
+        help: "The full host you sign in to, without `https://` — if your Okta URL is `https://acme.okta.com`, this is `acme.okta.com`. European and preview orgs use `.okta-emea.com` and `.oktapreview.com`, and an org with a customised domain uses that instead, so give the whole host rather than just the first part",
+        example: Some("acme.okta.com"),
+        format: "hostname",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: Some("https://developer.okta.com/docs/api/#url-namespace"),
+        binds: "endpoint.domain",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"domain\",\"label\":\"Okta domain\",\"help\":\"The full host you sign in to, without `https://` — if your Okta URL is `https://acme.okta.com`, this is `acme.okta.com`. European and preview orgs use `.okta-emea.com` and `.oktapreview.com`, and an org with a customised domain uses that instead, so give the whole host rather than just the first part\",\"example\":\"acme.okta.com\",\"format\":\"hostname\",\"docs_url\":\"https://developer.okta.com/docs/api/#url-namespace\",\"binds\":\"endpoint.domain\"}",
+    },
+    crate::ConfigField {
+        name: "api_token",
+        service: "default",
+        label: "API token",
+        help: "Create one under Security → API → Tokens in the Okta Admin Console. The token inherits the permissions of the administrator who creates it, so create it as an account with only the access this connection needs — reading users and groups needs a read-only administrator, and okta-user-deactivate needs one that can manage users. Okta shows the token once, and it expires after 30 days without use",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://developer.okta.com/docs/guides/create-an-api-token/"),
+        binds: "credential.okta.api_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_token\",\"label\":\"API token\",\"help\":\"Create one under Security → API → Tokens in the Okta Admin Console. The token inherits the permissions of the administrator who creates it, so create it as an account with only the access this connection needs — reading users and groups needs a read-only administrator, and okta-user-deactivate needs one that can manage users. Okta shows the token once, and it expires after 30 days without use\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.okta.com/docs/guides/create-an-api-token/\",\"binds\":\"credential.okta.api_token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

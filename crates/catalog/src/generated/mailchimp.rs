@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://{dc}.api.mailchimp.com/3.0",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,48 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "server_prefix",
+        service: "default",
+        label: "Mailchimp datacentre",
+        help: "The short region code in front of `api.mailchimp.com` for your account, like us14 or us6. Find it three ways, whichever is easiest: it is the first part of the URL on your Mailchimp API keys page; it is the last part of your API key, after the final - character; or, on an OAuth connection, the OAuth metadata endpoint returns it. Enter the code alone, not a full URL",
+        example: Some("us14"),
+        format: "subdomain",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: Some("https://mailchimp.com/developer/marketing/docs/fundamentals/"),
+        binds: "endpoint.dc",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"server_prefix\",\"label\":\"Mailchimp datacentre\",\"help\":\"The short region code in front of `api.mailchimp.com` for your account, like us14 or us6. Find it three ways, whichever is easiest: it is the first part of the URL on your Mailchimp API keys page; it is the last part of your API key, after the final - character; or, on an OAuth connection, the OAuth metadata endpoint returns it. Enter the code alone, not a full URL\",\"example\":\"us14\",\"format\":\"subdomain\",\"docs_url\":\"https://mailchimp.com/developer/marketing/docs/fundamentals/\",\"binds\":\"endpoint.dc\"}",
+    },
+    crate::ConfigField {
+        name: "api_key",
+        service: "default",
+        label: "Mailchimp API key",
+        help: "Generate one under Account & billing, Extras, API keys in your Mailchimp account. It grants everything your Mailchimp user can do, so treat it as a password. Copy the datacentre code above from the same page before you leave it",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://mailchimp.com/developer/marketing/guides/quick-start/"),
+        binds: "credential.mailchimp.api_key",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_key\",\"label\":\"Mailchimp API key\",\"help\":\"Generate one under Account & billing, Extras, API keys in your Mailchimp account. It grants everything your Mailchimp user can do, so treat it as a password. Copy the datacentre code above from the same page before you leave it\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://mailchimp.com/developer/marketing/guides/quick-start/\",\"binds\":\"credential.mailchimp.api_key\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

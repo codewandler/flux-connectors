@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.stripe.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -31,6 +34,73 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Inbound,
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "secret_key",
+        service: "default",
+        label: "Secret key",
+        help: "From the Stripe dashboard under Developers → API keys. **A test key and a live key are different values.** The test key begins `sk_test` and acts only on test data; the live key begins `sk_live` and moves real money out of your account — a refund made with it is a real refund. Check the Test mode toggle in the dashboard before you copy. A restricted key (`rk_live` / `rk_test`) with write access to Charges, PaymentIntents and Refunds and read access to Customers and Balance is safer and is enough for this connector",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://docs.stripe.com/keys"),
+        binds: "credential.stripe.secret_key",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"secret_key\",\"label\":\"Secret key\",\"help\":\"From the Stripe dashboard under Developers → API keys. **A test key and a live key are different values.** The test key begins `sk_test` and acts only on test data; the live key begins `sk_live` and moves real money out of your account — a refund made with it is a real refund. Check the Test mode toggle in the dashboard before you copy. A restricted key (`rk_live` / `rk_test`) with write access to Charges, PaymentIntents and Refunds and read access to Customers and Balance is safer and is enough for this connector\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://docs.stripe.com/keys\",\"binds\":\"credential.stripe.secret_key\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+    crate::Event {
+        name: "payment_intent.succeeded",
+        service: "default",
+        description: "A payment intent completed and the money was taken. The customer has been charged",
+        wire_value: None,
+        default: true,
+        group: "Payments",
+        schema: Some("{\"properties\":{\"created\":{\"description\":\"Unix timestamp\",\"type\":\"integer\"},\"data\":{\"description\":\"The payload envelope; the payment intent itself is at `data.object`\",\"properties\":{\"object\":{\"description\":\"The payment intent, in the API version the endpoint is pinned to\",\"type\":\"object\"}},\"required\":[\"object\"],\"type\":\"object\"},\"id\":{\"description\":\"The event's own id, `evt_…`, which is what deduplicates a redelivery\",\"type\":\"string\"},\"livemode\":{\"type\":\"boolean\"},\"object\":{\"const\":\"event\"},\"type\":{\"const\":\"payment_intent.succeeded\"}},\"required\":[\"id\",\"type\",\"data\"],\"type\":\"object\"}"),
+        declaration_json: "{\"name\":\"payment_intent.succeeded\",\"description\":\"A payment intent completed and the money was taken. The customer has been charged\",\"group\":\"Payments\",\"schema\":{\"properties\":{\"created\":{\"description\":\"Unix timestamp\",\"type\":\"integer\"},\"data\":{\"description\":\"The payload envelope; the payment intent itself is at `data.object`\",\"properties\":{\"object\":{\"description\":\"The payment intent, in the API version the endpoint is pinned to\",\"type\":\"object\"}},\"required\":[\"object\"],\"type\":\"object\"},\"id\":{\"description\":\"The event's own id, `evt_…`, which is what deduplicates a redelivery\",\"type\":\"string\"},\"livemode\":{\"type\":\"boolean\"},\"object\":{\"const\":\"event\"},\"type\":{\"const\":\"payment_intent.succeeded\"}},\"required\":[\"id\",\"type\",\"data\"],\"type\":\"object\"}}",
+    },
+    crate::Event {
+        name: "payment_intent.payment_failed",
+        service: "default",
+        description: "A payment intent failed — the card was declined, the authentication was abandoned, or the bank refused it. No money was taken",
+        wire_value: None,
+        default: true,
+        group: "Payments",
+        schema: Some("{\"properties\":{\"created\":{\"type\":\"integer\"},\"data\":{\"description\":\"The payment intent is at `data.object`; the decline reason is on its `last_payment_error`\",\"properties\":{\"object\":{\"type\":\"object\"}},\"required\":[\"object\"],\"type\":\"object\"},\"id\":{\"type\":\"string\"},\"livemode\":{\"type\":\"boolean\"},\"object\":{\"const\":\"event\"},\"type\":{\"const\":\"payment_intent.payment_failed\"}},\"required\":[\"id\",\"type\",\"data\"],\"type\":\"object\"}"),
+        declaration_json: "{\"name\":\"payment_intent.payment_failed\",\"description\":\"A payment intent failed — the card was declined, the authentication was abandoned, or the bank refused it. No money was taken\",\"group\":\"Payments\",\"schema\":{\"properties\":{\"created\":{\"type\":\"integer\"},\"data\":{\"description\":\"The payment intent is at `data.object`; the decline reason is on its `last_payment_error`\",\"properties\":{\"object\":{\"type\":\"object\"}},\"required\":[\"object\"],\"type\":\"object\"},\"id\":{\"type\":\"string\"},\"livemode\":{\"type\":\"boolean\"},\"object\":{\"const\":\"event\"},\"type\":{\"const\":\"payment_intent.payment_failed\"}},\"required\":[\"id\",\"type\",\"data\"],\"type\":\"object\"}}",
+    },
+    crate::Event {
+        name: "charge.refunded",
+        service: "default",
+        description: "A charge was refunded, in whole or in part. Fires for a refund made through this connector as well as one made by a human in the Stripe dashboard, so a flow that triggers on it must not assume it caused the refund",
+        wire_value: None,
+        default: true,
+        group: "Payments",
+        schema: Some("{\"properties\":{\"created\":{\"type\":\"integer\"},\"data\":{\"description\":\"The charge is at `data.object`; `amount_refunded` says how much of it has now been returned\",\"properties\":{\"object\":{\"type\":\"object\"}},\"required\":[\"object\"],\"type\":\"object\"},\"id\":{\"type\":\"string\"},\"livemode\":{\"type\":\"boolean\"},\"object\":{\"const\":\"event\"},\"type\":{\"const\":\"charge.refunded\"}},\"required\":[\"id\",\"type\",\"data\"],\"type\":\"object\"}"),
+        declaration_json: "{\"name\":\"charge.refunded\",\"description\":\"A charge was refunded, in whole or in part. Fires for a refund made through this connector as well as one made by a human in the Stripe dashboard, so a flow that triggers on it must not assume it caused the refund\",\"group\":\"Payments\",\"schema\":{\"properties\":{\"created\":{\"type\":\"integer\"},\"data\":{\"description\":\"The charge is at `data.object`; `amount_refunded` says how much of it has now been returned\",\"properties\":{\"object\":{\"type\":\"object\"}},\"required\":[\"object\"],\"type\":\"object\"},\"id\":{\"type\":\"string\"},\"livemode\":{\"type\":\"boolean\"},\"object\":{\"const\":\"event\"},\"type\":{\"const\":\"charge.refunded\"}},\"required\":[\"id\",\"type\",\"data\"],\"type\":\"object\"}}",
+    },
+    crate::Event {
+        name: "charge.dispute.created",
+        service: "default",
+        description: "A customer disputed a charge with their bank. Money and a dispute fee are withheld immediately, and there is a deadline to submit evidence — this is a case for a human, not for an automated reply",
+        wire_value: None,
+        default: false,
+        group: "Disputes",
+        schema: Some("{\"properties\":{\"created\":{\"type\":\"integer\"},\"data\":{\"description\":\"The dispute is at `data.object`; `evidence_details.due_by` is the deadline and `charge` is the charge it contests\",\"properties\":{\"object\":{\"type\":\"object\"}},\"required\":[\"object\"],\"type\":\"object\"},\"id\":{\"type\":\"string\"},\"livemode\":{\"type\":\"boolean\"},\"object\":{\"const\":\"event\"},\"type\":{\"const\":\"charge.dispute.created\"}},\"required\":[\"id\",\"type\",\"data\"],\"type\":\"object\"}"),
+        declaration_json: "{\"name\":\"charge.dispute.created\",\"description\":\"A customer disputed a charge with their bank. Money and a dispute fee are withheld immediately, and there is a deadline to submit evidence — this is a case for a human, not for an automated reply\",\"default\":false,\"group\":\"Disputes\",\"schema\":{\"properties\":{\"created\":{\"type\":\"integer\"},\"data\":{\"description\":\"The dispute is at `data.object`; `evidence_details.due_by` is the deadline and `charge` is the charge it contests\",\"properties\":{\"object\":{\"type\":\"object\"}},\"required\":[\"object\"],\"type\":\"object\"},\"id\":{\"type\":\"string\"},\"livemode\":{\"type\":\"boolean\"},\"object\":{\"const\":\"event\"},\"type\":{\"const\":\"charge.dispute.created\"}},\"required\":[\"id\",\"type\",\"data\"],\"type\":\"object\"}}",
+    },
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

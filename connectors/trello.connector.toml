@@ -10,3 +10,40 @@ base_url = "https://api.trello.com/1"
 api_version = "1"
 module = "trello.flux"
 operations = ["trello-board-list", "trello-board-get", "trello-board-lists", "trello-list-cards", "trello-card-create", "trello-card-archive"]
+
+[[auth]]
+name = "trello.key"
+env = ["TRELLO_API_KEY"]
+description = "Trello API key, identifying the Power-Up registration a call is made through. Travels as the `key` query parameter on every request, always together with the token; neither authenticates a call alone"
+
+[auth.scheme.query]
+name = "key"
+
+[[auth]]
+name = "trello.token"
+env = ["TRELLO_API_TOKEN"]
+description = "Trello API token, granting access to one member's account. Travels as the `token` query parameter on every request, always together with the key; a token is only valid against the key it was minted for"
+
+[auth.scheme.query]
+name = "token"
+
+[[default_auth]]
+credentials = ["trello.key", "trello.token"]
+
+[[config]]
+name = "api_key"
+label = "Trello API key"
+help = "Generate one at trello.com/power-ups/admin: open (or create) a Power-Up, then the API Key tab. Do this first — the token below is minted against this key and only works with it"
+format = "token"
+secret = true
+docs_url = "https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/"
+binds = "credential.trello.key"
+
+[[config]]
+name = "api_token"
+label = "Trello API token"
+help = "From the same API Key page, follow the manual token link and click Allow. The token grants access to everything your Trello account can see, so treat it as a password"
+format = "token"
+secret = true
+docs_url = "https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/"
+binds = "credential.trello.token"

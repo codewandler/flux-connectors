@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.datadoghq.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -31,6 +34,48 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "DD-APPLICATION-KEY", prefix: "" },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "api_key",
+        service: "default",
+        label: "Datadog API Key",
+        help: "Organization Settings > API Keys in the Datadog app. Sent as DD-API-KEY on every request, always together with the Application Key",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://docs.datadoghq.com/account_management/api-app-keys/"),
+        binds: "credential.datadog.api_key",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_key\",\"label\":\"Datadog API Key\",\"help\":\"Organization Settings > API Keys in the Datadog app. Sent as DD-API-KEY on every request, always together with the Application Key\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://docs.datadoghq.com/account_management/api-app-keys/\",\"binds\":\"credential.datadog.api_key\"}",
+    },
+    crate::ConfigField {
+        name: "application_key",
+        service: "default",
+        label: "Datadog Application Key",
+        help: "Organization Settings > Application Keys in the Datadog app, scoped to the user who creates it. Sent as DD-APPLICATION-KEY on every request, always together with the API Key",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://docs.datadoghq.com/account_management/api-app-keys/"),
+        binds: "credential.datadog.application_key",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"application_key\",\"label\":\"Datadog Application Key\",\"help\":\"Organization Settings > Application Keys in the Datadog app, scoped to the user who creates it. Sent as DD-APPLICATION-KEY on every request, always together with the API Key\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://docs.datadoghq.com/account_management/api-app-keys/\",\"binds\":\"credential.datadog.application_key\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

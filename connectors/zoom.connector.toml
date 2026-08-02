@@ -10,3 +10,12 @@ base_url = "https://api.zoom.us"
 api_version = "v2"
 module = "zoom.flux"
 operations = ["zoom-meeting-delete", "zoom-user-get"]
+
+[[auth]]
+name = "zoom.access_token"
+scheme = "bearer"
+env = ["ZOOM_ACCESS_TOKEN"]
+description = "Zoom server-to-server OAuth access token, sent as a bearer. Minted outside flux and supplied through the environment; it expires within the hour and nothing here can refresh it"
+
+[[default_auth]]
+credentials = ["zoom.access_token"]

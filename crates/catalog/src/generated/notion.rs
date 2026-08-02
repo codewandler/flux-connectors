@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.notion.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "token",
+        service: "default",
+        label: "Integration token",
+        help: "Create an integration at notion.so/my-integrations and copy its Internal Integration Secret. **Then share your pages with it**: in Notion, open each page or database, use the ••• menu → Connections → and add your integration. An integration can only see content that has been shared with it this way, so a token that is otherwise valid returns a 404 for a page you can see in your browser until you do. Sharing a parent page shares everything under it",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://developers.notion.com/docs/authorization"),
+        binds: "credential.notion.token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"token\",\"label\":\"Integration token\",\"help\":\"Create an integration at notion.so/my-integrations and copy its Internal Integration Secret. **Then share your pages with it**: in Notion, open each page or database, use the ••• menu → Connections → and add your integration. An integration can only see content that has been shared with it this way, so a token that is otherwise valid returns a 404 for a page you can see in your browser until you do. Sharing a parent page shares everything under it\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developers.notion.com/docs/authorization\",\"binds\":\"credential.notion.token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

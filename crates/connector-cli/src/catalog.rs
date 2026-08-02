@@ -37,6 +37,8 @@
 //! held to flux-lang's formatter instead, by the emitter, and that fixed point *is* asserted
 //! (`connector-flux`'s `shipped_modules.rs`).
 
+use std::collections::BTreeMap;
+
 use anyhow::{bail, Context, Result};
 use connector_spec::{AuthScheme, Connector, Idempotency, Operation, Risk};
 
@@ -84,10 +86,16 @@ pub fn render(connector: &Connector, renderings: &[OperationRendering]) -> Resul
     out.push_str(&format!("    base_url: {},\n", string(&connector.base_url)));
     out.push_str("    auth: AUTH,\n");
     out.push_str("    operations: OPERATIONS,\n");
+    out.push_str("    config: CONFIG,\n");
+    out.push_str("    events: EVENTS,\n");
+    out.push_str("    channels: CHANNELS,\n");
     out.push_str("    config_choices: CONFIG_CHOICES,\n");
     out.push_str("};\n\n");
 
     out.push_str(&render_auth(connector)?);
+    out.push_str(&render_config(connector)?);
+    out.push_str(&render_events(connector)?);
+    out.push_str(&render_channels(connector)?);
     out.push_str(&render_config_choices(connector));
 
     out.push_str("#[rustfmt::skip]\n");
@@ -452,6 +460,195 @@ fn render_auth(connector: &Connector) -> Result<String> {
             acquisition(connector, method)
         ));
         out.push_str(&format!("        place: {},\n", placement(&method.scheme)));
+        out.push_str("    },\n");
+    }
+    out.push_str("];\n\n");
+    Ok(out)
+}
+
+fn render_config(connector: &Connector) -> Result<String> {
+    let mut out = String::from("#[rustfmt::skip]\nstatic CONFIG: &[crate::ConfigField] = &[\n");
+    for field in &connector.config {
+        let also_binds = field
+            .also_binds
+            .iter()
+            .map(|binds| string(binds))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let declaration = serde_json::to_string(field)?;
+        out.push_str("    crate::ConfigField {\n");
+        out.push_str(&format!("        name: {},\n", string(&field.name)));
+        out.push_str(&format!("        service: {},\n", string(&field.service)));
+        out.push_str(&format!("        label: {},\n", string(&field.label)));
+        out.push_str(&format!("        help: {},\n", string(&field.help)));
+        out.push_str(&format!(
+            "        example: {},\n",
+            option_string(field.example.as_deref())
+        ));
+        out.push_str(&format!(
+            "        format: {},\n",
+            string(field.format.word())
+        ));
+        out.push_str(&format!("        required: {},\n", field.required));
+        out.push_str(&format!(
+            "        default: {},\n",
+            option_string(field.default.as_deref())
+        ));
+        out.push_str(&format!("        secret: {},\n", field.secret));
+        out.push_str(&format!(
+            "        docs_url: {},\n",
+            option_string(field.docs_url.as_deref())
+        ));
+        out.push_str(&format!("        binds: {},\n", string(&field.binds)));
+        out.push_str(&format!("        also_binds: &[{also_binds}],\n"));
+        out.push_str(&format!(
+            "        declaration_json: {},\n",
+            string(&declaration)
+        ));
+        out.push_str("    },\n");
+    }
+    out.push_str("];\n\n");
+    Ok(out)
+}
+
+fn render_events(connector: &Connector) -> Result<String> {
+    let mut out = String::from("#[rustfmt::skip]\nstatic EVENTS: &[crate::Event] = &[\n");
+    for event in &connector.events {
+        let schema = event
+            .schema
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()?;
+        let declaration = serde_json::to_string(event)?;
+        out.push_str("    crate::Event {\n");
+        out.push_str(&format!("        name: {},\n", string(&event.name)));
+        out.push_str(&format!("        service: {},\n", string(&event.service)));
+        out.push_str(&format!(
+            "        description: {},\n",
+            string(&event.description)
+        ));
+        out.push_str(&format!(
+            "        wire_value: {},\n",
+            option_string(event.wire_value.as_deref())
+        ));
+        out.push_str(&format!("        default: {},\n", event.default));
+        out.push_str(&format!("        group: {},\n", string(&event.group)));
+        out.push_str(&format!(
+            "        schema: {},\n",
+            option_string(schema.as_deref())
+        ));
+        out.push_str(&format!(
+            "        declaration_json: {},\n",
+            string(&declaration)
+        ));
+        out.push_str("    },\n");
+    }
+    out.push_str("];\n\n");
+    Ok(out)
+}
+
+fn render_pairs(values: &BTreeMap<String, String>) -> String {
+    values
+        .iter()
+        .map(|(name, value)| {
+            format!(
+                "crate::Pair {{ name: {}, value: {} }}",
+                string(name),
+                string(value)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn render_requirements(requirements: &[connector_spec::AuthRequirement]) -> String {
+    let alternatives = requirements
+        .iter()
+        .map(|requirement| {
+            let names = requirement
+                .iter()
+                .map(|name| string(name))
+                .collect::<Vec<_>>();
+            format!("&[{}]", names.join(", "))
+        })
+        .collect::<Vec<_>>();
+    format!("&[{}]", alternatives.join(", "))
+}
+
+fn render_selector(selector: &connector_spec::Selector) -> String {
+    let source = match selector.source {
+        connector_spec::FieldSource::Header => "header",
+        connector_spec::FieldSource::Body => "body",
+    };
+    format!(
+        "crate::Selector {{ source: {}, name: {} }}",
+        string(source),
+        string(&selector.name)
+    )
+}
+
+fn render_channels(connector: &Connector) -> Result<String> {
+    let mut out = String::from("#[rustfmt::skip]\nstatic CHANNELS: &[crate::Channel] = &[\n");
+    for channel in &connector.channels {
+        let transport = match channel.transport {
+            connector_spec::Transport::Webhook => "crate::ChannelTransport::Webhook",
+            connector_spec::Transport::Socket => "crate::ChannelTransport::Socket",
+            connector_spec::Transport::Poll => "crate::ChannelTransport::Poll",
+        };
+        let events = channel
+            .events
+            .iter()
+            .map(|event| string(event))
+            .collect::<Vec<_>>();
+        let payload = render_pairs(&channel.payload);
+        let connect = channel.connect.as_ref().map_or_else(
+            || "None".to_owned(),
+            |connect| {
+                let subprotocols = connect
+                    .subprotocols
+                    .iter()
+                    .map(|value| string(value))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "Some(crate::SocketConnect {{ path: {}, query: &[{}], headers: &[{}], auth: {}, subprotocols: &[{}] }})",
+                    string(&connect.path),
+                    render_pairs(&connect.query),
+                    render_pairs(&connect.headers),
+                    render_requirements(&connect.auth),
+                    subprotocols
+                )
+            },
+        );
+        let discriminator = channel.discriminator.as_ref().map_or_else(
+            || "None".to_owned(),
+            |selector| format!("Some({})", render_selector(selector)),
+        );
+        let declaration = serde_json::to_string(channel)?;
+        out.push_str("    crate::Channel {\n");
+        out.push_str(&format!("        name: {},\n", string(&channel.name)));
+        out.push_str(&format!("        service: {},\n", string(&channel.service)));
+        out.push_str(&format!(
+            "        base_url: {},\n",
+            string(connector.base_url_of(&channel.service))
+        ));
+        out.push_str(&format!(
+            "        description: {},\n",
+            string(&channel.description)
+        ));
+        out.push_str(&format!("        transport: {transport},\n"));
+        out.push_str(&format!("        events: &[{}],\n", events.join(", ")));
+        out.push_str(&format!("        connect: {connect},\n"));
+        out.push_str(&format!("        discriminator: {discriminator},\n"));
+        out.push_str(&format!("        payload: &[{payload}],\n"));
+        out.push_str(&format!(
+            "        payload_root: {},\n",
+            channel.payload_root
+        ));
+        out.push_str(&format!(
+            "        declaration_json: {},\n",
+            string(&declaration)
+        ));
         out.push_str("    },\n");
     }
     out.push_str("];\n\n");

@@ -8,3 +8,24 @@ runtime = "http"
 base_url = "https://api.pagerduty.com"
 module = "pagerduty.flux"
 operations = ["pagerduty-incident-list", "pagerduty-incident-get", "pagerduty-service-list", "pagerduty-oncall-list", "pagerduty-incident-acknowledge", "pagerduty-incident-resolve"]
+
+[[auth]]
+name = "pagerduty.api_token"
+env = ["PAGERDUTY_API_TOKEN"]
+description = "PagerDuty REST API access key, sent as the Authorization header after the literal `Token token=`. A read-only key satisfies the four read operations; the two incident writes need a full-access key"
+
+[auth.scheme.header]
+name = "Authorization"
+prefix = "Token token="
+
+[[default_auth]]
+credentials = ["pagerduty.api_token"]
+
+[[config]]
+name = "api_token"
+label = "PagerDuty API access key"
+help = "Create a REST API key in PagerDuty under Integrations, then API Access Keys. A read-only key is enough to list incidents, services and on-calls; acknowledging or resolving an incident needs a full-access key. PagerDuty shows the key once, when it is created"
+format = "token"
+secret = true
+docs_url = "https://developer.pagerduty.com/docs/authentication"
+binds = "credential.pagerduty.api_token"

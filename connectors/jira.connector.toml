@@ -10,3 +10,39 @@ base_url = "https://{site}.atlassian.net"
 api_version = "2"
 module = "jira.flux"
 operations = ["jira-issue-get", "jira-issue-create", "jira-issue-comment-list", "jira-issue-comment-add", "jira-issue-transitions-list", "jira-issue-transition"]
+
+[[auth]]
+name = "jira.api_token"
+scheme = "basic"
+env = ["JIRA_API_TOKEN"]
+user_env = ["JIRA_USER"]
+description = "Atlassian API token; the user half is the account email that minted it"
+
+[[default_auth]]
+credentials = ["jira.api_token"]
+
+[[config]]
+name = "site"
+label = "Atlassian site name"
+help = "The part of your Jira URL before `.atlassian.net` — if you sign in at `acme.atlassian.net`, this is `acme`"
+example = "acme"
+format = "subdomain"
+docs_url = "https://support.atlassian.com/jira-software-cloud/docs/what-is-a-jira-site/"
+binds = "endpoint.site"
+
+[[config]]
+name = "email"
+label = "Atlassian account email"
+help = "The email of the account that minted the API token. It travels as the username half of the request"
+example = "you@acme.com"
+format = "email"
+binds = "username.jira.api_token"
+
+[[config]]
+name = "api_token"
+label = "API token"
+help = "Create one at id.atlassian.com under Security → API tokens. Atlassian shows it once"
+format = "token"
+secret = true
+docs_url = "https://id.atlassian.com/manage-profile/security/api-tokens"
+binds = "credential.jira.api_token"

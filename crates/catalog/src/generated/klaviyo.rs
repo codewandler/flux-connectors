@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://a.klaviyo.com/api",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Klaviyo-API-Key " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "api_key",
+        service: "default",
+        label: "Klaviyo private API key",
+        help: "Create one in Klaviyo under Settings > Account > API keys > Create Private API Key. Grant it these scopes and no more: accounts:read (for the connection test), profiles:read, profiles:write, lists:read and events:write. A key missing one of these still connects successfully and then fails on the single call that needs it. The key begins pk_ followed by a long hex string; it is shown once, so store it when it is created",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://developers.klaviyo.com/en/docs/retrieve_api_credentials"),
+        binds: "credential.klaviyo.api_key",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_key\",\"label\":\"Klaviyo private API key\",\"help\":\"Create one in Klaviyo under Settings > Account > API keys > Create Private API Key. Grant it these scopes and no more: accounts:read (for the connection test), profiles:read, profiles:write, lists:read and events:write. A key missing one of these still connects successfully and then fails on the single call that needs it. The key begins pk_ followed by a long hex string; it is shown once, so store it when it is created\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developers.klaviyo.com/en/docs/retrieve_api_credentials\",\"binds\":\"credential.klaviyo.api_key\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

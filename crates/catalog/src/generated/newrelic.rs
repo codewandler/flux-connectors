@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://{host}/v2",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,48 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "X-Api-Key", prefix: "" },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "host",
+        service: "default",
+        label: "New Relic API host",
+        help: "Which region this New Relic account lives in. Pick United States for an account on api.newrelic.com or European Union for one on api.eu.newrelic.com — those are the only two, and an account is in exactly one of them from the day it was created. If you are not sure, look at the URL you log in at: one.newrelic.com is the US region and one.eu.newrelic.com is the EU region. Getting this wrong returns 401 on every call, exactly as a bad key would, so check it before you rotate anything",
+        example: Some("api.newrelic.com"),
+        format: "hostname",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: Some("https://docs.newrelic.com/docs/apis/rest-api-v2/get-started/introduction-new-relic-rest-api-v2/"),
+        binds: "endpoint.host",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"host\",\"label\":\"New Relic API host\",\"help\":\"Which region this New Relic account lives in. Pick United States for an account on api.newrelic.com or European Union for one on api.eu.newrelic.com — those are the only two, and an account is in exactly one of them from the day it was created. If you are not sure, look at the URL you log in at: one.newrelic.com is the US region and one.eu.newrelic.com is the EU region. Getting this wrong returns 401 on every call, exactly as a bad key would, so check it before you rotate anything\",\"example\":\"api.newrelic.com\",\"format\":\"hostname\",\"choices\":[{\"value\":\"api.newrelic.com\",\"label\":\"United States\"},{\"value\":\"api.eu.newrelic.com\",\"label\":\"European Union\"}],\"docs_url\":\"https://docs.newrelic.com/docs/apis/rest-api-v2/get-started/introduction-new-relic-rest-api-v2/\",\"binds\":\"endpoint.host\"}",
+    },
+    crate::ConfigField {
+        name: "api_key",
+        service: "default",
+        label: "New Relic User API key",
+        help: "A User API key from New Relic's API keys page (one.newrelic.com, Administration -> API keys). Create a User key, not a License or Ingest key — a License key does not authenticate REST v2 and returns 401. The key inherits the permissions of the New Relic user it was created by",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://docs.newrelic.com/docs/apis/intro-apis/new-relic-api-keys/"),
+        binds: "credential.newrelic.api_key",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_key\",\"label\":\"New Relic User API key\",\"help\":\"A User API key from New Relic's API keys page (one.newrelic.com, Administration -> API keys). Create a User key, not a License or Ingest key — a License key does not authenticate REST v2 and returns 401. The key inherits the permissions of the New Relic user it was created by\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://docs.newrelic.com/docs/apis/intro-apis/new-relic-api-keys/\",\"binds\":\"credential.newrelic.api_key\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

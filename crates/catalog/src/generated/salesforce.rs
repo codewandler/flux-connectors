@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://{instance}.my.salesforce.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,48 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "instance",
+        service: "default",
+        label: "Salesforce My Domain name",
+        help: "The subdomain of your org's My Domain URL — if you log in at acme.my.salesforce.com, this is acme. Find it under Setup → Company Settings → My Domain, or read it off the instance_url your org's login flow returns",
+        example: Some("acme"),
+        format: "subdomain",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: None,
+        binds: "endpoint.instance",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"instance\",\"label\":\"Salesforce My Domain name\",\"help\":\"The subdomain of your org's My Domain URL — if you log in at acme.my.salesforce.com, this is acme. Find it under Setup → Company Settings → My Domain, or read it off the instance_url your org's login flow returns\",\"example\":\"acme\",\"format\":\"subdomain\",\"binds\":\"endpoint.instance\"}",
+    },
+    crate::ConfigField {
+        name: "access_token",
+        service: "default",
+        label: "Access token",
+        help: "An OAuth2 access token for this org — minted by Salesforce's own login flow, or by a Connected App's client-credentials or JWT-bearer flow, and pasted here already-minted. It is short-lived; a call that starts failing with 401 usually means this needs refreshing",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: None,
+        binds: "credential.salesforce.access_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"access_token\",\"label\":\"Access token\",\"help\":\"An OAuth2 access token for this org — minted by Salesforce's own login flow, or by a Connected App's client-credentials or JWT-bearer flow, and pasted here already-minted. It is short-lived; a call that starts failing with 401 usually means this needs refreshing\",\"format\":\"token\",\"secret\":true,\"binds\":\"credential.salesforce.access_token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

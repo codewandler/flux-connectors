@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.webflow.com/v2",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "token",
+        service: "default",
+        label: "Webflow API token",
+        help: "Generate a Site API token from your site's Settings -> Apps & Integrations -> API access, or register an OAuth app at developers.webflow.com for a token scoped across sites. A Site API token only ever sees the one site it was generated for; supply a per-site token for a single-site connection or an OAuth token for one that must span several",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://developers.webflow.com/data/reference/authentication"),
+        binds: "credential.webflow.token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"token\",\"label\":\"Webflow API token\",\"help\":\"Generate a Site API token from your site's Settings -> Apps & Integrations -> API access, or register an OAuth app at developers.webflow.com for a token scoped across sites. A Site API token only ever sees the one site it was generated for; supply a per-site token for a single-site connection or an OAuth token for one that must span several\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developers.webflow.com/data/reference/authentication\",\"binds\":\"credential.webflow.token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

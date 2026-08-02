@@ -123,7 +123,7 @@ pub use graph::{
 };
 pub use inbound::{
     ChannelBinding, Digest, Encoding, EventDecl, FieldSource, HmacSpec, ManualSetup, Reply,
-    Selector, Subscription, TimestampFormat, Transport, VerificationScheme,
+    Selector, SocketConnectSpec, Subscription, TimestampFormat, Transport, VerificationScheme,
 };
 pub use ir::{
     constrains_nothing, credential_handle_schema, response_location_exists, BodyEncoding,

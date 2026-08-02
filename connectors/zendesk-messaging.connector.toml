@@ -11,3 +11,58 @@ base_url = "https://{subdomain}.zendesk.com/sc"
 api_version = "v2"
 module = "zendesk-messaging.flux"
 operations = ["zendesk-messaging-conversation-create", "zendesk-messaging-conversation-get", "zendesk-messaging-conversation-update", "zendesk-messaging-participant-list", "zendesk-messaging-message-create", "zendesk-messaging-message-list", "zendesk-messaging-user-create", "zendesk-messaging-user-get", "zendesk-messaging-user-update"]
+
+[[auth]]
+name = "zendesk.api_token"
+scheme = "basic"
+env = ["ZENDESK_API_TOKEN"]
+user_env = ["ZENDESK_USER"]
+user_suffix = "/token"
+description = "Zendesk API token; the user half is the agent email with Zendesk's /token marker"
+
+[[auth]]
+name = "zendesk.messaging_key"
+scheme = "basic"
+env = ["ZENDESK_MESSAGING_KEY_SECRET"]
+user_env = ["ZENDESK_MESSAGING_KEY_ID"]
+description = "App-scoped Zendesk Messaging API key id and secret"
+
+[[default_auth]]
+credentials = ["zendesk.api_token"]
+
+[[config]]
+name = "messaging_subdomain"
+service = "messaging"
+label = "Zendesk subdomain"
+help = "The part of your Zendesk URL before `.zendesk.com` — the same account subdomain used by Support"
+example = "acme"
+format = "subdomain"
+docs_url = "https://support.zendesk.com/hc/en-us/articles/4409381383578"
+binds = "endpoint.subdomain"
+
+[[config]]
+name = "messaging_app_id"
+service = "messaging"
+label = "Messaging app id"
+help = "The Sunshine Conversations app id this connection manages, as one path-safe identifier"
+example = "app_123"
+docs_url = "https://developer.zendesk.com/api-reference/apps/apps-api/apps/"
+binds = "path.appId"
+
+[[config]]
+name = "messaging_key_id"
+service = "messaging"
+label = "Messaging key id"
+help = "The id half of an app-scoped Sunshine Conversations API key"
+example = "key_123"
+binds = "username.zendesk.messaging_key"
+
+[[config]]
+name = "messaging_key_secret"
+service = "messaging"
+label = "Messaging key secret"
+help = "The secret half of the app-scoped Sunshine Conversations API key; Zendesk shows it only when the key is created"
+format = "token"
+secret = true
+docs_url = "https://developer.zendesk.com/documentation/conversations/getting-started/using-the-api/"
+binds = "credential.zendesk.messaging_key"

@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.typeform.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "access_token",
+        service: "default",
+        label: "Typeform access token",
+        help: "Create one under Account (top-left menu next to your username) → Personal tokens in Typeform, or supply the access token from an OAuth2 app's authorization flow. Typeform shows a newly created personal token once",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://www.typeform.com/developers/get-started/personal-access-token/"),
+        binds: "credential.typeform.access_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"access_token\",\"label\":\"Typeform access token\",\"help\":\"Create one under Account (top-left menu next to your username) → Personal tokens in Typeform, or supply the access token from an OAuth2 app's authorization flow. Typeform shows a newly created personal token once\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://www.typeform.com/developers/get-started/personal-access-token/\",\"binds\":\"credential.typeform.access_token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

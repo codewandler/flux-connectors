@@ -10,3 +10,12 @@ base_url = "https://openrouter.ai"
 api_version = "v1"
 module = "openrouter.flux"
 operations = ["openrouter-models-list", "openrouter-model-endpoints-list", "openrouter-chat-completion", "openrouter-credits-get"]
+
+[[auth]]
+name = "openrouter.api_key"
+scheme = "bearer"
+env = ["OPENROUTER_API_KEY"]
+description = "OpenRouter API key, sent as a bearer token"
+
+[[default_auth]]
+credentials = ["openrouter.api_key"]

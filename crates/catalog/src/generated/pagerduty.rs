@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.pagerduty.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Token token=" },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "api_token",
+        service: "default",
+        label: "PagerDuty API access key",
+        help: "Create a REST API key in PagerDuty under Integrations, then API Access Keys. A read-only key is enough to list incidents, services and on-calls; acknowledging or resolving an incident needs a full-access key. PagerDuty shows the key once, when it is created",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://developer.pagerduty.com/docs/authentication"),
+        binds: "credential.pagerduty.api_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_token\",\"label\":\"PagerDuty API access key\",\"help\":\"Create a REST API key in PagerDuty under Integrations, then API Access Keys. A read-only key is enough to list incidents, services and on-calls; acknowledging or resolving an incident needs a full-access key. PagerDuty shows the key once, when it is created\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.pagerduty.com/docs/authentication\",\"binds\":\"credential.pagerduty.api_token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

@@ -515,6 +515,14 @@ pub enum Binding<'a> {
         /// The `{placeholder}` the emitted module carries, and the name the vendor sees.
         name: &'a str,
     },
+    /// One query parameter on one declared socket channel —
+    /// `channel.ari-events.query.subscribeAll`.
+    ChannelQuery {
+        /// The [`ChannelBinding`](crate::ChannelBinding) name.
+        channel: &'a str,
+        /// The query parameter name on that channel's connect declaration.
+        parameter: &'a str,
+    },
     /// The secret half of a declared credential — `credential.zendesk.api_token`.
     Credential {
         /// The [`AuthMethod::name`](crate::AuthMethod::name).
@@ -552,6 +560,7 @@ impl<'a> Binding<'a> {
             Self::OAuthClientId | Self::OAuthClientSecret => Level::Operator,
             Self::Endpoint { .. }
             | Self::Request { .. }
+            | Self::ChannelQuery { .. }
             | Self::Credential { .. }
             | Self::Username { .. } => Level::Connection,
         }
@@ -568,6 +577,7 @@ impl<'a> Binding<'a> {
         match self {
             Self::Endpoint { .. } => "endpoint",
             Self::Request { position, .. } => position.word(),
+            Self::ChannelQuery { .. } => "channel_query",
             Self::Credential { .. } => "credential",
             Self::Username { .. } => "username",
             Self::OAuthClientId | Self::OAuthClientSecret => "oauth",
@@ -582,6 +592,7 @@ impl<'a> Binding<'a> {
             Self::Request { name, .. } | Self::Credential { name } | Self::Username { name } => {
                 name
             }
+            Self::ChannelQuery { parameter, .. } => parameter,
             Self::OAuthClientId => "client_id",
             Self::OAuthClientSecret => "client_secret",
         }
@@ -604,6 +615,7 @@ impl<'a> Binding<'a> {
             // travels in a URL or a header the module itself composes, where a secret must never be.
             Self::Endpoint { .. }
             | Self::Request { .. }
+            | Self::ChannelQuery { .. }
             | Self::Username { .. }
             | Self::OAuthClientId => false,
         }
@@ -628,6 +640,7 @@ impl<'a> Binding<'a> {
         match self {
             Self::Endpoint { .. } => validate_host_value(value),
             Self::Request { position, .. } => position.validate_value(value),
+            Self::ChannelQuery { .. } => Position::Query.validate_value(value),
             Self::Credential { .. }
             | Self::Username { .. }
             | Self::OAuthClientId
@@ -660,6 +673,20 @@ pub fn parse_binding(binds: &str) -> Result<Binding<'_>, String> {
         }
         return Ok(Binding::Username { name });
     }
+    if let Some(rest) = binds.strip_prefix("channel.") {
+        let Some((channel, parameter)) = rest.split_once(".query.") else {
+            return Err(format!(
+                "{binds:?} is not a channel query binding; write \
+                 `channel.<binding>.query.<parameter>`"
+            ));
+        };
+        if channel.is_empty() || parameter.is_empty() {
+            return Err(format!(
+                "{binds:?} must name both a channel binding and a query parameter"
+            ));
+        }
+        return Ok(Binding::ChannelQuery { channel, parameter });
+    }
     for position in [Position::Path, Position::Query, Position::Header] {
         let Some(name) = binds
             .strip_prefix(position.word())
@@ -682,6 +709,7 @@ pub fn parse_binding(binds: &str) -> Result<Binding<'_>, String> {
         _ => Err(format!(
             "{binds:?} is not a binding. A configuration value goes to exactly one of: \
              `endpoint.<variable>`, `path.<variable>`, `query.<name>`, `header.<name>`, \
+             `channel.<binding>.query.<parameter>`, \
              `credential.<name>`, `username.<name>`, `oauth.client_id`, `oauth.client_secret`"
         )),
     }
@@ -765,6 +793,10 @@ pub struct ConfigField {
     /// safe default is to ask.
     #[serde(default = "default_required", skip_serializing_if = "is_true")]
     pub required: bool,
+    /// A literal used when an optional value is absent. Unlike [`example`](Self::example), this is
+    /// sent on the wire and is therefore validated exactly like a supplied value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
     /// Whether the value is a secret — masked on input, never logged, never echoed back.
     ///
     /// **Must agree with [`binds`](Self::binds)**; see [`Binding::is_secret`] for why that is a rule
@@ -1174,6 +1206,7 @@ mod tests {
             format: Format::Text,
             choices: Vec::new(),
             required: true,
+            default: None,
             secret: false,
             docs_url: None,
             binds: "endpoint.app_id".to_owned(),
@@ -1228,6 +1261,7 @@ mod tests {
             format: Format::Token,
             choices: Vec::new(),
             required: true,
+            default: None,
             secret: false,
             docs_url: None,
             binds: "username.twilio.basic_auth".to_owned(),

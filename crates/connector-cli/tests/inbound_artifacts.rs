@@ -542,7 +542,7 @@ fn neither_projection_can_lose_a_field_hmac_spec_declares() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// 2 — the declaration is emitted nowhere
+// 2 — the declaration reaches metadata, never executable Flux
 // ---------------------------------------------------------------------------------------------
 
 /// **Nothing reaches the `.flux` module.** Every shipped module is byte-identical to one emitted
@@ -586,10 +586,10 @@ fn no_event_or_binding_reaches_any_shipped_module() {
                 unit.service
             );
         }
-        assert_eq!(
+        assert_ne!(
             with.catalog, without.catalog,
-            "`{provider}`'s generated catalogue table changes with its inbound surface; the Rust \
-             catalogue embeds `op` renderings only"
+            "`{provider}`'s generated catalogue table ignores its inbound surface, so a host could \
+             not plan or route its declared channels"
         );
 
         // The complement, so the check above cannot pass because the manifests are identical too.

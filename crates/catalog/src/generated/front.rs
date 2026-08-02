@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api2.frontapp.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "api_token",
+        service: "default",
+        label: "API token",
+        help: "In Front, open Settings → API & Integrations → API, and create a new token. A token is scoped to the teammate who creates it and to the scopes granted when it is created — replying and tagging require write scopes, not just read ones",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://dev.frontapp.com/docs/authentication"),
+        binds: "credential.front.api_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_token\",\"label\":\"API token\",\"help\":\"In Front, open Settings → API & Integrations → API, and create a new token. A token is scoped to the teammate who creates it and to the scopes granted when it is created — replying and tagging require write scopes, not just read ones\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://dev.frontapp.com/docs/authentication\",\"binds\":\"credential.front.api_token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.clickup.com/api/v2",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "" },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "token",
+        service: "default",
+        label: "ClickUp personal API token",
+        help: "Copy it from ClickUp under your avatar -> Settings -> Apps. ClickUp shows the full token there each time; treat it like a password — it is sent raw, with no scheme word, on every request",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://developer.clickup.com/docs/authentication"),
+        binds: "credential.clickup.token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"token\",\"label\":\"ClickUp personal API token\",\"help\":\"Copy it from ClickUp under your avatar -> Settings -> Apps. ClickUp shows the full token there each time; treat it like a password — it is sent raw, with no scheme word, on every request\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.clickup.com/docs/authentication\",\"binds\":\"credential.clickup.token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

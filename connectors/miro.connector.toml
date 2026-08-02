@@ -10,3 +10,21 @@ base_url = "https://api.miro.com/v2"
 api_version = "v2"
 module = "miro.flux"
 operations = ["miro-board-list", "miro-board-item-list", "miro-board-item-get", "miro-sticky-note-create", "miro-sticky-note-update", "miro-sticky-note-delete"]
+
+[[auth]]
+name = "miro.access_token"
+scheme = "bearer"
+env = ["MIRO_ACCESS_TOKEN"]
+description = "Miro access token (a personal access token or an OAuth2 access token), sent as a bearer token, scoped to read and write boards, board items and sticky notes"
+
+[[default_auth]]
+credentials = ["miro.access_token"]
+
+[[config]]
+name = "access_token"
+label = "Miro access token"
+help = "Create one at your Miro app's settings (developers.miro.com) or from a personal access token under a board's Settings -> Apps, scoped to boards:read and boards:write. Miro shows the token once"
+format = "token"
+secret = true
+docs_url = "https://developers.miro.com/docs/getting-started-with-oauth"
+binds = "credential.miro.access_token"

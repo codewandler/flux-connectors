@@ -10,3 +10,32 @@ base_url = "https://{project_ref}.supabase.co"
 api_version = "v1"
 module = "supabase.flux"
 operations = ["supabase-schema-describe", "supabase-rows-list", "supabase-auth-settings"]
+
+[[auth]]
+name = "supabase.anon_key"
+env = ["SUPABASE_ANON_KEY"]
+description = "Supabase project anon (publishable) key. Travels as the `apikey` header on every request. Requests made with it run as the project's `anon` Postgres role, so everything they return is bounded by the project's row-level-security policies — it is not the `service_role` key and confers none of that key's authority"
+
+[auth.scheme.header]
+name = "apikey"
+
+[[default_auth]]
+credentials = ["supabase.anon_key"]
+
+[[config]]
+name = "project_ref"
+label = "Supabase project ref"
+help = "The reference id of your project, from Project Settings → General, or the first label of your project's URL. Paste only that label — not the full `https://…` URL and not anything with an `@` in it: the ref becomes the hostname every request goes to, so a value carrying an `@` would send this project's key to a host you did not name"
+example = "abcdefghijklmnopqrst"
+format = "subdomain"
+docs_url = "https://supabase.com/docs/guides/api"
+binds = "endpoint.project_ref"
+
+[[config]]
+name = "anon_key"
+label = "Supabase anon (publishable) key"
+help = "From Project Settings → API, copy the key labelled `anon` / `public` (newer projects spell it `sb_publishable_…`). Do NOT paste the `service_role` key, even though it also works: `service_role` bypasses row-level security completely, so a connector holding it can read and change every row in your database regardless of the policies you wrote. The anon key is the one Supabase publishes as safe to expose, and it is all this connector needs"
+format = "token"
+secret = true
+docs_url = "https://supabase.com/docs/guides/api/api-keys"
+binds = "credential.supabase.anon_key"

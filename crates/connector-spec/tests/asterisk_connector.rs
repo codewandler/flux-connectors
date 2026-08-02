@@ -1,6 +1,9 @@
 //! C-485: Asterisk ARI is one spec-backed HTTP connector, not a Flux plugin.
 
-use connector_spec::{AuthScheme, HttpMethod, Idempotency, Risk};
+use std::collections::BTreeSet;
+
+use connector_spec::{AuthScheme, Binding, HttpMethod, Idempotency, Risk, Transport};
+use serde_json::Value;
 
 #[path = "support/shipped_provider.rs"]
 mod shipped_provider;
@@ -17,14 +20,8 @@ fn every_non_websocket_ari_operation_is_selected_from_the_vendor_document() {
         .operation_specs
         .values()
         .all(|source| source.operation_id != "events.eventWebsocket"));
-    assert!(
-        connector.events.is_empty(),
-        "eventing is future channel work"
-    );
-    assert!(
-        connector.channels.is_empty(),
-        "eventing is future channel work"
-    );
+    assert_eq!(connector.events.len(), 45);
+    assert_eq!(connector.channels.len(), 1);
 
     let count = |method| {
         connector
@@ -37,6 +34,90 @@ fn every_non_websocket_ari_operation_is_selected_from_the_vendor_document() {
     assert_eq!(count(HttpMethod::Post), 48);
     assert_eq!(count(HttpMethod::Put), 8);
     assert_eq!(count(HttpMethod::Delete), 20);
+}
+
+#[test]
+fn the_websocket_and_every_declared_event_subtype_are_accounted_for() {
+    let connector = shipped_provider::load("asterisk").connector;
+    let source: Value = serde_json::from_slice(
+        &std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../specs/asterisk/api-docs/events.json"),
+        )
+        .expect("vendored events document"),
+    )
+    .expect("events document is JSON");
+    let source_events = source["models"]["Event"]["subTypes"]
+        .as_array()
+        .expect("Event subtype census")
+        .iter()
+        .map(|value| value.as_str().expect("subtype name"))
+        .collect::<BTreeSet<_>>();
+    let declared_wire_values = connector
+        .events
+        .iter()
+        .map(|event| event.wire_value.as_deref().expect("exact ARI wire value"))
+        .collect::<BTreeSet<_>>();
+    assert_eq!(declared_wire_values, source_events);
+
+    for event in &connector.events {
+        let schema = event.schema.as_ref().expect("full event schema");
+        assert_eq!(
+            schema["properties"]["type"]["const"].as_str(),
+            event.wire_value.as_deref()
+        );
+        assert!(schema["properties"].get("application").is_some());
+        assert!(schema["properties"].get("timestamp").is_some());
+        assert!(
+            event
+                .name
+                .chars()
+                .all(|character| character.is_ascii_lowercase() || character == '-'),
+            "{}",
+            event.name
+        );
+    }
+
+    let channel = connector.channel("ari-events").expect("ARI event socket");
+    assert_eq!(channel.transport, Transport::Socket);
+    assert!(channel.payload_root);
+    assert_eq!(
+        channel
+            .discriminator
+            .as_ref()
+            .map(|selector| selector.name.as_str()),
+        Some("type")
+    );
+    assert_eq!(channel.events.len(), source_events.len());
+    let connect = channel
+        .connect
+        .as_ref()
+        .expect("declarative socket handshake");
+    assert_eq!(connect.path, "/events");
+    assert_eq!(connect.query["app"], "{app}");
+    assert_eq!(connect.query["subscribeAll"], "{subscribe_all}");
+    assert_eq!(connect.auth, connector.default_auth);
+
+    let app = connector
+        .config
+        .iter()
+        .find(|field| field.name == "app")
+        .expect("required Stasis application");
+    assert!(app.required);
+    assert_eq!(
+        app.binding(),
+        Some(Binding::ChannelQuery {
+            channel: "ari-events",
+            parameter: "app",
+        })
+    );
+    let subscribe_all = connector
+        .config
+        .iter()
+        .find(|field| field.name == "subscribe_all")
+        .expect("optional subscribe-all setting");
+    assert!(!subscribe_all.required);
+    assert_eq!(subscribe_all.default.as_deref(), Some("false"));
 }
 
 #[test]

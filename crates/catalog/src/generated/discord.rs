@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://discord.com/api/v10",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bot " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "bot_token",
+        service: "default",
+        label: "Discord bot token",
+        help: "From the Discord Developer Portal: open your application, go to the Bot tab, and use Reset Token to reveal one — Discord shows a token exactly once and resetting invalidates the previous one. The bot must then be invited to each server you want to reach, with at least View Channels, Read Message History and Send Messages. Paste the token alone: the `Bot ` prefix Discord's documentation shows is added for you, and pasting it as part of the value breaks the header",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://discord.com/developers/docs/reference#authentication"),
+        binds: "credential.discord.bot_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"bot_token\",\"label\":\"Discord bot token\",\"help\":\"From the Discord Developer Portal: open your application, go to the Bot tab, and use Reset Token to reveal one — Discord shows a token exactly once and resetting invalidates the previous one. The bot must then be invited to each server you want to reach, with at least View Channels, Read Message History and Send Messages. Paste the token alone: the `Bot ` prefix Discord's documentation shows is added for you, and pasting it as part of the value breaks the header\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://discord.com/developers/docs/reference#authentication\",\"binds\":\"credential.discord.bot_token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

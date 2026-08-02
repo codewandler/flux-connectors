@@ -11,6 +11,43 @@ api_version = "2"
 module = "newrelic.flux"
 operations = ["newrelic-application-list", "newrelic-application-get", "newrelic-alert-policy-list", "newrelic-alert-violation-list", "newrelic-deployment-list", "newrelic-deployment-create"]
 
+[[auth]]
+name = "newrelic.api_key"
+env = ["NEW_RELIC_API_KEY"]
+description = "New Relic User API key, authorizing REST v2 calls as the New Relic user it was created by. Travels as the `X-Api-Key` header on every request. A key is issued in one region and is not valid against the other region's host — a 401 from this connector is as likely to be a wrong `host` as a wrong key"
+
+[auth.scheme.header]
+name = "X-Api-Key"
+
+[[default_auth]]
+credentials = ["newrelic.api_key"]
+
+[[config]]
+name = "host"
+label = "New Relic API host"
+help = "Which region this New Relic account lives in. Pick United States for an account on api.newrelic.com or European Union for one on api.eu.newrelic.com — those are the only two, and an account is in exactly one of them from the day it was created. If you are not sure, look at the URL you log in at: one.newrelic.com is the US region and one.eu.newrelic.com is the EU region. Getting this wrong returns 401 on every call, exactly as a bad key would, so check it before you rotate anything"
+example = "api.newrelic.com"
+format = "hostname"
+docs_url = "https://docs.newrelic.com/docs/apis/rest-api-v2/get-started/introduction-new-relic-rest-api-v2/"
+binds = "endpoint.host"
+
+[[config.choices]]
+value = "api.newrelic.com"
+label = "United States"
+
+[[config.choices]]
+value = "api.eu.newrelic.com"
+label = "European Union"
+
+[[config]]
+name = "api_key"
+label = "New Relic User API key"
+help = "A User API key from New Relic's API keys page (one.newrelic.com, Administration -> API keys). Create a User key, not a License or Ingest key — a License key does not authenticate REST v2 and returns 401. The key inherits the permissions of the New Relic user it was created by"
+format = "token"
+secret = true
+docs_url = "https://docs.newrelic.com/docs/apis/intro-apis/new-relic-api-keys/"
+binds = "credential.newrelic.api_key"
+
 [[config_choices]]
 field = "host"
 label = "New Relic API host"

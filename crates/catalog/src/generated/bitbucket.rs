@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.bitbucket.org/2.0",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,48 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "access_token",
+        service: "default",
+        label: "Bitbucket access token",
+        help: "Create one in the workspace's settings under Security -> Access tokens -> Create Workspace Access Token, with the Repositories: Read and Pull requests: Write scopes. Bitbucket shows the token once. Create it in the same workspace you name below, so the token reaches no further than this connection does",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://support.atlassian.com/bitbucket-cloud/docs/using-access-tokens/"),
+        binds: "credential.bitbucket.access_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"access_token\",\"label\":\"Bitbucket access token\",\"help\":\"Create one in the workspace's settings under Security -> Access tokens -> Create Workspace Access Token, with the Repositories: Read and Pull requests: Write scopes. Bitbucket shows the token once. Create it in the same workspace you name below, so the token reaches no further than this connection does\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://support.atlassian.com/bitbucket-cloud/docs/using-access-tokens/\",\"binds\":\"credential.bitbucket.access_token\"}",
+    },
+    crate::ConfigField {
+        name: "workspace",
+        service: "default",
+        label: "Bitbucket workspace",
+        help: "The workspace this connection manages, as its slug — the single path segment right after bitbucket.org/ in any of its URLs. In https://bitbucket.org/acme-engineering/widget-service the workspace is acme-engineering, not acme-engineering/widget-service and not the full URL. Find it under Workspace settings -> Overview. One connection manages one workspace",
+        example: Some("acme-engineering"),
+        format: "text",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: Some("https://support.atlassian.com/bitbucket-cloud/docs/what-is-a-workspace/"),
+        binds: "path.workspace",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"workspace\",\"label\":\"Bitbucket workspace\",\"help\":\"The workspace this connection manages, as its slug — the single path segment right after bitbucket.org/ in any of its URLs. In https://bitbucket.org/acme-engineering/widget-service the workspace is acme-engineering, not acme-engineering/widget-service and not the full URL. Find it under Workspace settings -> Overview. One connection manages one workspace\",\"example\":\"acme-engineering\",\"docs_url\":\"https://support.atlassian.com/bitbucket-cloud/docs/what-is-a-workspace/\",\"binds\":\"path.workspace\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

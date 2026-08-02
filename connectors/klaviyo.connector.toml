@@ -8,3 +8,24 @@ runtime = "http"
 base_url = "https://a.klaviyo.com/api"
 module = "klaviyo.flux"
 operations = ["klaviyo-account-list", "klaviyo-profile-list", "klaviyo-profile-get", "klaviyo-profile-create", "klaviyo-list-list", "klaviyo-event-create"]
+
+[[auth]]
+name = "klaviyo.api_key"
+env = ["KLAVIYO_API_KEY"]
+description = "Klaviyo private API key for one account. Travels as the whole Authorization header behind Klaviyo's own scheme word. Keys are scoped per key: one minted without the scopes the shipped operations need will authenticate, pass verification, and fail on exactly the call that needs the missing scope"
+
+[auth.scheme.header]
+name = "Authorization"
+prefix = "Klaviyo-API-Key "
+
+[[default_auth]]
+credentials = ["klaviyo.api_key"]
+
+[[config]]
+name = "api_key"
+label = "Klaviyo private API key"
+help = "Create one in Klaviyo under Settings > Account > API keys > Create Private API Key. Grant it these scopes and no more: accounts:read (for the connection test), profiles:read, profiles:write, lists:read and events:write. A key missing one of these still connects successfully and then fails on the single call that needs it. The key begins pk_ followed by a long hex string; it is shown once, so store it when it is created"
+format = "token"
+secret = true
+docs_url = "https://developers.klaviyo.com/en/docs/retrieve_api_credentials"
+binds = "credential.klaviyo.api_key"

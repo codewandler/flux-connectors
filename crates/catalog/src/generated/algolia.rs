@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://{app_id}.algolia.net",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,48 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "X-Algolia-API-Key", prefix: "" },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "api_key",
+        service: "default",
+        label: "Algolia API key",
+        help: "Create one under API Keys in the Algolia dashboard, with the search, browse, addObject and deleteObject ACLs restricted to the indices this connection should reach. Algolia shows the full key in the dashboard; the Admin key is deliberately not what this asks for",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://dashboard.algolia.com/account/api-keys/"),
+        binds: "credential.algolia.api_key",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_key\",\"label\":\"Algolia API key\",\"help\":\"Create one under API Keys in the Algolia dashboard, with the search, browse, addObject and deleteObject ACLs restricted to the indices this connection should reach. Algolia shows the full key in the dashboard; the Admin key is deliberately not what this asks for\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://dashboard.algolia.com/account/api-keys/\",\"binds\":\"credential.algolia.api_key\"}",
+    },
+    crate::ConfigField {
+        name: "app_id",
+        service: "default",
+        label: "Algolia application id",
+        help: "The ten-character application id shown at the top of the API Keys page in your Algolia dashboard, e.g. B1G2GM9NG0. It identifies your Algolia application, forms the hostname every call goes to, and is sent as a header on every request — you supply it once here and this connector puts it in both places. It is not a secret; Algolia publishes it in client-side code",
+        example: Some("B1G2GM9NG0"),
+        format: "text",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: Some("https://dashboard.algolia.com/account/api-keys/"),
+        binds: "endpoint.app_id",
+        also_binds: &["header.X-Algolia-Application-Id"],
+        declaration_json: "{\"name\":\"app_id\",\"label\":\"Algolia application id\",\"help\":\"The ten-character application id shown at the top of the API Keys page in your Algolia dashboard, e.g. B1G2GM9NG0. It identifies your Algolia application, forms the hostname every call goes to, and is sent as a header on every request — you supply it once here and this connector puts it in both places. It is not a secret; Algolia publishes it in client-side code\",\"example\":\"B1G2GM9NG0\",\"docs_url\":\"https://dashboard.algolia.com/account/api-keys/\",\"binds\":\"endpoint.app_id\",\"also_binds\":[\"header.X-Algolia-Application-Id\"]}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

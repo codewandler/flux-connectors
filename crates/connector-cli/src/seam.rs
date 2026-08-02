@@ -32,7 +32,8 @@ use anyhow::{bail, Result};
 use serde::Serialize;
 
 use connector_spec::{
-    ChannelBinding, ConfigField, EventDecl, ManualSetup, Selector, Subscription, VerificationScheme,
+    AuthMethod, AuthRequirement, ChannelBinding, ConfigField, EventDecl, ManualSetup, Selector,
+    SocketConnectSpec, Subscription, VerificationScheme,
 };
 
 use crate::catalog::{self, OperationRendering};
@@ -491,6 +492,15 @@ fn manifest(connector: &Connector, service: &str) -> Result<String> {
         api_version: Option<&'a str>,
         module: String,
         operations: Vec<&'a str>,
+        /// Credential declarations and placements, never values.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        auth: Vec<&'a AuthMethod>,
+        /// Connector-level authentication alternatives.
+        #[serde(skip_serializing_if = "<[AuthRequirement]>::is_empty")]
+        default_auth: &'a [AuthRequirement],
+        /// The complete service configuration surface. A host need not read provider TOML.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        config: Vec<&'a ConfigField>,
         /// The events this service receives. Arrays of tables, so they come last — every scalar and
         /// inline value above them, which is what keeps the emitted TOML valid without sorting.
         #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -528,6 +538,9 @@ fn manifest(connector: &Connector, service: &str) -> Result<String> {
             .operations_of(service)
             .map(|operation| operation.id.as_str())
             .collect(),
+        auth: connector.auth.iter().collect(),
+        default_auth: &connector.default_auth,
+        config: connector.config_of(service).collect(),
         events: connector
             .events_of(service)
             .map(|event| manifest_event(connector, event))
@@ -555,6 +568,8 @@ fn manifest(connector: &Connector, service: &str) -> Result<String> {
 #[derive(Serialize)]
 struct ManifestEvent<'a> {
     name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    wire_value: Option<&'a str>,
     /// The rendered address, when the connector publishes one.
     #[serde(skip_serializing_if = "Option::is_none")]
     oip: Option<String>,
@@ -582,6 +597,8 @@ struct ManifestChannel<'a> {
     #[serde(skip_serializing_if = "str::is_empty")]
     description: &'a str,
     transport: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    connect: Option<&'a SocketConnectSpec>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     events: Vec<&'a str>,
     /// The cursor operation a `poll` binding resumes from — the field that carries a poll's
@@ -601,6 +618,8 @@ struct ManifestChannel<'a> {
     delivery_id: Option<ManifestSelector<'a>>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     payload: &'a BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "is_false")]
+    payload_root: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     reply: Option<ManifestReply<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -677,9 +696,14 @@ fn is_true(value: &bool) -> bool {
     *value
 }
 
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 fn manifest_event<'a>(connector: &Connector, event: &'a EventDecl) -> ManifestEvent<'a> {
     ManifestEvent {
         name: &event.name,
+        wire_value: event.wire_value.as_deref(),
         oip: member_oip(connector, &event.service, &event.name),
         description: &event.description,
         default: event.default,
@@ -746,6 +770,7 @@ fn manifest_channel<'a>(connector: &Connector, channel: &'a ChannelBinding) -> M
         oip: member_oip(connector, &channel.service, &channel.name),
         description: &channel.description,
         transport: crate::inbound::transport_token(channel.transport),
+        connect: channel.connect.as_ref(),
         events: channel.events.iter().map(String::as_str).collect(),
         cursor: channel.cursor.as_deref(),
         interval: channel.interval.as_deref(),
@@ -770,6 +795,7 @@ fn manifest_channel<'a>(connector: &Connector, channel: &'a ChannelBinding) -> M
         discriminator: channel.discriminator.as_ref().map(manifest_selector),
         delivery_id: channel.delivery_id.as_ref().map(manifest_selector),
         payload: &channel.payload,
+        payload_root: channel.payload_root,
         reply: channel.reply.as_ref().map(|reply| ManifestReply {
             operation: &reply.operation,
             oip: member_oip(connector, &channel.service, &reply.operation),

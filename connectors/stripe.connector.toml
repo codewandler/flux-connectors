@@ -11,6 +11,30 @@ api_version = "v1"
 module = "stripe.flux"
 operations = ["stripe-balance-get", "stripe-customer-get", "stripe-charge-get", "stripe-payment-intent-get", "stripe-refund-get", "stripe-payment-intent-capture", "stripe-payment-intent-cancel", "stripe-charge-refund-create", "stripe-country-spec-list", "stripe-event-list", "stripe-exchange-rate-list", "stripe-billing-meter-list"]
 
+[[auth]]
+name = "stripe.secret_key"
+scheme = "bearer"
+env = ["STRIPE_SECRET_KEY"]
+description = "Stripe secret key sent as a bearer. A live key moves real money; a test key does not. A restricted key limited to Charges, PaymentIntents, Refunds, Customers and Balance is sufficient"
+
+[[auth]]
+name = "stripe.webhook_signing_secret"
+scheme = "signing"
+env = ["STRIPE_WEBHOOK_SIGNING_SECRET"]
+description = "Stripe webhook endpoint signing secret, used to verify inbound events. Never sent to Stripe"
+
+[[default_auth]]
+credentials = ["stripe.secret_key"]
+
+[[config]]
+name = "secret_key"
+label = "Secret key"
+help = "From the Stripe dashboard under Developers → API keys. **A test key and a live key are different values.** The test key begins `sk_test` and acts only on test data; the live key begins `sk_live` and moves real money out of your account — a refund made with it is a real refund. Check the Test mode toggle in the dashboard before you copy. A restricted key (`rk_live` / `rk_test`) with write access to Charges, PaymentIntents and Refunds and read access to Customers and Balance is safer and is enough for this connector"
+format = "token"
+secret = true
+docs_url = "https://docs.stripe.com/keys"
+binds = "credential.stripe.secret_key"
+
 [[events]]
 name = "payment_intent.succeeded"
 oip = "com.stripe.api:v1#payment_intent.succeeded"

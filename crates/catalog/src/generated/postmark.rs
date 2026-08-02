@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.postmarkapp.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "X-Postmark-Server-Token", prefix: "" },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "server_token",
+        service: "server",
+        label: "Postmark Server Token",
+        help: "Find it on the server's API Tokens tab in the Postmark dashboard. Grants sending and that server's own message history only — it cannot list or manage servers",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://postmarkapp.com/support/article/1008-what-are-the-account-server-api-tokens"),
+        binds: "credential.postmark.server_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"server_token\",\"service\":\"server\",\"label\":\"Postmark Server Token\",\"help\":\"Find it on the server's API Tokens tab in the Postmark dashboard. Grants sending and that server's own message history only — it cannot list or manage servers\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://postmarkapp.com/support/article/1008-what-are-the-account-server-api-tokens\",\"binds\":\"credential.postmark.server_token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

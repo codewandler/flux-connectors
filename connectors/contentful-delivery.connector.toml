@@ -9,3 +9,46 @@ runtime = "http"
 base_url = "https://cdn.contentful.com/spaces/{space_id}/environments/{environment_id}"
 module = "contentful-delivery.flux"
 operations = ["contentful-entry-get", "contentful-entries-list", "contentful-asset-get"]
+
+[[auth]]
+name = "contentful.delivery_token"
+scheme = "bearer"
+env = ["CONTENTFUL_DELIVERY_TOKEN"]
+description = "Contentful Content Delivery API (CDA) access token, sent as a bearer. Read-only: published content in one space only, and only the Delivery API accepts it"
+
+[[auth]]
+name = "contentful.management_token"
+scheme = "bearer"
+env = ["CONTENTFUL_MANAGEMENT_TOKEN"]
+description = "Contentful Content Management API (CMA) access token, sent as a bearer. Read and write in one space; the Delivery API rejects it. Required only for contentful-entry-create and contentful-entry-publish — every read above uses the Delivery token instead"
+
+[[default_auth]]
+credentials = ["contentful.delivery_token"]
+
+[[config]]
+name = "delivery_space_id"
+service = "delivery"
+label = "Contentful space ID"
+help = "Found on the space's Settings > General settings page in the Contentful web app. Identifies which space the delivery token reads from"
+example = "a1b2c3d4e5f6"
+docs_url = "https://www.contentful.com/developers/docs/references/authentication/"
+binds = "endpoint.space_id"
+
+[[config]]
+name = "delivery_environment_id"
+service = "delivery"
+label = "Contentful environment"
+help = "The environment within the space to read from — commonly `master` unless this space uses staged environments"
+example = "master"
+docs_url = "https://www.contentful.com/developers/docs/concepts/multiple-environments/"
+binds = "endpoint.environment_id"
+
+[[config]]
+name = "delivery_token"
+service = "delivery"
+label = "Contentful Delivery API token"
+help = "Create a Content Delivery API access token in the space under Settings > API keys. Read-only: published content in this space only"
+format = "token"
+secret = true
+docs_url = "https://www.contentful.com/developers/docs/references/authentication/"
+binds = "credential.contentful.delivery_token"

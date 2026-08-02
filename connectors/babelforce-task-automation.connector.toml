@@ -11,3 +11,12 @@ base_url = "https://services.babelforce.com"
 api_version = "v3"
 module = "babelforce-task-automation.flux"
 operations = ["babelforce-change-agent-lock", "babelforce-agent-action-on-task", "babelforce-tasks", "babelforce-submit-task", "babelforce-testing", "babelforce-list-secret-prefixes", "babelforce-list-secret-keys", "babelforce-create-secrets", "babelforce-patch-secrets", "babelforce-delete-secret-keys", "babelforce-read-selection-configuration", "babelforce-create-selection-configuration", "babelforce-update-selection-configuration", "babelforce-delete-selection-configuration", "babelforce-list", "babelforce-agent-interaction-duration", "babelforce-agent-interactions", "babelforce-task-journal", "babelforce-list-scripts", "babelforce-submit-script", "babelforce-get-script", "babelforce-update-script", "babelforce-delete-script", "babelforce-submit-task-template", "babelforce-task-usage", "babelforce-task-usage-types", "babelforce-task", "babelforce-update-task", "babelforce-manager-interrupt-on-task", "babelforce-change-task-state"]
+
+[[auth]]
+name = "babelforce.access_token"
+scheme = "bearer"
+env = ["BABELFORCE_ACCESS_TOKEN"]
+description = "SSO-issued babelforce access token, minted outside flux and supplied through the environment"
+
+[[default_auth]]
+credentials = ["babelforce.access_token"]

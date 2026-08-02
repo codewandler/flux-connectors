@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://{site}.atlassian.net",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,63 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::BasicJoin { user_env: &["JIRA_USER"], user_suffix: "" },
         place: crate::Placement::Header { name: "Authorization", prefix: "Basic " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "site",
+        service: "default",
+        label: "Atlassian site name",
+        help: "The part of your Jira URL before `.atlassian.net` — if you sign in at `acme.atlassian.net`, this is `acme`",
+        example: Some("acme"),
+        format: "subdomain",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: Some("https://support.atlassian.com/jira-software-cloud/docs/what-is-a-jira-site/"),
+        binds: "endpoint.site",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"site\",\"label\":\"Atlassian site name\",\"help\":\"The part of your Jira URL before `.atlassian.net` — if you sign in at `acme.atlassian.net`, this is `acme`\",\"example\":\"acme\",\"format\":\"subdomain\",\"docs_url\":\"https://support.atlassian.com/jira-software-cloud/docs/what-is-a-jira-site/\",\"binds\":\"endpoint.site\"}",
+    },
+    crate::ConfigField {
+        name: "email",
+        service: "default",
+        label: "Atlassian account email",
+        help: "The email of the account that minted the API token. It travels as the username half of the request",
+        example: Some("you@acme.com"),
+        format: "email",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: None,
+        binds: "username.jira.api_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"email\",\"label\":\"Atlassian account email\",\"help\":\"The email of the account that minted the API token. It travels as the username half of the request\",\"example\":\"you@acme.com\",\"format\":\"email\",\"binds\":\"username.jira.api_token\"}",
+    },
+    crate::ConfigField {
+        name: "api_token",
+        service: "default",
+        label: "API token",
+        help: "Create one at id.atlassian.com under Security → API tokens. Atlassian shows it once",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://id.atlassian.com/manage-profile/security/api-tokens"),
+        binds: "credential.jira.api_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_token\",\"label\":\"API token\",\"help\":\"Create one at id.atlassian.com under Security → API tokens. Atlassian shows it once\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://id.atlassian.com/manage-profile/security/api-tokens\",\"binds\":\"credential.jira.api_token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

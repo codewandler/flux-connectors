@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.twilio.com/2010-04-01",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -30,6 +33,94 @@ static AUTH: &[crate::Credential] = &[
         leaf: "webhook_signing_secret",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Inbound,
+    },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "account_sid",
+        service: "default",
+        label: "Account SID",
+        help: "Copy this from the Twilio Console dashboard — it starts with AC and is the same value used to sign in to the API, not your login email",
+        example: Some("ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"),
+        format: "token",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: Some("https://www.twilio.com/docs/iam/api/account"),
+        binds: "username.twilio.basic_auth",
+        also_binds: &["path.AccountSid"],
+        declaration_json: "{\"name\":\"account_sid\",\"label\":\"Account SID\",\"help\":\"Copy this from the Twilio Console dashboard — it starts with AC and is the same value used to sign in to the API, not your login email\",\"example\":\"ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\",\"format\":\"token\",\"docs_url\":\"https://www.twilio.com/docs/iam/api/account\",\"binds\":\"username.twilio.basic_auth\",\"also_binds\":[\"path.AccountSid\"]}",
+    },
+    crate::ConfigField {
+        name: "auth_token",
+        service: "default",
+        label: "Auth Token",
+        help: "Your primary Auth Token from the Twilio Console dashboard. Twilio shows it masked by default — click to reveal it",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://www.twilio.com/docs/iam/api/account"),
+        binds: "credential.twilio.basic_auth",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"auth_token\",\"label\":\"Auth Token\",\"help\":\"Your primary Auth Token from the Twilio Console dashboard. Twilio shows it masked by default — click to reveal it\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://www.twilio.com/docs/iam/api/account\",\"binds\":\"credential.twilio.basic_auth\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+    crate::Event {
+        name: "message.status_callback",
+        service: "default",
+        description: "A message's delivery status changed. Twilio POSTs this, form-encoded, to the StatusCallback URL supplied when the message was created",
+        wire_value: None,
+        default: true,
+        group: "Messaging",
+        schema: Some("{\"properties\":{\"ApiVersion\":{\"type\":\"string\"},\"ErrorCode\":{\"description\":\"Present only when MessageStatus is failed or undelivered\",\"type\":\"string\"},\"From\":{\"description\":\"The sender\",\"type\":\"string\"},\"MessageSid\":{\"type\":\"string\"},\"MessageStatus\":{\"enum\":[\"accepted\",\"queued\",\"sending\",\"sent\",\"failed\",\"delivered\",\"undelivered\",\"receiving\",\"received\",\"read\"],\"type\":\"string\"},\"To\":{\"description\":\"The recipient\",\"type\":\"string\"}},\"required\":[\"MessageSid\",\"MessageStatus\"],\"type\":\"object\"}"),
+        declaration_json: "{\"name\":\"message.status_callback\",\"description\":\"A message's delivery status changed. Twilio POSTs this, form-encoded, to the StatusCallback URL supplied when the message was created\",\"group\":\"Messaging\",\"schema\":{\"properties\":{\"ApiVersion\":{\"type\":\"string\"},\"ErrorCode\":{\"description\":\"Present only when MessageStatus is failed or undelivered\",\"type\":\"string\"},\"From\":{\"description\":\"The sender\",\"type\":\"string\"},\"MessageSid\":{\"type\":\"string\"},\"MessageStatus\":{\"enum\":[\"accepted\",\"queued\",\"sending\",\"sent\",\"failed\",\"delivered\",\"undelivered\",\"receiving\",\"received\",\"read\"],\"type\":\"string\"},\"To\":{\"description\":\"The recipient\",\"type\":\"string\"}},\"required\":[\"MessageSid\",\"MessageStatus\"],\"type\":\"object\"}}",
+    },
+    crate::Event {
+        name: "call.status_callback",
+        service: "default",
+        description: "A call's status changed. Twilio POSTs this, form-encoded, to the StatusCallback URL configured for the call or the answering number",
+        wire_value: None,
+        default: true,
+        group: "Voice",
+        schema: Some("{\"properties\":{\"ApiVersion\":{\"type\":\"string\"},\"CallDuration\":{\"description\":\"Seconds, sent as a numeric string; present only once the call has ended\",\"type\":\"string\"},\"CallSid\":{\"type\":\"string\"},\"CallStatus\":{\"enum\":[\"queued\",\"ringing\",\"in-progress\",\"completed\",\"busy\",\"failed\",\"no-answer\",\"canceled\"],\"type\":\"string\"},\"Direction\":{\"enum\":[\"inbound\",\"outbound-api\",\"outbound-dial\"],\"type\":\"string\"},\"From\":{\"description\":\"The calling party\",\"type\":\"string\"},\"Timestamp\":{\"description\":\"RFC 2822, not ISO 8601\",\"type\":\"string\"},\"To\":{\"description\":\"The called party\",\"type\":\"string\"}},\"required\":[\"CallSid\",\"CallStatus\"],\"type\":\"object\"}"),
+        declaration_json: "{\"name\":\"call.status_callback\",\"description\":\"A call's status changed. Twilio POSTs this, form-encoded, to the StatusCallback URL configured for the call or the answering number\",\"group\":\"Voice\",\"schema\":{\"properties\":{\"ApiVersion\":{\"type\":\"string\"},\"CallDuration\":{\"description\":\"Seconds, sent as a numeric string; present only once the call has ended\",\"type\":\"string\"},\"CallSid\":{\"type\":\"string\"},\"CallStatus\":{\"enum\":[\"queued\",\"ringing\",\"in-progress\",\"completed\",\"busy\",\"failed\",\"no-answer\",\"canceled\"],\"type\":\"string\"},\"Direction\":{\"enum\":[\"inbound\",\"outbound-api\",\"outbound-dial\"],\"type\":\"string\"},\"From\":{\"description\":\"The calling party\",\"type\":\"string\"},\"Timestamp\":{\"description\":\"RFC 2822, not ISO 8601\",\"type\":\"string\"},\"To\":{\"description\":\"The called party\",\"type\":\"string\"}},\"required\":[\"CallSid\",\"CallStatus\"],\"type\":\"object\"}}",
+    },
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
+    crate::Channel {
+        name: "message-status-callback",
+        service: "default",
+        base_url: "https://api.twilio.com/2010-04-01",
+        description: "Message delivery-status callbacks. Twilio POSTs form-encoded to the StatusCallback URL supplied when a message is created, signing the URL and the parameters with the Auth Token",
+        transport: crate::ChannelTransport::Webhook,
+        events: &["message.status_callback"],
+        connect: None,
+        discriminator: None,
+        payload: &[crate::Pair { name: "error_code", value: "ErrorCode" }, crate::Pair { name: "message_sid", value: "MessageSid" }, crate::Pair { name: "sender", value: "From" }, crate::Pair { name: "status", value: "MessageStatus" }, crate::Pair { name: "to", value: "To" }],
+        payload_root: false,
+        declaration_json: "{\"name\":\"message-status-callback\",\"description\":\"Message delivery-status callbacks. Twilio POSTs form-encoded to the StatusCallback URL supplied when a message is created, signing the URL and the parameters with the Auth Token\",\"transport\":\"webhook\",\"events\":[\"message.status_callback\"],\"verification\":{\"hmac\":{\"algorithm\":\"sha1\",\"encoding\":\"base64\",\"header\":\"X-Twilio-Signature\",\"signed\":\"{url}{sorted_form}\",\"secret\":\"twilio.webhook_signing_secret\"}},\"payload\":{\"error_code\":\"ErrorCode\",\"message_sid\":\"MessageSid\",\"sender\":\"From\",\"status\":\"MessageStatus\",\"to\":\"To\"},\"setup\":{\"docs_url\":\"https://www.twilio.com/docs/messaging/guides/track-outbound-message-status\",\"steps\":[\"Open console.twilio.com and choose the phone number or Messaging Service this connection sends from\",\"Paste the Request URL shown above into its status-callback field, exactly as shown — the signature covers the URL, so a redirect or a rewritten host breaks every delivery\",\"Or, if messages are created by another system, have it pass the same URL as the `StatusCallback` parameter\",\"Copy the Auth Token from the console into this connection's signing secret field — it is the same value as the Auth Token above\"]}}",
+    },
+    crate::Channel {
+        name: "call-status-callback",
+        service: "default",
+        base_url: "https://api.twilio.com/2010-04-01",
+        description: "Call status callbacks. Twilio POSTs form-encoded to the StatusCallback URL configured for the call or the answering number, signed exactly as the messaging callback is",
+        transport: crate::ChannelTransport::Webhook,
+        events: &["call.status_callback"],
+        connect: None,
+        discriminator: None,
+        payload: &[crate::Pair { name: "call_sid", value: "CallSid" }, crate::Pair { name: "caller", value: "From" }, crate::Pair { name: "direction", value: "Direction" }, crate::Pair { name: "duration", value: "CallDuration" }, crate::Pair { name: "status", value: "CallStatus" }, crate::Pair { name: "to", value: "To" }],
+        payload_root: false,
+        declaration_json: "{\"name\":\"call-status-callback\",\"description\":\"Call status callbacks. Twilio POSTs form-encoded to the StatusCallback URL configured for the call or the answering number, signed exactly as the messaging callback is\",\"transport\":\"webhook\",\"events\":[\"call.status_callback\"],\"verification\":{\"hmac\":{\"algorithm\":\"sha1\",\"encoding\":\"base64\",\"header\":\"X-Twilio-Signature\",\"signed\":\"{url}{sorted_form}\",\"secret\":\"twilio.webhook_signing_secret\"}},\"payload\":{\"call_sid\":\"CallSid\",\"caller\":\"From\",\"direction\":\"Direction\",\"duration\":\"CallDuration\",\"status\":\"CallStatus\",\"to\":\"To\"},\"setup\":{\"docs_url\":\"https://www.twilio.com/docs/voice/twiml/number#attributes-statusCallback\",\"steps\":[\"Open console.twilio.com and choose the phone number this connection answers or dials on\",\"Paste the Request URL shown above into its call status-callback field, exactly as shown — the signature covers the URL\",\"Select the call events to report: initiated, ringing, answered, completed\",\"Copy the Auth Token from the console into this connection's signing secret field\"]}}",
     },
 ];
 

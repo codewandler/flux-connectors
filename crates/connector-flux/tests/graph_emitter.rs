@@ -138,6 +138,7 @@ fn vendor() -> Connector {
         ],
         events: vec![EventDecl {
             name: "app_mention".to_string(),
+            wire_value: None,
             service: DEFAULT_SERVICE.to_string(),
             description: "Somebody mentioned the app.".to_string(),
             default: true,

@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.sendgrid.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "api_key",
+        service: "default",
+        label: "SendGrid API key",
+        help: "Create one under Settings → API Keys in the SendGrid dashboard. Restrict it to only the scopes this connector needs — Mail Send is unnecessary, since this connector never sends mail",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://www.twilio.com/docs/sendgrid/ui/account-and-settings/api-keys"),
+        binds: "credential.sendgrid.api_key",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_key\",\"label\":\"SendGrid API key\",\"help\":\"Create one under Settings → API Keys in the SendGrid dashboard. Restrict it to only the scopes this connector needs — Mail Send is unnecessary, since this connector never sends mail\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://www.twilio.com/docs/sendgrid/ui/account-and-settings/api-keys\",\"binds\":\"credential.sendgrid.api_key\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

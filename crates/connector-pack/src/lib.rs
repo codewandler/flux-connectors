@@ -185,6 +185,7 @@
 //! the variables are read off each operation's own emitted Flux.
 
 mod auth;
+mod channel;
 mod config;
 mod credentials;
 mod dry_run;
@@ -195,6 +196,7 @@ mod request;
 mod spec;
 mod tool;
 
+pub use channel::{channel_plan, PreparedChannelPlan, SensitiveText};
 pub use config::{ConfigStore, Configuration, Field, MemoryConfig};
 pub use credentials::{Credentials, DEFAULT_SERVICE};
 pub use dry_run::{CredentialReference, DryRun, DryRunTransport, Transport};
@@ -242,6 +244,18 @@ pub enum Error {
         /// How many connectors the catalogue does carry.
         available: usize,
     },
+
+    /// The provider carries no channel under the requested name.
+    #[error("connector `{provider}` declares no channel binding `{binding}`")]
+    UnknownChannel { provider: String, binding: String },
+
+    /// A non-socket binding cannot be composed as a WebSocket handshake.
+    #[error("connector `{provider}` binding `{binding}` is not a socket channel")]
+    NotSocketChannel { provider: String, binding: String },
+
+    /// A vendor-specific socket has no generic RFC 6455 connect declaration.
+    #[error("connector `{provider}` binding `{binding}` is vendor-specific and has no generic connect plan")]
+    VendorSocketChannel { provider: String, binding: String },
 
     /// The operation's id has no dotted tool name. See [`NameError`].
     #[error("`{operation}` cannot be projected onto a flux tool name: {source}")]

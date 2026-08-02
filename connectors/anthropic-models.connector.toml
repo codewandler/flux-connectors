@@ -11,3 +11,32 @@ base_url = "https://api.anthropic.com"
 api_version = "v1"
 module = "anthropic-models.flux"
 operations = ["anthropic-models-list", "anthropic-model-get"]
+
+[[auth]]
+name = "anthropic.api_key"
+env = ["ANTHROPIC_API_KEY"]
+description = "Anthropic API key, sent as x-api-key"
+
+[auth.scheme.header]
+name = "x-api-key"
+
+[[auth]]
+name = "anthropic.admin_key"
+env = ["ANTHROPIC_ADMIN_KEY"]
+description = "Anthropic Admin API key (starts sk-ant-admin), sent as x-api-key. Required only for the Admin API operations below — organization, members, workspaces, workspace members, API keys and invites — the model catalogue uses the regular API key"
+
+[auth.scheme.header]
+name = "x-api-key"
+
+[[default_auth]]
+credentials = ["anthropic.api_key"]
+
+[[config]]
+name = "api_key"
+service = "models"
+label = "API key"
+help = "Create a key in the Anthropic Console (console.anthropic.com), under API Keys. This is the standard key used for the model catalogue"
+format = "token"
+secret = true
+docs_url = "https://docs.anthropic.com/en/api/getting-started"
+binds = "credential.anthropic.api_key"

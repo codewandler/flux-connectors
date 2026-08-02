@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.statuspage.io/v1/pages/{page_id}",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,48 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "OAuth " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "page_id",
+        service: "default",
+        label: "Status page id",
+        help: "The id of the status page this connection administers. Statuspage shows it in the address bar of the page's own management screen (manage.statuspage.io/pages/<page id>) and on the API keys screen. One connection administers one page: an account with several status pages needs one installation per page",
+        example: None,
+        format: "text",
+        required: true,
+        default: None,
+        secret: false,
+        docs_url: None,
+        binds: "endpoint.page_id",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"page_id\",\"label\":\"Status page id\",\"help\":\"The id of the status page this connection administers. Statuspage shows it in the address bar of the page's own management screen (manage.statuspage.io/pages/<page id>) and on the API keys screen. One connection administers one page: an account with several status pages needs one installation per page\",\"binds\":\"endpoint.page_id\"}",
+    },
+    crate::ConfigField {
+        name: "api_key",
+        service: "default",
+        label: "Statuspage API key",
+        help: "Create one under your Statuspage user account's API keys screen. The key carries the permissions of the account that created it, so an account that should only read incidents must not be the one that mints this key. Statuspage shows the key once",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://developer.statuspage.io/"),
+        binds: "credential.statuspage.api_key",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"api_key\",\"label\":\"Statuspage API key\",\"help\":\"Create one under your Statuspage user account's API keys screen. The key carries the permissions of the account that created it, so an account that should only read incidents must not be the one that mints this key. Statuspage shows the key once\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.statuspage.io/\",\"binds\":\"credential.statuspage.api_key\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

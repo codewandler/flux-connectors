@@ -9,6 +9,36 @@ base_url = "https://{host}"
 module = "intercom.flux"
 operations = ["intercom-contact-get", "intercom-contact-create", "intercom-conversation-get", "intercom-conversation-reply", "intercom-contact-note-create"]
 
+[[auth]]
+name = "intercom.access_token"
+scheme = "bearer"
+env = ["INTERCOM_ACCESS_TOKEN"]
+description = "Intercom access token sent as a bearer — an OAuth app token or a workspace access token"
+
+[[default_auth]]
+credentials = ["intercom.access_token"]
+
+[[config]]
+name = "host"
+label = "Intercom region"
+help = "Which region this Intercom workspace is hosted in. Pick United States, European Union or Australia — Intercom assigns the region when the workspace is created and it does not change. If you are not sure, look at the URL you use Intercom at: app.intercom.com is the US region, app.eu.intercom.com the EU one and app.au.intercom.com the Australian one. A token issued for one region returns 401 against another, exactly as a revoked token would"
+example = "api.intercom.io"
+format = "hostname"
+docs_url = "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/"
+binds = "endpoint.host"
+
+[[config.choices]]
+value = "api.intercom.io"
+label = "United States"
+
+[[config.choices]]
+value = "api.eu.intercom.io"
+label = "European Union"
+
+[[config.choices]]
+value = "api.au.intercom.io"
+label = "Australia"
+
 [[config_choices]]
 field = "host"
 label = "Intercom region"

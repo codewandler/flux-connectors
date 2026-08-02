@@ -52,8 +52,8 @@ use crate::config::{parse_binding, template_variables, Binding, ConfigField, Pos
 use crate::graph::{Graph, GraphNode, NodeKind, PortRef};
 use crate::inbound::{
     parse_tolerance, signed_placeholders, validate_path, validate_symbol, ChannelBinding,
-    EventDecl, FieldSource, HmacSpec, ManualSetup, Reply, Selector, Subscription, Transport,
-    VerificationScheme, PAYLOAD_PLACEHOLDERS, SIGNED_PLACEHOLDERS,
+    EventDecl, FieldSource, HmacSpec, ManualSetup, Reply, Selector, SocketConnectSpec,
+    Subscription, Transport, VerificationScheme, PAYLOAD_PLACEHOLDERS, SIGNED_PLACEHOLDERS,
 };
 use crate::lock::sha256_hex;
 use crate::{
@@ -2481,6 +2481,33 @@ fn validate_config(connector: &Connector, problems: &mut Vec<String>) {
             }
         }
 
+        if field.secret && field.default.is_some() {
+            problems.push(format!(
+                "configuration field {name:?} declares a secret `default`; a default is a literal \
+                 sent on the wire and credentials never belong in provider TOML"
+            ));
+        }
+        if field.required && field.default.is_some() {
+            problems.push(format!(
+                "configuration field {name:?} is required and also declares a `default`. A value \
+                 the connector can supply itself is optional; set `required = false`"
+            ));
+        }
+        if let Some(default) = &field.default {
+            if let Err(reason) = field.format.validate(default) {
+                problems.push(format!(
+                    "configuration field {name:?} declares a `default` that does not satisfy \
+                     format `{}`: {reason}",
+                    field.format.word()
+                ));
+            }
+            if let Err(reason) = field.permits(default) {
+                problems.push(format!(
+                    "configuration field {name:?} declares a `default` outside its choices: {reason}"
+                ));
+            }
+        }
+
         validate_choices(field, problems);
         validate_binding(connector, field, problems);
     }
@@ -2701,6 +2728,45 @@ fn validate_one_binding(
             position,
             name: pinned,
         } => validate_pin(connector, field, position, pinned, problems),
+        Binding::ChannelQuery { channel, parameter } => {
+            match connector.channel(channel) {
+                None => problems.push(format!(
+                    "configuration field {name:?} binds channel {channel:?}, which names no \
+                     channel binding"
+                )),
+                Some(channel_binding) if channel_binding.service != field.service => {
+                    problems.push(format!(
+                        "configuration field {name:?} is in service {:?} but binds channel \
+                         {channel:?} in service {:?}",
+                        field.service, channel_binding.service
+                    ));
+                }
+                Some(channel_binding) => match &channel_binding.connect {
+                    None => problems.push(format!(
+                        "configuration field {name:?} binds socket query parameter {parameter:?} \
+                         on channel {channel:?}, which declares no generic `connect` block"
+                    )),
+                    Some(connect) if !connect.query.contains_key(parameter) => {
+                        problems.push(format!(
+                            "configuration field {name:?} binds socket query parameter \
+                             {parameter:?} on channel {channel:?}, but its `connect.query` \
+                             declares no such parameter"
+                        ));
+                    }
+                    Some(connect) => {
+                        let value = &connect.query[parameter];
+                        if !template_variables(value).contains(&name) {
+                            problems.push(format!(
+                                "configuration field {name:?} binds socket query parameter \
+                                 {parameter:?} on channel {channel:?}, but its value {value:?} \
+                                 does not interpolate {{{name}}}"
+                            ));
+                        }
+                    }
+                },
+            }
+            validate_substituted_values(field, binding, "fills a socket query value", problems);
+        }
         Binding::Credential { name: credential } | Binding::Username { name: credential } => {
             match connector.auth_method(credential) {
                 None => problems.push(format!(
@@ -3213,6 +3279,7 @@ fn validate_channels(connector: &Connector, problems: &mut Vec<String>) {
 
         validate_channel_events(connector, channel, problems);
         validate_channel_verification(connector, channel, problems);
+        validate_socket_connect(connector, channel, problems);
         validate_channel_payload(channel, problems);
         validate_channel_reply(connector, channel, problems);
         validate_channel_transport(connector, channel, problems);
@@ -3227,6 +3294,131 @@ fn validate_channels(connector: &Connector, problems: &mut Vec<String>) {
             }
         }
     }
+}
+
+/// Validate the declarative RFC 6455 handshake without resolving a host or reading credentials.
+fn validate_socket_connect(
+    connector: &Connector,
+    channel: &ChannelBinding,
+    problems: &mut Vec<String>,
+) {
+    let name = channel.name.as_str();
+    let Some(connect) = &channel.connect else {
+        return;
+    };
+
+    if channel.transport != Transport::Socket {
+        problems.push(format!(
+            "channel binding {name:?} declares `connect`, which only the `socket` transport uses"
+        ));
+    }
+
+    let path = connect.path.as_str();
+    if !path.starts_with('/')
+        || path.starts_with("//")
+        || path.contains("://")
+        || path.contains(['?', '#'])
+        || path.split('/').any(|segment| matches!(segment, "." | ".."))
+    {
+        problems.push(format!(
+            "channel binding {name:?} declares socket path {path:?}, which is not a relative \
+             WebSocket path rooted at the service `base_url`"
+        ));
+    }
+
+    const HANDSHAKE_HEADERS: &[&str] = &[
+        "host",
+        "connection",
+        "upgrade",
+        "sec-websocket-key",
+        "sec-websocket-version",
+        "sec-websocket-protocol",
+        "authorization",
+    ];
+    for (header, value) in &connect.headers {
+        if HANDSHAKE_HEADERS
+            .iter()
+            .any(|reserved| header.eq_ignore_ascii_case(reserved))
+        {
+            problems.push(format!(
+                "channel binding {name:?} fixes handshake-owned header {header:?}; the guarded \
+                 host owns upgrade, subprotocol and authentication headers"
+            ));
+        }
+        if header.is_empty()
+            || !header
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&byte))
+        {
+            problems.push(format!(
+                "channel binding {name:?} declares invalid fixed header name {header:?}"
+            ));
+        }
+        if value.chars().any(|c| !c.is_ascii() || c.is_ascii_control())
+            || value.contains(['{', '}'])
+        {
+            problems.push(format!(
+                "channel binding {name:?} declares fixed header {header:?} with an invalid or \
+                 templated value; fixed headers are public literals"
+            ));
+        }
+    }
+
+    let mut seen_protocols: Vec<&str> = Vec::new();
+    for protocol in &connect.subprotocols {
+        let valid = !protocol.is_empty()
+            && protocol
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&byte));
+        if !valid {
+            problems.push(format!(
+                "channel binding {name:?} declares invalid WebSocket subprotocol {protocol:?}"
+            ));
+        }
+        if seen_protocols.contains(&protocol.as_str()) {
+            problems.push(format!(
+                "channel binding {name:?} declares WebSocket subprotocol {protocol:?} twice"
+            ));
+        }
+        seen_protocols.push(protocol);
+    }
+
+    for (parameter, value) in &connect.query {
+        if parameter.is_empty()
+            || parameter
+                .chars()
+                .any(|c| c.is_control() || c.is_whitespace() || "&=?#".contains(c))
+        {
+            problems.push(format!(
+                "channel binding {name:?} declares invalid socket query parameter {parameter:?}"
+            ));
+        }
+        for variable in template_variables(value) {
+            let declared = connector.config.iter().any(|field| {
+                field.service == channel.service
+                    && field.name == variable
+                    && matches!(
+                        field.binding(),
+                        Some(Binding::ChannelQuery { channel: owner, parameter: target })
+                            if owner == name && target == parameter
+                    )
+            });
+            if !declared {
+                problems.push(format!(
+                    "channel binding {name:?} query parameter {parameter:?} needs configuration \
+                     {{{variable}}}, but no `[[config]]` field binds \
+                     `channel.{name}.query.{parameter}` under that name"
+                ));
+            }
+        }
+    }
+
+    validate_requirements(
+        connector,
+        &connect.auth,
+        &format!("channel binding {name:?}"),
+        problems,
+    );
 }
 
 /// Every event a binding carries must exist **in the binding's own service**.
@@ -3248,7 +3440,15 @@ fn validate_channel_events(
         ));
     }
 
+    let mut seen_events: Vec<&str> = Vec::new();
+    let mut seen_wire_values: Vec<&str> = Vec::new();
     for event in &channel.events {
+        if seen_events.contains(&event.as_str()) {
+            problems.push(format!(
+                "channel binding {name:?} carries event {event:?} twice"
+            ));
+        }
+        seen_events.push(event);
         match connector.event(event) {
             None => problems.push(format!(
                 "channel binding {name:?} carries event {event:?}, which no `[[events]]` block \
@@ -3260,7 +3460,21 @@ fn validate_channel_events(
                  and address independently",
                 channel.service, declared.service
             )),
-            Some(_) => {}
+            Some(declared) => {
+                let wire = declared.wire_value.as_deref().unwrap_or(&declared.name);
+                if wire.trim().is_empty() {
+                    problems.push(format!(
+                        "event {event:?} carried by channel {name:?} declares an empty `wire_value`"
+                    ));
+                }
+                if seen_wire_values.contains(&wire) {
+                    problems.push(format!(
+                        "channel binding {name:?} maps more than one event to wire value {wire:?}; \
+                         a discriminator value must select exactly one declared event"
+                    ));
+                }
+                seen_wire_values.push(wire);
+            }
         }
     }
 }
@@ -3452,6 +3666,12 @@ fn validate_hmac(
 /// A payload map binds Flux symbols to dotted paths, and both halves have to be spellable.
 fn validate_channel_payload(channel: &ChannelBinding, problems: &mut Vec<String>) {
     let name = channel.name.as_str();
+    if channel.payload_root && !channel.payload.is_empty() {
+        problems.push(format!(
+            "channel binding {name:?} declares `payload_root = true` and a `payload` projection. \
+             A delivery is either the complete JSON event or one projected object, never both"
+        ));
+    }
     for (symbol, path) in &channel.payload {
         if let Err(reason) = validate_symbol(symbol) {
             problems.push(format!("channel binding {name:?}: {reason}"));
@@ -5529,6 +5749,7 @@ pub fn accepted_keys() -> Vec<(&'static str, Vec<String>)> {
         ("producedCredential", probe::<crate::ProducedCredential>()),
         ("event", probe::<EventDecl>()),
         ("channel", probe::<ChannelBinding>()),
+        ("socketConnect", probe::<SocketConnectSpec>()),
         ("configField", probe::<ConfigField>()),
         ("choice", probe::<crate::Choice>()),
         ("graph", probe::<Graph>()),

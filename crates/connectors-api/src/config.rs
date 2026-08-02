@@ -83,6 +83,9 @@ fn decompose(field: Field<'_>) -> (&'static str, String) {
     match field {
         Field::Endpoint(name) => ("endpoint", name.to_owned()),
         Field::Username(name) => ("username", name.to_owned()),
+        Field::ChannelQuery { channel, parameter } => {
+            ("channel_query", format!("{channel}\0{parameter}"))
+        }
     }
 }
 

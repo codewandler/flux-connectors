@@ -297,6 +297,22 @@ fn the_normalizer_is_a_deterministic_fixed_point() {
 }
 
 #[test]
+fn the_generated_event_declarations_are_a_deterministic_fixed_point() {
+    let script = root().join("scripts/generate-asterisk-events.py");
+    let output = Command::new("python3")
+        .arg(&script)
+        .arg("--check")
+        .output()
+        .unwrap_or_else(|error| panic!("cannot run {}: {error}", script.display()));
+    assert!(
+        output.status.success(),
+        "{} --check failed: {}",
+        script.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn all_108_normalized_rest_operations_reach_the_existing_openapi_front_end() {
     let path = spec_root().join("ari-22.10.1.openapi.json");
     let document = std::fs::read_to_string(&path)

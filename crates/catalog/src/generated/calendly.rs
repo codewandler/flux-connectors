@@ -14,6 +14,9 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     base_url: "https://api.calendly.com",
     auth: AUTH,
     operations: OPERATIONS,
+    config: CONFIG,
+    events: EVENTS,
+    channels: CHANNELS,
     config_choices: CONFIG_CHOICES,
 };
 
@@ -25,6 +28,33 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
     },
+];
+
+#[rustfmt::skip]
+static CONFIG: &[crate::ConfigField] = &[
+    crate::ConfigField {
+        name: "access_token",
+        service: "default",
+        label: "Calendly access token",
+        help: "Create one under Integrations & apps → API & Webhooks → Personal access tokens in Calendly. Calendly shows it once",
+        example: None,
+        format: "token",
+        required: true,
+        default: None,
+        secret: true,
+        docs_url: Some("https://developer.calendly.com/getting-started"),
+        binds: "credential.calendly.access_token",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"access_token\",\"label\":\"Calendly access token\",\"help\":\"Create one under Integrations & apps → API & Webhooks → Personal access tokens in Calendly. Calendly shows it once\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.calendly.com/getting-started\",\"binds\":\"credential.calendly.access_token\"}",
+    },
+];
+
+#[rustfmt::skip]
+static EVENTS: &[crate::Event] = &[
+];
+
+#[rustfmt::skip]
+static CHANNELS: &[crate::Channel] = &[
 ];
 
 #[rustfmt::skip]

@@ -10,3 +10,35 @@ base_url = "https://{account_host}/restapi/v2.1/accounts/{account_id}"
 api_version = "v2.1"
 module = "docusign.flux"
 operations = ["docusign-verify", "docusign-envelope-list", "docusign-envelope-get", "docusign-envelope-recipients-get", "docusign-envelope-create-from-template", "docusign-envelope-void"]
+
+[[auth]]
+name = "docusign.access_token"
+scheme = "bearer"
+env = ["DOCUSIGN_ACCESS_TOKEN"]
+description = "DocuSign OAuth2 access token sent as a bearer; already minted, supplied through the environment"
+
+[[default_auth]]
+credentials = ["docusign.access_token"]
+
+[[config]]
+name = "account_host"
+label = "DocuSign account API host"
+help = "The host portion of this account's own API server, without the https:// prefix — read it from the base_uri field of the accounts[] entry in DocuSign's OAuth UserInfo response (https://account-d.docusign.com/oauth/userinfo in the developer sandbox, https://account.docusign.com/oauth/userinfo in production) for the account you are connecting. If that field reads https://demo.docusign.net, enter demo.docusign.net"
+example = "demo.docusign.net"
+format = "hostname"
+binds = "endpoint.account_host"
+
+[[config]]
+name = "account_id"
+label = "DocuSign account id"
+help = "This account's id (a GUID), from the same accounts[] entry of DocuSign's OAuth UserInfo response that account_host came from"
+example = "00000000-0000-0000-0000-000000000000"
+binds = "endpoint.account_id"
+
+[[config]]
+name = "access_token"
+label = "Access token"
+help = "An OAuth2 access token for this account — minted by DocuSign's own login flow or an integration key's JWT/authorization-code grant, and pasted here already-minted. It is short-lived; a call that starts failing with 401 usually means this needs refreshing"
+format = "token"
+secret = true
+binds = "credential.docusign.access_token"

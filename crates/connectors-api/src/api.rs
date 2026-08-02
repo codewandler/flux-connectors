@@ -658,10 +658,22 @@ pub async fn put_config(
     let target = match kind.as_str() {
         "endpoint" => connector_pack::Field::Endpoint(name),
         "username" => connector_pack::Field::Username(name),
+        "channel_query" => {
+            let (channel, parameter) = name.split_once('.').ok_or_else(|| {
+                Failure(
+                    StatusCode::BAD_REQUEST,
+                    "a channel query field is `<binding>.<parameter>`".to_owned(),
+                )
+            })?;
+            connector_pack::Field::ChannelQuery { channel, parameter }
+        }
         other => {
             return Err(Failure(
                 StatusCode::BAD_REQUEST,
-                format!("unknown configuration kind `{other}`; expected `endpoint` or `username`"),
+                format!(
+                    "unknown configuration kind `{other}`; expected `endpoint`, `username` or \
+                     `channel_query`"
+                ),
             ))
         }
     };
