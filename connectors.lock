@@ -37,7 +37,7 @@ ir_sha256 = "a1ffd1a0d6e3dc59156900767ff419581b8ae9963e96584061a6b2b75076c6c7"
 [[provider]]
 id = "anthropic"
 generator = "flux-connectors 0.11.0"
-toml_sha256 = "9232736fd8b006e26b62b3d4f4d95b5113786a8fdceb1ecbc84eca5c7ce2738b"
+toml_sha256 = "357434fb1f641cf5eedd9da522450593d6d9b121b7f2b8f9d04a872ac06b577c"
 ir_sha256 = "296efe57fd8b72ae028e894145cf5c75b673e43a5aa9941c64f51ec692a06ec9"
 
 [provider.artifacts]

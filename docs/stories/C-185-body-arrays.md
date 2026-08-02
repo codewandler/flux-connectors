@@ -110,6 +110,24 @@ That is the argument for fixing the mechanism rather than recording the gap five
 - This runs solo: it changes body lowering, which every provider reads.
 
 ## Progress
+- **Independently reviewed after integration: `PASS`, no blocking findings.** The review it never got
+  from its own implementor. It confirmed the expression-language boundary **structurally** rather than
+  on the doc comment's word: the op path constructs only
+  `Bind, Call, Fmt, List, Lit, Obj, Parse, Return, Var, When` — no `Each`, `Repeat`, `Expr` or `Jq`,
+  so there is no iteration or formula construct available to it at all. It also falsified four
+  refusal pins by mutation in a scratch tree with its own `CARGO_TARGET_DIR`, and verified the base
+  emitted `payload = { "personalizations[0]": { "to[0]": … } }` — bracketed object keys, the 400 the
+  story claims — so the failing-first holds behaviourally and not merely as a compile error.
+- **`sendgrid_connector.rs` was checked for weakened assertions and none were found**: 9 tests/22
+  assertions before, 10/22 after, every base test surviving by name except the one whose premise this
+  story inverts, which became *two* tests. The old spelling went from silently-wrong-and-passing to
+  refused-and-pinned.
+- **The review found the trap this story's own prose named and nobody had filed: [C-452](C-452-pack-cannot-evaluate-an-array-body.md).**
+  `connector-pack`'s evaluator has no `Node::List` arm and refuses at `request.rs:1330`. No provider
+  declares an indexed path yet, so the gate is green today — but the first one to do so, which is the
+  entire point of this story, turns it red. That is what actually gates SendGrid's send, Anthropic's
+  writes and the Managed Agents epic, and `providers/anthropic.toml` has been corrected to cite it
+  instead of the now-false *"`BodyNode` never builds an array"*.
 
 **2026-08-02, `impl/C-185` from `dd8d21a`.** Emitter only; no provider file changed, no generated
 artifact touched.

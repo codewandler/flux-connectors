@@ -104,11 +104,19 @@
 #
 # WHY THE SELECTION IS READ-ONLY.
 #
-# Nothing below is a POST, PATCH or DELETE. Two constraints measured earlier in this wave make that
-# the honest choice rather than a missed opportunity: `BodyNode` never builds an array (C-168/C-185),
-# and the emitter refuses `idempotency = "idempotent"` on POST and PATCH regardless of vendor
-# semantics (C-186) — neither gap is exercised here because there is no body to build and no write
-# to mis-declare. The Admin API's mutating surface (creating invites, updating member roles,
+# Nothing below is a POST, PATCH or DELETE. Two constraints were measured earlier in this wave, and
+# **both have since closed** — so the read-only scope now rests on the shape decision below, not on a
+# missing primitive. `BodyNode` could not build an array when this was written; C-185 landed the
+# indexed `wire` path, so it can. C-186 closed the `idempotency = "idempotent"` refusal on POST and
+# PATCH. Neither gap was ever exercised here (there is no body to build and no write to mis-declare),
+# which is why closing them changes nothing about this file — but the sentence that cited them as
+# *reasons* would now be false, and a stale premise is how a withheld surface gets reopened on an
+# argument nobody re-checked.
+#
+# **What C-185 did not close, and what a write here would hit first:** `connector-pack`'s evaluator
+# has no `Node::List` arm, so the first operation that emits an array body refuses at
+# `crates/connector-pack/src/request.rs:1330` with "its body computes a list, which this pack does not
+# evaluate". That is C-452, and it is the real gate on a mutating surface here. The Admin API's mutating surface (creating invites, updating member roles,
 # archiving workspaces, rotating API-key status) is real and useful, but each one needs a decision
 # about request/response shape this story does not need to make to satisfy its Goal, so it is left
 # out rather than guessed at — the standing rule this repository applies everywhere a shape is
