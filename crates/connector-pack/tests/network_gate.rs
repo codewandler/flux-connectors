@@ -10,7 +10,7 @@
 //! sampled one, because a subject that is right for `zendesk-ticket-show` and empty for
 //! `google-calendar-calendar-get` is a hole in exactly the connector nobody checked.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use catalog::OperationKey;
 use connector_pack::{Configuration, Credentials, Egress, MemoryConfig, MemoryStore, Operation};
@@ -68,6 +68,17 @@ fn value_for(variable: &str) -> String {
 /// since this file's whole claim is that it asserts the gate over *every* operation rather than a
 /// sampled one.
 fn configuration() -> Configuration {
+    static CONFIGURATION: OnceLock<Configuration> = OnceLock::new();
+
+    CONFIGURATION.get_or_init(build_configuration).clone()
+}
+
+/// Build the immutable configuration snapshot shared by this test binary.
+///
+/// Discovering the fields is deliberately catalogue-wide, but doing that from every call to
+/// [`tool_for`] made each assertion project the whole catalogue once per operation. The production
+/// port remains explicitly host-bound; this cache exists only inside the test process.
+fn build_configuration() -> Configuration {
     let mut values = MemoryConfig::new();
     for entry in catalog::operations() {
         for variable in probe(entry).endpoint_variables() {

@@ -23,6 +23,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The whole-catalogue network safety gate no longer rebuilds the catalogue once per operation**
+  (C-456). Its four permission-subject and intent assertions keep the same coverage while their
+  targeted test time falls from 191.31 seconds to 1.48 seconds.
+
 - **Forgotten worktrees and their story state are reconciled before release** (C-454). Five stories
   whose implementations and Progress were complete now say `done`; blocker chains and epic
   checklists match the commits already on `main`. All 75 merged local branch pointers were removed.
