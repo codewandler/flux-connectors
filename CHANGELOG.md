@@ -7,6 +7,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Documented
+
+- **The Managed Agents surface, inventoried before any TOML — and it contradicts its own epic's
+  premise in three places** (C-445). Eighty endpoints catalogued with a carry/withhold decision and a
+  reason for every withheld one. The three findings are why the inventory came first:
+  the SSE and webhook **event vocabularies collide by name** (`session.status_terminated`,
+  `session.status_rescheduled` and `session.thread_created` appear in both with different payloads;
+  `session.status_idle` / `session.status_idled` differ by a letter), and a service is one member
+  namespace — so "two bindings on one service, the shape slack proved" was wrong, because slack's two
+  bindings share *one* vocabulary. The beta header must be **per-operation** `const_headers`, not
+  provider-level: `distribute_const_headers` (`crates/connector-spec/src/provider.rs:2010`) copies the
+  provider table onto every operation, which would beta-gate the five existing non-beta Anthropic
+  reads. And the "management plane yes, session plane later" middle is **not** obviously safe — the
+  vendor treats agents and environments as control-plane resources applied once from CI, so a
+  management-only connector risks a catalogued surface with no caller.
+
+  No provider TOML was written, which is the outcome C-130's precedent exists to make legible.
+
 ### Added
 
 - **A service says what kind of thing it is, so 54 providers can be filtered by domain** (C-153).

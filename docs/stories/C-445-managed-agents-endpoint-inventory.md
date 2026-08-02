@@ -2,7 +2,7 @@
 id: C-445
 title: "Inventory the Managed Agents surface before any TOML is written"
 pillar: Spec
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/anthropic-managed-agents.md
 epic: anthropic-managed-agents

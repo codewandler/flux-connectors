@@ -62,7 +62,13 @@ The honest split, and the one this design proposes:
 
 A defensible outcome is *management-plane yes, session-plane decided separately* — which is exactly
 what C-122 already did for `anthropic` (the model catalogue and admin surface shipped; inference did
-not). It is also possible the answer is that the session plane belongs in flux as a plugin, which
+not). **C-445 costed that middle and found it is not obviously safe**: the vendor's own guidance is
+that agents and environments are control-plane resources applied once from CI, and calls
+`agents.create()` in the request path an anti-pattern — so a management-only connector risks shipping
+a catalogued, callable surface with no caller, which is the provisioning category
+`provider-operation-inventory.md:717` already drops ~120 babelforce operations for. `memory_stores`
+is the part that survives a "no". The inventory costs both branches and picks neither; C-444
+decides. It is also possible the answer is that the session plane belongs in flux as a plugin, which
 `AGENTS.md:124-130` would support: this is protocol-rich and stateful, and it holds a socket.
 
 **This design does not settle it.** It states it, scopes the epic so the management half can proceed
@@ -81,9 +87,15 @@ member kind this repository already has:
 | `POST /v1/sessions/{id}/events` | `[[operations]]`, and the channel's **`reply`** | The binding's outbound half. |
 | Console-registered webhooks | a second `[[channels]]`, `transport = "webhook"` | Its own event namespace (`data.type`), its own verification. |
 
-**Two channel bindings over two event sets on one service** — the shape `slack` proved with
-`socket` + `events-api`, but here the two halves carry *different* vocabularies, which the model has
-never been asked to express.
+**Two channel bindings over two event sets on one service** — and **C-445 found that this does not
+hold as written.** The claim was that `slack` proved the shape with `socket` + `events-api`; it did
+not, because slack's two bindings share *one* vocabulary. Here the two vocabularies **collide by
+name**: `session.status_terminated`, `session.status_rescheduled` and `session.thread_created` each
+appear in both the SSE and the webhook set with *different payloads*, and `session.status_idle` /
+`session.status_idled` differ by a single letter. A service is one member namespace
+(`AGENTS.md` §Member contract), so a duplicate is a loud error rather than a merge. Resolving it is
+[C-446](../stories/C-446-managed-agents-events-and-verification.md)'s, and it constrains the service
+partition — which is why C-445 recorded it rather than leaving it to be discovered in the TOML.
 
 ### The socket binding needs no verification, and the webhook one does
 
@@ -109,9 +121,14 @@ not a hand-rolled scheme.
   Managed Agents connector is **hand-authored**, like the `admin` service before it — and C-126's
   rule binds: a field not known with confidence is left out or left untyped, never guessed into a
   `required` list.
-- **Beta.** The whole surface sits behind `anthropic-beta: managed-agents-2026-04-01`. This
-  repository has `const_headers` (`ir.rs:328`) for exactly this — a vendor-fixed header distributed
-  onto every operation by the loader, never caller-supplied, never in the `ToolSpec`.
+- **Beta, and the header goes on the operation, not the provider.** The whole surface sits behind
+  `anthropic-beta: managed-agents-2026-04-01`. **Corrected by C-445:** the sentence that stood here
+  said `const_headers` is *"distributed onto every operation by the loader"* and read as an argument
+  for declaring it provider-level. It is distributed onto every operation — `distribute_const_headers`
+  (`crates/connector-spec/src/provider.rs:2010`) loops the whole slice — which is exactly why a
+  provider-level declaration is **wrong** here: it would beta-gate `anthropic-models-list`,
+  `anthropic-model-get` and the three admin reads, none of which are beta. Declare it per operation;
+  distribution is additive per header name, so those operations still inherit `anthropic-version`.
 - **Pagination is `page`/`next_page`**, not the `after_id`/`before_id` scheme the rest of the
   Anthropic surface uses. `quirks.pagination` is declared by 6 operations across 3 providers and
   reaches no artifact (`AGENTS.md` §Intentional gaps), so declaring it here is honest and
@@ -137,3 +154,7 @@ conformance question, and the charter decision.
 ## Stories
 
 Seeded with this design; see the board under the `anthropic-managed-agents` epic.
+
+The endpoint inventory produced by [C-445](../stories/C-445-managed-agents-endpoint-inventory.md)
+is [managed-agents-inventory.md](managed-agents-inventory.md) — **read its §What the inventory found
+before acting on anything above**; three of its findings correct this document.
