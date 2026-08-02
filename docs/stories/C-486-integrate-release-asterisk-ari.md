@@ -23,7 +23,7 @@ as the newly added provider.
       recorded from commands in this session.
 - [x] Response coverage floor/absence ceiling changes, if required by their tests, are made only at
       integration.
-- [ ] The complete Rust, public-site, host-page and publish-dry-run gates pass.
+- [x] The complete Rust, public-site, host-page and publish-dry-run gates pass.
 - [x] Engineering and customer changelogs describe a spec-generated Asterisk ARI REST connector and
       do not claim event/WebSocket or Flux-plugin ownership.
 - [ ] `scripts/cut-release.sh` cuts the required bump; main and tag are pushed, crates publication is
@@ -39,6 +39,8 @@ as the newly added provider.
 - 2026-08-02: `cargo test --workspace --no-fail-fast`, workspace build, Clippy with warnings denied
   and formatting all pass; publish dry-run is intentionally repeated after committing generated
   catalogue files because Cargo refuses to package a dirty published crate.
+- 2026-08-02: clean-tree publish dry-run packaged and verified all four publishable crates without
+  uploading anything.
 
 ## Notes
 
