@@ -74,7 +74,43 @@
 //!    `providers/zendesk.toml` pins it with a JSON Schema `const` for want of anywhere better.
 //!    `const` already means "this value and no other", so [`constant`] reads it: the field is sent
 //!    and does not become a parameter a model has to guess.
-//! 3. **Free-form object bodies — emitted through `parse`.** `babelforce-call-session-set` and
+//! 3. **Arrays in the body — emitted, at a declared length (C-185).** A `wire` segment may carry a
+//!    bracketed index, and `personalizations[0].to[0].email` puts a caller's value inside two
+//!    nested arrays of objects. That is SendGrid's envelope, and before this an envelope-shaped
+//!    vendor could not be addressed at all: every segment was an object key, so the body came out
+//!    as `{"personalizations": {"0": …}}`, which is a 400 rather than a shorthand.
+//!
+//!    **What it solves is the fixed-length envelope, not the caller-supplied list**, and the two
+//!    are different problems. The indices come from the provider file, so the array's length is a
+//!    property of the declaration: a one-recipient send is one `[0]`, a two-recipient send is a
+//!    second set of fields. A *batch* — the caller passes n items and n elements are built — would
+//!    need the emitter to compute over caller data, which is the expression language this
+//!    repository refuses (AGENTS.md, *Flow graph contract*). The caller can still supply a whole
+//!    array as one value (`providers/notion.toml`'s rich-text title), and that is the older bargain
+//!    unchanged: the caller assembles the shape and nothing here checks it. An index may also
+//!    address a whole *element* — `properties.title[0]` — which splits the difference: this
+//!    repository supplies the array wrapper, the caller supplies the element.
+//!
+//!    **What it refuses**, each because the alternative is a request the vendor answers:
+//!    a hole in the indices ([`Error::SparseBodyArray`]); a bare numeric segment, which used to
+//!    build an object keyed `"0"` and now sits one character from a spelling that means something
+//!    else ([`Error::NumericWirePathSegment`]); anything else brackets can spell, including an
+//!    array directly inside an array ([`Error::BadArrayIndex`]); a body whose *root* is an array,
+//!    which needs an empty first segment and is refused as one ([`Error::BadWirePath`]) — every
+//!    root-array vendor this repository has looked at wants a caller-supplied batch, so a
+//!    fixed-length spelling would buy nothing; and an indexed path under `form` encoding, which
+//!    C-144 refuses nesting for already.
+//!
+//!    **How deep it goes: as deep as an author spells, and no deeper.** There is no recursion and
+//!    no untyped blob, because every leaf of the tree is a declared parameter — the body is always
+//!    the finite set of fields the provider file lists, which is the property C-107 and C-168 were
+//!    protecting when they refused a recursive body model.
+//!
+//!    **An optional field inside an element behaves exactly as it does inside an object**, which is
+//!    to say C-56's problem is unchanged and unsolved here: it is sent as an explicit `null` rather
+//!    than omitted. An *element* cannot be optional at all — the indices are declared, so a
+//!    two-element envelope always sends two elements.
+//! 4. **Free-form object bodies — emitted through `parse`.** `babelforce-call-session-set` and
 //!    `babelforce-session-update` take `{"type": "object"}` bodies with no properties, which
 //!    [`connector_spec::ParamSet::body_schema`] declares. The caller supplies the whole body as one
 //!    parameter — and it is **re-bound through `parse($body, as: "json")` rather than passed
@@ -187,9 +223,48 @@ const RESPONSE: &str = "response";
 /// into control flow (C-12) are omitted; a body declaration that could be read two ways is refused
 /// rather than resolved by guesswork. See the module documentation and [`Error`].
 pub fn emit_operation(connector: &Connector, operation: &Operation) -> Result<String> {
-    Ok(flux_lang::format::format_composite_op(&lower(
-        connector, operation,
-    )?))
+    let printed = flux_lang::format::format_composite_op(&lower(connector, operation)?);
+    canonical(operation, printed)
+}
+
+/// Re-print the AST printer's text through flux's **CST** formatter, and emit that — C-185.
+///
+/// flux-lang has two formatters and they do not always agree. `flux_lang::format` prints an AST;
+/// `flux_lang::format_cst::format_module` re-prints parsed *text* and is the one a human editing a
+/// generated file runs, so it is the one the C-11 canonicality gate compares against
+/// (`tests/op_emitter.rs`, every per-provider `…_emits_an_analyzable_module`). Measured on
+/// flux-lang 0.47.1: a list expression is `[ a, b ]` from the AST printer and `[a, b]` from the CST
+/// formatter, while a record is `{ a: b }` from both. So the moment a body carried an array, the
+/// emitter's own documented promise — *"flux-lang's own formatter leaves it unchanged"* — stopped
+/// being true, and it stopped being true for the whole module rather than for the array.
+///
+/// Taking the CST spelling is the fix that does not involve this crate touching generated text. It
+/// is safe by construction rather than by inspection: `format_module` carries an **equivalence
+/// guard** (`format_cst.rs:51-61`) and returns `Some` only for text it has re-parsed and lowered to
+/// the identical module, comments included — so this can change spacing and never meaning, and its
+/// failure mode is `None`, which is a refusal. That is the same reasoning
+/// [`Error::UnspellableDuration`] already records for the other place the two formatters disagree,
+/// and the same conclusion, arrived at from the other side: a duration has no CST spelling at all,
+/// so it is refused; a list has one, so it is used.
+///
+/// **It is inert on everything already shipped.** Every committed module is already a fixed point of
+/// `format_module` — that is what the canonicality tests assert — so re-printing one returns it
+/// unchanged. `cargo run -p connector-cli -- diff` is the measurement, and when this landed it
+/// reported `945 artifacts up to date (54 providers checked)` — no drift, nothing rewritten.
+fn canonical(operation: &Operation, printed: String) -> Result<String> {
+    let parsed = flux_lang::parser::parse_cst(&printed);
+    if !parsed.errors.is_empty() {
+        return Err(Error::NotCanonical {
+            operation: operation.id.clone(),
+            reason: format!("it does not parse: {:?}", parsed.errors),
+        });
+    }
+    flux_lang::format_cst::format_module(&parsed).ok_or_else(|| Error::NotCanonical {
+        operation: operation.id.clone(),
+        reason: "flux's own formatter could not re-print it, so no spelling of this operation is \
+                 canonical"
+            .to_string(),
+    })
 }
 
 /// A parameter paired with the Flux symbol that carries it.
@@ -479,8 +554,11 @@ fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl
         }
     }
     for bound in body {
-        // A dotted name with no `wire` cannot be read either way — see `Error::NestedBodyField`.
-        if bound.param.wire.is_none() && bound.param.name.contains('.') {
+        // A dotted or bracketed name with no `wire` cannot be read either way — see
+        // `Error::NestedBodyField`. The bracket joined the dot when an index became a path step
+        // (C-185): without this, `name = "items[0]"` and no `wire` would build an array out of a
+        // name that may well be one the vendor spells with brackets.
+        if bound.param.wire.is_none() && bound.param.name.contains(['.', '[', ']']) {
             return Err(Error::NestedBodyField {
                 operation: operation.id.clone(),
                 name: bound.param.name.clone(),
@@ -599,6 +677,12 @@ fn check_body_encoding(
         // caller-facing name, and it is the *wire* name that reaches this template.
         let reason = if wire.contains('.') {
             Some("its `wire` path is nested")
+        } else if wire.contains('[') || wire.contains(']') {
+            // C-185 gave a `wire` path array indices, and C-144's refusal of nesting has to cover
+            // them: a form body is `fmt`-assembled text, so `items[0]=…` would reach the vendor as
+            // a literal key. Some form parsers do read that as an array and none of the vendors
+            // described here has been checked for it, which is precisely the guess this refuses.
+            Some("its `wire` path indexes an array, which a form body cannot express")
         } else if wire.is_empty() {
             Some("its wire name is empty, which is not a form key")
         } else if wire.contains('{') || wire.contains('}') {
@@ -1097,49 +1181,230 @@ fn request_body(
     Ok(body)
 }
 
-/// The request body under construction: a JSON object tree, keyed by wire path segment.
+/// One step of a parsed [`Param::wire`] path: an object key, or one element of the array that key
+/// holds — C-185.
+///
+/// `personalizations[0].to[0].email` is five steps, and the two kinds are what a `BodyNode` matches
+/// on to decide whether the position it is standing at is a record or a list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Step<'a> {
+    /// A JSON object key.
+    Key(&'a str),
+    /// A position in the array held by the key immediately before it.
+    Index(usize),
+}
+
+/// Parse one `wire` path into steps, refusing every spelling that is not one of the two.
+///
+/// The grammar is deliberately small: `key` or `key[0]`, joined by dots. A segment that is neither
+/// is refused rather than absorbed into an object key, because an absorbed bracket produces
+/// `{"items[": …}` — accepted by the vendor, ignored, answered 200.
+fn wire_steps<'a>(operation: &Operation, param: &Param, wire: &'a str) -> Result<Vec<Step<'a>>> {
+    let bad_path = || Error::BadWirePath {
+        operation: operation.id.clone(),
+        name: param.name.clone(),
+        wire: wire.to_string(),
+    };
+    let bad_index = |segment: &str, reason: &'static str| Error::BadArrayIndex {
+        operation: operation.id.clone(),
+        name: param.name.clone(),
+        wire: wire.to_string(),
+        segment: segment.to_string(),
+        reason,
+    };
+
+    let mut steps = Vec::new();
+    for segment in wire.split('.') {
+        let (key, brackets) = match segment.find('[') {
+            Some(at) => segment.split_at(at),
+            None => (segment, ""),
+        };
+        if key.is_empty() {
+            // Covers `""`, `".a"`, `"a."`, `"a..b"` exactly as before — and `"[0].x"`, which is a
+            // body whose *root* is an array. See the module documentation for why that stays out.
+            return Err(bad_path());
+        }
+        if key.contains(']') {
+            return Err(bad_index(key, "it closes a bracket it never opened"));
+        }
+        if key.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err(Error::NumericWirePathSegment {
+                operation: operation.id.clone(),
+                name: param.name.clone(),
+                wire: wire.to_string(),
+                segment: key.to_string(),
+                segment_bracketed: format!("[{key}]"),
+            });
+        }
+        steps.push(Step::Key(key));
+
+        if brackets.is_empty() {
+            continue;
+        }
+        let inner = &brackets[1..];
+        let Some(close) = inner.find(']') else {
+            return Err(bad_index(brackets, "its `[` is never closed"));
+        };
+        let (digits, after) = inner.split_at(close);
+        let after = &after[1..];
+        if !after.is_empty() {
+            return Err(bad_index(
+                brackets,
+                if after.starts_with('[') {
+                    "an array whose elements are themselves arrays has no spelling here"
+                } else {
+                    "text follows the closing `]`"
+                },
+            ));
+        }
+        if digits.is_empty() {
+            return Err(bad_index(brackets, "its brackets hold no index"));
+        }
+        if !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err(bad_index(
+                brackets,
+                "an index is a decimal position from `[0]` up",
+            ));
+        }
+        if digits.len() > 1 && digits.starts_with('0') {
+            return Err(bad_index(
+                brackets,
+                "a leading zero would give one position two spellings",
+            ));
+        }
+        let index = digits
+            .parse::<usize>()
+            .map_err(|_| bad_index(brackets, "the index is larger than this machine counts to"))?;
+        steps.push(Step::Index(index));
+    }
+    Ok(steps)
+}
+
+/// The steps back in `wire` spelling, so a refusal names the path an author wrote.
+fn render_steps(steps: &[Step<'_>]) -> String {
+    let mut rendered = String::new();
+    for step in steps {
+        match step {
+            Step::Key(key) => {
+                if !rendered.is_empty() {
+                    rendered.push('.');
+                }
+                rendered.push_str(key);
+            }
+            Step::Index(index) => rendered.push_str(&format!("[{index}]")),
+        }
+    }
+    rendered
+}
+
+/// The request body under construction: a JSON tree, keyed by wire path step.
 ///
 /// A tree rather than a flat map because a vendor's body nests — Zendesk's comment text lives at
 /// `ticket.comment.body` — and the flat spelling `{"ticket.comment.body": …}` is a request Zendesk
 /// accepts and ignores. `BTreeMap` at every level is what makes the emitted record deterministic
-/// without sorting anything at emit time.
+/// without sorting anything at emit time; for [`BodyNode::Elements`] it additionally puts the
+/// declared indices in position order, which is the order the array is emitted in.
 #[derive(Debug)]
 enum BodyNode {
     /// A caller-supplied (or constant) value, carried by this Flux symbol.
     Leaf(String),
     /// An object of further paths.
     Branch(BTreeMap<String, BodyNode>),
+    /// An array, keyed by the position each declared element occupies — C-185. Held sparsely while
+    /// the tree is built and checked dense before it is lowered, so `items[0]` and `items[2]` can
+    /// be refused by naming the hole rather than by silently closing it.
+    Elements(BTreeMap<usize, BodyNode>),
 }
 
 impl BodyNode {
-    /// Place `symbol_name` at `segments`.
-    ///
-    /// `Err(depth)` reports that the first `depth` segments of the path are contested — either they
-    /// already hold a value this field would have to live *inside*, or another field already claimed
-    /// exactly them. The caller turns that into [`Error::BodyPathConflict`]; reporting the depth
-    /// rather than a message is what lets one recursive step stay ignorant of the whole path.
-    fn insert(&mut self, segments: &[&str], symbol_name: &str) -> std::result::Result<(), usize> {
-        let BodyNode::Branch(children) = self else {
-            // This node already holds a value, so the path that reached it cannot also be an
-            // object. The caller adds the depth it was reached at.
-            return Err(0);
-        };
-        let (head, rest) = segments.split_first().expect("a wire path has a segment");
-        if rest.is_empty() {
-            if children.contains_key(*head) {
-                return Err(1);
-            }
-            children.insert((*head).to_string(), BodyNode::Leaf(symbol_name.to_string()));
-            return Ok(());
+    /// An empty container of the kind `step` needs to stand on.
+    fn empty_for(step: &Step<'_>) -> BodyNode {
+        match step {
+            Step::Key(_) => BodyNode::Branch(BTreeMap::new()),
+            Step::Index(_) => BodyNode::Elements(BTreeMap::new()),
         }
-        children
-            .entry((*head).to_string())
-            .or_insert_with(|| BodyNode::Branch(BTreeMap::new()))
-            .insert(rest, symbol_name)
-            .map_err(|depth| depth + 1)
     }
 
-    /// Lower the tree into the nested Flux record the payload is bound to.
+    /// Place `symbol_name` at `steps`.
+    ///
+    /// `Err(depth)` reports that the first `depth` steps of the path are contested — they already
+    /// hold a value this field would have to live *inside*, they hold the other kind of container,
+    /// or another field already claimed exactly them. The caller turns that into
+    /// [`Error::BodyPathConflict`]; reporting the depth rather than a message is what lets one
+    /// recursive step stay ignorant of the whole path.
+    fn insert(&mut self, steps: &[Step<'_>], symbol_name: &str) -> std::result::Result<(), usize> {
+        let (head, rest) = steps.split_first().expect("a wire path has a step");
+        let slot = match (&mut *self, head) {
+            (BodyNode::Branch(children), Step::Key(key)) => {
+                if rest.is_empty() {
+                    if children.contains_key(*key) {
+                        return Err(1);
+                    }
+                    children.insert((*key).to_string(), BodyNode::Leaf(symbol_name.to_string()));
+                    return Ok(());
+                }
+                children
+                    .entry((*key).to_string())
+                    .or_insert_with(|| BodyNode::empty_for(&rest[0]))
+            }
+            (BodyNode::Elements(items), Step::Index(index)) => {
+                if rest.is_empty() {
+                    if items.contains_key(index) {
+                        return Err(1);
+                    }
+                    items.insert(*index, BodyNode::Leaf(symbol_name.to_string()));
+                    return Ok(());
+                }
+                items
+                    .entry(*index)
+                    .or_insert_with(|| BodyNode::empty_for(&rest[0]))
+            }
+            // Whatever occupies this position is not what this path needs it to be: a value the
+            // path wants to descend into, an object the path indexes, or an array the path keys.
+            // The caller adds the depth it was reached at.
+            _ => return Err(0),
+        };
+        slot.insert(rest, symbol_name).map_err(|depth| depth + 1)
+    }
+
+    /// Refuse any array whose declared indices are not `0..n` — C-185.
+    ///
+    /// Run once over the finished tree rather than at insert time, because "the indices are dense"
+    /// is a property of the whole field set and no single field can be the one that breaks it.
+    fn check_dense(&self, operation: &Operation, path: &str) -> Result<()> {
+        match self {
+            BodyNode::Leaf(_) => Ok(()),
+            BodyNode::Branch(children) => children.iter().try_for_each(|(key, child)| {
+                let below = if path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{path}.{key}")
+                };
+                child.check_dense(operation, &below)
+            }),
+            BodyNode::Elements(items) => {
+                for (position, index) in items.keys().enumerate() {
+                    if *index != position {
+                        return Err(Error::SparseBodyArray {
+                            operation: operation.id.clone(),
+                            path: path.to_string(),
+                            missing: position,
+                            declared: items
+                                .keys()
+                                .map(|index| format!("[{index}]"))
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                        });
+                    }
+                }
+                items.iter().try_for_each(|(index, child)| {
+                    child.check_dense(operation, &format!("{path}[{index}]"))
+                })
+            }
+        }
+    }
+
+    /// Lower the tree into the nested Flux value the payload is bound to.
     fn into_node(self) -> Node {
         match self {
             BodyNode::Leaf(symbol_name) => symbol(&symbol_name),
@@ -1149,16 +1414,26 @@ impl BodyNode {
                     .map(|(key, child)| (key, Box::new(child.into_node())))
                     .collect(),
             },
+            // `Node::List` is flux's own list constructor, so an array is a projection of Flux
+            // rather than a shape this crate invented — the same standing every other node here
+            // has. Its items are in `BTreeMap<usize, _>` order, which is index order.
+            BodyNode::Elements(items) => Node::List {
+                items: items
+                    .into_values()
+                    .map(BodyNode::into_node)
+                    .collect::<Vec<_>>(),
+            },
         }
     }
 }
 
 /// Assemble every body field into one tree, each at the JSON path its [`Param::wire`] names.
 ///
-/// Both ways a path set can be incoherent are refused rather than resolved, because either
-/// resolution silently drops a field the author declared: an empty segment
-/// ([`Error::BadWirePath`]), and a path that needs to be both a value and an object
-/// ([`Error::BodyPathConflict`]).
+/// Every way a path set can be incoherent is refused rather than resolved, because each resolution
+/// silently drops or invents something the author did not declare: an empty segment
+/// ([`Error::BadWirePath`]), a malformed index ([`Error::BadArrayIndex`]), a bare numeric segment
+/// ([`Error::NumericWirePathSegment`]), a path that needs to be two shapes at once
+/// ([`Error::BodyPathConflict`]), and an array with a hole in it ([`Error::SparseBodyArray`]).
 fn body_tree(operation: &Operation, body_params: &[Bound<'_>]) -> Result<BodyNode> {
     let mut root = BodyNode::Branch(BTreeMap::new());
     // Every path placed so far, so a conflict can name *both* fields rather than only the one that
@@ -1167,25 +1442,20 @@ fn body_tree(operation: &Operation, body_params: &[Bound<'_>]) -> Result<BodyNod
 
     for bound in body_params {
         let wire = wire_name(bound.param);
-        let segments: Vec<&str> = wire.split('.').collect();
-        if segments.iter().any(|segment| segment.is_empty()) {
-            return Err(Error::BadWirePath {
-                operation: operation.id.clone(),
-                name: bound.param.name.clone(),
-                wire: wire.to_string(),
-            });
-        }
+        let steps = wire_steps(operation, bound.param, wire)?;
 
-        match root.insert(&segments, &bound.symbol) {
+        match root.insert(&steps, &bound.symbol) {
             Ok(()) => placed.push((wire, bound.param.name.as_str())),
             Err(depth) => {
-                let path = segments[..depth].join(".");
+                let path = render_steps(&steps[..depth]);
                 // The field already occupying that path is the one whose own path is it, or lies
-                // under it.
+                // under it — one step further down is a `.` for an object and a `[` for an array.
                 let first = placed
                     .iter()
                     .find(|(placed_wire, _)| {
-                        *placed_wire == path || placed_wire.starts_with(&format!("{path}."))
+                        *placed_wire == path
+                            || placed_wire.starts_with(&format!("{path}."))
+                            || placed_wire.starts_with(&format!("{path}["))
                     })
                     .map(|(_, name)| *name)
                     .unwrap_or(bound.param.name.as_str());
@@ -1199,6 +1469,7 @@ fn body_tree(operation: &Operation, body_params: &[Bound<'_>]) -> Result<BodyNod
         }
     }
 
+    root.check_dense(operation, "")?;
     Ok(root)
 }
 
@@ -1611,6 +1882,92 @@ mod tests {
             comment["body"].as_ref(),
             Node::Var { name } if name.0 == "body"
         ));
+    }
+
+    /// The array twin of the test above — C-185. Asserted on the AST for the same reason: what a
+    /// bracketed index means is `Node::List`, and a formatting change must not be able to make that
+    /// pass or fail.
+    #[test]
+    fn indexed_wire_paths_assemble_arrays_of_records() {
+        let op = operation("/a", Vec::new());
+        let params = vec![
+            body_param("to_address", Some("personalizations[0].to[0].email")),
+            body_param("body_text", Some("content[0].value")),
+        ];
+        let bound = bind_all(&op, &params);
+        let record = body_tree(&op, &bound)
+            .expect("an envelope is a coherent path set")
+            .into_node();
+
+        let Node::Obj { fields: root } = &record else {
+            panic!("a body is a record");
+        };
+        assert_eq!(
+            root.keys().collect::<Vec<_>>(),
+            ["content", "personalizations"]
+        );
+
+        let Node::List { items } = root["personalizations"].as_ref() else {
+            panic!("`personalizations` holds an array, not an object keyed by digits");
+        };
+        assert_eq!(items.len(), 1, "one declared index is a one-element array");
+        let Node::Obj { fields: element } = &items[0] else {
+            panic!("the element is a record");
+        };
+        let Node::List { items: recipients } = element["to"].as_ref() else {
+            panic!("`to` holds a further array");
+        };
+        let Node::Obj { fields: recipient } = &recipients[0] else {
+            panic!("a recipient is a record");
+        };
+        assert!(matches!(
+            recipient["email"].as_ref(),
+            Node::Var { name } if name.0 == "to_address"
+        ));
+    }
+
+    /// The declared indices *are* the positions, in order — the tree is keyed by index rather than
+    /// by arrival, so two fields declared in either order build the same array.
+    #[test]
+    fn an_arrays_positions_are_its_declared_indices_in_order() {
+        let op = operation("/a", Vec::new());
+        let first = ("first", "items[0].id");
+        let second = ("second", "items[1].id");
+        for order in [[first, second], [second, first]] {
+            let params: Vec<Param> = order
+                .iter()
+                .map(|(name, wire)| body_param(name, Some(wire)))
+                .collect();
+            let bound = bind_all(&op, &params);
+            let record = body_tree(&op, &bound).expect("two elements").into_node();
+
+            let Node::Obj { fields: root } = &record else {
+                panic!("a body is a record");
+            };
+            let Node::List { items } = root["items"].as_ref() else {
+                panic!("`items` holds an array");
+            };
+            assert_eq!(items.len(), 2, "two declared indices are two elements");
+            let names: Vec<&str> = items
+                .iter()
+                .map(|item| {
+                    let Node::Obj { fields } = item else {
+                        panic!("an element is a record");
+                    };
+                    let Node::Var { name } = fields["id"].as_ref() else {
+                        panic!("an element's field is a symbol");
+                    };
+                    name.0.as_str()
+                })
+                .collect();
+            // `second` is declared first in one of the two orderings; the array is the same either
+            // way, because the index decides the position and the declaration order does not.
+            assert_eq!(
+                names,
+                ["first", "second"],
+                "element order follows the declared index, not the declaration order"
+            );
+        }
     }
 
     /// A field with no `wire` keeps sitting at the root of the body — the existing encoding, and the

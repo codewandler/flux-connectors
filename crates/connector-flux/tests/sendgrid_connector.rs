@@ -1,14 +1,20 @@
-//! `providers/sendgrid.toml` exists, and **it does not — and structurally cannot — send mail**
-//! through this pipeline's named-body-parameter mechanism (C-168).
+//! `providers/sendgrid.toml` exists, and **it does not send mail** (C-168).
 //!
 //! SendGrid's `POST /v3/mail/send` takes `personalizations: [{"to": [{"email": "…"}]}]` — an array
-//! of objects containing a further array of objects. This file's central claim is not "the connector
-//! parses" but "the body-nesting mechanism this pipeline has cannot place a value inside an array,
-//! at any depth, so a per-field decomposition of that envelope is not merely unwritten — it is
-//! unwritable." The mechanical proof is [`a_wire_path_that_looks_like_an_array_index_still_builds_an_object`]
-//! below, which is deliberately independent of `providers/sendgrid.toml` — it demonstrates the claim
-//! about the *pipeline*, not about this one provider file — while every other test here does depend
-//! on the provider file loading, which is what gives this file its failing-first shape.
+//! of objects containing a further array of objects. This file's central claim used to be that the
+//! body-nesting mechanism *could not* place a value inside an array at any depth, so the
+//! decomposition was unwritable rather than merely unwritten.
+//!
+//! **C-185 changed that half, and this file records the change rather than restating a claim that
+//! has stopped being true.** A `wire` segment now takes a bracketed index, so the envelope is
+//! expressible — [`the_excluded_envelope_shape_is_now_expressible`] builds SendGrid's exact shape
+//! from a synthetic fixture, and [`a_bare_numeric_wire_segment_is_refused`] shows the spelling that
+//! used to be silently wrong is now a refusal. What has *not* changed is that this connector still
+//! ships four reads and no send; [`the_curated_operation_set_still_excludes_the_send`] carries the
+//! two reasons that outlive C-185.
+//!
+//! Every test here except the two synthetic ones depends on the provider file loading, which is what
+//! gives this file its failing-first shape.
 
 use std::path::{Path, PathBuf};
 
@@ -55,11 +61,19 @@ fn the_sendgrid_connector_loads() {
 }
 
 /// **The curated set is exactly the reads.** Named rather than counted, so adding
-/// `sendgrid-mail-send` back in is a deliberate edit here rather than a silent regression — the
-/// exclusion is not "not yet written", it is "not expressible with this pipeline's `wire` mechanism"
-/// (see the module doc and `providers/sendgrid.toml`'s header comment).
+/// `sendgrid-mail-send` back in is a deliberate edit here rather than a silent regression.
+///
+/// **The reason for the exclusion moved with C-185 and is now two things, neither of them the
+/// emitter.** The `wire` mechanism can build the envelope
+/// ([`the_excluded_envelope_shape_is_now_expressible`]), so what remains is: the host cannot yet
+/// *compose a request* from a body containing an array — `connector_pack`'s evaluator has arms for
+/// `Lit`, `Var`, `Fmt`, `Obj` and `Parse` and refuses everything else with *"its body computes a
+/// list, which this pack does not evaluate"* (`crates/connector-pack/src/request.rs:1297-1332`,
+/// `kind` at `:1550`) — and the operation itself has never been authored. An operation that
+/// emitted, catalogued and could not be called is the C-110 shape this repository has shipped once
+/// already; the send waits for the pack.
 #[test]
-fn the_curated_operation_set_excludes_the_unexpressible_send() {
+fn the_curated_operation_set_still_excludes_the_send() {
     let connector = sendgrid();
     let mut ids: Vec<&str> = connector
         .operations
@@ -76,8 +90,9 @@ fn the_curated_operation_set_excludes_the_unexpressible_send() {
             "sendgrid-template-get",
             "sendgrid-template-list",
         ],
-        "the curated set changed. Sending mail needs an array-of-objects body envelope, which \
-         `BodyNode` (crates/connector-flux/src/op.rs) cannot build — see the module doc"
+        "the curated set changed. Sending mail needs an array-of-objects body envelope: the \
+         emitter builds one since C-185, and `connector-pack` cannot yet compose a request from \
+         one — see this test's documentation"
     );
 }
 
@@ -90,34 +105,27 @@ fn no_operation_reaches_the_mail_send_endpoint() {
     for operation in &connector.operations {
         assert!(
             !operation.path.contains("/mail"),
-            "`{}` reaches {:?}, under SendGrid's mail-sending surface. That surface's request body \
-             is an array-of-objects envelope this pipeline's `wire` mechanism cannot build \
-             (see providers/sendgrid.toml's header comment) and was excluded deliberately",
+            "`{}` reaches {:?}, under SendGrid's mail-sending surface. That surface was excluded \
+             deliberately, and since C-185 it is excluded for the host's reason rather than the \
+             emitter's — see `the_curated_operation_set_still_excludes_the_send`",
             operation.id,
             operation.path
         );
     }
 }
 
-/// **The mechanical proof.** `wire`'s only nesting primitive is a dot-separated object path
-/// (`BodyNode::Branch(BTreeMap<String, BodyNode>)`, `crates/connector-flux/src/op.rs`), so a segment
-/// that reads like an array index — `"0"` — is not special-cased into "the next array element": it
-/// becomes an ordinary object key, indistinguishable from any other. This is checked against a
-/// synthetic fixture rather than `providers/sendgrid.toml` because the claim is about the pipeline's
-/// body-assembly mechanism in general, not about one provider's authoring choice.
+/// One synthetic stand-in for SendGrid's mail-send envelope, spelled `{wire}` at the recipient.
 ///
-/// The emitter does **not** refuse this — refusing it would at least be loud. Instead it succeeds and
-/// assembles nested objects, which is the quieter and more dangerous failure: a caller who mistook a
-/// numeric `wire` segment for "build me an array here" gets a request that parses, formats, and loads
-/// as one composite op, and that SendGrid answers 400 to, because `{"personalizations": {"0": {"to":
-/// {"0": {"email": …}}}}}` is not the array `[{"to": [{"email": …}]}]` it required.
-#[test]
-fn a_wire_path_that_looks_like_an_array_index_still_builds_an_object() {
-    let fixture = r#"
+/// Synthetic rather than `providers/sendgrid.toml` because the claim being tested is about the
+/// pipeline's body-assembly mechanism in general, not about one provider's authoring choice — and
+/// because no recipient address, real or shaped like one, belongs in this repository.
+fn envelope_fixture(wire: &str) -> Connector {
+    let fixture = format!(
+        r#"
 id = "acme-mail"
 vendor = "Acme"
 base_url = "https://api.acme.test"
-description = "A fixture proving wire paths cannot build an array"
+description = "A fixture standing in for SendGrid's mail-send envelope"
 
 [[operations]]
 id = "acme-mail-send"
@@ -129,43 +137,61 @@ idempotency = "non_idempotent"
 
 [[operations.params.body]]
 name = "to_address"
-wire = "personalizations.0.to.0.email"
-description = "The one recipient this fixture attempts to address, by a wire path shaped like an array index"
+wire = "{wire}"
+description = "The one recipient this fixture addresses"
 required = true
-schema = { type = "string" }
-"#;
-    let connector = provider::load("providers/acme-mail.toml", fixture)
+schema = {{ type = "string" }}
+"#
+    );
+    provider::load("providers/acme-mail.toml", &fixture)
         .expect("the fixture must load")
-        .connector;
+        .connector
+}
 
-    let emitted = emit_operation(&connector, &connector.operations[0]).unwrap_or_else(|error| {
-        panic!(
-            "an array-shaped wire path is not refused at all — it is silently wrong, which is the \
-             point this test makes. It should not fail to emit, and yet it errored: {error}"
-        )
-    });
+/// **The claim this file used to make, now inverted: the envelope is expressible.** A bracketed
+/// index in a `wire` path is an array element (C-185), so `personalizations[0].to[0].email` reaches
+/// the vendor as the two nested arrays of objects it requires, rather than as the nested objects
+/// that earned SendGrid a 400.
+///
+/// This is what moves the `sendgrid-mail-send` exclusion off the emitter. It does not by itself
+/// ship the operation — see [`the_curated_operation_set_still_excludes_the_send`] for what does.
+#[test]
+fn the_excluded_envelope_shape_is_now_expressible() {
+    let connector = envelope_fixture("personalizations[0].to[0].email");
+    let emitted = emit_operation(&connector, &connector.operations[0])
+        .unwrap_or_else(|error| panic!("the envelope must emit since C-185: {error}"));
 
-    // No array survives: the assembled payload nests only `Node::Obj` records, so no `[` from an
-    // array literal appears anywhere the payload is built.
     let payload_line = emitted
         .lines()
         .find(|line| line.trim_start().starts_with("payload ="))
         .unwrap_or_else(|| panic!("no `payload` binding in the emitted op:\n{emitted}"));
-    assert!(
-        !payload_line.contains('['),
-        "the assembled body must contain no JSON array — `wire` can only build nested objects, so \
-         `personalizations` and `to` both come out as objects rather than arrays:\n{payload_line}"
-    );
-    // The numeric segment is placed as a literal object key, exactly like any other segment — proof
-    // that "0" was never read as "index zero of a list" rather than "the object key `0`".
-    // The exact shape measured: nested objects, each numeric segment surviving as a *quoted string
-    // key* (`"0"`), never as an array index or an array literal. This is the mechanical proof that
-    // `wire` has no array primitive — a segment that looks like an index is just an object key that
-    // happens to be all digits.
     assert_eq!(
         payload_line.trim(),
-        r#"payload = { personalizations: { "0": { to: { "0": { email: to_address } } } } }"#,
-        "the assembled payload must be nested objects with quoted numeric keys, not arrays:\n{payload_line}"
+        "payload = { personalizations: [{ to: [{ email: to_address }] }] }",
+        "the assembled payload must carry SendGrid's two arrays, not objects keyed by \
+         digits:\n{payload_line}"
+    );
+}
+
+/// **The trap that used to sit here, now a refusal.** `personalizations.0.to.0.email` built
+/// `{"personalizations": {"0": {"to": {"0": {"email": …}}}}}` — a request that parsed, formatted,
+/// loaded as one composite op, and that SendGrid answers 400 to, because an object keyed `"0"` is
+/// not an array. It was the quietest failure available.
+///
+/// With `[0]` now meaning the array, two spellings one character apart would mean two different
+/// requests, so the ambiguous one is refused and the refusal names the one that works.
+#[test]
+fn a_bare_numeric_wire_segment_is_refused() {
+    let connector = envelope_fixture("personalizations.0.to.0.email");
+    let error = match emit_operation(&connector, &connector.operations[0]) {
+        Ok(emitted) => panic!("a bare numeric segment must be refused, and emitted:\n{emitted}"),
+        Err(error) => error,
+    };
+
+    let rendered = error.to_string();
+    assert!(
+        rendered.contains("all digits") && rendered.contains("[0]"),
+        "the refusal must name the segment and show the bracket spelling: {rendered}"
     );
 }
 
@@ -266,9 +292,10 @@ fn the_api_key_is_configurable_and_carries_no_example_value() {
     );
 }
 
-/// No operation declares a body-nested field without `wire`, and — the point of this file — no
-/// operation's `wire` path, if one is declared, ever needs an array to express: everything shipped
-/// here nests objects at most, never arrays. Read operations carry no body at all.
+/// No operation declares a body-nested field without `wire`, and nothing shipped here needs an
+/// array: the four curated operations are three bodiless reads and one flat write. That was a
+/// consequence of the emitter's limit and is now a consequence of the curation — C-185 made the
+/// array expressible without adding one here.
 #[test]
 fn no_shipped_operation_declares_a_body_field() {
     let connector = sendgrid();

@@ -62,13 +62,16 @@ pub enum Error {
     /// literal JSON key yields `{"presence.name": …}`, which a vendor accepts and ignores — the
     /// worst failure available, because it answers 200.
     ///
+    /// A bracket is the same ambiguity one story later (C-185): `items[0]` is either a field
+    /// literally called `items[0]` or element zero of `items`, and only a `wire` can say which.
+    ///
     /// So it is refused, and the fix is one line in the provider file.
     #[error(
-        "operation `{operation}`: body field `{name}` has a dotted name and no `wire`, so whether \
-         it is one field called `\"{name}\"` or a nested path is undecidable. A body field's JSON \
-         path is declared with `wire` — write `wire = \"{name}\"` and give the field a \
-         caller-facing `name`. Emitted as-is it would be the literal key `\"{name}\"`, which the \
-         vendor accepts and ignores"
+        "operation `{operation}`: body field `{name}` has a structural name — a `.` or a `[` — and \
+         no `wire`, so whether it is one field called `\"{name}\"` or a path into the body is \
+         undecidable. A body field's JSON path is declared with `wire` — write `wire = \"{name}\"` \
+         and give the field a caller-facing `name`. Emitted as-is it would be the literal key \
+         `\"{name}\"`, which the vendor accepts and ignores"
     )]
     NestedBodyField {
         /// The operation id.
@@ -95,16 +98,112 @@ pub enum Error {
         wire: String,
     },
 
+    /// An operation whose emitted text flux's own CST formatter cannot re-print — C-185.
+    ///
+    /// The emitter prints an AST and then hands the result to `format_cst::format_module`, whose
+    /// spelling is the one the canonicality gate compares against; see
+    /// [`op::emit_operation`](crate::emit_operation) for why. That formatter declines — returns
+    /// `None` — when its equivalence guard cannot prove the re-print lowers to the same module, and
+    /// it is the guard that makes the round trip safe. A refusal here therefore means flux cannot
+    /// spell this operation at all, which is a shipped module a human's formatter would rewrite:
+    /// the same class of upstream defect [`Error::UnspellableDuration`] records, and it is refused
+    /// for the same reason.
+    #[error("operation `{operation}`: {reason}")]
+    NotCanonical {
+        /// The operation id.
+        operation: String,
+        /// What the formatter said, or could not say.
+        reason: String,
+    },
+
+    /// A `wire` path whose array index is not one — C-185.
+    ///
+    /// `items[0]` is the only spelling an index has here. Everything else a bracket can be part of
+    /// is refused rather than absorbed into an object key, because absorbing it produces
+    /// `{"items[": …}` — a key the vendor accepts and ignores, which is the failure mode every
+    /// refusal in this enum exists to avoid.
+    #[error(
+        "operation `{operation}`: body field `{name}` declares `wire = \"{wire}\"`, whose segment \
+         `{segment}` is not an array index — {reason}. An element of an array is spelled \
+         `key[0]`, one index per path segment"
+    )]
+    BadArrayIndex {
+        /// The operation id.
+        operation: String,
+        /// The caller-facing field name.
+        name: String,
+        /// The whole path.
+        wire: String,
+        /// The segment that could not be read.
+        segment: String,
+        /// What is wrong with it.
+        reason: &'static str,
+    },
+
+    /// A `wire` segment that is all digits, with no brackets to say whether it is an array index —
+    /// C-185.
+    ///
+    /// Before an array had a spelling, `items.0.value` built `{"items": {"0": {"value": …}}}`, and
+    /// `providers/sendgrid.toml` records an author reading that path as an array and getting an
+    /// object. Now that `items[0].value` means the array, the two spellings sit one character apart
+    /// and mean different requests, so the ambiguous one is refused rather than left as a trap.
+    ///
+    /// The cost is that a vendor whose object key is genuinely a number is unspellable. No provider
+    /// in this repository has one (measured 2026-08-02:
+    /// `grep -n 'wire = "[^"]*\.[0-9]' providers/` returns nothing), and this refusal is where that
+    /// case gets reconsidered when one arrives.
+    #[error(
+        "operation `{operation}`: body field `{name}` declares `wire = \"{wire}\"`, whose segment \
+         `{segment}` is all digits — an array index is spelled with brackets, so write \
+         `…{segment_bracketed}…` for element {segment} of the array before it. A numeric object \
+         *key* has no spelling here"
+    )]
+    NumericWirePathSegment {
+        /// The operation id.
+        operation: String,
+        /// The caller-facing field name.
+        name: String,
+        /// The whole path.
+        wire: String,
+        /// The all-digit segment.
+        segment: String,
+        /// The same index in the spelling that builds an array, so the message can show it.
+        segment_bracketed: String,
+    },
+
+    /// An array declared with a hole in it — C-185.
+    ///
+    /// An array's length is the set of indices its fields declare, so `items[0]` and `items[2]`
+    /// with no `items[1]` has no honest emission. Closing the gap sends the third element in the
+    /// second position; filling it with `null` sends a value the author never wrote. Both are
+    /// requests a vendor answers.
+    #[error(
+        "operation `{operation}`: the body array `{path}` is declared at {declared} but not at \
+         [{missing}] — an array's elements are its declared indices, and a hole in them would \
+         either shift an element into another's position or send a `null` nobody wrote"
+    )]
+    SparseBodyArray {
+        /// The operation id.
+        operation: String,
+        /// The path of the array, in `wire` spelling.
+        path: String,
+        /// The lowest index no field declares.
+        missing: usize,
+        /// The indices that are declared, rendered as `[0], [2]`.
+        declared: String,
+    },
+
     /// Two body fields whose wire paths cannot both exist: one occupies a JSON path that the other
-    /// needs as an object, or two fields claim the same path outright.
+    /// needs as an object or an array, or two fields claim the same path outright.
     ///
     /// `ticket.comment` and `ticket.comment.body` are not composable — the first says
     /// `comment` holds the caller's value, the second says it holds an object. Emitting either
     /// silently discards the other, so the operation is refused instead of one field being dropped.
+    /// `items[0].value` and `items.value` are the same conflict with an array on one side (C-185).
     #[error(
         "operation `{operation}`: body fields `{first}` and `{second}` claim conflicting wire \
-         paths — `{path}` cannot be both a value and an object. One of the two would be silently \
-         dropped from the request"
+         paths — `{path}` cannot be a value, an object and an array at once. One of the two would \
+         be silently dropped from the request"
     )]
     BodyPathConflict {
         /// The operation id.
