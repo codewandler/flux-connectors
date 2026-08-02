@@ -19,7 +19,7 @@
 
 # What's new in flux-connectors
 
-## Unreleased
+## 0.12.0
 
 ### New
 

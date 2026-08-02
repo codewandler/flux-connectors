@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-08-02
+
 ### Changed — breaking for `connector-flux` consumers
 
 - **`connector_flux::Error` gained three variants** — `SparseBodyArray`, `BadArrayIndex` and
