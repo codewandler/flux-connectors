@@ -7,6 +7,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed — breaking for `connector-pack` consumers
+
+- **The connector runtime seam moves from flux 0.47 to flux 0.49** (C-455). `connector-pack` exposes
+  `flux_runtime::Tool` and `flux_core::Result` in its public boundary, so a host and the pack must be
+  built on the same pre-1.0 minor line; mixing them is two unrelated traits, not a conservative
+  downgrade. Downstream hosts must move their engine pins with this connector release.
+
+  The impact here was measured against the registry sources and the gate. `flux-core`, `flux-web`
+  and `flux-credentials` have byte-identical `src/` trees between 0.47.1 and 0.49.0; runtime adds an
+  identity constructor, lang adds canonicalization/CLI support, and system adds guarded UDP/raw-ICMP
+  dial variants. This workspace does not exhaustively match the newly widened `DialTarget`. All
+  eleven resolved engine packages moved together, the workspace builds, and all 951 generated
+  artifacts remain current. No connector operation changed.
+
 ### Fixed
 
 - **A release cut now runs both Node consumer gates before it creates a tag** (C-453). v0.12.0

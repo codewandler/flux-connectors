@@ -14,6 +14,13 @@
 
 ## [Unreleased]
 
+### Action needed
+
+- **Upgrade a host's Flux engine to 0.49 when adopting this release.** The connector pack and the
+  host exchange Flux runtime objects directly, so they must use the same engine generation. Keeping
+  a host on 0.47 while upgrading its connectors will not link. The connector catalogue itself is
+  unchanged by this move.
+
 ## [0.12.0] — 2026-08-02
 
 ### New

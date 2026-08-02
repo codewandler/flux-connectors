@@ -1,0 +1,58 @@
+---
+id: C-455
+title: "Move the connector seam to flux 0.49, then publish it before exchange moves"
+pillar: Build
+status: in-progress
+priority: 0
+epic: connectors-api
+areas: [build, release]
+note: "owner-directed 2026-08-02: family releases are ordered flux, wait for its crates, flux-connectors, wait for its closure, then flux-exchange. flux 0.49.0 is live; connector-pack 0.12.0 still requires ^0.47 and is the one thing preventing exchange from moving"
+---
+
+# Move the connector seam to flux 0.49, then publish it before exchange moves
+
+## Goal
+Publish a connector-pack built against flux 0.49 so downstream hosts can move to the current engine
+without resolving two incompatible `flux_runtime::Tool` traits.
+
+## Why now
+
+The owner directed the family release order explicitly: **flux → wait for its crates →
+flux-connectors → wait for its closure → flux-exchange**. The first wait is complete: crates.io
+answers `0.49.0`, not yanked, for `codewandler-flux-{core,lang,runtime,system,web}`. The newest
+published `connector-pack` is 0.12.0 and still requires the 0.47 line, so it is the blocker rather
+than a downstream source change.
+
+This is breaking for `connector-pack` consumers even if its own Rust source does not change: the
+public `Tool`, `ToolSpec`, `ToolContext` and `flux_core::Result` types move to a different pre-1.0
+minor line. The connector release is therefore a minor bump, never a patch.
+
+## Acceptance
+- [x] **Failing first:** changing only `ENGINE_LINE` to `0.49` makes
+      `every_flux_requirement_states_the_recorded_line` name every manifest pin left on 0.47.
+- [x] Every engine requirement moves together to `0.49`; `SPEC_LINE` remains independently pinned,
+      and `Cargo.lock` contains one engine line.
+- [x] The workspace compiles against published crates only. No path or git dependency on `../flux`
+      appears anywhere.
+- [x] Generated artifacts are rebuilt and `connector-cli diff` reports a fixed point.
+- [ ] The full Rust gate, public-site gate, host-page gate and crates.io dry-run closure are green.
+- [ ] The engineering and customer changelogs state the compatibility break and the required
+      downstream action.
+- [ ] A minor release is tagged and pushed through CI; all four published crates are visible on
+      crates.io before flux-exchange is changed.
+
+## Progress
+- 2026-08-02 — Filed after verifying the five flux 0.49.0 crates above on crates.io and confirming
+  `connector-pack 0.12.0` still requires `codewandler-flux-{core,lang,runtime} ^0.47`.
+- 2026-08-02 — Failing-first guard named all six 0.47 manifest pins. The targeted Cargo update moved
+  eleven resolved flux packages from 0.47.1 to 0.49.0 and no other package; all three engine-line
+  tests pass and the full workspace builds.
+- 2026-08-02 — Registry-source diff measured the boundary: core/web/credentials unchanged;
+  runtime one additive constructor; lang canonicalization/CLI; system UDP/raw-ICMP dial variants.
+  `connector-cli diff` reports `951 artifacts up to date (54 providers checked)`.
+
+## Notes
+- Precedent: [[C-431]], the 0.46 → 0.47 engine move. The value is compatibility at the public trait
+  seam; any behavioural difference discovered by the gate is recorded rather than assumed.
+- The dirty primary checkout is user-owned. This work runs from committed `a835478` in an isolated
+  worktree and includes none of that checkout's uncommitted generated output.
