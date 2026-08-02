@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed — breaking for `connector-flux` consumers
+
+- **`connector_flux::Error` gained three variants** — `SparseBodyArray`, `BadArrayIndex` and
+  `NumericWirePathSegment` (C-185) — and the enum is not `#[non_exhaustive]`, so a downstream
+  exhaustive `match` on it will no longer compile. Add the new arms or a `_` arm. This is the same
+  shape as 0.11.0's `Service` field: the crate publishes, so adding to a public type is breaking.
+
 ### Added
 
 - **A request body can carry an array, at a declared length** (C-185). A `wire` path segment may now

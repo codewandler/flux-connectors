@@ -33,6 +33,11 @@
   the caller has" still is not possible, and a connector that needs it will say so rather than build
   the wrong request.
 
+### Action needed
+
+- **If you build against the `connector-flux` crate and match exhaustively on its `Error` type, your
+  build will break.** Three variants were added for the new refusals. Add the arms, or a `_` arm.
+
 ## 0.11.0
 
 ### New
