@@ -10,10 +10,9 @@
 //! headline test is the one that checks whether the partition still earns its place when neither
 //! excuse is available — see `graph_services_share_a_host_and_version_but_still_partition_cleanly`.
 //!
-//! The two negative claims about the query and body surfaces deliberately duplicate what
-//! `google_connector.rs` asserts for its own provider, for the same reason that file gives: both
-//! are gaps in the emitter (C-30, C-56) rather than in Graph, so each connector holds the line for
-//! itself rather than sharing a test that several concurrent stories would have to edit.
+//! The body-surface claim and the closed query exception are provider-specific. C-471 adds integer
+//! `$top`/`$skip` only to four exact spec-backed reads; the eight operations C-108 shipped remain
+//! query-free, and no string-shaped OData expression is admitted.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -47,6 +46,7 @@ const SERVICES: &[(&str, &[&str])] = &[
             "microsoft_graph-mail-message-get",
             "microsoft_graph-mail-message-reply",
             "microsoft_graph-mail-folder-list",
+            "microsoft_graph-mail-message-list",
         ],
     ),
     (
@@ -55,6 +55,9 @@ const SERVICES: &[(&str, &[&str])] = &[
             "microsoft_graph-calendar-event-get",
             "microsoft_graph-calendar-event-create",
             "microsoft_graph-calendar-calendar-get",
+            "microsoft_graph-calendar-category-list",
+            "microsoft_graph-calendar-time-zone-list",
+            "microsoft_graph-calendar-language-list",
         ],
     ),
     (
@@ -64,6 +67,14 @@ const SERVICES: &[(&str, &[&str])] = &[
             "microsoft_graph-files-item-update",
         ],
     ),
+];
+
+/// The closed C-471 exception to the eight existing operations' query-free contract.
+const INTEGER_PAGED_READS: [&str; 4] = [
+    "microsoft_graph-mail-message-list",
+    "microsoft_graph-calendar-category-list",
+    "microsoft_graph-calendar-time-zone-list",
+    "microsoft_graph-calendar-language-list",
 ];
 
 fn providers_dir() -> PathBuf {
@@ -192,7 +203,7 @@ fn graph_services_share_a_host_and_version_but_still_partition_cleanly() {
 fn every_microsoft_graph_service_owns_the_operations_it_declares() {
     let connector = load();
 
-    let mut expected_all: Vec<&str> = Vec::new();
+    let mut expected_all: BTreeSet<&str> = BTreeSet::new();
     for (name, operations) in SERVICES {
         let owned: Vec<&str> = connector
             .operations_of(name)
@@ -206,10 +217,10 @@ fn every_microsoft_graph_service_owns_the_operations_it_declares() {
             !owned.is_empty(),
             "service `{name}` owns no operation, so it is a declaration with nothing behind it"
         );
-        expected_all.extend_from_slice(operations);
+        expected_all.extend(operations.iter().copied());
     }
 
-    let declared: Vec<&str> = connector
+    let declared: BTreeSet<&str> = connector
         .operations
         .iter()
         .map(|operation| operation.id.as_str())
@@ -220,19 +231,18 @@ fn every_microsoft_graph_service_owns_the_operations_it_declares() {
     );
     assert_eq!(
         declared.len(),
-        8,
-        "C-108 ships eight operations, three-three-two"
+        12,
+        "C-108's eight plus C-471's four reads are four-six-two"
     );
 }
 
-/// **No query parameter at all.** Graph's OData system query options (`$filter`, `$search`,
-/// `$orderby`, `$top`) are exactly the free-text-or-cursor shape `zendesk-ticket-search` already
-/// demonstrates is unshippable here: nothing in this pipeline percent-encodes a query value, so a
-/// value carrying a space or a quote corrupts the request rather than filtering it. This is the
-/// strong form — the query surface is empty rather than merely free of string-ish values — for the
-/// same reason `google_connector.rs` asserts it that way.
+/// Four exact reads keep integer `$top`/`$skip`; every other operation remains query-free.
+///
+/// `$filter`, `$search`, `$orderby`, `$select`, `$expand`, string `includeHiddenMessages` and
+/// boolean `$count` remain omitted. A name-derived or suffix-derived exception would let the next
+/// operation widen silently, so the four public ids are a literal closed set.
 #[test]
-fn no_microsoft_graph_operation_declares_a_query_parameter() {
+fn only_four_named_reads_declare_integer_paging_queries() {
     let connector = load();
 
     for operation in &connector.operations {
@@ -242,21 +252,36 @@ fn no_microsoft_graph_operation_declares_a_query_parameter() {
             .iter()
             .map(|param| param.name.as_str())
             .collect();
-        assert!(
-            declared.is_empty(),
-            "operation `{}` declares query parameters {declared:?}. Graph's OData query options are \
-             free text or opaque cursors that this pipeline cannot percent-encode (C-30) — the \
-             `zendesk-ticket-search` failure AGENTS.md records. If C-30 has landed, change this test \
-             deliberately",
-            operation.id
-        );
+        if INTEGER_PAGED_READS.contains(&operation.id.as_str()) {
+            assert_eq!(
+                declared,
+                ["$top", "$skip"],
+                "{} widened paging",
+                operation.id
+            );
+            for param in &operation.params.query {
+                assert_eq!(
+                    param.schema.get("type").and_then(|value| value.as_str()),
+                    Some("integer"),
+                    "{} on {} is not integer-shaped",
+                    param.name,
+                    operation.id
+                );
+            }
+        } else {
+            assert!(
+                declared.is_empty(),
+                "the existing operation `{}` gained query parameters {declared:?}",
+                operation.id
+            );
+        }
     }
 }
 
-/// The same claim over the emitted text: no `$url` is rebound for an optional query parameter, and
-/// no query string is ever assembled.
+/// The same closed exception over emitted Flux: four named modules assemble precisely two integer
+/// options, while every previously shipped module remains byte-shaped as one fixed URL.
 #[test]
-fn no_microsoft_graph_module_assembles_a_query_string() {
+fn only_four_named_modules_assemble_integer_paging() {
     let connector = load();
 
     for operation in &connector.operations {
@@ -268,24 +293,36 @@ fn no_microsoft_graph_module_assembles_a_query_string() {
             .map(str::trim_start)
             .filter(|line| line.starts_with("url = "))
             .collect();
-        assert_eq!(
-            url_lines.len(),
-            1,
-            "`{}` binds $url {} times, which means a query string:\n{emitted}",
-            operation.id,
-            url_lines.len()
-        );
-        assert!(
-            !url_lines[0].contains('?'),
-            "`{}` emits a query string: {}",
-            operation.id,
-            url_lines[0]
-        );
-        assert!(
-            !emitted.contains("sep = "),
-            "`{}` emits the `sep` query separator, which exists only to join query parameters",
-            operation.id
-        );
+        if INTEGER_PAGED_READS.contains(&operation.id.as_str()) {
+            assert_eq!(
+                url_lines.len(),
+                3,
+                "{} emitted an unexpected query shape",
+                operation.id
+            );
+            assert!(emitted.contains(r#"url = fmt("{url}{sep}$top={_top}")"#));
+            assert!(emitted.contains(r#"url = fmt("{url}{sep}$skip={_skip}")"#));
+            assert_eq!(emitted.matches("sep = ").count(), 2);
+        } else {
+            assert_eq!(
+                url_lines.len(),
+                1,
+                "`{}` binds url {} times, which means a query string:\n{emitted}",
+                operation.id,
+                url_lines.len()
+            );
+            assert!(
+                !url_lines[0].contains('?'),
+                "`{}` emits a query string: {}",
+                operation.id,
+                url_lines[0]
+            );
+            assert!(
+                !emitted.contains("sep = "),
+                "`{}` emits the `sep` query separator, which exists only to join query parameters",
+                operation.id
+            );
+        }
     }
 }
 

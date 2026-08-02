@@ -46,7 +46,7 @@
 //! (the connector's `[[auth]]` table), the network gate's declared hosts, and the dotted tool name's
 //! collision behaviour across a whole pack. Those arrive at integration, where the index does.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use flux_lang::program::CompositeOpDecl;
 use flux_spec::ToolSpec;
@@ -80,6 +80,8 @@ pub struct Rehearsal {
     variables: Vec<String>,
     /// Where each of them lands on the request (C-214).
     slots: BTreeMap<String, Slot>,
+    /// Caller parameters the emitted body places in its URL path (C-478).
+    caller_path_parameters: BTreeSet<String>,
 }
 
 impl Rehearsal {
@@ -105,6 +107,7 @@ impl Rehearsal {
             service: service.to_owned(),
             variables: request::endpoint_variables(&declaration),
             slots: request::endpoint_slots(&declaration),
+            caller_path_parameters: request::caller_path_parameters(&declaration),
             declaration,
             spec,
         })
@@ -146,13 +149,15 @@ impl Rehearsal {
         let settings = configuration.snapshot(
             &self.provider,
             &self.service,
-            self.variables.iter().map(|name| Field::Endpoint(name)),
+            self.variables
+                .iter()
+                .map(|name| Field::from_placeholder(name)),
         );
         let endpoints = self
             .variables
             .iter()
             .map(|variable| {
-                let value = settings.require(&self.operation, Field::Endpoint(variable))?;
+                let value = settings.require(&self.operation, Field::from_placeholder(variable))?;
                 Ok((variable.clone(), value))
             })
             .collect::<Result<BTreeMap<String, String>, Error>>()?;
@@ -163,6 +168,7 @@ impl Rehearsal {
             params,
             &endpoints,
             &self.slots,
+            &self.caller_path_parameters,
         )
     }
 }

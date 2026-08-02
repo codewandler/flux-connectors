@@ -597,6 +597,16 @@ fn quirks_and_provenance_round_trip() {
             sha256: Some("a".repeat(64)),
             ..Default::default()
         }],
+        operation_specs: [(
+            "babelforce-call-list".into(),
+            connector_spec::OperationSpecSource {
+                operation_id: "listCalls".into(),
+                source_url: Some("https://example.test/manager.openapi.json".into()),
+                upstream_version: "2024-05-06".into(),
+                sha256: "a".repeat(64),
+            },
+        )]
+        .into(),
         toml_sha256: Some("b".repeat(64)),
     };
     connector.operations[1].quirks = Quirks {

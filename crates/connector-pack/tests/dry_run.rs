@@ -63,7 +63,14 @@ fn configuration() -> Configuration {
         let operation = Operation::project(entry, http(), empty_credentials(), unconfigured())
             .unwrap_or_else(|error| panic!("`{}`: {error}", entry.id));
         for variable in operation.endpoint_variables() {
-            values = values.with_endpoint(TENANT, entry.provider, entry.service, variable, "acme");
+            values = match variable.strip_prefix("username.") {
+                Some(credential) => {
+                    values.with_username(TENANT, entry.provider, entry.service, credential, "acme")
+                }
+                None => {
+                    values.with_endpoint(TENANT, entry.provider, entry.service, variable, "acme")
+                }
+            };
         }
     }
     Configuration::new(Arc::new(values), TENANT).expect("a valid tenant id")

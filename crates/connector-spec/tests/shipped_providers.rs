@@ -99,7 +99,11 @@ fn every_shipped_provider_loads() {
 #[test]
 fn operation_selection_stays_curated() {
     let expected = [
-        ("zendesk", 7),
+        // C-461/C-462 publish 13 Support operations, C-466 adds 8 Support foundation reads, C-463
+        // adds 7 Help Center operations, and C-464 adds 9 Messaging operations. Two message
+        // operations use bounded inline schemas because their pinned OpenAPI responses are
+        // recursive; the other 28 are exact selections or the seven original Support operations.
+        ("zendesk", 37),
         ("freshdesk", 9),
         // **Not a curated count — a coverage one.** C-417 widened babelforce to the whole surface
         // `manager-sdk` covers: the five vendored documents declare 398 operations, the canonical
@@ -118,14 +122,15 @@ fn operation_selection_stays_curated() {
         // history and create/start/stop/restart/delete. Optional filters, force deletion and signal
         // bodies wait for C-30/C-56, and the event history is not misrepresented as a channel.
         ("fly", 9),
-        // C-52 curates 5 of roughly a thousand operations in `github/rest-api-description`, and the
-        // cut is the query-encoding gap rather than taste: every listing and search endpoint is
-        // excluded pending C-30. See the header comment in `providers/github.toml`.
-        ("github", 5),
-        // C-51 curates 4: the models pair, chat completions and embeddings. The cut is the same
-        // gap — every listing parameter OpenAI documents is a query value. See
-        // `providers/openai.toml`.
-        ("openai", 4),
+        // C-52's established 5 now sit beside C-469's 4 exact first-party OpenAPI selections:
+        // repository issues, pull-request files, workflow runs and commits. The new collections
+        // retain integer page/per_page only; string filters and search remain excluded pending
+        // C-30. See the header comment in `providers/github.toml`.
+        ("github", 9),
+        // C-51's established 4 now sit beside C-472's 4 exact first-party OpenAPI selections:
+        // stored response get/input items, files and batches. Integer limits survive; string
+        // cursors and expansion filters remain excluded pending C-30. See `providers/openai.toml`.
+        ("openai", 8),
         // C-76 curates 4 of the 68 paths in `https://openrouter.ai/openapi.json`: the models list,
         // one model's upstream endpoints, chat completion and the credit balance. The story asked for
         // roughly three including `GET /api/v1/generation`, which is excluded because its generation

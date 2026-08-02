@@ -1,6 +1,6 @@
 //! One catalogue operation, as a thing a host's [`ToolRegistry`](flux_runtime::ToolRegistry) holds.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -124,6 +124,9 @@ pub struct Operation {
     /// same moment. A value is checked against its position where it is substituted, so the rule
     /// binds every host and every `ConfigStore` rather than the loader's view of an `example`.
     endpoint_slots: BTreeMap<String, request::Slot>,
+    /// Caller-visible parameters the emitted Flux places in the URL path (C-478). Derived once at
+    /// projection and checked before a request can reach authentication or egress.
+    caller_path_parameters: BTreeSet<String>,
     /// **The credential this operation mints, when minting is its whole purpose** (C-136).
     ///
     /// `None` for every operation the shipped catalogue carries, and the field that decides whether
@@ -225,6 +228,7 @@ impl Operation {
         request::refuse_unconfigurable(entry.id, &declaration)?;
         let endpoint_variables = request::endpoint_variables(&declaration);
         let endpoint_slots = request::endpoint_slots(&declaration);
+        let caller_path_parameters = request::caller_path_parameters(&declaration);
 
         // **The one read of the configuration port** (C-198). Everything this operation can ever ask
         // for is knowable here — the endpoint variables off its own emitted Flux, the Basic user
@@ -233,7 +237,7 @@ impl Operation {
         // hole through the host's egress gate.
         let mut fields: Vec<Field<'_>> = endpoint_variables
             .iter()
-            .map(|variable| Field::Endpoint(variable.as_str()))
+            .map(|variable| Field::from_placeholder(variable))
             .collect();
         push_user_half_fields(provider, &mut fields);
         // **Keyed by the operation's own service** (C-197). `entry.service` is what makes this one
@@ -250,6 +254,7 @@ impl Operation {
             spec,
             endpoint_variables,
             endpoint_slots,
+            caller_path_parameters,
             declaration,
             entry,
             provider,
@@ -302,7 +307,7 @@ impl Operation {
             .map(|variable| {
                 let value = self
                     .settings
-                    .require(self.entry.id, Field::Endpoint(variable))?;
+                    .require(self.entry.id, Field::from_placeholder(variable))?;
                 Ok((variable.clone(), value))
             })
             .collect()
@@ -361,6 +366,7 @@ impl Operation {
     /// # Errors
     ///
     /// [`Error::MissingParameter`] when a declared parameter was not supplied,
+    /// [`Error::UnsafePathParameter`] when a caller path value would escape its segment,
     /// [`Error::Unbuildable`] when the operation's body contains something the pack does not
     /// evaluate, and [`Error::MissingConfig`] when the tenant has not supplied a value for a
     /// `{placeholder}` in the connector's base URL. All refuse rather than sending a
@@ -372,6 +378,7 @@ impl Operation {
             params,
             &self.endpoints()?,
             &self.endpoint_slots,
+            &self.caller_path_parameters,
         )
     }
 
@@ -472,7 +479,7 @@ impl Operation {
                 .unwrap_or(request::Slot::Unplaced);
             if let Some(value) = self
                 .settings
-                .lookup(Field::Endpoint(variable))
+                .lookup(Field::from_placeholder(variable))
                 .filter(|value| slot.substitutable(value))
             {
                 out = out.replace(&format!("{{{variable}}}"), &value);
@@ -493,7 +500,10 @@ impl Operation {
 fn push_user_half_fields(provider: &'static catalog::Provider, fields: &mut Vec<Field<'_>>) {
     for credential in provider.auth {
         if matches!(credential.acquire, catalog::Acquisition::BasicJoin { .. }) {
-            fields.push(Field::Username(credential.name));
+            let username = Field::Username(credential.name);
+            if !fields.contains(&username) {
+                fields.push(username);
+            }
         }
     }
 }
@@ -621,6 +631,18 @@ mod tests {
         let second = serde_json::to_value(tool.spec()).expect("a spec serializes");
 
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn a_qualified_username_pin_does_not_snapshot_the_basic_user_twice() {
+        let provider = catalog::provider(catalog::ProviderKey::id("twilio"))
+            .expect("the shipped catalogue carries Twilio");
+        let username = Field::Username("twilio.basic_auth");
+        let mut fields = vec![username];
+
+        push_user_half_fields(provider, &mut fields);
+
+        assert_eq!(fields, vec![username]);
     }
 
     /// **The inverted tripwire.** C-114 asserted that `permission_subjects` and `intents` were the

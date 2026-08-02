@@ -109,6 +109,15 @@ export interface Service {
   operation_count: number
 }
 
+/** The vendor operation and pinned API description from which an operation was selected. */
+export interface SpecSource {
+  operation_id: string
+  /** `null` when the vendoring source is private and has no publishable location. */
+  source_url: string | null
+  upstream_version: string
+  sha256: string
+}
+
 export interface Operation {
   id: string
   provider: string
@@ -129,6 +138,8 @@ export interface Operation {
   /** The request shape. `Published` because a source that describes no HTTP call omits both. */
   method: Published<string>
   path: Published<string>
+  /** `null` for an inline operation; never inferred from the operation's service. */
+  spec_source: SpecSource | null
   parameters: Parameter[]
   /**
    * **One schema for everything the operation receives**, composed from the parameters and the body.
@@ -609,16 +620,23 @@ export function facet(operations: Operation[], pick: (operation: Operation) => s
  * The reserved service name — the only name in this file that is not read out of the catalogue,
  * because it is not catalogue data.
  *
- * It is vocabulary from the address grammar: an operation naming no service belongs to it, no
- * provider may declare it, and it is elided from every published address and every file name. The
- * consequence this site has to honour is that it is never rendered — a card listing it, or a filter
- * offering it, would name something no address contains.
+ * It is vocabulary from the address grammar: an operation naming no service belongs to it, and it
+ * is elided from published addresses and file names. A sole implicit default is therefore omitted;
+ * an explicit legacy default beside named siblings is a real surface whose raw value remains this
+ * token in filters and data attributes.
  */
 const RESERVED_SERVICE = 'default'
 
-/** The services a provider publishes under a name of their own, in catalogue order. */
-export function namedServices(provider: Provider): Service[] {
-  return provider.services.filter((service) => service.name !== RESERVED_SERVICE)
+/** The services worth presenting: every declared surface except a sole implicit default. */
+export function visibleServices(provider: Provider): Service[] {
+  return provider.services.length === 1 && provider.services[0].name === RESERVED_SERVICE
+    ? []
+    : provider.services
+}
+
+/** Human-facing service prose; machine state continues to use the catalogue's raw token. */
+export function serviceLabel(service: string): string {
+  return service === RESERVED_SERVICE ? 'Primary' : service
 }
 
 /**
@@ -626,12 +644,13 @@ export function namedServices(provider: Provider): Service[] {
  *
  * Dependent in one direction only, which is the obvious one: choosing a connector narrows the
  * services to that connector's, and choosing a service with no connector chosen stays valid. A
- * connector that addresses a single surface offers nothing here — its one service is the reserved
- * one, and it names no address to filter on.
+ * connector whose sole surface is the reserved default offers nothing here. A sole explicitly
+ * named service remains useful, and every surface of a multi-service connector is offered — legacy
+ * default included.
  */
 export function serviceFacet(providers: Provider[], provider = ''): string[] {
   const scope = provider ? providers.filter((owner) => owner.id === provider) : providers
-  return [...new Set(scope.flatMap((owner) => namedServices(owner).map((service) => service.name)))]
+  return [...new Set(scope.flatMap((owner) => visibleServices(owner).map((service) => service.name)))]
 }
 
 /**
@@ -641,7 +660,7 @@ export function serviceFacet(providers: Provider[], provider = ''): string[] {
  * for the reserved one it would name something the address elides.
  */
 export function operationService(provider: Provider, operation: Operation): string | null {
-  return namedServices(provider).length > 1 ? operation.service : null
+  return provider.services.length > 1 ? operation.service : null
 }
 
 /**
@@ -888,6 +907,28 @@ export function narrowView(view: View, providers: Provider[]): View {
     risk: offered(view.risk, facet(operations, (operation) => operation.risk)),
     idempotency: offered(view.idempotency, facet(operations, (operation) => operation.idempotency)),
   }
+}
+
+/** Whether one owned operation belongs in a view, including the raw service machine value. */
+export function operationMatchesView(
+  provider: Provider,
+  operation: Operation,
+  view: View
+): boolean {
+  if (view.provider && provider.id !== view.provider) return false
+  if (view.service && operation.service !== view.service) return false
+  if (view.risk && operation.risk !== view.risk) return false
+  if (view.idempotency && operation.idempotency !== view.idempotency) return false
+  if (view.defect === 'own' && !ownsDefect(operation)) return false
+  if (view.defect === 'none' && ownsDefect(operation)) return false
+
+  const needle = view.query.trim().toLowerCase()
+  if (!needle) return true
+  return (
+    operation.id.toLowerCase().includes(needle) ||
+    operation.description.toLowerCase().includes(needle) ||
+    searchablePath(operation).includes(needle)
+  )
 }
 
 /** Where a risk tier ranks, with a tier this build has not heard of ranked after every one it has. */

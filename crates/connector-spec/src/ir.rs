@@ -499,6 +499,26 @@ impl Quirks {
     }
 }
 
+/// The exact vendor document selection that produced one public operation — C-481.
+///
+/// This type deliberately has no repository-local path or fetch timestamp. A catalogue consumer
+/// needs the vendor operation identity and the public source contract, while local refresh
+/// mechanics remain in [`crate::provider::SpecSource`]. `source_url` alone is nullable: private
+/// vendoring may publish the bytes and hashes without publishing the pull location.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OperationSpecSource {
+    /// The vendor's exact `operationId`, before the connector gives it a stable public id.
+    pub operation_id: String,
+    /// The public URL the vendored document came from, when one may be published.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_url: Option<String>,
+    /// The upstream version the ingested document declares.
+    pub upstream_version: String,
+    /// Measured SHA-256 of the committed document bytes the compiler ingested.
+    pub sha256: String,
+}
+
 /// Where a connector came from, so drift against upstream can be detected rather than absorbed.
 ///
 /// **`ir_sha256` is deliberately absent.** The pipeline design lists it under provenance, but it is
@@ -541,6 +561,13 @@ pub struct Provenance {
     /// this field moves no `ir_sha256` in the repository.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub specs: Vec<crate::provider::SpecSource>,
+    /// Stable public operation id → the exact vendor selection that produced it.
+    ///
+    /// Filled only by the patch application path. [`crate::provider::ProviderFile`] has no
+    /// provenance field, so an inline operation cannot author or forge this map. A `BTreeMap`
+    /// makes its canonical encoding independent of selection traversal order.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub operation_specs: BTreeMap<String, OperationSpecSource>,
     /// SHA-256 of the provider TOML bytes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub toml_sha256: Option<String>,
@@ -928,6 +955,14 @@ pub struct Service {
     /// The service name, e.g. `s3`. Names the emitted `<provider>-<name>.flux`, is the first path
     /// segment of the service's gid, and is what [`Operation::service`] references.
     pub name: String,
+    /// This is the connector's already-published, address-elided `default` service, preserved while
+    /// named siblings are added — C-458.
+    ///
+    /// The marker is admitted only on a `default` entry beside at least one named service. It is an
+    /// address-migration capability, not shorthand for a new connector: without it `default` beside
+    /// a named service remains refused, and with it every member must state its service explicitly.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub legacy: bool,
     /// What the service is for, in one line.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
@@ -975,6 +1010,10 @@ pub struct Service {
     /// `ir_sha256` in the repository and churns `connectors.lock` for a provider nobody edited.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<Tag>,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// **The shortest stated condition that counts as one**, in characters after trimming.

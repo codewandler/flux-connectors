@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+# Re-vendor GitHub's commit-pinned REST OpenAPI document with an allowlist-shaped scrub.
+#
+# Usage:
+#   scripts/vendor-github-spec.sh
+#   scripts/vendor-github-spec.sh --source-dir /path/holding/api.github.com.2022-11-28.json
+#
+# The replay form never reaches the network. Both forms verify the exact upstream hash and
+# inventory before writing. The scrub removes every OpenAPI `example`/`examples` value rather than
+# trying to recognise known credentials or personal contact details; a new example is therefore
+# removed by default while schemas, descriptions, security declarations and operations survive.
+
+set -euo pipefail
+
+commit=5e28810649ba41b5483753ba74f976f83856a504
+source_name=api.github.com.2022-11-28.json
+source_url="https://raw.githubusercontent.com/github/rest-api-description/$commit/descriptions/api.github.com/$source_name"
+upstream_sha256=281dc9e4ab24860c4010cea1bc90232175a6c92aa73dc569e1ccea6a5018cae9
+retrieved_at=2026-08-02T00:00:00Z
+vendored_name=api.github.com.2022-11-28-2026-08-02.openapi.json
+
+usage() {
+    printf '%s\n' \
+        "usage: scripts/vendor-github-spec.sh [--source-dir DIRECTORY]" \
+        "" \
+        "Without --source-dir, fetches the immutable first-party GitHub source." \
+        "With it, replays from DIRECTORY/$source_name without network access." >&2
+    exit 2
+}
+
+source_dir=
+case $# in
+0) ;;
+2)
+    [ "$1" = "--source-dir" ] || usage
+    source_dir=$2
+    ;;
+*) usage ;;
+esac
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+out_dir="$root/specs/github"
+out="$out_dir/$vendored_name"
+provenance="$root/specs/github.provenance.toml"
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+upstream="$work/$source_name"
+
+if [ -n "$source_dir" ]; then
+    [ -d "$source_dir" ] || {
+        printf 'not a directory: %s\n' "$source_dir" >&2
+        exit 1
+    }
+    [ -f "$source_dir/$source_name" ] || {
+        printf 'missing replay source: %s/%s\n' "$source_dir" "$source_name" >&2
+        exit 1
+    }
+    cp "$source_dir/$source_name" "$upstream"
+else
+    curl -fsSL "$source_url" -o "$upstream"
+fi
+
+actual_upstream_sha256=$(sha256sum "$upstream" | cut -d' ' -f1)
+[ "$actual_upstream_sha256" = "$upstream_sha256" ] || {
+    printf 'GitHub upstream SHA-256 moved: expected %s, got %s\n' \
+        "$upstream_sha256" "$actual_upstream_sha256" >&2
+    exit 1
+}
+
+jq -e '
+    .openapi == "3.0.3" and
+    .info.version == "1.1.4" and
+    (.info.license.name == "MIT") and
+    (.paths | length) == 805 and
+    ([.paths[] | to_entries[] |
+      select(.key | IN("get", "put", "post", "delete", "options", "head", "patch", "trace"))]
+      | length) == 1216
+' "$upstream" >/dev/null || {
+    printf '%s\n' 'GitHub OpenAPI version, license or path/operation inventory moved' >&2
+    exit 1
+}
+
+python3 "$root/scripts/openapi_example_scrub.py" --operation-inventory "$upstream" \
+    >"$work/operation-inventory.json"
+jq -e '.operations == 1216 and .present == 1216 and .unique == 1216' \
+    "$work/operation-inventory.json" >/dev/null || {
+    printf 'GitHub operationId inventory contains a missing or duplicate id: %s\n' \
+        "$(<"$work/operation-inventory.json")" >&2
+    exit 1
+}
+
+jq -r '
+    .paths[] | to_entries[] |
+    select(.key | IN("get", "put", "post", "delete", "options", "head", "patch", "trace")) |
+    .value.operationId
+' "$upstream" | sort >"$work/operation-ids"
+
+[ "$(wc -l <"$work/operation-ids")" -eq 1216 ] || {
+    printf '%s\n' 'GitHub operation inventory does not contain 1,216 operation ids' >&2
+    exit 1
+}
+selected=(
+    issues/list-for-repo
+    pulls/list-files
+    actions/list-workflow-runs-for-repo
+    repos/list-commits
+)
+for operation_id in "${selected[@]}"; do
+    [ "$(grep -cFx "$operation_id" "$work/operation-ids")" -eq 1 ] || {
+        printf 'selected GitHub operationId is absent or duplicated: %s\n' "$operation_id" >&2
+        exit 1
+    }
+done
+
+# JSON object keys are sorted and every example keyword value is removed. The path finder preserves
+# declaration-map entries literally named `example`/`examples`, so scrubbing values cannot erase a
+# schema property or component declaration with the same spelling.
+python3 "$root/scripts/openapi_example_scrub.py" "$upstream" >"$work/example-paths.json"
+jq -S --slurpfile paths "$work/example-paths.json" 'delpaths($paths[0])' \
+    "$upstream" >"$work/vendored.json"
+
+python3 "$root/scripts/openapi_example_scrub.py" "$work/vendored.json" |
+    jq -e 'length == 0' >/dev/null || {
+    printf '%s\n' 'an example keyword value survived the GitHub scrub' >&2
+    exit 1
+}
+
+jq -e '
+    .openapi == "3.0.3" and .info.version == "1.1.4" and
+    (.info.license.name == "MIT") and (.paths | length) == 805
+' "$work/vendored.json" >/dev/null || {
+    printf '%s\n' 'the GitHub scrub removed contract declarations' >&2
+    exit 1
+}
+
+vendored_sha256=$(sha256sum "$work/vendored.json" | cut -d' ' -f1)
+mkdir -p "$out_dir"
+install -m 0644 "$work/vendored.json" "$out"
+
+printf '%s\n' \
+    '# GitHub REST OpenAPI provenance — generated by scripts/vendor-github-spec.sh.' \
+    "path = \"specs/github/$vendored_name\"" \
+    "source_url = \"$source_url\"" \
+    "source_commit = \"$commit\"" \
+    'openapi_version = "3.0.3"' \
+    'upstream_version = "1.1.4"' \
+    "fetched_at = \"$retrieved_at\"" \
+    "upstream_sha256 = \"$upstream_sha256\"" \
+    "sha256 = \"$vendored_sha256\"" >"$provenance"
+
+printf 'vendored %s\nupstream sha256: %s\nvendored sha256: %s\n' \
+    "$out" "$upstream_sha256" "$vendored_sha256"

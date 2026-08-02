@@ -191,7 +191,7 @@ fn every_placeholder_of_a_two_variable_host_is_filled() {
 
 /// **A caller cannot spend a tenant's configuration.** Substitution happens over the emitter's
 /// *literals*, never over the finished URL, so a parameter whose text spells a variable is not
-/// filled in — and the brace it leaves behind is refused rather than sent.
+/// filled in — and C-478's caller path guard refuses the brace before a URL is sent.
 ///
 /// Getting this backwards is an easy and expensive mistake: substituting over the finished URL is
 /// one line shorter and would let a caller's argument reach the wire as a tenant's configured value.
@@ -202,7 +202,10 @@ fn a_parameter_that_spells_a_variable_is_not_substituted() {
         .expect_err("a parameter is not configuration");
 
     assert!(
-        matches!(&error, Error::UnresolvedEndpoint { variable, .. } if variable == "subdomain"),
+        matches!(
+            &error,
+            Error::UnsafePathParameter { parameter, .. } if parameter == "ticket_id"
+        ),
         "{error}"
     );
 }

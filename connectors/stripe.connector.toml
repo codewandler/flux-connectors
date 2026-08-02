@@ -4,12 +4,12 @@ generator = "flux-connectors 0.13.0"
 connector = "stripe"
 gid = "com.stripe.api:v1"
 vendor = "Stripe"
-description = "Stripe payments: read a balance, customer, charge, payment intent or refund; capture, cancel and refund a payment"
+description = "Stripe payments and billing: read balances, customers, charges, payment intents, refunds, country specs, events, exchange rates and billing meters; capture, cancel and refund a payment"
 runtime = "http"
 base_url = "https://api.stripe.com"
 api_version = "v1"
 module = "stripe.flux"
-operations = ["stripe-balance-get", "stripe-customer-get", "stripe-charge-get", "stripe-payment-intent-get", "stripe-refund-get", "stripe-payment-intent-capture", "stripe-payment-intent-cancel", "stripe-charge-refund-create"]
+operations = ["stripe-balance-get", "stripe-customer-get", "stripe-charge-get", "stripe-payment-intent-get", "stripe-refund-get", "stripe-payment-intent-capture", "stripe-payment-intent-cancel", "stripe-charge-refund-create", "stripe-country-spec-list", "stripe-event-list", "stripe-exchange-rate-list", "stripe-billing-meter-list"]
 
 [[events]]
 name = "payment_intent.succeeded"

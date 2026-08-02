@@ -66,19 +66,21 @@ diff against §5.2 before regenerating.
 > ⚠ **Before this file is published, read §1.3.** It embeds credential-shaped example values and the
 > vendoring is not cleared for a public repository yet.
 
-### 1.2 zendesk and freshdesk — no vendored spec, hand-derived
+### 1.2 zendesk is spec-backed; freshdesk remains hand-derived
 
-Neither provider has a spec in `specs/`. Their operation sets in §3 and §4 are **hand-derived** from
-on-disk sources (a working Rust plugin and a working integration collection), and **no network fetch
-was performed for this story.** That is a deliberate, temporary state:
+Zendesk's original seven-operation set and Freshdesk's set were **hand-derived** from on-disk
+sources (a working Rust plugin and a working integration collection). C-459/C-461 have since
+vendored Zendesk's full first-party Ticketing document and selected the eighth operation from it;
+the original seven remain inline until C-6 measures their conversion. Freshdesk still has no
+vendored document.
 
 | Provider | Where a real spec would come from later | Confidence |
 |---|---|---|
-| zendesk | Zendesk publishes OpenAPI descriptions alongside its API reference on `developer.zendesk.com`. When C-14 lands, that document should be fetched into `specs/zendesk/` and the set below becomes an **overlay selection** (C-6) over it rather than a hand-written list. | likely available — **verify when C-14 lands** |
+| zendesk | `specs/zendesk/ticketing-2026-08-02.openapi.yaml`, fetched from Zendesk's public Ticketing OAS and pinned with both hashes in `specs/zendesk.provenance.toml`. | **vendored; one opt-in selection in C-461** |
 | freshdesk | Freshdesk's developer documentation (`developers.freshdesk.com/api/`, cited by the source collection) is hand-written HTML with no official machine-readable description known to us. Absent an official spec, freshdesk stays hand-authored; a community spec would need vetting before being vendored. | **no official spec known** |
 
-Until a spec is vendored, drift for these two providers is undetectable by machine. That is a real
-gap, not an oversight — see §6.7.
+Freshdesk drift remains undetectable by machine. Zendesk's selected spec operation and the document
+hash now move loudly; C-6 still owns converting and drift-pinning the seven inline operations.
 
 ### 1.3 ⚠ UNRESOLVED — the vendored spec embeds credential-shaped example values
 
@@ -170,7 +172,7 @@ still required by the schema — see §6.1 and §5.1.3.
 | User-half format | Zendesk's **`<email>/token`** form, e.g. `agent@example.com/token`. The literal `/token` suffix is what tells Zendesk the password is an API token rather than a password. |
 | Endpoint env | **`ZENDESK_URL`** — e.g. `https://company.zendesk.com` |
 | `http_hosts` | `*.zendesk.com` |
-| Requirement-set shape | **single**, identically for all 7 operations |
+| Requirement-set shape | **single**, identically for all 8 operations |
 
 Citations: `../flux/plugins/zendesk/src/main.rs:5-6` (the env-var contract, verbatim: *"`ZENDESK_USER`
 is the non-secret username half and should use Zendesk's `<email>/token` form; `ZENDESK_API_TOKEN` is
@@ -180,10 +182,14 @@ the sole secret"*), `:14-15` (purpose + endpoint names), `:128-146` (`Caps.secre
 `Basic` here fits `AuthScheme::Basic` exactly: the non-secret identity is in the user half, the
 secret in the password half. Contrast Freshdesk (§4.1), which does not.
 
-### 3.2 Operations — 7 selected of 7 available
+### 3.2 Operations — 8 selected
 
-The plugin *is* the requirement: a connector replaces it only if it covers the same surface. All
-seven are taken.
+The plugin *is* the original requirement: a connector replaces it only if it covers the same
+surface, so all seven plugin operations are taken. C-461 adds one opt-in read from the pinned
+Ticketing OpenAPI document. Re-measured on 2026-08-02 with
+`cargo test -p codewandler-connector-spec --test zendesk_spec_selection --no-fail-fast`: all three
+contract tests passed, pinning eight operations while keeping the original seven renderings
+byte-identical.
 
 | # | Operation | Method | Path | Description |
 |---|---|---|---|---|
@@ -194,6 +200,7 @@ seven are taken.
 | 5 | `zendesk.ticket.update` | PUT | `/api/v2/tickets/{ticket_id}.json` | Safe-update selected ticket fields against the caller's `updated_stamp`. |
 | 6 | `zendesk.ticket.comment.add` | PUT | `/api/v2/tickets/{ticket_id}.json` | Add a comment; **internal unless `public` is explicitly true**. |
 | 7 | `zendesk.ticket.tag.add` | PUT | `/api/v2/tickets/{ticket_id}.json` | Add tags **without replacing** existing tags. |
+| 8 | `zendesk-ticket-audit-list` | GET | `/api/v2/tickets/{ticket_id}/audits` | List a ticket's read-only audit history without publishing the document's seven optional query parameters. |
 
 #### Parameters
 
@@ -255,6 +262,18 @@ Precondition (plugin preflight, `main.rs:201-209`): **at least one** of
 | `updated_stamp` | body `ticket.updated_stamp` | string | **yes** | |
 | `tags` | body `ticket.additional_tags` | array[string] | **yes** | non-empty, no blank entries (`main.rs:219-232`) |
 | — | body `ticket.safe_update` | boolean | constant `true` | |
+
+**8. `zendesk-ticket-audit-list`**
+(`specs/zendesk/ticketing-2026-08-02.openapi.yaml:15481`, operationId
+`ListAuditsForTicket` at `:15485`)
+
+| Name | In | Type | Required | Notes |
+|---|---|---|---|---|
+| `ticket_id` | path | integer (int64) | **yes** | The only published argument; the response carries the `audits` collection. |
+
+C-461 explicitly omits `page`, `sort`, `include`, `include_boundary_indicators`,
+`include_item_cursors`, `filter_events`, and `sort_order`, leaving the emitted GET query-free until
+query encoding is safe.
 
 ### 3.3 Quirks C-12 must carry
 
@@ -821,24 +840,21 @@ a **declared, reproducible scrub** with both hashes recorded, so drift-check sta
 Related and worth its own story: C-14's fetch path should refuse to vendor a spec containing
 credential-shaped literals without an explicit acknowledgement.
 
-### 6.7 Drift is undetectable for two of three providers
+### 6.7 Drift is detectable for the spec-backed selections
 
-Only babelforce has a vendored spec, so only babelforce can be drift-checked (C-14). Zendesk and
-Freshdesk are hand-derived, and a vendor-side change to either surfaces as a runtime failure rather
-than a build-time diff. Two mitigations, neither in this story's scope:
-
-- Zendesk: vendor the published OpenAPI document when C-14 lands (§1.2), which converts the §3 set
-  into an overlay selection and makes drift visible.
-- Freshdesk: with no official spec, the `freshdesk.test` op (§4.2) is the only automated signal, and
-  it only proves auth works. The C-15 live end-to-end run is doing more work for Freshdesk than for
-  the others and should be scoped accordingly.
+Babelforce and Zendesk now have vendored documents with pinned hashes. Zendesk's audit operation is
+selected from those bytes, so an upstream change to its operationId or parameter set is a build-time
+failure; its seven original inline operations wait on C-6 for the same proof. Freshdesk remains
+hand-derived: `freshdesk.test` (§4.2) proves authentication works but cannot detect an endpoint or
+schema change, so C-15's live end-to-end run continues to do more work there.
 
 ---
 
 ## 7. Sources
 
-All three were read directly, on disk. **No network access was used, and no source repository was
-modified.**
+The original inventories were read directly on disk and no source repository was modified. C-459
+later fetched Zendesk's public first-party OpenAPI documents; their exact URLs, fetch
+time, upstream hashes, and vendored hashes are recorded in `specs/zendesk.provenance.toml`.
 
 | Provider | Source | Size | Read-only origin |
 |---|---|---|---|

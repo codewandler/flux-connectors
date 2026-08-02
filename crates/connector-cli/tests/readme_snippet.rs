@@ -4,7 +4,7 @@
 //! docstring said "the output is a GENERATED ARTIFACT and nothing yet checks it for drift". So the
 //! README could show Flux the compiler had stopped emitting and no test would notice.
 //!
-//! Two properties close that, and both are asserted against the real repository rather than a
+//! Three properties close that, and all are asserted against the real repository rather than a
 //! fixture, because the thing under test is what a reader of this README sees:
 //!
 //! 1. [`the_snippet_is_verbatim_from_the_generated_module`] — the source the image renders is
@@ -14,6 +14,9 @@
 //!    [`pipeline::plan`], which makes them subject to everything the pipeline already guarantees:
 //!    `build` rewrites them, `diff` reports them stale, and a rebuild over unchanged inputs writes
 //!    nothing.
+//! 3. [`the_documented_catalogue_counts_match_the_build_plan`] — the provider, service, curated
+//!    operation and artifact counts in `README.md` and `AGENTS.md`, including the copy-pasteable
+//!    clean `diff` output, are derived from that same full plan rather than trusted as prose.
 
 use std::path::{Path, PathBuf};
 
@@ -35,6 +38,114 @@ fn read(relative: &str) -> String {
     std::fs::read_to_string(&path).unwrap_or_else(|error| {
         panic!("cannot read {}: {error}", path.display());
     })
+}
+
+fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// **Every catalogue count a maintainer is invited to quote is a checked claim.**
+///
+/// These figures are deliberately not permanent invariants: a provider change is supposed to move
+/// them. What is invariant is that the two documents move in the same commit as the build plan.
+/// Counting operation artifacts also asks the build what it plans, rather than walking the
+/// committed output directory, where an orphan could make a stale number appear correct.
+#[test]
+fn the_documented_catalogue_counts_match_the_build_plan() {
+    let workspace = Workspace::new(repo_root());
+    let plan = pipeline::plan(&workspace, None).expect("every shipped provider compiles");
+
+    let planned_paths: Vec<String> = plan
+        .artifacts
+        .iter()
+        .map(|artifact| {
+            workspace
+                .display_path(&artifact.path)
+                .display()
+                .to_string()
+                .replace('\\', "/")
+        })
+        .collect();
+    let providers = plan.providers.len();
+    let services = planned_paths
+        .iter()
+        .filter(|path| path.starts_with("connectors/") && path.ends_with(".connector.toml"))
+        .count();
+    let operations = planned_paths
+        .iter()
+        .filter(|path| path.starts_with("crates/catalog/ops/") && path.ends_with(".flux"))
+        .count();
+    let artifacts = plan.artifacts.len();
+
+    let readme = read("README.md");
+    let agents = read("AGENTS.md");
+    let readme_line = one_line(&readme);
+    let agents_line = one_line(&agents);
+    let regenerate =
+        "Regenerate these stated numbers from `pipeline::plan`; do not relax this test.";
+
+    let readme_catalogue = format!(
+        "The repository currently contains **{operations} curated connector operations across \
+         {providers} providers and {services} services**"
+    );
+    assert!(
+        readme_line.contains(&readme_catalogue),
+        "README.md does not state the full build's {providers} providers, {services} services and \
+         {operations} curated operations ({artifacts} artifacts total). {regenerate}"
+    );
+
+    let readme_artifacts = format!(
+        "A full build compiles everything into **{artifacts} committed, reviewable artifacts**"
+    );
+    assert!(
+        readme_line.contains(&readme_artifacts),
+        "README.md does not state the full build's {artifacts} planned artifacts. {regenerate}"
+    );
+
+    let agents_catalogue = format!(
+        "compiles **{providers} providers**, **{services} services** and **{operations} curated \
+         connector operations**"
+    );
+    assert!(
+        agents_line.contains(&agents_catalogue),
+        "AGENTS.md does not state the full build's {providers} providers, {services} services and \
+         {operations} curated operations. {regenerate}"
+    );
+
+    let agents_artifacts = format!("into **{artifacts} artifacts**");
+    assert!(
+        agents_line.contains(&agents_artifacts),
+        "AGENTS.md does not state the full build's {artifacts} planned artifacts. {regenerate}"
+    );
+
+    let clean_diff = format!("{artifacts} artifacts up to date ({providers} providers checked)");
+    for (path, document) in [("README.md", &readme), ("AGENTS.md", &agents)] {
+        assert!(
+            document.contains(&clean_diff),
+            "{path} does not quote the real clean diff output `{clean_diff}`. {regenerate}"
+        );
+    }
+    let stale: Vec<&str> = plan
+        .changes()
+        .filter_map(|artifact| {
+            planned_paths
+                .iter()
+                .find(|path| artifact.path.ends_with(path))
+        })
+        .map(String::as_str)
+        .collect();
+    assert!(
+        stale.is_empty(),
+        "the committed tree is not at the clean build state both documents quote; run \
+         `cargo run -p connector-cli -- build` before regenerating the stated numbers. Stale \
+         artifacts:\n  {}",
+        stale.join("\n  ")
+    );
+    assert_eq!(
+        connector_cli::diff::render(&workspace, &plan).trim(),
+        clean_diff,
+        "the exact clean diff output changed; regenerate the stated numbers from the real command"
+    );
 }
 
 /// **The snippet is the compiler's output, not a retelling of it.**

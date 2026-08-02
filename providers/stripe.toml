@@ -1,27 +1,10 @@
-# Stripe API (`/v1`) — hand-authored, no vendor spec vendored.
+# Stripe API (`/v1`) — eight established hand-authored operations plus four exact reads selected
+# from Stripe's first-party GA OpenAPI document.
 #
-# WHY THIS IS NOT A `[spec]` POINTER, even though Stripe publishes the best OpenAPI document of any
-# vendor in this fleet. `stripe/openapi` ships `spec3.json` — a machine-generated OpenAPI 3.0
-# description of the entire API, regenerated on every release, and it is what powers Stripe's own
-# reference site and every official client library. Nothing is vendored under `specs/` because ingest
-# (C-4) and the overlay (C-6) do not exist yet, and the document describes some **450 endpoints**
-# across every product Stripe sells. `vision.md` is explicit that mechanically emitting all 400
-# endpoints of a large spec produces an unusable tool catalog, and Stripe is the vendor that makes
-# that concrete. When C-14's fetch and C-4's ingest land, this file becomes `[spec]` plus a
-# `[[patch.operations]]` selection, and **the eight operations below are the selection to
-# reproduce**, by path and method:
-#
-#   GET    /v1/balance
-#   GET    /v1/customers/{customer}
-#   GET    /v1/charges/{charge}
-#   GET    /v1/payment_intents/{payment_intent}
-#   GET    /v1/refunds/{refund}
-#   POST   /v1/payment_intents/{payment_intent}/capture
-#   POST   /v1/payment_intents/{payment_intent}/cancel
-#   POST   /v1/charges/{charge}/refunds
-#
-# Until then drift is undetectable by machine, exactly as for zendesk, freshdesk, github, openai and
-# slack (`docs/designs/provider-operation-inventory.md` §6.7).
+# The full document remains source evidence rather than an exposure list. Each new operation is
+# named by exact `operationId`; no prefix, tag or path selector can publish a newly added endpoint on
+# an upstream refresh. The original eight stay inline so their public identities and emitted Flux
+# bytes do not move during this conversion.
 #
 # ---------------------------------------------------------------------------------------------
 # THE CONSTRAINT THAT SHAPED THE WHOLE SELECTION: STRIPE READS FORM-ENCODED BODIES.
@@ -74,7 +57,7 @@
 # flux; it is additive rather than a reshape, and it is what unlocks the rest of the Stripe surface.
 #
 # ---------------------------------------------------------------------------------------------
-# WHY THERE IS NOT A SINGLE QUERY PARAMETER, and which Stripe operations are therefore missing.
+# WHY THE FOUR LISTS EXPOSE ONLY AN INTEGER LIMIT, and which Stripe operations remain missing.
 #
 # Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
 # `fmt` template and flux registers no URL-encoding op (C-30 is unimplemented). `zendesk-ticket-search`
@@ -84,9 +67,9 @@
 # keys**: `GET /v1/charges?created[gte]=1700000000&customer=cus_…`, `GET /v1/events?types[]=…`. A `[`
 # is not a query-safe character, so those endpoints cannot be expressed even approximately — and
 # Stripe's `starting_after` cursor is an opaque object id, the same shape as a Slack cursor and just
-# as unencodable. Every `list` endpoint is therefore excluded, and with it every "find the charge for
-# this customer" flow. A caller that has an id can use this connector; a caller that has to search
-# cannot, and that is C-30's to fix.
+# as unencodable. C-470 adds four list reads with only Stripe's integer `limit`: its decimal rendering
+# cannot introduce another query pair. Cursor, string, array and object filters remain omitted one by
+# one; searches and every other list remain withheld pending C-30.
 #
 # The path surface, by contrast, is genuinely safe rather than merely untested: a Stripe object id is
 # `<prefix>_<base62>` — `ch_3Ov…`, `cus_Q1…`, `pi_3Ov…` — and carries no character that changes the
@@ -145,7 +128,7 @@ api_version = "v1"
 # adding one would widen the egress allow-list for nothing.
 base_url = "https://api.stripe.com"
 
-description = "Stripe payments: read a balance, customer, charge, payment intent or refund; capture, cancel and refund a payment"
+description = "Stripe payments and billing: read balances, customers, charges, payment intents, refunds, country specs, events, exchange rates and billing meters; capture, cancel and refund a payment"
 
 # Every operation authenticates the same way.
 default_auth = [{ credentials = ["stripe.secret_key"] }]
@@ -156,6 +139,63 @@ default_auth = [{ credentials = ["stripe.secret_key"] }]
 # whenever someone opens a settings page, so it must be a read; the loader refuses a `high` or
 # `destructive` one.
 verify = "stripe-balance-get"
+
+# ---------------------------------------------------------------------------------------------
+# First-party GA OpenAPI — pinned to one immutable stripe/openapi commit and normalized by
+# `scripts/vendor-stripe-spec.sh`.
+#
+# Stripe generates an optional, semantically empty form body on these GETs. That exact shape is the
+# only semantic normalization: the script refuses a non-empty or required body, retains the complete
+# upstream hash in provenance, and proves a neighbouring POST body survives. The four patches below
+# are the entire spec-selected surface.
+# ---------------------------------------------------------------------------------------------
+
+[spec]
+path = "specs/stripe/openapi-2026-08-02.json"
+source_url = "https://raw.githubusercontent.com/stripe/openapi/8da624f9b4f65178eb2e2c2b6fc80162a6c0dceb/latest/openapi.spec3.json"
+upstream_version = "2026-07-29.dahlia"
+fetched_at = "2026-08-02T11:12:55Z"
+sha256 = "3b3d858f1a02a2ac0116cc10a296a7d374fe7c9d8b4a68a5419712e0bb3fbf41"
+
+[[patch.operations]]
+select = "GetCountrySpecs"
+rename = "stripe-country-spec-list"
+description = "List country-specific requirements, supported currencies and payment capabilities without changing an account"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["ending_before", "expand", "starting_after"]
+
+[[patch.operations]]
+select = "GetEvents"
+rename = "stripe-event-list"
+description = "List Stripe account events for operational visibility without replaying or changing an event"
+risk = "low"
+idempotency = "idempotent"
+omit.query = [
+  "created",
+  "delivery_success",
+  "ending_before",
+  "expand",
+  "starting_after",
+  "type",
+  "types",
+]
+
+[[patch.operations]]
+select = "GetExchangeRates"
+rename = "stripe-exchange-rate-list"
+description = "List current Stripe exchange rates without creating a conversion or moving funds"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["ending_before", "expand", "starting_after"]
+
+[[patch.operations]]
+select = "GetBillingMeters"
+rename = "stripe-billing-meter-list"
+description = "List usage-billing meter definitions without creating, changing or deactivating one"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["ending_before", "expand", "starting_after", "status"]
 
 # ---------------------------------------------------------------------------------------------
 # Credentials
@@ -213,12 +253,11 @@ description = "Stripe webhook endpoint signing secret, used to verify inbound ev
 # keeps Stripe's own snake_case resource names, because that is what the vendor routes on.
 #
 # `/v1` is Stripe's only version prefix and has been since the API was published. Stripe versions
-# *behaviour* by date instead, through the `Stripe-Version` header or the account's pinned version —
-# and that header is a **constant** this connector cannot send: `params.header` is documented as
-# "request headers the caller supplies" and a `const`-pinned header emits as a caller-overridable
-# argument with the `const` dropped (C-52's finding, recorded at length in `providers/github.toml`).
-# So every response below is shaped by whatever version the operator's account is pinned to, which is
-# a real incompleteness; C-55 is the story that closes it.
+# *behaviour* by date instead, through the `Stripe-Version` header or the account's pinned version.
+# Constant headers are now representable, but this connector deliberately sends none: its runtime
+# responses follow each operator account's pinned version while the selected response schemas are
+# evidence from `2026-07-29.dahlia`. C-477 owns the compatibility decision; adding a provider-wide
+# header here would intentionally move all eight established operation renderings.
 # ---------------------------------------------------------------------------------------------
 
 [[services]]

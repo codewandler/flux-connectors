@@ -149,6 +149,15 @@ proves the seams end to end, and keep the fleet growing in parallel waves.
 An **epic** is a themed group of stories with a shared design doc. Stories join an epic via the
 `epic: <slug>` frontmatter field, where `<slug>` matches a design doc at `docs/designs/<slug>.md`.
 
+### Zendesk suite — grow from Support without moving the addresses already published
+
+Zendesk currently ships as one implicit/default Support service. Its seven operation addresses and
+unsuffixed module are already public, while Help Center and Messaging need distinct hosts and service
+contracts. The epic first makes that growth address-preserving, then vendors Zendesk's first-party
+Ticketing, Help Center, and Messaging documents and selects reviewed slices from them. OpenAPI is the
+endpoint/schema source, never the exposure policy; webhook facts absent from those documents remain
+identified hand-curation. See [zendesk-suite.md](designs/zendesk-suite.md).
+
 ### Anthropic Managed Agents — the first vendor that declares both transports and its own event set
 
 The `channel-bindings` and `inbound-events` epics built a model for the reverse call direction and the

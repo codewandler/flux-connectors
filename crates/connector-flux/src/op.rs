@@ -324,7 +324,7 @@ struct Pinned<'a> {
     /// variable (C-229) breaks the coincidence — Algolia's application id is `{app_id}` in the host
     /// and `X-Algolia-Application-Id` on the wire — and the *slot's* spelling is the one a host
     /// resolves, so it is the one the literal must carry in every position the value reaches.
-    variable: &'a str,
+    variable: String,
     symbol: String,
 }
 
@@ -454,7 +454,7 @@ fn bind_pins<'a>(
             Ok(Pinned {
                 position: pin.position,
                 name: pin.name,
-                variable: pin.variable,
+                variable: pin.variable.into_owned(),
                 // Allocated from the **wire** name rather than the slot, so a field that grows a
                 // second destination does not rename the symbol its first one already emitted, and
                 // two destinations of one field get two symbols rather than colliding on one.
@@ -2106,6 +2106,7 @@ mod tests {
         let mut connector = connector("https://www.googleapis.com", op.clone());
         connector.services = vec![connector_spec::Service {
             name: "gmail".to_string(),
+            legacy: false,
             description: String::new(),
             base_url: Some("https://gmail.googleapis.com/".to_string()),
             api_version: Some("v1".to_string()),

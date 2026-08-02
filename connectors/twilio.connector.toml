@@ -4,12 +4,12 @@ generator = "flux-connectors 0.13.0"
 connector = "twilio"
 gid = "com.twilio.api:2010-04-01"
 vendor = "Twilio"
-description = "Twilio programmable messaging and voice: read messages, calls and the authenticated account"
+description = "Twilio programmable messaging and voice: read the account, messages, calls, recordings, usage and conferences"
 runtime = "http"
 base_url = "https://api.twilio.com/2010-04-01"
 api_version = "2010-04-01"
 module = "twilio.flux"
-operations = ["twilio-account-get", "twilio-message-list", "twilio-message-get", "twilio-call-list", "twilio-call-get"]
+operations = ["twilio-account-get", "twilio-message-list", "twilio-message-get", "twilio-call-list", "twilio-call-get", "twilio-recording-list", "twilio-recording-get", "twilio-usage-record-list", "twilio-conference-list"]
 
 [[events]]
 name = "message.status_callback"

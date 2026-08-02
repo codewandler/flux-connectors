@@ -220,9 +220,9 @@ omit.query = [\"format\"]
     assert!(rendered.contains("required"), "{rendered}");
 }
 
-/// A path parameter is refused whatever its `required` flag says, because the path template keeps
-/// its placeholder: dropping `actionType` from `/api/v2/actions/{actionType}/{actionName}` leaves
-/// a URL nothing can compose.
+/// A path parameter with no exact configuration pin is refused whatever its `required` flag says,
+/// because the path template keeps its placeholder: dropping `actionType` from
+/// `/api/v2/actions/{actionType}/{actionName}` leaves a URL nothing can compose.
 #[test]
 fn omitting_a_path_parameter_is_refused() {
     let rendered = refuse(&with(

@@ -1551,6 +1551,7 @@ impl Plan {
             .filter(|document| document.names_service)
             .map(|document| Service {
                 name: document.service.clone(),
+                legacy: false,
                 description: document.ingested.title.clone(),
                 base_url: None,
                 api_version: None,

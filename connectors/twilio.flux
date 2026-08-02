@@ -76,3 +76,82 @@ op twilio-call-get(account_sid: String, call_sid: String) -> Any
   url = fmt("{base}/Accounts/{account_sid}/Calls/{call_sid}.json")
   response = http.request(method: "GET", url)
   return response
+
+op twilio-recording-list(IncludeSoftDeleted: Bool, PageSize: Number, Page: Number) -> Any
+  description "List recordings for the configured Twilio account with bounded pagination"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.twilio.com/2010-04-01"
+  AccountSid = "{username.twilio.basic_auth}"
+  url = fmt("{base}/Accounts/{AccountSid}/Recordings.json")
+  sep = "?"
+  when IncludeSoftDeleted
+    url = fmt("{url}{sep}IncludeSoftDeleted={IncludeSoftDeleted}")
+    sep = "&"
+  when PageSize
+    url = fmt("{url}{sep}PageSize={PageSize}")
+    sep = "&"
+  when Page
+    url = fmt("{url}{sep}Page={Page}")
+  response = http.request(method: "GET", url)
+  return response
+
+op twilio-recording-get(Sid: String, IncludeSoftDeleted: Bool) -> Any
+  description "Fetch one recording's metadata from the configured Twilio account"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.twilio.com/2010-04-01"
+  AccountSid = "{username.twilio.basic_auth}"
+  url = fmt("{base}/Accounts/{AccountSid}/Recordings/{Sid}.json")
+  sep = "?"
+  when IncludeSoftDeleted
+    url = fmt("{url}{sep}IncludeSoftDeleted={IncludeSoftDeleted}")
+  response = http.request(method: "GET", url)
+  return response
+
+op twilio-usage-record-list(IncludeSubaccounts: Bool, PageSize: Number, Page: Number) -> Any
+  description "List usage records for the configured Twilio account with bounded pagination"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.twilio.com/2010-04-01"
+  AccountSid = "{username.twilio.basic_auth}"
+  url = fmt("{base}/Accounts/{AccountSid}/Usage/Records.json")
+  sep = "?"
+  when IncludeSubaccounts
+    url = fmt("{url}{sep}IncludeSubaccounts={IncludeSubaccounts}")
+    sep = "&"
+  when PageSize
+    url = fmt("{url}{sep}PageSize={PageSize}")
+    sep = "&"
+  when Page
+    url = fmt("{url}{sep}Page={Page}")
+  response = http.request(method: "GET", url)
+  return response
+
+op twilio-conference-list(PageSize: Number, Page: Number) -> Any
+  description "List conferences for the configured Twilio account with bounded pagination"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.twilio.com/2010-04-01"
+  AccountSid = "{username.twilio.basic_auth}"
+  url = fmt("{base}/Accounts/{AccountSid}/Conferences.json")
+  sep = "?"
+  when PageSize
+    url = fmt("{url}{sep}PageSize={PageSize}")
+    sep = "&"
+  when Page
+    url = fmt("{url}{sep}Page={Page}")
+  response = http.request(method: "GET", url)
+  return response

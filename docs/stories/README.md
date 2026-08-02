@@ -9,8 +9,8 @@ the stories, not the generated region. New work? Copy [`_TEMPLATE.md`](_TEMPLATE
 
 ## Status
 
-**Snapshot: v0.13.0 (2026-08-02).** Measured with `ls providers/*.toml | wc -l` and
-`cargo run -p connector-cli -- diff`: 54 provider definitions compile to a fixed point of 951
+**Snapshot: v0.14.0 (2026-08-02).** Measured with `ls providers/*.toml | wc -l` and
+`cargo run -p connector-cli -- diff`: 54 provider definitions compile to a fixed point of 1005
 artifacts. The publishable host seam is on Flux 0.49, and the generated board below is the current
 story state rather than the original scaffold plan.
 
@@ -27,6 +27,8 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 - [C-86 — The connector configuration surface — enough declared data to generate the UI (epic)](C-86-connector-configuration-epic.md) · Spec · EPIC — the repo modelled how a credential reaches the wire and nothing about how a human supplies it. Configuration has TWO levels (operator: the OAuth app; connection: the tenant), and conflating them leaks the product's own credential to every customer. IR + loader landed; codegen and OAuth remain
 - [C-90 — Credential addressing and the secret-store seam (epic)](C-90-credential-addressing-epic.md) · Spec · EPIC — a hosted product needs two customers' Zendesk tokens in two places, and neither repo could say where. This repo owns the ADDRESS (pure, derived from pid + service, version deliberately omitted); a host library owns the client. Pure layer landed
 - [C-94 — The flow graph — connector members composed into one Flux op (epic)](C-94-flow-graph-epic.md) · Spec · EPIC — four waves built the vocabulary (Operation=call node, EventDecl=source, oip=node id, wire paths=edges); this is the graph. NOT a second language: every past rejection was an EXPRESSION language, every acceptance was declarative structure. IR landed
+- [C-467 — Five popular providers gain curated coverage from first-party API specs (epic)](C-467-popular-provider-spec-coverage-epic.md) · Agent · EPIC — GitHub, Stripe, Microsoft Graph, OpenAI and Twilio; exact selectors, no wholesale exposure
+- [C-474 — Integrate, prove and release the five-provider spec wave](C-474-integrate-popular-provider-spec-wave.md) · Agent · GitHub, Stripe, Microsoft Graph, OpenAI and Twilio; coordinator-owned regeneration, gates and release
 
 ## Next (ready — take the top one unless the user named a story)
 - [C-155 — An operation cannot say it costs money, and all 110 of them claim only `network`](C-155-semantic-effects.md) · Spec · measured: every one of 110 emitted operations declares `effects [\"network\"]` — including Stripe's refund, which is risk `destructive`. flux has a semantic tier (Money/Delete/SendExternal) and built OpSignature::semantic_effects so 'a downstream visual editor' could see it
@@ -34,6 +36,7 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 - [C-404 — Enable the Graph → composite-operation lowering now that a response is a record](C-404-enable-graph-lowering.md) · Codegen · READY — C-403 landed the canonical {status, headers, body} response record and its host test; the lowering and its old refusal exist, so this story now removes the spent guard and proves a real graph
 - [C-224 — `RateLimit` takes a fixed pair, so a header-discovered budget survives only as prose — and two shipped connectors now decline to declare one](C-224-ratelimit-cannot-express-a-discovered-budget.md) · Spec · found by the C-216 implementor 2026-07-31. hubspot declined on tier grounds, discord on discovered-bound grounds. Two independent refusals of the same declaration is the signal the shape is wrong, not that the connectors are lazy
 - [C-402 — Decide whether a whole-host template needs an operator allowlist](C-402-whole-host-template-allowlist.md) · Bridge · DECIDED 2026-08-01 — option (b): the connector declares an allowlist or suffix and the loader REFUSES a whole-host template that declares neither. Four connectors template the ENTIRE authority, so Slot::Host constrains the value only to being a hostname — 127.0.0.1 and 169.254.169.254 both compose. Not a defect; a thinner layer than the docs claimed
+- [C-477 — Align runtime API versions with vendored provider contracts](C-477-pin-runtime-api-version-contracts.md) · Connector · compatibility follow-up — GitHub can send its dated API version; Stripe needs an explicit account-version decision
 
 ### Anthropic Managed Agents — the first vendor that declares both transports and its own event set
 _The `channel-bindings` and `inbound-events` epics built a model for the reverse call direction —_
@@ -94,7 +97,6 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-80 — Let a connector declare more than one error shape](C-80-error-envelope-alternatives.md) · Spec · five providers declared pointers that resolve to nothing against the vendor's other shape
 - [C-37 — Give providers and operations stable global addresses](C-37-global-addressing.md) · Spec · pid / gid / oip · the global half; C-23 stays the local half
 - [C-56 — Omit an optional body field instead of sending an explicit null](C-56-omit-optional-body-fields.md) · Codegen · query params get a `when` guard; body fields do not
-- [C-81 — Make the documented provider and artifact counts a checked claim](C-81-declared-counts-are-checked.md) · Build · drifted five times in one session; every agent noticed and none could fix it
 - [C-30 — Refuse query values the emitter cannot encode safely](C-30-refuse-unencodable-query.md) · Codegen · **security** · a model-supplied query value can inject request parameters today
 - [C-67 — Declare the scopes an operation requires](C-67-required-scopes.md) · Spec · least privilege, and mechanical 403 diagnosis
 - [C-68 — Bind a service's endpoint to operator configuration](C-68-endpoint-binding.md) · Spec · closes the SCHEMA GAP every shipped provider records in a comment
@@ -170,6 +172,10 @@ _[connector-pipeline.md](connector-pipeline.md) drew two front-ends over one IR:
 _Every connector we will ever ship differs from its neighbours mostly in **how it authenticates**._
 - [C-47 — Design a db.open seam so connectors can reach databases](C-47-db-open-seam.md) · Bridge · the $auth argument applied to a second transport · unblocks mysql-class connectors
 - [C-19 — Model credentials as source x acquisition x placement](C-19-unified-credential-model.md) · Bridge · extends C-2's AuthMethod · the axis split that keeps auth from going combinatorial
+
+### Zendesk suite — stable Support addresses, spec-backed expansion
+- [C-479 — Preserve vendor event discriminator values separately from local names](C-479-preserve-event-wire-discriminators.md) · Surfaces · Zendesk values such as zen:event-type:ticket.created are not legal member names and must not be normalized
+- [C-480 — Provision webhook subscriptions and generated signing secrets](C-480-provision-webhook-subscriptions-and-secrets.md) · Surfaces · subscription setup cannot yet bind selected events, required create fields, or capture a post-create signing secret
 
 ## Blocked
 - [C-26 — File the outbound $auth seam stories on flux's board](C-26-file-seam-stories-on-flux.md) · Bridge · **critical path** · 11 paste-ready drafts wait on a decision to write into ../flux
@@ -279,6 +285,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-76 — Ship the OpenRouter connector](C-76-provider-openrouter.md) · Spec · bearer · OpenAI-compatible · charter-named
 - [C-77 — Ship the Sentry connector](C-77-provider-sentry.md) · Spec · bearer · trailing slashes are load-bearing
 - [C-78 — Ship the Zoom connector](C-78-provider-zoom.md) · Spec · bearer · nested meeting settings
+- [C-81 — Make the documented provider and artifact counts a checked claim](C-81-declared-counts-are-checked.md) · Build · drifted five times in one session; every agent noticed and none could fix it
 - [C-83 — Publish events and channel bindings into the manifest and the catalogue](C-83-channel-binding-codegen.md) · Codegen · the strict split: bindings reach the manifest and catalog.json and NOTHING reaches the module. The emitter must refuse to dress a binding up as a pollable op
 - [C-84 — Design the flux-side generic connector channel kind and file its flux stories](C-84-flux-connector-channel-seam.md) · Bridge · this is what retires adapters/slack.rs — one generic `connector` arm in build_channels instead of one arm per vendor. Cross-repo handoff, per the C-16/C-64 precedent
 - [C-91 — `connector-secrets` — the store trait and a Vault implementation](C-91-connector-secrets-crate.md) · Bridge · a HOST LIBRARY, outside the compile path — connector-cli must not depend on it, asserted by test, so no_network.rs keeps meaning what it means
@@ -416,6 +423,27 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-454 — Forgotten worktrees do not outlive their stories or the release that should contain them](C-454-forgotten-worktrees-do-not-outlive-their-stories.md) · Build · release audit 2026-08-02: C-403's obsolete rollback was pruned; concurrently-created C-455 was recovered as commit 6e421af; five completed stories and three blocker chains were reconciled before the v0.13.0 cut
 - [C-455 — Move the connector seam to flux 0.49, then publish it before exchange moves](C-455-move-the-flux-engine-line-to-049.md) · Build · owner-directed 2026-08-02: family releases are ordered flux, wait for its crates, flux-connectors, wait for its closure, then flux-exchange. flux 0.49.0 is live; connector-pack 0.12.0 still requires ^0.47 and is the one thing preventing exchange from moving
 - [C-456 — The catalogue network gate builds its configuration once, not once per operation](C-456-network-gate-reuses-its-catalogue-configuration.md) · Build · release-gate finding 2026-08-02: three safety assertions are CPU-bound because every operation rebuilds configuration by projecting the whole catalogue
+- [C-457 — Zendesk suite — vendor specs, stable Support addresses, and curated surfaces (epic)](C-457-zendesk-suite-epic.md) · Spec · EPIC — preserve the seven published Support addresses, make first-party specs the source, and add curated Support, Help Center, Messaging, and webhook surfaces
+- [C-458 — Preserve a published default service while a connector grows](C-458-preserve-default-service-while-growing.md) · Spec · prerequisite — Zendesk Support already publishes the elided default address; named Help Center or Messaging must not repoint it
+- [C-459 — Vendor Zendesk's first-party OpenAPI documents](C-459-vendor-zendesk-openapi-documents.md) · Build · Ticketing and Help Center are public Zendesk downloads; Messaging is Zendesk's Sunshine Conversations spec — pin the bytes, never fetch during build
+- [C-460 — Curate the Zendesk suite operation and inbound inventory](C-460-curate-zendesk-suite-inventory.md) · Spec · decide carry/withhold/defer from the pinned bytes before widening selection; do not confuse an OAS path list with a connector
+- [C-461 — Add query-free Zendesk ticket audit history from the Ticketing spec](C-461-expand-zendesk-support-foundations.md) · Spec · the first real selection from Zendesk's full OAS: one useful response-shaped operation, with every unsafe optional query parameter explicitly omitted
+- [C-462 — Add Zendesk synchronization and custom data](C-462-add-zendesk-sync-and-custom-data.md) · Spec · custom objects and incremental exports only where cursor, query, and caller-chosen path values are encoded safely
+- [C-463 — Add Zendesk Help Center as a named service](C-463-add-zendesk-help-center.md) · Spec · articles, categories, sections, and translations from the pinned Help Center OAS after the legacy-default service prerequisite
+- [C-464 — Add Zendesk Messaging from the Sunshine Conversations spec](C-464-add-zendesk-messaging.md) · Spec · nine curated conversation, message, user and participant operations; webhook responses expose a signing secret and remain withheld
+- [C-465 — Withhold Zendesk webhook administration and inbound events safely](C-465-add-zendesk-webhooks.md) · Surfaces · official webhook prose, not the Ticketing OAS, is the source; signature verification must be exact or inbound stays withheld
+- [C-466 — Expand Zendesk Support foundations after the audit proof](C-466-expand-zendesk-support-foundations.md) · Spec · eight remaining inventory-approved Support reads; incomplete and secret-shaped write contracts remain withheld or deferred
+- [C-468 — Freeze the five-provider OpenAPI source and operation inventory](C-468-inventory-popular-provider-openapi.md) · Agent · exact commits, hashes, selectors, parameters, response models and defer reasons before parallel implementation
+- [C-469 — Expand GitHub from its official REST OpenAPI description](C-469-expand-github-from-openapi.md) · Agent · preserve 5 operations; add exact issue, pull-file, workflow-run and commit collection reads
+- [C-470 — Expand Stripe from its official OpenAPI description](C-470-expand-stripe-from-openapi.md) · Agent · preserve 8 operations; add exact country-spec, event, exchange-rate and billing-meter reads
+- [C-471 — Expand Microsoft Graph from its official v1.0 OpenAPI metadata](C-471-expand-microsoft-graph-from-openapi.md) · Agent · preserve 8 operations; extract one message and three Outlook calendar-metadata reads
+- [C-472 — Expand OpenAI from its official OpenAPI description](C-472-expand-openai-from-openapi.md) · Agent · preserve 4 operations; add stored response, response-input, file and batch reads
+- [C-473 — Expand Twilio from its official API v2010 OpenAPI description](C-473-expand-twilio-from-openapi.md) · Agent · preserve 5 operations; add exact recording, usage and conference reads; defer unsafe forms
+- [C-475 — Reuse a Basic username as a host-owned request pin](C-475-reuse-basic-usernames-in-request-pins.md) · Spec · Twilio prerequisite — one Account SID must drive both Basic auth and selected operation paths
+- [C-476 — Make popular-provider refresh contracts fail closed](C-476-harden-popular-provider-refresh-contracts.md) · Spec · integration prerequisite — enforce full operation-id uniqueness/inventory and scrub values without deleting declarations
+- [C-478 — Refuse caller path values that escape their segment](C-478-refuse-caller-path-segment-escapes.md) · Host · Messaging prerequisite — string ids may not turn one reviewed resource path into another
+- [C-481 — Publish per-operation API specification provenance](C-481-publish-operation-spec-provenance.md) · Agent · mixed-front-end providers require an operation-level source marker; service-level inference is false
+- [C-482 — Render a legacy default service beside named siblings](C-482-render-legacy-default-service.md) · Surfaces · an explicit legacy default is a real filterable surface; only an implicit single-service default stays hidden
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

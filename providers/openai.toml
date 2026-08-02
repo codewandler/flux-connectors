@@ -1,23 +1,7 @@
-# OpenAI — hand-authored, and the first connector that is hand-authored *despite* a usable spec.
-#
-# Zendesk and Freshdesk are written out inline because no machine-readable description exists for
-# them (`docs/designs/provider-operation-inventory.md` §1.2). OpenAI is a different case: it publishes
-# a real OpenAPI 3 document at `https://github.com/openai/openai-openapi` (`openapi.yaml`), and the
-# four operations below were checked against it — paths, methods, the absence of query parameters on
-# all four, the `model` path parameter, and bearer security. The reason this file is still inline is
-# only that **C-4's ingest and C-14's fetch do not exist yet**, so there is nothing to vendor into
-# `specs/` and nothing to overlay.
-#
-# When they land this file should become a `[spec]` pointer plus a `[[patch.operations]]` selection
-# over the vendored document, and the operation list below becomes the selection to reproduce. Two
-# things make that conversion worth waiting for rather than faking: the document is large (the whole
-# `components/schemas` section describes assistants, audio, batch, files and fine-tuning, none of
-# which is selected here), and an opt-in `[[patch.operations]]` selection is what keeps a 400-operation
-# vendor spec from becoming 400 LLM tools. Until then drift is undetectable by machine (§6.7),
-# exactly as for the other hand-authored providers.
-#
-# Everything below is JSON in and JSON out. That is the point of shipping OpenAI now — see the
-# query-parameter note before the operations.
+# OpenAI — four established hand-authored contracts plus four exact reads selected from OpenAI's
+# first-party OpenAPI document. The original operations remain inline so their public identities and
+# emitted Flux bytes do not move. OpenAPI is evidence for the four additions, never permission to
+# expose its broad generation, administration, upload or deletion surfaces wholesale.
 
 id = "openai"
 vendor = "OpenAI"
@@ -48,11 +32,62 @@ api_version = "v1"
 # not per-tenant hosts — see the excluded-headers note below.
 base_url = "https://api.openai.com"
 
-description = "OpenAI platform: list models, and create chat completions and embeddings"
+description = "OpenAI platform: inspect models, stored responses, files and batches, and create chat completions and embeddings"
 
 # Every operation authenticates the same way: one bearer credential, requirement-set shape `single`.
 # OpenAI's spec declares its security scheme once at the root and no operation overrides it.
 default_auth = [{ credentials = ["openai.api_key"] }]
+
+# ---------------------------------------------------------------------------------------------
+# First-party OpenAPI — pinned, scrubbed and narrowed by C-472.
+#
+# `scripts/vendor-openai-spec.py` verifies the immutable upstream bytes, strips every example value,
+# and emits one reference-closed document containing only the four operationIds named below. The
+# source server includes `/v1`; extraction materializes that prefix on each path so the established
+# `base_url` and every existing operation remain byte-stable. Full and extracted hashes are recorded
+# in `specs/openai.provenance.toml`.
+# ---------------------------------------------------------------------------------------------
+
+[spec]
+path = "specs/openai/selected-2026-08-02.openapi.json"
+source_url = "https://raw.githubusercontent.com/openai/openai-openapi/117ce5680e4269f6656a4fd70d28f9755630d938/openapi.json"
+upstream_version = "2.3.0"
+fetched_at = "2026-08-02T11:28:56Z"
+sha256 = "bf253f99bca25941f6b7a5ce0c4a0634b89677502067bfbadb82727690c596a6"
+
+# Query interpolation still has no percent-encoder. Keep only integer limits, whose decimal
+# rendering cannot add a query pair; omit cursors, ordering, expansion and streaming controls.
+[[patch.operations]]
+select = "getResponse"
+rename = "openai-response-get"
+description = "Retrieve one stored model response by id"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["include", "stream", "starting_after", "include_obfuscation"]
+
+[[patch.operations]]
+select = "listInputItems"
+rename = "openai-response-input-item-list"
+description = "List input items retained for one stored response with a bounded integer limit"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["order", "after", "include"]
+
+[[patch.operations]]
+select = "listFiles"
+rename = "openai-file-list"
+description = "List files available to this API key with a bounded integer limit"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["purpose", "order", "after"]
+
+[[patch.operations]]
+select = "listBatches"
+rename = "openai-batch-list"
+description = "List batch jobs available to this API key with a bounded integer limit"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["after"]
 
 # ---------------------------------------------------------------------------------------------
 # Credentials
@@ -82,14 +117,15 @@ description = "OpenAI API key, sent as a bearer token"
 # ---------------------------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------------------------
-# Operations — 4, and ZERO query parameters between them.
+# Established inline operations — 4, and zero query parameters between them.
 #
 # That is a selection criterion, not an accident. C-30 is not implemented: `connector-flux`
 # interpolates a query value into the URL verbatim and nothing percent-encodes it, so a string-ish
 # query value containing `&`, `#` or `+` corrupts the request and can inject a parameter.
 # `zendesk-ticket-search` is the standing proof and is shipped KNOWN NON-FUNCTIONAL for exactly this
-# reason. OpenAI's selected surface needs no query string at all, so this connector simply does not
-# enter that failure mode, and `crates/connector-flux/tests/openai_connector.rs` holds it to that.
+# reason. These four established operations need no query string at all. The spec-backed additions
+# above retain only integer `limit`, whose decimal rendering cannot inject another query pair;
+# `crates/connector-flux/tests/openai_connector.rs` holds the whole connector to that boundary.
 #
 # Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
 # alphanumerics, `_` and `-` only, so `op openai.models.list` is undeclarable (C-8,

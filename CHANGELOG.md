@@ -7,11 +7,126 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed — breaking for `connector-pack` consumers
+
+- **Caller-owned path segments are refused before authentication or egress when they could reshape
+  the URL** (C-478). `connector_pack::Error` gains `UnsafePathParameter`; downstream exhaustive
+  matches must add that arm or a wildcard. String path values containing `/`, `?`, `#`, `%`, `\\`,
+  whitespace/control characters, or the complete segments `.` and `..` no longer compose a
+  request. Safe strings and numeric identifiers retain their bytes, and query/header/body values do
+  not inherit the path rule.
+
+### Changed — breaking for `codewandler-connector-spec` consumers
+
+- **Selected operations now retain their exact API-document provenance** (C-481). The public
+  `Provenance` struct gains an `operation_specs` map, so downstream struct literals and exhaustive
+  destructuring must add that field (usually `BTreeMap::new()`) or use
+  `..Provenance::default()`. The new public `OperationSpecSource` value is otherwise additive. Its
+  vendor `operation_id`, ingested upstream version, measured committed-document SHA-256, and
+  nullable public source URL are derived during patch application and remain outside the IR hash
+  domain; provider TOML operations cannot author them. Public catalogue operations gain an
+  always-present `spec_source` key, `null` for inline operations and an object for selected ones,
+  without exposing local paths or fetch metadata.
+
+- **A published default service can grow named siblings without changing its addresses** (C-458).
+  `Service` gains the public `legacy` field; downstream struct literals must add `legacy: false` or
+  use `..Default::default()`. Connector authors may set `legacy = true` only on an already-published
+  `default` beside a named service, and every operation, spec, event, channel, config field, and graph
+  must then state its service explicitly. The legacy GID/OIP, credential path, and unsuffixed module
+  stay unchanged while named siblings use ordinary segmented addresses and suffixed artifacts.
+
+- **A configuration pin can reuse a Basic username in a request path** (C-475). Public `Pin` is no
+  longer `Copy`, and `Pin::variable` changes from `&str` to `Cow<'_, str>` so a qualified
+  `username.<credential>` placeholder can travel without leaking or duplicating the username value.
+  Downstream callers must clone/borrow pins deliberately and accept the `Cow`. `LoadedProvider` also
+  gains private bookkeeping for explicit legacy-service membership, so external code can no longer
+  construct or destructure that public type by fields; use the loader and its accessors.
+
+### Added
+
+- **Five established connectors add twenty exact first-party-spec reads** (C-467–C-474): GitHub
+  adds repository issues, pull-request files, workflow runs and commits; Stripe adds country specs,
+  events, exchange rates and billing meters; Microsoft Graph adds messages, master categories,
+  supported time zones and supported languages; OpenAI adds stored-response, response-input, file
+  and batch reads; Twilio adds recording list/get, usage records and conferences. Each provider
+  vendors a pinned, reproducibly scrubbed source and selects four operation ids explicitly. String
+  cursors, free-text/OData filters, recursive schemas, and currently unencodable write bodies remain
+  omitted or deferred rather than silently weakened.
+
+- **Zendesk grows from 7 operations to 37 across three surfaces** (C-462–C-464, C-466). Support adds
+  five incremental/custom-object reads and eight foundation reads; Help Center adds seven category,
+  section, article and translation operations; Messaging adds nine conversation, participant,
+  message and user operations using a separate app id and app-scoped Basic key. Seven Messaging
+  operations select directly from the pinned document, while two message operations use bounded
+  transcriptions because their official response graph is recursive. The original seven Support
+  operations, their addresses, and their Flux bytes remain unchanged.
+
+- **Twilio's configured Account SID now supplies both halves of its Basic credential and the four
+  new read paths** (C-475). One non-secret field binds the username and qualified path pin; the
+  account id is no longer collected twice for those reads, while the five established operations
+  keep their published caller signatures.
+
+- **Zendesk Support adds eight query-free foundation reads** (C-466): recent tickets, built-in view
+  tickets, one user, one organization, groups, ticket fields, ticket forms, and custom statuses.
+  Their 33 optional query inputs remain explicitly omitted, response envelopes retain the pinned
+  document's requiredness, and unsafe view path segments are refused. Ticket and organization
+  creation remain deferred for incomplete contracts; create-or-update user remains withheld because
+  both union variants expose `password` and its merge variant requires no stable identity.
+
+- **Zendesk Support now exposes query-free ticket audit history** (C-461). The new
+  `zendesk-ticket-audit-list` operation is selected by operationId from Zendesk's pinned Ticketing
+  document, and its seven optional query parameters are explicitly omitted until structural query
+  encoding is safe. The seven existing Zendesk operations keep their methods, paths, addresses, and
+  per-operation Flux bytes.
+
+- **Zendesk's first-party Ticketing, Help Center, and Messaging OpenAPI documents are vendored,
+  scrubbed, and provenanced** (C-459). A reproducible script records upstream and committed hashes,
+  removes credential/contact/system-shaped example values, preserves security declarations, and is
+  absent from every offline compiler path.
+
+### Documented
+
+- **GitHub and Stripe record an explicit runtime/schema-version limitation** (C-477 follow-up).
+  GitHub sends its media type but not `X-GitHub-Api-Version`; Stripe sends no `Stripe-Version`, so
+  its response behavior follows the account-pinned version while selected schemas come from
+  `2026-07-29.dahlia`. This release does not claim runtime bytes are date-pinned. Twilio message/call
+  writes remain deferred for structural form encoding, and the selected Stripe exchange-rate
+  surface retains the vendor's deprecated/restricted warning.
+
+- **Zendesk's Support webhook family is explicitly withheld rather than partially published**
+  (C-465). The five prose-only CRUD requests and both signing-secret endpoints are accounted for,
+  but the generic Webhook response can carry the live signing credential and raw responses are not
+  redacted by narrowing their schema. Response-safe update/delete calls do not ship as an orphaned
+  lifecycle, and inbound events wait for C-479's lossless wire discriminator plus C-480's complete
+  subscription and generated-secret provisioning.
+
+- **The Zendesk suite has an implementation inventory instead of an endpoint wish list** (C-460).
+  Support foundations, sync/custom data, Help Center, Messaging, and webhooks each have bounded
+  carry/defer/withhold decisions. Ticket creation, unrestricted custom-object paths, missing-body
+  operations, multipart uploads, credential responses, and lossless inbound event names remain
+  deferred behind their actual model gaps.
+
 ### Fixed
 
+- **The public explorer no longer hides a legacy primary service when a connector gains named
+  siblings** (C-482). A multi-surface `default` remains the machine value used by filters and
+  addresses but renders generically as `Primary` in facets, provider cards, and operation rows.
+  Ordinary single-surface defaults remain elided; Zendesk Support is now selectable beside Help
+  Center and Messaging.
+
+- **Documented catalogue counts are checked against the full build plan** (C-81). Provider,
+  service, operation, and artifact totals plus the exact clean `diff` sentence in `README.md` and
+  `AGENTS.md` now fail when prose drifts; the failure tells maintainers to regenerate the numbers
+  rather than relaxing the assertion.
+
+- **Caller path parameters can no longer escape their reviewed URL segment** (C-478). The pack
+  derives placement from emitted Flux, including guarded branches, and validates caller strings
+  before credentials, permission subjects, or transport are reached. This closes the prerequisite
+  for Zendesk's unconstrained Messaging identifiers.
+
 - **The board header describes the released repository instead of its initial scaffold** (C-454
-  follow-up). It now carries the measured v0.13.0 catalogue snapshot and the complete Rust, Node and
-  packaging gate.
+  follow-up). It now carries the measured v0.14.0 catalogue snapshot and the complete Rust, Node and
+  packaging gate; C-81 keeps its provider and artifact counts tied to the full build plan.
 
 ## [0.13.0] — 2026-08-02
 

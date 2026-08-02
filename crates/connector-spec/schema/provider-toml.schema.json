@@ -30,7 +30,7 @@
         },
         "services": {
           "type": "array",
-          "description": "The API surfaces this provider exposes. Omit the block entirely for a provider with one surface: its operations then belong to the reserved `default` service, which no entry may declare and which is elided from every published address.\n\nDeclare services and every operation must name one — there is no implicit `default` sitting beside them.",
+          "description": "The API surfaces this provider exposes. Omit the block entirely for a provider with one surface: its operations then belong to the reserved `default` service, which is elided from every published address. A single-surface provider may declare `default` only to carry roles or tags.\n\nA provider growing named services may preserve an already-published default by declaring it with `legacy = true`; every member must then state its service explicitly. This is an address migration, not shorthand for a new connector.",
           "items": { "$ref": "#/$defs/service" }
         },
         "vendor": {
@@ -631,7 +631,12 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "The service name, e.g. `s3`. Lowercase letters, digits and `-`. Names the emitted `<provider>-<name>.flux`, is the middle segment of the service address, and is what an operation's `service` references. `default` is reserved: an entry may name it only to carry `roles`, which a single-surface provider has nowhere else to put."
+          "description": "The service name, e.g. `s3`. Lowercase letters, digits and `-`. Names the emitted `<provider>-<name>.flux`, is the middle segment of the service address, and is what an operation's `service` references. `default` is reserved: a single-surface provider may name it to carry roles or tags, and an already-published default may name it beside new siblings only with `legacy = true`."
+        },
+        "legacy": {
+          "type": "boolean",
+          "default": false,
+          "description": "Marks `default` as an already-published, address-elided service that must retain its GID, OIP, credential address and unsuffixed artifacts while named siblings are added. Admitted only on `default` beside at least one named service. In that mixed shape every operation, spec document, event, channel binding, configuration field and graph must state its service; omission is refused."
         },
         "description": {
           "type": "string",
@@ -1433,9 +1438,41 @@
           "description": "Every vendored document this connector compiles, one entry each, so a drift check can say which document moved. Filled for a single-document connector too — the four fields above are the projection of the one-element case.",
           "items": { "$ref": "#/$defs/spec" }
         },
+        "operation_specs": {
+          "type": "object",
+          "description": "Derived map from stable public operation id to the exact selected vendor operation and document. Authors do not write it: patch application fills it, and inline operations have no entry.",
+          "additionalProperties": { "$ref": "#/$defs/operationSpecSource" }
+        },
         "toml_sha256": {
           "type": "string",
           "description": "SHA-256 of the provider TOML bytes, computed by the loader."
+        }
+      }
+    },
+
+    "operationSpecSource": {
+      "type": "object",
+      "title": "Derived operation specification source",
+      "description": "The exact vendor operation and committed document that produced one selected operation. Repository-local paths and fetch timestamps are deliberately absent.",
+      "additionalProperties": false,
+      "required": ["operation_id", "upstream_version", "sha256"],
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "description": "The vendor's exact operationId before the connector gives it a stable public id."
+        },
+        "source_url": {
+          "type": "string",
+          "description": "The public source URL, absent for a private vendoring source whose location may not be published."
+        },
+        "upstream_version": {
+          "type": "string",
+          "description": "The upstream version declared by the ingested document."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Measured SHA-256 of the committed document bytes the compiler ingested."
         }
       }
     },

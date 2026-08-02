@@ -84,8 +84,18 @@ fn basic_join_renders_two_fields_and_hides_the_vendor_marker() {
     assert_eq!(method.scheme, AuthScheme::Basic);
     assert_eq!(method.user_suffix.as_deref(), Some("/token"));
 
+    let support_form: Vec<_> = connector
+        .config_of(connector_spec::DEFAULT_SERVICE)
+        .map(|field| {
+            (
+                field.label.as_str(),
+                field.secret,
+                field.level().expect("a loaded field has a valid binding"),
+            )
+        })
+        .collect();
     assert_eq!(
-        form(&connector),
+        support_form,
         vec![
             ("Zendesk subdomain", false, Level::Connection),
             ("Agent email", false, Level::Connection),

@@ -106,3 +106,180 @@ op zendesk-ticket-tag-add(ticket_id: Number, updated_stamp: String, tags: List<S
   payload = { ticket: { additional_tags: tags, safe_update, updated_stamp } }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
   return response
+
+op zendesk-ticket-audit-list(ticket_id: Number) -> Any
+  description "List the read-only audit history for one ticket, including field changes, comments and notifications"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/tickets/{ticket_id}/audits")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-incremental-ticket-list(start_time: Number) -> Any
+  description "Incrementally export tickets updated at or after a required Unix start time"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/incremental/tickets?start_time={start_time}")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-incremental-user-list(start_time: Number, per_page: Number) -> Any
+  description "Incrementally export users updated at or after a required Unix start time with an optional integer page size"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/incremental/users?start_time={start_time}")
+  sep = "&"
+  when per_page
+    url = fmt("{url}{sep}per_page={per_page}")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-incremental-organization-list(start_time: Number, per_page: Number) -> Any
+  description "Incrementally export organizations updated at or after a required Unix start time with an optional integer page size"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/incremental/organizations?start_time={start_time}")
+  sep = "&"
+  when per_page
+    url = fmt("{url}{sep}per_page={per_page}")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-incremental-ticket-event-list(start_time: Number) -> Any
+  description "Incrementally export ticket audit events at or after a required Unix start time"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/incremental/ticket_events?start_time={start_time}")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-custom-object-list(include_ui_path: Bool) -> Any
+  description "List custom-object definitions, optionally including each definition's UI path"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/custom_objects")
+  sep = "?"
+  when include_ui_path
+    url = fmt("{url}{sep}include_ui_path={include_ui_path}")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-ticket-recent-list -> Any
+  description "List the account's most recently created or updated tickets"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/tickets/recent")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-view-ticket-list(view_id: String) -> Any
+  description "List tickets from one numeric or built-in Zendesk view"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/views/{view_id}/tickets")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-user-show(user_id: Number) -> Any
+  description "Get one Zendesk user by numeric id"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/users/{user_id}")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-organization-show(organization_id: Number) -> Any
+  description "Get one Zendesk organization by numeric id"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/organizations/{organization_id}")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-group-list -> Any
+  description "List the account's Zendesk groups without exposing optional filters or pagination"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/groups")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-ticket-field-list -> Any
+  description "List the account's ticket field definitions without optional locale, creator, sort or pagination inputs"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/ticket_fields")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-ticket-form-list -> Any
+  description "List the account's ticket forms without optional visibility, type, brand, locale, sort or pagination inputs"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/ticket_forms")
+  response = http.request(method: "GET", url)
+  return response
+
+op zendesk-custom-status-list -> Any
+  description "List the account's custom ticket statuses without optional category, activity or default filters"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://{subdomain}.zendesk.com"
+  url = fmt("{base}/api/v2/custom_statuses")
+  response = http.request(method: "GET", url)
+  return response

@@ -59,6 +59,7 @@ const MUST_BE_EXERCISED = [
   'ConfigChoices',
   'Choice',
   'Service',
+  'SpecSource',
   'Operation',
   'Channel',
   'InboundEvent',

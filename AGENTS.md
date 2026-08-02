@@ -92,19 +92,18 @@ The coordinator failures from the same session, and each of them cost a rework r
 
 ## Current project boundary
 
-**Snapshot: v0.6.0.** `cargo run -p connector-cli -- build` compiles **45 providers**, **52 services**
-and **254 curated connector operations** — plus 8 events, 2 channel bindings and 77 Flux core entries
-(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **488 artifacts**. The
+**Snapshot: v0.14.0.** `cargo run -p connector-cli -- build` compiles **54 providers**, **65 services**
+and **735 curated connector operations** — plus 8 events, 4 channel bindings and 77 Flux core entries
+(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **1005 artifacts**. The
 compiler, the embedded Rust catalogue, the JSON catalogue, the Tool pack and the public explorer all
 work. **The repository now also ships a host**, `connectors-api` (C-200), which makes live API calls
 — it is fenced away from the compile path in both directions, and the compiler itself still reaches
 no network. Read
 [Intentional gaps](#intentional-gaps) before changing code that appears broken.
 
-> Every count in this paragraph and in `README.md` is **hand-typed and unchecked**. It has drifted
-> repeatedly; `docs/stories/C-81-declared-counts-are-checked.md` is the fix and is still `ready`. Until
-> it lands, re-measure before quoting: `ls providers/*.toml | wc -l`,
-> `cargo run -p connector-cli -- diff`, and a query over `web/public/catalog.json`.
+> These counts are not permanent invariants, but they are checked at every commit against a full
+> build plan by `crates/connector-cli/tests/readme_snippet.rs`. When the catalogue changes, regenerate
+> the stated numbers here and in `README.md`; do not relax the check.
 
 flux-connectors compiles vendor API descriptions into Flux-Lang. A provider is described in
 `providers/<name>.toml`; the build emits an installable Flux module, a capability manifest,
@@ -173,11 +172,11 @@ cargo run -p connector-cli -- build
 cargo run -p connector-cli -- diff
 ```
 
-`diff` must finish with `951 artifacts up to date (54 providers checked)` for the current catalogue
-(measured 2026-08-01, after C-189 made `connectors.lock` the 558th). The artifact count may
-legitimately change when providers or operations change; do not encode it as a permanent invariant.
-It is also not currently checked against this file — see C-81 and the caveat under
-[Current project boundary](#current-project-boundary).
+`diff` must finish with `1005 artifacts up to date (54 providers checked)` for the current catalogue.
+The artifact count legitimately changes when providers or operations change: it is not a permanent
+invariant, but it is checked at every commit against the real build plan. Regenerate this sentence
+and the counts under [Current project boundary](#current-project-boundary) when that plan changes;
+do not relax the check.
 
 | Generated path | Source of truth |
 |---|---|

@@ -5,7 +5,7 @@
 //! emits, parses, is canonical, and reloads. This file exists because OpenAI's reason for shipping
 //! is a **narrower** claim than that, and one the shared tests cannot make.
 //!
-//! # The headline invariant: no query parameters at all
+//! # The headline invariant: only integer limits enter the query string
 //!
 //! C-30 is not implemented. `connector-flux` interpolates a query value into the URL verbatim —
 //! nothing percent-encodes it (`crates/connector-flux/src/op.rs`, module docs) — so a string-ish
@@ -13,12 +13,12 @@
 //! `zendesk-ticket-search` is the standing proof: `providers/zendesk.toml` declares it
 //! KNOWN NON-FUNCTIONAL for exactly this reason, and `AGENTS.md` lists it under intentional gaps.
 //!
-//! OpenAI is the first connector whose whole selected surface is JSON in and JSON out, so it can
-//! avoid the gap entirely rather than document its way around it. That is a **property to enforce,
-//! not a coincidence to observe**: the next author reaching for `?limit=` on `/v1/models` must fail
-//! a test rather than ship a sixth operation with a latent injection. Hence
-//! [`the_openai_connector_declares_no_query_parameter_at_all`], which is deliberately stated over
-//! the whole connector rather than per operation — "this one is fine" is not the claim.
+//! OpenAI's established surface avoided the gap entirely. C-472 adds three first-party collection
+//! reads whose only query is an integer `limit`; its decimal rendering cannot introduce a second
+//! query pair. String cursors, ordering, expansion and streaming controls remain omitted. That is a
+//! **property to enforce, not a coincidence to observe**: a later string query must fail here rather
+//! than arrive as a latent injection. [`every_openai_query_is_an_integer_limit`] is deliberately
+//! stated over the whole connector rather than per operation — "this one is fine" is not the claim.
 //!
 //! # Why the assertions are stated over the loaded IR and the emitted text
 //!
@@ -47,6 +47,13 @@ const BASE_URL: &str = "https://api.openai.com";
 /// AGENTS.md's hard invariant, re-asserted from the emitted text in
 /// [`the_emitted_flux_carries_no_credential_at_all`].
 const SECRET_ENV: &str = "OPENAI_API_KEY";
+
+/// The closed C-472 set allowed to expose OpenAI's integer `limit` query.
+const INTEGER_LIMIT_OPERATIONS: [&str; 3] = [
+    "openai-response-input-item-list",
+    "openai-file-list",
+    "openai-batch-list",
+];
 
 fn providers_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -89,27 +96,42 @@ fn the_openai_connector_loads() {
     }
 }
 
-/// **The headline invariant.** See the module documentation: C-30 is not implemented, so a query
-/// parameter is an unencoded value on the wire, and the whole point of this connector's selection is
-/// that it has none. Stated over every operation, including the ones a later author adds.
+/// **The headline invariant.** See the module documentation: C-30 is not implemented, so every
+/// caller-visible query must have a representation that cannot change the query shape. C-472 keeps
+/// only integer `limit`; stated over every operation, including the ones a later author adds.
 #[test]
-fn the_openai_connector_declares_no_query_parameter_at_all() {
+fn every_openai_query_is_an_integer_limit() {
     let connector = load();
     for operation in &connector.operations {
-        let declared: Vec<&str> = operation
-            .params
-            .query
-            .iter()
-            .map(|param| param.name.as_str())
-            .collect();
-        assert!(
-            declared.is_empty(),
-            "`{}` declares query parameters {declared:?}. C-30 is not implemented, so a query value \
-             reaches the wire unencoded and `&`, `#` or `+` inside it can inject a parameter \
-             (`zendesk-ticket-search` is the standing proof). Leave the operation out and name it in \
-             the provider file's Notes instead, or close C-30 first",
-            operation.id
-        );
+        if INTEGER_LIMIT_OPERATIONS.contains(&operation.id.as_str()) {
+            assert_eq!(
+                operation.params.query.len(),
+                1,
+                "`{}` must expose exactly its reviewed C-472 integer limit",
+                operation.id
+            );
+            let param = &operation.params.query[0];
+            assert_eq!(param.name, "limit");
+            assert_eq!(
+                param.schema["type"],
+                serde_json::json!("integer"),
+                "`{}` has a non-integer limit, whose rendering could change the query shape",
+                operation.id
+            );
+        } else {
+            let declared: Vec<&str> = operation
+                .params
+                .query
+                .iter()
+                .map(|parameter| parameter.name.as_str())
+                .collect();
+            assert!(
+                declared.is_empty(),
+                "`{}` exposes unreviewed queries {declared:?}; only the three exact C-472 list \
+                 operations may carry integer `limit` until C-30 lands",
+                operation.id
+            );
+        }
     }
 }
 

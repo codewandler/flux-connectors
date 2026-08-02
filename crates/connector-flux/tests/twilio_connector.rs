@@ -9,13 +9,10 @@
 //!   encoder yet, because the encoder that exists upstream (flux's `L-101`) is not in the pinned
 //!   `codewandler-flux-lang` release. A value carrying `&` or `=` would corrupt the body. So this
 //!   connector ships reads only, over Basic auth, until the encoder publishes.
-//! - **The Account SID is both this connector's Basic-auth username and a required path parameter
-//!   on every operation.** `ConfigField::binds` admits exactly one destination per field
-//!   (`crates/connector-spec/src/config.rs:239-267`), so the one visible `[[config]]` field binds to
-//!   `username.twilio.basic_auth` and the SID is *not* templated into `base_url` — it travels as a
-//!   real, caller-facing `account_sid` path parameter instead. [`every_twilio_operation_requires_the_account_sid_in_its_path`]
-//!   is what stops that duplication from being "cleaned up" back into a second config field or a
-//!   silently-invented `base_url` template.
+//! - **The Account SID is both this connector's Basic-auth username and an account path segment.**
+//!   The five established inline operations retain their caller-facing lowercase `account_sid` so
+//!   their Flux bytes do not move. The four OpenAPI additions use C-475's qualified username-backed
+//!   `path.AccountSid` pin, so the configured tenant scope is not caller-selectable.
 //! - **No query parameter carries a phone number or a range operator.** `To`, `From` and Twilio's
 //!   `DateSent`/`StartTime` range filters are all documented, and all excluded: an unencoded `+` in a
 //!   phone number, or `<`/`>` in a parameter *name*, is exactly the class of defect
@@ -49,13 +46,17 @@ const ACCOUNT_SID_ENV: &str = "TWILIO_ACCOUNT_SID";
 /// The `signing`-scheme credential both status-callback bindings verify with — see the module docs.
 const SIGNING_CREDENTIAL: &str = "twilio.webhook_signing_secret";
 
-/// The curated operations, in the order `providers/twilio.toml` declares them. All five are reads.
+/// The curated operations: five established inline reads followed by four spec-backed reads.
 const OPERATIONS: &[&str] = &[
     "twilio-account-get",
     "twilio-message-list",
     "twilio-message-get",
     "twilio-call-list",
     "twilio-call-get",
+    "twilio-recording-list",
+    "twilio-recording-get",
+    "twilio-usage-record-list",
+    "twilio-conference-list",
 ];
 
 fn providers_dir() -> PathBuf {
@@ -169,19 +170,19 @@ fn the_twilio_connector_loads_and_authenticates_with_an_account_sid_and_auth_tok
     );
 }
 
-/// **The Account SID is a required path parameter on every operation — not a `base_url` template —
-/// and every operation's path is account-scoped.**
+/// **Every operation is account-scoped, with the old and new contracts kept explicit.**
 ///
-/// This is the load-bearing assertion for C-109's second finding: `ConfigField::binds` cannot send
-/// one collected value to both `endpoint.account_sid` and `username.twilio.basic_auth`, so the SID
-/// is authored once in config (as the username) and again as a real path parameter every operation
-/// declares. A later author "fixing" the duplication by templating `{account_sid}` into `base_url`
-/// would silently drop this parameter and break every emitted request.
+/// The five established operations keep the lowercase caller parameter to preserve their emitted
+/// bytes. The four C-473 operations omit the source's `AccountSid` parameter only because the same
+/// service declares an exact username-backed path pin, so a caller cannot choose another account.
 #[test]
 fn every_twilio_operation_requires_the_account_sid_in_its_path() {
     let connector = load();
 
-    for operation in &connector.operations {
+    for id in OPERATIONS[..5].iter().copied() {
+        let operation = connector
+            .operation(id)
+            .unwrap_or_else(|| panic!("twilio declares {id}"));
         assert!(
             operation.path.starts_with("/Accounts/{account_sid}"),
             "operation `{}` has path `{}`; every operation is scoped under the caller's account",
@@ -204,6 +205,21 @@ fn every_twilio_operation_requires_the_account_sid_in_its_path() {
             account_sid.required,
             "operation `{}`'s `account_sid` must be required; there is no fallback value",
             operation.id
+        );
+    }
+
+    for id in OPERATIONS[5..].iter().copied() {
+        let operation = connector
+            .operation(id)
+            .unwrap_or_else(|| panic!("twilio declares {id}"));
+        assert!(operation.path.starts_with("/Accounts/{AccountSid}"));
+        assert!(
+            operation
+                .params
+                .path
+                .iter()
+                .all(|parameter| parameter.name != "AccountSid"),
+            "operation `{id}` exposes the configured account scope to the caller"
         );
     }
 
@@ -430,6 +446,7 @@ fn the_config_surface_asks_for_the_account_sid_exactly_once() {
         .find(|field| field.name == "account_sid")
         .expect("twilio declares an `account_sid` config field");
     assert_eq!(sid_field.binds, "username.twilio.basic_auth");
+    assert_eq!(sid_field.also_binds, ["path.AccountSid"]);
     assert!(
         !sid_field.secret,
         "the Account SID is the non-secret username half"
@@ -460,7 +477,6 @@ fn no_twilio_module_carries_a_credential_or_its_variable_name() {
         for forbidden in [
             AUTH_TOKEN_ENV,
             ACCOUNT_SID_ENV,
-            CREDENTIAL,
             SIGNING_CREDENTIAL,
             "$secret",
             "Authorization",

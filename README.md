@@ -16,14 +16,15 @@ queryable Rust catalogue, and a flux Tool pack.
 > this repository is `crates/connectors-api` — `publish = false`, loopback-only, and the thing that has
 > actually sent bytes to a vendor. See [Current limitations](#current-limitations).
 
-The repository currently contains **299 curated connector operations across 53 providers and 60
-services**, plus 8 events and 2 channel bindings. It also publishes 77 Flux-owned core operations, node
-kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **557
+The repository currently contains **735 curated connector operations across 54 providers and 65
+services**, plus 8 events and 4 channel bindings. It also publishes 77 Flux-owned core operations, node
+kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **1005
 committed, reviewable artifacts** without contacting a vendor. Browse them in the
 [catalogue explorer](https://flux.codewandler.org/explorer).
 
-> These counts are hand-typed and nothing checks them; they have drifted repeatedly. `C-81` is the fix
-> and has not landed. Re-measure with `cargo run -p connector-cli -- diff` before quoting them.
+> These counts are intentionally mutable, but they are checked against a full build plan by
+> `crates/connector-cli/tests/readme_snippet.rs`. When the catalogue changes, regenerate the stated
+> numbers in this file and `AGENTS.md`; do not relax the check.
 
 ## Why this exists
 
@@ -68,7 +69,7 @@ cargo run -p connector-cli -- build
 On a clean checkout, `diff` reports:
 
 ```text
-557 artifacts up to date (53 providers checked)
+1005 artifacts up to date (54 providers checked)
 ```
 
 Then inspect [`connectors/zendesk.flux`](connectors/zendesk.flux), browse the

@@ -53,3 +53,60 @@ op openai-embeddings-create(model: String, input: Any) -> Any
   payload = { input, model }
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
   return response
+
+op openai-response-get(response_id: String) -> Any
+  description "Retrieve one stored model response by id"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.openai.com"
+  url = fmt("{base}/v1/responses/{response_id}")
+  response = http.request(method: "GET", url)
+  return response
+
+op openai-response-input-item-list(response_id: String, limit: Number) -> Any
+  description "List input items retained for one stored response with a bounded integer limit"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.openai.com"
+  url = fmt("{base}/v1/responses/{response_id}/input_items")
+  sep = "?"
+  when limit
+    url = fmt("{url}{sep}limit={limit}")
+  response = http.request(method: "GET", url)
+  return response
+
+op openai-file-list(limit: Number) -> Any
+  description "List files available to this API key with a bounded integer limit"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.openai.com"
+  url = fmt("{base}/v1/files")
+  sep = "?"
+  when limit
+    url = fmt("{url}{sep}limit={limit}")
+  response = http.request(method: "GET", url)
+  return response
+
+op openai-batch-list(limit: Number) -> Any
+  description "List batch jobs available to this API key with a bounded integer limit"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.openai.com"
+  url = fmt("{base}/v1/batches")
+  sep = "?"
+  when limit
+    url = fmt("{url}{sep}limit={limit}")
+  response = http.request(method: "GET", url)
+  return response

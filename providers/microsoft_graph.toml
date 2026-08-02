@@ -1,16 +1,12 @@
-# Microsoft Graph — hand-authored, curated to the surface this pipeline can express honestly.
+# Microsoft Graph — eight stable inline operations plus four reads selected from first-party
+# OpenAPI metadata, curated to the surface this pipeline can express honestly.
 #
-# WHY THIS IS NOT A `[spec]` POINTER. Microsoft publishes Graph's OpenAPI description in pieces per
-# workload (`github.com/microsoftgraph/msgraph-metadata`), but nothing is vendored under `specs/`
-# here: ingest (C-4) and the overlay (C-6) do not exist yet, and the full metadata document
-# describes several thousand operations across mail, calendar, files, Teams, directory, security,
-# device management and more — pointing at it without a selection mechanism would be pointing
-# several thousand LLM tools at a tenant's entire Microsoft 365 estate. Checked directly against
-# `learn.microsoft.com/en-us/graph/api/*` reference pages on 2026-07-31 (message-get, message-reply,
-# user-list-mailfolders, event-get, the `event` resource, user-post-events, user-list-calendars,
-# driveitem-get), not assumed from a generic REST shape. Until C-4/C-14 land, drift against those
-# pages is undetectable by machine, the same caveat zendesk, freshdesk, github, notion, front and
-# google already carry (`docs/designs/provider-operation-inventory.md` §6.7).
+# Microsoft publishes one 38 MB v1.0 document. It is source evidence rather than the build input:
+# `scripts/vendor-microsoft-graph-spec.py` verifies the complete first-party bytes at an immutable
+# commit, then emits one reference-closed document for mail and one for calendar. The full upstream
+# hash remains in both `[[spec]]` provenance entries and in `specs/microsoft_graph.provenance.toml`.
+# Selection remains one exact `[[patch.operations]]` block per operation; pointing at the monolith
+# never makes its unreviewed Microsoft 365 administration surface public.
 #
 # ---------------------------------------------------------------------------------------------
 # C-108'S QUESTION: DOES A SERVICE STILL EARN ITS PLACE WHEN NEITHER HOST NOR VERSION DIFFERS?
@@ -36,8 +32,8 @@
 # contract says a service is "the unit you address, version, select and install", and install is the
 # operative word once routing and versioning stop varying: an operator who wants an agent to read and
 # reply to mail, and nothing about calendars or files, installs `microsoft_graph-mail` and gets
-# exactly those three operations in `microsoft_graph-mail.flux` — never `microsoft_graph-calendar.flux`
-# or `microsoft_graph-files.flux`, and never a combined module carrying all eight. `--service mail`
+# exactly those four operations in `microsoft_graph-mail.flux` — never `microsoft_graph-calendar.flux`
+# or `microsoft_graph-files.flux`, and never a combined module carrying all twelve. `--service mail`
 # on `build`/`diff` narrows to precisely that set (C-49). Google's case conflated three justifications
 # — host, version, install-scope — into one connector; this one isolates the third and shows it holds
 # on its own. That is the answer for C-49 this story exists to produce, not a shortcoming of Graph.
@@ -99,15 +95,15 @@
 # C-187, precisely because Graph put tenant scoping in the credential rather than in the URL.
 #
 # ---------------------------------------------------------------------------------------------
-# SCHEMA GAP: NO QUERY PARAMETER OF ANY KIND (C-30) — CHECKED AND EXCLUDED, NOT ASSUMED.
+# QUERY CURATION: INTEGER PAGING ONLY; STRING ODATA EXPRESSIONS REMAIN EXCLUDED (C-30).
 # ---------------------------------------------------------------------------------------------
 #
 # Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
 # `fmt` template and flux registers no encoding op. `zendesk-ticket-search` is the standing
 # demonstration AGENTS.md lists under *Intentional gaps* — a value carrying `&` does not filter, it
 # injects a parameter. Graph's query surface is its OData system query options, and every one of them
-# was checked against that trap before being excluded, per this story's own warning that OData
-# parameters are "full of spaces and quotes":
+# was checked against that trap. The four spec-backed collection reads keep only integer `$top` and
+# `$skip`; the eight existing inline operations remain byte-identical and query-free:
 #
 # - **`$filter` and `$search`** — free-form OData filter expressions and full-text search strings,
 #   exactly the shape that motivated the warning. `me/messages?$search="from:alice"` and
@@ -121,22 +117,17 @@
 #   string appended to the query. Excluded for the same reason `google.toml` excludes `fields=`: a
 #   parameter that *usually* looks safe is still unencoded, and "usually" is not a property this
 #   pipeline can check at compile time.
-# - **`$top` and `$skip`** — plain integers, which *would* survive verbatim interpolation today.
-#   Excluded anyway: `providers/zoom.toml`'s header comment names this exact shape as "the trap" —
-#   an integer that looks encodable today is where the next author reaches for a text filter
-#   tomorrow — and this connector holds that line rather than being the provider that starts eroding
-#   it. The cost is real and is named per operation below: every list operation returns Graph's
-#   default first page only, and this connector cannot follow `@odata.nextLink` (a full absolute URL,
-#   the same shape `providers/front.toml`'s `_pagination.next` already demonstrates this pipeline's
-#   request model cannot construct — an `Operation.path` is a compile-time template, never a value
-#   read out of a prior response body).
+# - **`$top` and `$skip`** — plain integers whose decimal rendering cannot inject another query
+#   pair. These are the only query arguments the four new reads expose. The connector still cannot
+#   follow `@odata.nextLink` (a full absolute URL, while `Operation.path` is a compile-time template),
+#   so callers can bound or offset a page but cannot consume the opaque continuation URL.
 # - **`includeHiddenFolders`** on the mail-folder list — a plain boolean, excluded for the same
 #   `$top`/`$skip` reasoning: harmless today, and the query-assembly path a future author reaches for
 #   first.
 #
-# So the query surface is empty, in the strong sense `providers/google.toml` asserts it in: not "no
-# string-ish parameter", but no query parameter of any kind
-# (`no_microsoft_graph_operation_declares_a_query_parameter`).
+# `includeHiddenMessages` is string-shaped in this source and is omitted with the OData strings.
+# `$count` is boolean-shaped but also omitted: C-471's reviewed surface is integer paging only, so a
+# later boolean or string addition must arrive as a visible patch change rather than by similarity.
 #
 # ---------------------------------------------------------------------------------------------
 # SCHEMA GAP: NO OPTIONAL REQUEST-BODY FIELD CAN BE DECLARED (C-56).
@@ -211,8 +202,8 @@
 # - **Sending new mail** (`POST /me/sendMail`) — its `toRecipients` is the array-of-objects C-185
 #   refuses and C-56 could not fix alone. `microsoft_graph-mail-message-reply` ships instead, whose
 #   recipients Graph resolves automatically and whose body is a body-root scalar.
-# - **Everything paginated beyond a first page** — every list operation's `$top`/`$skip`/`$filter`
-#   exclusion above.
+# - **Opaque continuation paging** — four new reads take integer `$top`/`$skip`, but no operation
+#   follows the absolute `@odata.nextLink` returned by Graph.
 # - **Attachments, categories, delegation, mailbox rules, shared/delegate mailboxes, Teams, contacts,
 #   the directory/user-administration surface, OneDrive sharing links, SharePoint sites, and every
 #   `/users/{id}` form of these endpoints** (as opposed to `/me/...`) — out of scope for a first
@@ -252,7 +243,7 @@ authority = "com.microsoft.graph"
 # literal and `status.rs` reports no `unbound-base-url-template` issue.
 base_url = "https://graph.microsoft.com"
 
-description = "Microsoft Graph: read and reply to Outlook mail, read and create Calendar events, read and rename OneDrive files"
+description = "Microsoft Graph: read and reply to Outlook mail, inspect Outlook settings, read and create Calendar events, and read and rename OneDrive files"
 
 # Every operation of every service authenticates the same way.
 default_auth = [{ credentials = ["microsoft_graph.access_token"] }]
@@ -269,13 +260,13 @@ verify = "microsoft_graph-calendar-calendar-get"
 [[services]]
 name = "mail"
 tags = ["email"]
-description = "Outlook Mail: read a message, reply to one, list mail folders"
+description = "Outlook Mail: read and list messages, reply to one, list mail folders"
 api_version = "v1.0"
 
 [[services]]
 name = "calendar"
 tags = ["scheduling"]
-description = "Outlook Calendar: read an event, create one, read the signed-in user's default calendar"
+description = "Outlook Calendar and settings: read an event, create one, inspect the default calendar, categories, languages and time zones"
 api_version = "v1.0"
 
 [[services]]
@@ -283,6 +274,78 @@ name = "files"
 tags = ["storage"]
 description = "OneDrive: read and rename a file's metadata"
 api_version = "v1.0"
+
+# ---------------------------------------------------------------------------------------------
+# First-party Microsoft Graph v1.0 OpenAPI — deterministic, reference-closed extracts (C-471).
+#
+# The immutable upstream document is 38,050,122 bytes and describes 16,702 operations. It is too
+# broad to be a reviewable build input, so the vendor script retains only the selected operation
+# objects and the components they reference. Its complete SHA-256 remains in
+# `specs/microsoft_graph.provenance.toml`; the hashes here identify the exact extracted bytes the
+# offline compiler ingests. The source server is `https://graph.microsoft.com/v1.0`, while this
+# provider's stable base is `https://graph.microsoft.com`, so extraction materializes `/v1.0` onto
+# every selected path key and tests prove the two absolute URLs are equal.
+# ---------------------------------------------------------------------------------------------
+
+[[spec]]
+path = "specs/microsoft_graph/mail-2026-08-02.openapi.json"
+service = "mail"
+source_url = "https://raw.githubusercontent.com/microsoftgraph/msgraph-metadata/60b50e2e5b23612aac74ecdf65d35d566c5a4031/openapi/v1.0/openapi.yaml"
+upstream_version = "v1.0"
+fetched_at = "2026-08-02T11:24:27Z"
+sha256 = "5fe57015831998550609994baa2436b80796a4d573c4e6b33198020679bb3f07"
+
+[[spec]]
+path = "specs/microsoft_graph/calendar-2026-08-02.openapi.json"
+service = "calendar"
+source_url = "https://raw.githubusercontent.com/microsoftgraph/msgraph-metadata/60b50e2e5b23612aac74ecdf65d35d566c5a4031/openapi/v1.0/openapi.yaml"
+upstream_version = "v1.0"
+fetched_at = "2026-08-02T11:24:27Z"
+sha256 = "d3cf91ee72c4f23f7b1a80b5d7796462bef5ea448dd268d328233b8f0479f57a"
+
+[[patch.operations]]
+select = "me.ListMessages"
+rename = "microsoft_graph-mail-message-list"
+service = "mail"
+description = "List Outlook messages visible to the signed-in user with the Microsoft Graph Mail.Read permission; returns personal correspondence, so treat subjects, senders, recipients and bodies as personal data"
+risk = "low"
+idempotency = "idempotent"
+omit.query = [
+  "includeHiddenMessages",
+  "$search",
+  "$filter",
+  "$count",
+  "$orderby",
+  "$select",
+  "$expand",
+]
+
+[[patch.operations]]
+select = "me.outlook.ListMasterCategories"
+rename = "microsoft_graph-calendar-category-list"
+service = "calendar"
+description = "List the signed-in user's Outlook master categories with the Microsoft Graph MailboxSettings.Read permission"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["$search", "$filter", "$count", "$orderby", "$select", "$expand"]
+
+[[patch.operations]]
+select = "me.outlook.supportedTimeZones-5c4f"
+rename = "microsoft_graph-calendar-time-zone-list"
+service = "calendar"
+description = "List the mailbox server's supported time zones with the Microsoft Graph MailboxSettings.Read permission"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["$search", "$filter", "$count"]
+
+[[patch.operations]]
+select = "me.outlook.supportedLanguages"
+rename = "microsoft_graph-calendar-language-list"
+service = "calendar"
+description = "List the mailbox server's supported languages and locales with the Microsoft Graph MailboxSettings.Read permission"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["$search", "$filter", "$count"]
 
 # ---------------------------------------------------------------------------------------------
 # Credentials
@@ -312,15 +375,16 @@ description = "Microsoft Entra ID OAuth2 access token sent as a bearer; short-li
 name = "access_token"
 service = "mail"
 label = "Microsoft Graph access token"
-help = "An OAuth2 access token for Microsoft Graph, minted through an Entra ID app registration with the delegated or application permissions the enabled operations need (Mail.Read and Mail.Send for the mail operations, Calendars.ReadWrite for calendar, Files.ReadWrite for files). flux is handed an already-minted token; it does not perform the sign-in or client-credentials grant itself"
+help = "An OAuth2 access token for Microsoft Graph, minted through an Entra ID app registration with the delegated or application permissions the enabled operations need (Mail.Read and Mail.Send for mail, MailboxSettings.Read for Outlook settings, Calendars.ReadWrite for calendar, Files.ReadWrite for files). flux is handed an already-minted token; it does not perform the sign-in or client-credentials grant itself"
 format = "token"
 secret = true
 docs_url = "https://learn.microsoft.com/en-us/graph/auth/auth-concepts"
 binds = "credential.microsoft_graph.access_token"
 
 # ---------------------------------------------------------------------------------------------
-# Operations — 8: three mail, three calendar, two files. See the header comment for what each
-# service's own SCHEMA GAP sections exclude.
+# Inline operations — 8 stable operations: three mail, three calendar, two files. The four
+# spec-backed reads above join these during load; leaving the inline blocks untouched is what keeps
+# every previously published Flux byte stable.
 #
 # Op ids carry the service — `microsoft_graph-mail-message-get`, not `microsoft_graph-message-get` —
 # the same reasoning `providers/google.toml` gives: several of these are "get one thing by id" and

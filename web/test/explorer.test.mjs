@@ -62,16 +62,17 @@ function ownIssues(operation) {
  * The reserved service name — the one name in this file that is not read out of the catalogue,
  * because it is not catalogue data.
  *
- * It is vocabulary from the address grammar: an operation naming no service belongs to it, no
- * provider may declare it, and it is elided from every published address. The consequence the
- * explorer has to honour is that nothing renders it and no filter offers it — a card listing it, or
- * an option selecting it, would name something no address contains.
+ * It is vocabulary from the address grammar: an operation naming no service belongs to it and it
+ * is elided from published addresses. A sole implicit default stays invisible; an explicit legacy
+ * default beside named siblings is a real surface whose machine value remains this token.
  */
 const RESERVED_SERVICE = 'default'
 
-/** The services a provider publishes under a name of their own, in catalogue order. */
-function namedServices(provider) {
-  return provider.services.filter((service) => service.name !== RESERVED_SERVICE)
+/** Every filterable/rendered service for a multi-surface provider, and none for one surface. */
+function visibleServices(provider) {
+  return provider.services.length === 1 && provider.services[0].name === RESERVED_SERVICE
+    ? []
+    : provider.services
 }
 
 /** One built page, as HTML. */
@@ -904,33 +905,26 @@ test('the service filter is a facet of the catalogue and narrows to the chosen c
   const providers = catalog().providers
 
   const published = [
-    ...new Set(providers.flatMap((provider) => namedServices(provider).map((s) => s.name))),
+    ...new Set(providers.flatMap((provider) => visibleServices(provider).map((s) => s.name))),
   ]
-  assert.ok(published.length > 0, 'no connector publishes a named service; this would pass vacuously')
+  assert.ok(published.length > 0, 'no connector publishes several services; this would pass vacuously')
 
-  // With no connector chosen, every service the catalogue publishes is on offer — and the reserved
-  // one never is, at any narrowing.
+  // With no connector chosen, every surface of a multi-surface connector is on offer.
   assert.deepEqual(selectors.serviceFacet(providers), published)
-  for (const provider of providers) {
-    assert.ok(
-      !selectors.serviceFacet(providers, provider.id).includes(RESERVED_SERVICE),
-      'the service filter offers the reserved service, which names no address'
-    )
-  }
 
   // Choosing a connector narrows the options to that connector's own, in catalogue order.
   for (const provider of providers) {
     assert.deepEqual(
       selectors.serviceFacet(providers, provider.id),
-      namedServices(provider).map((service) => service.name),
+      visibleServices(provider).map((service) => service.name),
       `choosing \`${provider.id}\` does not narrow the service options to its own`
     )
   }
 
   // The narrowing is worth having only if the catalogue actually varies: at least one connector
   // publishes several services and at least one publishes none of its own.
-  const several = providers.filter((provider) => namedServices(provider).length > 1)
-  const single = providers.filter((provider) => namedServices(provider).length === 0)
+  const several = providers.filter((provider) => visibleServices(provider).length > 1)
+  const single = providers.filter((provider) => visibleServices(provider).length === 0)
   assert.ok(several.length > 0, 'no connector publishes more than one service')
   assert.ok(single.length > 0, 'every connector publishes a named service')
 
@@ -947,6 +941,82 @@ test('the service filter is a facet of the catalogue and narrows to the chosen c
   }
 })
 
+test('Zendesk primary Support is filterable as default while a sole default stays omitted', () => {
+  const providers = catalog().providers
+  const zendesk = providers.find((provider) => provider.id === 'zendesk')
+  assert.ok(zendesk, 'the Zendesk suite fixture is absent')
+  assert.ok(zendesk.services.length > 1, 'Zendesk no longer exercises a legacy default beside siblings')
+
+  const primary = zendesk.services.find((service) => service.name === RESERVED_SERVICE)
+  assert.ok(primary, 'Zendesk no longer carries its primary Support surface as `default`')
+  const support = zendesk.operations.find((operation) => operation.service === RESERVED_SERVICE)
+  assert.ok(support, 'Zendesk publishes no operation on its primary Support surface')
+
+  assert.deepEqual(
+    selectors.serviceFacet(providers, zendesk.id),
+    zendesk.services.map((service) => service.name),
+    'Zendesk does not offer every service machine value'
+  )
+  assert.equal(selectors.serviceLabel(RESERVED_SERVICE), 'Primary')
+  assert.equal(selectors.serviceLabel('help-center'), 'help-center')
+  assert.equal(selectors.operationService(zendesk, support), RESERVED_SERVICE)
+  assert.equal(
+    selectors.narrowView(
+      { ...selectors.emptyView(), provider: zendesk.id, service: RESERVED_SERVICE },
+      providers
+    ).service,
+    RESERVED_SERVICE,
+    'the default machine value is discarded before filtering'
+  )
+  const primaryView = {
+    ...selectors.emptyView(),
+    provider: zendesk.id,
+    service: RESERVED_SERVICE,
+  }
+  assert.deepEqual(
+    zendesk.operations
+      .filter((operation) => selectors.operationMatchesView(zendesk, operation, primaryView))
+      .map((operation) => operation.id),
+    zendesk.operations
+      .filter((operation) => operation.service === RESERVED_SERVICE)
+      .map((operation) => operation.id),
+    'filtering the raw default value does not return exactly the primary operations'
+  )
+
+  const single = providers.find(
+    (provider) =>
+      provider.services.length === 1 && provider.services[0].name === RESERVED_SERVICE
+  )
+  assert.ok(single, 'no single-surface default connector exercises omission')
+  assert.deepEqual(selectors.serviceFacet(providers, single.id), [])
+  assert.equal(selectors.operationService(single, single.operations[0]), null)
+
+  const explorer = page('explorer.html')
+  assert.match(explorer, /<option value="default"[^>]*>Primary<\/option>/)
+
+  const zendeskStart = explorer.indexOf(`id="${zendesk.id}"`)
+  const zendeskCard = explorer.slice(zendeskStart, explorer.indexOf('</section>', zendeskStart))
+  const primaryEntry = zendeskCard.slice(zendeskCard.indexOf('data-service="default"'))
+  assert.ok(primaryEntry.startsWith('data-service="default"'), 'the primary card lost its raw value')
+  assert.ok(
+    text(primaryEntry.slice(0, primaryEntry.indexOf('</li>'))).includes('Primary'),
+    'the primary card renders the reserved token instead of its generic label'
+  )
+
+  const supportStart = explorer.indexOf(`data-operation="${support.id}"`)
+  const supportRow = explorer.slice(supportStart, explorer.indexOf('</li>', supportStart))
+  assert.match(supportRow, /data-service="default"/)
+  assert.ok(text(supportRow).includes('Primary'))
+
+  const singleStart = explorer.indexOf(`id="${single.id}"`)
+  const singleCard = explorer.slice(singleStart, explorer.indexOf('</section>', singleStart))
+  assert.doesNotMatch(singleCard, /data-service-of=/)
+  const singleOperation = single.operations[0]
+  const rowStart = explorer.indexOf(`data-operation="${singleOperation.id}"`)
+  const row = explorer.slice(rowStart, explorer.indexOf('</li>', rowStart))
+  assert.doesNotMatch(row, /data-service=/)
+})
+
 test('a filtered view round-trips through the query string, and an unfiltered one is clean', () => {
   // C-102. The page promises "every operation has a stable page you can share" — true of an
   // operation, false of a *view*. The encode/decode pair is what makes it true of a view, so it is a
@@ -956,7 +1026,7 @@ test('a filtered view round-trips through the query string, and an unfiltered on
   // literally are the ones the site owns and the catalogue cannot supply: the parameter keys, the
   // defect filter's two choices, and the sort orders.
   const providers = catalog().providers
-  const multi = providers.find((provider) => namedServices(provider).length > 1)
+  const multi = providers.find((provider) => visibleServices(provider).length > 1)
   assert.ok(multi, 'no connector publishes several services; this would not exercise the pair')
   const sample = multi.operations[0]
 
@@ -1052,7 +1122,7 @@ test('a filtered view round-trips through the query string, and an unfiltered on
   )
 
   // A service its connector does not publish is dropped, and the connector is kept.
-  const single = providers.find((provider) => namedServices(provider).length === 0)
+  const single = providers.find((provider) => visibleServices(provider).length === 0)
   assert.ok(single, 'every connector publishes a named service; this case is untested')
   assert.deepEqual(
     selectors.narrowView({ ...empty, provider: single.id, service: sample.service }, providers),
@@ -1142,16 +1212,16 @@ test('changing a filter replaces the URL rather than pushing a history entry', (
   )
 })
 
-test('the explorer shows the services a connector publishes, and never the reserved one', () => {
+test('the explorer shows every multi-surface service and omits a single-surface default', () => {
   const document = catalog()
   const explorer = page('explorer.html')
 
   for (const provider of document.providers) {
-    const services = namedServices(provider)
+    const services = visibleServices(provider)
 
     if (services.length === 0) {
-      // A connector with one surface says nothing about services at all. Fifteen cards growing a
-      // row reading `default` would contradict the address it is elided from.
+      // A connector whose sole surface is `default` says nothing about services at all. Those cards
+      // growing a service row would contradict the address it is elided from.
       assert.doesNotMatch(
         explorer,
         new RegExp(`data-service-of="${provider.id}"`),
@@ -1183,6 +1253,10 @@ test('the explorer shows the services a connector publishes, and never the reser
         rendered.includes(String(service.operation_count)),
         `the service \`${service.name}\` does not show its operation count`
       )
+      assert.ok(
+        rendered.includes(selectors.serviceLabel(service.name)),
+        `the service \`${service.name}\` does not show its presentation label`
+      )
       const version = selectors.serviceApiVersion(provider, service)
       if (version) {
         assert.ok(
@@ -1195,7 +1269,7 @@ test('the explorer shows the services a connector publishes, and never the reser
 
   // An operation states its service exactly when its connector addresses more than one surface.
   for (const provider of document.providers) {
-    const labelled = namedServices(provider).length > 1
+    const labelled = visibleServices(provider).length > 1
     for (const operation of provider.operations) {
       if (labelled) {
         assert.match(
@@ -1204,6 +1278,12 @@ test('the explorer shows the services a connector publishes, and never the reser
             `data-operation="${operation.id}"[^>]*data-service="${operation.service}"|data-service="${operation.service}"[^>]*data-operation="${operation.id}"`
           ),
           `the row for \`${operation.id}\` does not say which service it belongs to`
+        )
+        const start = explorer.indexOf(`data-operation="${operation.id}"`)
+        const row = explorer.slice(start, explorer.indexOf('</li>', start))
+        assert.ok(
+          text(row).includes(selectors.serviceLabel(operation.service)),
+          `the row for \`${operation.id}\` does not show its service label`
         )
       } else {
         assert.doesNotMatch(

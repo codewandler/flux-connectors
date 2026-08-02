@@ -44,6 +44,14 @@ can a patch set correct a real vendor document more cheaply than hand-writing th
   to satisfy its own acceptance at all, and applied `description`/`auth`/`quirks`/`params` rather
   than parse declared fields and ignore them. An independent reviewer confirmed nothing here is
   foreclosed: adding an omitted parameter is genuinely absent, and Zendesk parity is untouched.
+- 2026-08-02: Zendesk parity preflight disproved the remaining acceptance premise with the current
+  vocabulary. All seven methods match, but all pinned paths omit the published `.json` suffix and
+  all five referenced response envelopes have empty top-level `required` sets. Compose currently
+  copies both path and response schema and hard-wires `repeatable_because = None`; the three writes
+  also need three variants of the one `UpdateTicket` selection and sixteen flattened body parameter
+  instances with wire paths. `ParamPatch` has neither add nor wire. The seven inline blocks measure
+  218 non-comment/nonblank statements plus seven `[[operations]]` headers: 225 declarative lines.
+  They remain inline; implementing only missing-parameter addition would not make parity possible.
 
 ## Notes
 - **The bet did not go away, it moved.** What made this "the highest-risk story" was never the merge

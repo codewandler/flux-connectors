@@ -183,6 +183,8 @@
 //! all, which is the second reason to leave it: `service` is exactly one, always concrete, so
 //! "spans services" is spelled as two fields today and would still be two fields after.
 
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 
 use crate::ir::{default_service, is_default_service};
@@ -870,25 +872,32 @@ impl ConfigField {
             .collect()
     }
 
-    /// **The one host-side slot every destination of this field reads** — the `{placeholder}` the
-    /// emitted module carries and the `name` half of the `(kind, name)` a host stores the value
-    /// under.
+    /// **The one host-side slot every destination of this field reads** — the `name` half of the
+    /// `(kind, name)` a host stores the value under.
     ///
     /// Always [`binds`](Self::binds)' own target, whatever else the field reaches. That is the whole
     /// answer to the question a multi-destination field forces: [`Binding::Request`]'s `name` is
     /// both the placeholder and the wire spelling, and when two destinations spell the value
     /// differently the placeholder is the head's and the rest contribute only what the vendor sees.
+    /// A Basic username head is the one qualified exception: its request pins carry
+    /// `username.<slot>` so the host resolves it through the username port rather than mistaking the
+    /// credential name for an endpoint variable.
     pub fn slot(&self) -> Option<&str> {
         Some(self.binding()?.target())
     }
-    /// **Every request position this field pins**, each carrying the field's one slot.
+    /// **Every request position this field pins**, each carrying the field's host-resolvable
+    /// placeholder.
     ///
     /// The question `connector-flux` asks of every field of an operation's service, so it is one
     /// call rather than a `matches!` repeated at each request position. An empty result means the
     /// field reaches no request position at all.
     pub fn pins(&self) -> Vec<Pin<'_>> {
-        let Some(variable) = self.slot() else {
+        let Some(head) = self.binding() else {
             return Vec::new();
+        };
+        let variable = match head {
+            Binding::Username { name } => Cow::Owned(format!("username.{name}")),
+            _ => Cow::Borrowed(head.target()),
         };
         self.bindings()
             .unwrap_or_default()
@@ -897,7 +906,7 @@ impl ConfigField {
                 Binding::Request { position, name } => Some(Pin {
                     position,
                     name,
-                    variable,
+                    variable: variable.clone(),
                 }),
                 _ => None,
             })
@@ -912,15 +921,16 @@ impl ConfigField {
 /// that also reaches a `base_url` variable (C-229) breaks the coincidence — Algolia's application id
 /// is `app_id` in the host and `X-Algolia-Application-Id` on the wire — so an emitter needs both,
 /// and the pair is spelled out here rather than left to whichever caller guessed right.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pin<'a> {
     /// Where on the request the value lands.
     pub position: Position,
     /// The name the vendor sees — the header, the query parameter, the path template variable.
     pub name: &'a str,
-    /// The `{placeholder}` the emitted module carries for it: the field's
-    /// [`slot`](ConfigField::slot).
-    pub variable: &'a str,
+    /// The `{placeholder}` the emitted module carries for it. It is the field's
+    /// [`slot`](ConfigField::slot), except that a Basic username is qualified as
+    /// `username.<slot>` so a host resolves it through [`Binding::Username`].
+    pub variable: Cow<'a, str>,
 }
 
 /// The `{variable}` names a base URL template carries, in order, deduplicated.
@@ -1186,7 +1196,7 @@ mod tests {
             vec![Pin {
                 position: Position::Header,
                 name: "X-Algolia-Application-Id",
-                variable: "app_id",
+                variable: "app_id".into(),
             }]
         );
         // `binding`, `level` and `pin` still answer about the head, so every consumer that existed
@@ -1205,6 +1215,34 @@ mod tests {
         };
         assert_eq!(broken.bindings(), None);
         assert!(broken.pins().is_empty());
+    }
+
+    #[test]
+    fn a_username_head_qualifies_the_placeholder_of_its_request_pin() {
+        let field = ConfigField {
+            name: "account_sid".to_owned(),
+            service: default_service(),
+            label: "Account SID".to_owned(),
+            help: "The same value authenticates and scopes every request".to_owned(),
+            example: Some("AC00000000000000000000000000000000".to_owned()),
+            format: Format::Token,
+            choices: Vec::new(),
+            required: true,
+            secret: false,
+            docs_url: None,
+            binds: "username.twilio.basic_auth".to_owned(),
+            also_binds: vec!["path.AccountSid".to_owned()],
+        };
+
+        assert_eq!(field.slot(), Some("twilio.basic_auth"));
+        assert_eq!(
+            field.pins(),
+            vec![Pin {
+                position: Position::Path,
+                name: "AccountSid",
+                variable: "username.twilio.basic_auth".into(),
+            }]
+        );
     }
 
     #[test]

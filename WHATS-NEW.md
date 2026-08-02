@@ -14,6 +14,60 @@
 
 ## [Unreleased]
 
+### Action needed
+
+- **Rust consumers that construct connector provenance directly must add one field.**
+  `Provenance` now carries an `operation_specs` map so catalogue users can see which API document
+  produced each selected operation. Add an empty map for hand-built values, or construct with the
+  default and override the fields you need. The public catalogue change itself is additive: every
+  operation now has `spec_source`, which is `null` for an inline operation.
+
+- **Rust consumers using the connector specification types have three more compatibility changes.**
+  `Service` values need `legacy: false` (or a default update); `Pin` is no longer copyable and its
+  variable is now a borrowed-or-owned string; and `LoadedProvider` must be obtained through the
+  loader rather than constructed or exhaustively destructured by fields.
+
+- **Rust consumers that exhaustively match connector-pack errors must add the unsafe-path case.**
+  Calls now stop before authentication or network access when a caller-controlled path string could
+  escape its URL segment. Add the new error arm or a wildcard.
+
+### New
+
+- **Zendesk expands from 7 operations to 37 across Support, Help Center, and Messaging.** Support can
+  read audit history, recent/view tickets, users, organizations, groups, fields, forms, statuses,
+  incremental exports, and custom-object definitions. Help Center can browse and publish knowledge
+  base articles. Messaging can manage conversations, participants, messages, and users with its own
+  app id and app-scoped key. Existing Support calls and addresses do not move.
+
+  Lists deliberately omit string filters and cursors that cannot yet be encoded safely. Messaging
+  message creation is text-only in this first slice. Zendesk webhook administration and inbound
+  events do not ship: ordinary responses may expose a signing secret, and the complete setup flow
+  cannot yet store that generated secret without exposing it.
+
+- **GitHub, Stripe, Microsoft Graph, OpenAI, and Twilio each gain four reads sourced from pinned
+  first-party API descriptions.** The additions cover common issue/workflow/commit, billing/event,
+  mail/calendar-metadata, stored-response/file/batch, and recording/usage/conference workflows. The
+  public catalogue now identifies the exact source operation and document for every spec-selected
+  call; inline operations say so with a null source.
+
+  These are bounded additions, not bulk imports. Unsafe string filters/cursors and unsupported body
+  shapes stay absent. GitHub does not yet send its dated version header, Stripe follows the account's
+  pinned API version, Twilio send/call writes still wait for form encoding, and Stripe's exchange-rate
+  endpoint remains vendor-deprecated and restricted.
+
+### Improved
+
+- **Zendesk Support is visible as “Primary” wherever services are filtered or listed.** Its existing
+  machine address remains unchanged, while Support can now be selected alongside Help Center and
+  Messaging. Connectors with only one unnamed surface stay uncluttered.
+
+- **Caller-controlled path identifiers can no longer change the request route.** Values containing
+  path/query/fragment delimiters, percent escapes, whitespace/control characters, or `.`/`..` are
+  refused before credentials or network access. Safe text and numeric ids behave as before.
+
+- **Twilio's four new reads reuse the configured Account SID.** The same non-secret value supplies
+  the Basic username and the account path, so connection setup does not ask for it twice.
+
 ## [0.13.0] — 2026-08-02
 
 ### Action needed

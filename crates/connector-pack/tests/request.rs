@@ -113,12 +113,16 @@ struct Declared {
 impl Declared {
     /// The configuration *variable* this field binds, when it binds one this pack resolves.
     ///
-    /// The four binding kinds that reach a request: a templated base URL's `{variable}`
-    /// (`endpoint.*`) and C-187's three pin positions. `credential.*` and `username.*` are the
-    /// credential port's, not this one's.
-    fn variable(&self) -> Option<&str> {
+    /// The five non-secret binding kinds the request evaluator resolves: a templated base URL's
+    /// `{variable}` (`endpoint.*`), C-187's three pin positions, and a Basic username reused by a
+    /// request pin (`username.*`, C-475). A credential remains secret-port-only and is excluded.
+    fn variable(&self) -> Option<String> {
         let (kind, name) = self.binds.split_once('.')?;
-        matches!(kind, "endpoint" | "path" | "query" | "header").then_some(name)
+        match kind {
+            "endpoint" | "path" | "query" | "header" => Some(name.to_owned()),
+            "username" => Some(format!("username.{name}")),
+            _ => None,
+        }
     }
 
     /// Every request header this field's value lands in — from `binds` or from `also_binds`.
@@ -140,7 +144,10 @@ impl Declared {
     fn value(&self) -> String {
         match &self.example {
             Some(example) => example.clone(),
-            None => format!("a-{}", self.variable().unwrap_or(&self.field)),
+            None => format!(
+                "a-{}",
+                self.variable().unwrap_or_else(|| self.field.clone())
+            ),
         }
     }
 }
@@ -364,11 +371,7 @@ fn declared_for(module: &Module) -> BTreeMap<String, String> {
                 .as_ref()
                 .is_none_or(|service| *service == module.service)
         })
-        .filter_map(|field| {
-            field
-                .variable()
-                .map(|variable| (variable.to_owned(), field.value()))
-        })
+        .filter_map(|field| field.variable().map(|variable| (variable, field.value())))
         .collect()
 }
 
@@ -403,19 +406,31 @@ fn pinned_headers_for(module: &Module) -> BTreeSet<String> {
 /// The URLs asserted below read `https://acme.zendesk.com/…` because `acme` is what
 /// `providers/zendesk.toml` declares as its `subdomain` field's `example`. Nothing here is invented,
 /// and nothing here is derived from what the pack asked for.
+fn with_declared_value(
+    values: MemoryConfig,
+    module: &Module,
+    variable: &str,
+    value: &str,
+) -> MemoryConfig {
+    match variable.strip_prefix("username.") {
+        Some(credential) => values.with_username(
+            TENANT,
+            &module.connector,
+            &module.service,
+            credential,
+            value,
+        ),
+        None => values.with_endpoint(TENANT, &module.connector, &module.service, variable, value),
+    }
+}
+
 fn configuration() -> Configuration {
     let mut values = MemoryConfig::new();
     for module in modules() {
         for (variable, value) in declared_for(&module) {
             // Under the module's own service (C-197) — see `network_gate.rs` for why binding it
             // once per connector is not the same thing.
-            values = values.with_endpoint(
-                TENANT,
-                &module.connector,
-                &module.service,
-                &variable,
-                &value,
-            );
+            values = with_declared_value(values, &module, &variable, &value);
         }
     }
     Configuration::new(Arc::new(values), TENANT).expect("a valid tenant id")
@@ -431,13 +446,7 @@ fn alternative_configuration() -> Configuration {
     let mut values = MemoryConfig::new();
     for module in modules() {
         for (variable, value) in declared_for(&module) {
-            values = values.with_endpoint(
-                TENANT,
-                &module.connector,
-                &module.service,
-                &variable,
-                &format!("x{value}"),
-            );
+            values = with_declared_value(values, &module, &variable, &format!("x{value}"));
         }
     }
     Configuration::new(Arc::new(values), TENANT).expect("a valid tenant id")
@@ -466,6 +475,25 @@ fn request(id: &str, params: Value) -> Request {
     projected(id)
         .build_request(&params)
         .unwrap_or_else(|error| panic!("`{id}`: {error}"))
+}
+
+#[test]
+fn a_production_operation_refuses_an_escaping_caller_path_before_building_a_request() {
+    let error = projected("trello-board-get")
+        .build_request(&json!({"id": "board/../other"}))
+        .expect_err("a caller path escape is not a request");
+
+    assert!(
+        matches!(
+            &error,
+            connector_pack::Error::UnsafePathParameter {
+                operation,
+                parameter,
+                ..
+            } if operation == "trello-board-get" && parameter == "id"
+        ),
+        "{error}"
+    );
 }
 
 /// **A nested body nests.** `zendesk-ticket-comment-add` writes `ticket.comment.body`, and the flat
@@ -834,6 +862,35 @@ fn every_declared_operation_composes_a_request_from_its_declared_configuration()
     );
 }
 
+/// C-475's runtime placeholder is qualified because the same credential name has two storage
+/// halves. The non-secret username is configuration and must be supplied to rehearsal; the token
+/// remains a credential and must never be copied into this map.
+#[test]
+fn a_basic_username_pin_is_declared_under_its_qualified_runtime_placeholder() {
+    let module = modules()
+        .into_iter()
+        .find(|module| module.connector == "twilio" && module.service == "default")
+        .expect("Twilio's default service module is emitted");
+    let declared = declared_for(&module);
+
+    assert_eq!(
+        declared
+            .get("username.twilio.basic_auth")
+            .map(String::as_str),
+        Some("ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+    );
+    assert!(!declared.contains_key("twilio.basic_auth"));
+    assert!(
+        declared_config("twilio")
+            .into_iter()
+            .find(|field| field.binds == "credential.twilio.basic_auth")
+            .expect("Twilio declares the Basic secret half")
+            .variable()
+            .is_none(),
+        "credential values belong to the secret port, never Configuration"
+    );
+}
+
 /// **The declared configuration agrees with what every templated base URL asks for.**
 ///
 /// The oracle for the reader above. The loader already enforces that every `{variable}` in a base
@@ -855,7 +912,7 @@ fn the_declared_configuration_agrees_with_every_templated_base_url() {
                     .is_none_or(|service| *service == module.service)
             })
             .filter(|field| field.binds.starts_with("endpoint."))
-            .filter_map(|field| field.variable().map(str::to_owned))
+            .filter_map(|field| field.variable())
             .collect();
 
         let wanted = placeholders(&module.base_url);

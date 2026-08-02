@@ -6,22 +6,22 @@
 // `data/catalog.mts`. Whatever holds the whole provider back is stated once, as a banner on the
 // card, because repeating it on each of its operations would say nothing about any of them.
 //
-// The services block appears only for a connector that publishes services of its own. A connector
-// that addresses a single surface publishes only the reserved service, which every address elides,
-// so its card is exactly what it was before services existed — a row naming a service the address
-// does not contain would be noise on most of the grid and wrong on all of it.
+// The services block appears for an explicitly named service or for every surface of a
+// multi-surface connector. A connector whose sole surface is the reserved default keeps the compact
+// pre-services card; a legacy default beside named siblings is rendered generically as Primary.
 
 import { computed } from 'vue'
 import {
   UNPUBLISHED,
   defectCount,
   hasInboundSurface,
-  namedServices,
   providerAddress,
   providerAuth,
   providerIssues,
   published,
   serviceApiVersion,
+  serviceLabel,
+  visibleServices,
   type Provider,
 } from '../../../data/catalog.mts'
 import InboundSurface from './InboundSurface.vue'
@@ -31,7 +31,7 @@ const props = defineProps<{ provider: Provider }>()
 
 const defects = computed(() => defectCount(props.provider.operations))
 const issues = computed(() => providerIssues(props.provider))
-const services = computed(() => namedServices(props.provider))
+const services = computed(() => visibleServices(props.provider))
 const address = computed(() => providerAddress(props.provider))
 
 /**
@@ -120,7 +120,7 @@ const headline = computed(() => {
           :data-service-of="provider.id"
           :data-service="service.name"
         >
-          <code class="service__name">{{ service.name }}</code>
+          <code class="service__name">{{ serviceLabel(service.name) }}</code>
           <span class="service__count">
             {{ service.operation_count }} operation{{ service.operation_count === 1 ? '' : 's' }}
           </span>

@@ -102,6 +102,21 @@ const PROBE_THING_GET: &str = r#"op probe-thing-get(thing_id: Number) -> Any
   return response
 "#;
 
+/// A path pin whose stored value is the Basic credential's non-secret username half (C-475).
+const USERNAME_PIN_GET: &str = r#"op twilio-recording-get(Sid: String) -> Any
+  description "Fetch one recording"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.twilio.com/2010-04-01"
+  AccountSid = "{username.twilio.basic_auth}"
+  url = fmt("{base}/Accounts/{AccountSid}/Recordings/{Sid}.json")
+  response = http.request(method: "GET", url)
+  return response
+"#;
+
 fn configuration(rows: &[(&str, &str, &str)]) -> Configuration {
     let mut values = MemoryConfig::new();
     for (provider, service, variable) in rows {
@@ -201,4 +216,69 @@ fn a_value_stored_under_another_service_does_not_answer() {
         .expect_err("`delivery`'s value must not answer for `management`");
 
     assert!(matches!(error, Error::MissingConfig { .. }), "{error}");
+}
+
+#[test]
+fn a_qualified_username_pin_uses_the_basic_username_slot() {
+    let rehearsal = Rehearsal::of(
+        "twilio-recording-get",
+        "twilio",
+        "default",
+        USERNAME_PIN_GET,
+    )
+    .expect("a qualified username pin rehearses");
+    assert_eq!(
+        rehearsal.endpoint_variables(),
+        ["username.twilio.basic_auth"]
+    );
+
+    let values = MemoryConfig::new().with_username(
+        TENANT,
+        "twilio",
+        "default",
+        "twilio.basic_auth",
+        "AC00000000000000000000000000000000",
+    );
+    let configured = Configuration::new(Arc::new(values), TENANT).expect("a valid tenant");
+    let request = rehearsal
+        .request(
+            &configured,
+            &json!({"Sid": "RE00000000000000000000000000000000"}),
+        )
+        .expect("the username-backed path pin composes");
+    assert_eq!(
+        request.url,
+        "https://api.twilio.com/2010-04-01/Accounts/AC00000000000000000000000000000000/Recordings/RE00000000000000000000000000000000.json"
+    );
+
+    let missing = rehearsal
+        .request(
+            &Configuration::new(Arc::new(MemoryConfig::new()), TENANT).expect("a valid tenant"),
+            &json!({"Sid": "RE00000000000000000000000000000000"}),
+        )
+        .expect_err("the username value is mandatory");
+    assert!(
+        matches!(&missing, Error::MissingConfig { field, .. } if field == "username.twilio.basic_auth"),
+        "{missing}"
+    );
+
+    let unsafe_values = MemoryConfig::new().with_username(
+        TENANT,
+        "twilio",
+        "default",
+        "twilio.basic_auth",
+        "AC00000000000000000000000000000000/Recordings",
+    );
+    let unsafe_configuration =
+        Configuration::new(Arc::new(unsafe_values), TENANT).expect("a valid tenant");
+    let unsafe_error = rehearsal
+        .request(
+            &unsafe_configuration,
+            &json!({"Sid": "RE00000000000000000000000000000000"}),
+        )
+        .expect_err("a username used as a path pin cannot reshape the path");
+    assert!(
+        matches!(unsafe_error, Error::UnsafeConfig { .. }),
+        "{unsafe_error}"
+    );
 }

@@ -1,24 +1,14 @@
-//! `providers/github.toml` exists, emits analyzable Flux, and **declares no query parameter at all**
-//! (C-52).
+//! `providers/github.toml` exists, emits analyzable Flux, and exposes only integer pagination in
+//! query strings (C-52, C-469).
 //!
-//! The third claim is the one this file exists for, and it is a safety assertion rather than a style
-//! one. Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim
-//! into a `fmt` template (`crates/connector-flux/src/op.rs`, *"Query values are interpolated
-//! verbatim"*), and flux registers no URL-encoding op. `zendesk-ticket-search` is the standing
-//! demonstration — AGENTS.md lists it under *Intentional gaps* as non-functional for exactly this
-//! reason, where a value carrying `&` injects a parameter rather than filtering by one.
+//! Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim.
+//! C-469 therefore widens C-52's zero-query rule only for `per_page` and `page`, whose integer
+//! schemas cannot carry `&`, `#` or another query pair. This test closes that exception over the
+//! four frozen operation ids; every existing operation remains query-free and every string, array
+//! or boolean filter from GitHub's document remains omitted.
 //!
-//! GitHub's most-wanted operations are precisely the ones that would trip it: `GET /issues` filters
-//! on `state`, `labels` and `assignee`, and the search endpoints take a free-form `q`. So C-52 ships
-//! the path-and-body surface only, and this file is what stops a later well-meaning edit from adding
-//! `?state=open` back before C-30 lands. It asserts the strong form — **zero** query parameters, not
-//! merely zero string-ish ones — because that is a property a reader can check at a glance and a
-//! future author cannot satisfy by picking a narrower type for an injectable value.
-//!
-//! The two structural claims deliberately duplicate what `shipped_modules.rs` asserts across every
-//! provider. That file iterates whatever `providers/` holds (C-54, which replaced the hand-listed set
-//! it used to share with the sibling connector stories); this one names only github, so C-52's gate
-//! stays a claim about github rather than one whose subject moves when the shipped set does.
+//! This file names only GitHub; it never walks the catalogue, so another provider cannot change the
+//! premise of a GitHub-specific assertion.
 
 use std::path::{Path, PathBuf};
 
@@ -27,6 +17,13 @@ use connector_spec::Connector;
 
 #[path = "../../connector-spec/tests/support/shipped_provider.rs"]
 mod shipped_provider;
+
+const PAGINATED_READS: [&str; 4] = [
+    "github-issue-list",
+    "github-pull-files-list",
+    "github-workflow-run-list",
+    "github-commit-list",
+];
 
 /// `<repo root>/providers/github.toml`, derived from this crate's manifest directory so the test is
 /// independent of the working directory a runner happens to use.
@@ -107,52 +104,43 @@ fn every_github_operation_emits_an_analyzable_module() {
     }
 }
 
-/// **The honesty assertion.** No github operation declares a query parameter, so nothing this
-/// connector emits can carry an unencoded value into a query string. See the module documentation
-/// for why this is the strong form rather than a check on the parameter's type.
+/// **The honesty assertion.** Only the four reviewed collection reads carry query parameters, and
+/// their whole surface is the two integer pagination fields.
 #[test]
-fn no_github_operation_declares_a_query_parameter() {
+fn github_query_parameters_are_closed_over_integer_pagination() {
     let connector = github();
     for operation in &connector.operations {
-        assert!(
-            operation.params.query.is_empty(),
-            "operation `{}` declares query parameters {:?}. Nothing percent-encodes a query value \
-             (C-30 is unimplemented), so a value carrying `&` or `#` corrupts the request or injects \
-             a parameter — the `zendesk-ticket-search` failure AGENTS.md records. C-52 ships the \
-             path-and-body surface only; if C-30 has landed, change this test deliberately",
-            operation.id,
-            operation
-                .params
-                .query
-                .iter()
-                .map(|param| param.name.as_str())
-                .collect::<Vec<_>>()
-        );
+        let names: Vec<&str> = operation
+            .params
+            .query
+            .iter()
+            .map(|param| {
+                assert_eq!(
+                    param.schema["type"],
+                    serde_json::json!("integer"),
+                    "`{}.{}` is not injection-safe integer pagination",
+                    operation.id,
+                    param.name
+                );
+                param.name.as_str()
+            })
+            .collect();
+        if PAGINATED_READS.contains(&operation.id.as_str()) {
+            assert_eq!(names, ["per_page", "page"], "{} widened", operation.id);
+        } else {
+            assert!(
+                names.is_empty(),
+                "the existing operation `{}` gained a query surface",
+                operation.id
+            );
+        }
     }
 }
 
-/// The generated request URL carries no query string either — the assertion above stated against the
-/// emitted text rather than the IR, so a future emitter that synthesised a query parameter from
-/// somewhere other than `params.query` could not slip past.
-///
-/// **Every `url = ` line is checked, not just the first, and that is the whole substance of this
-/// test.** The emitter binds `$url` once for the path and required query parameters, then re-binds it
-/// once more per *optional* query parameter inside a `when` guard
-/// (`crates/connector-flux/src/op.rs`, the `optional` loop) — `connectors/zendesk.flux` shows the
-/// shape:
-///
-/// ```flux
-/// url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")
-/// sep = "?"
-/// when $page
-///   url = fmt("{url}{sep}page={page}")
-/// ```
-///
-/// The `?` lives on `sep`, and the parameter name lives on a *later* `$url` line than the first. So
-/// inspecting only the first binding would pass while an operation quietly appended optional filters,
-/// which is exactly the regression this file exists to prevent.
+/// The emitted URL assembly agrees: the reviewed reads append exactly `per_page` then `page`, and
+/// every other GitHub operation has one URL binding and no query separator.
 #[test]
-fn no_github_operation_emits_a_query_string() {
+fn github_emits_only_the_reviewed_pagination_query() {
     let connector = github();
     for operation in &connector.operations {
         let emitted = emit_operation(&connector, operation).expect("a shipped operation emits");
@@ -167,30 +155,22 @@ fn no_github_operation_emits_a_query_string() {
             "`{}` binds no $url:\n{emitted}",
             operation.id
         );
-        // One binding and one only: a second is the emitter appending an optional query parameter.
-        assert_eq!(
-            url_lines.len(),
-            1,
-            "`{}` re-binds $url {} times; the emitter does that once per optional query parameter, \
-             so this operation is appending a query string:\n{emitted}",
-            operation.id,
-            url_lines.len()
-        );
-        for line in &url_lines {
+        if PAGINATED_READS.contains(&operation.id.as_str()) {
+            assert_eq!(url_lines.len(), 3, "{} query assembly moved", operation.id);
             assert!(
-                !line.contains('?'),
-                "`{}` emits a query string: {line}",
-                operation.id
+                url_lines[1].contains("per_page={per_page}")
+                    && url_lines[2].contains("page={page}"),
+                "{} emits a query other than per_page/page:\n{emitted}",
+                operation.id,
             );
-        }
-        // `sep` exists only to carry the `?`/`&` between optional query parameters, so an operation
-        // that binds it is building a query string even if no single line spells the `?`.
-        assert!(
-            !emitted
+            assert!(emitted
                 .lines()
-                .any(|line| line.trim_start().starts_with("sep = ")),
-            "`{}` binds `sep`, which the emitter emits only to separate query parameters:\n{emitted}",
-            operation.id
-        );
+                .any(|line| line.trim_start() == "sep = \"?\""));
+        } else {
+            assert_eq!(url_lines.len(), 1, "{} gained a query", operation.id);
+            assert!(!emitted
+                .lines()
+                .any(|line| line.trim_start().starts_with("sep = ")));
+        }
     }
 }

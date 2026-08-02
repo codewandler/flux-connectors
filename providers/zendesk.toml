@@ -1,12 +1,13 @@
-# Zendesk Support — hand-authored, no vendor spec.
+# Zendesk Support and Help Center — seven published Support operations remain hand-authored; new
+# reads select from pinned first-party OpenAPI documents without moving Support's addresses.
 #
 # Transcribed from `docs/designs/provider-operation-inventory.md` §3, which derives the operation
 # set from `../flux/plugins/zendesk/src/main.rs` (687 lines). The plugin *is* the requirement: a
 # connector replaces it only if it covers the same surface, so all 7 of its operations are taken.
 #
-# Zendesk publishes OpenAPI descriptions on developer.zendesk.com. When C-14's fetch lands, this
-# file should become a `[spec]` pointer plus a `[[patch.operations]]` selection over the vendored
-# document rather than an inline list (§1.2). Until then drift is undetectable by machine (§6.7).
+# C-461 deliberately does not convert the seven operations below: C-6 owns measuring that conversion
+# and proving it preserves their already-published contracts. This file therefore exercises the
+# supported mixed front-end — unchanged inline operations plus exact opt-in spec selections.
 
 id = "zendesk"
 vendor = "Zendesk"
@@ -44,7 +45,7 @@ api_version = "v2"
 # variable nothing binds, so the gap this comment used to record cannot reopen silently.
 base_url = "https://{subdomain}.zendesk.com"
 
-description = "Zendesk Support ticketing: search, read, update tickets and their comments"
+description = "Zendesk Support ticketing: search, read and update tickets and comments; inspect audits, incremental exports and custom-object definitions"
 # The "Test connection" operation: a bounded read of the authenticated user. It existed already —
 # `zendesk-test` is named for it — but nothing declared which op played the role, so no host could
 # find it.
@@ -53,6 +54,419 @@ verify = "zendesk-test"
 # Every operation authenticates the same way — the inventory records requirement-set shape `single`
 # identically for all 7 (§3.1).
 default_auth = [{ credentials = ["zendesk.api_token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# First-party Ticketing OpenAPI — vendored, scrubbed and provenanced by C-459.
+#
+# This is evidence, not an exposure list. The full document publishes nothing by default; the
+# fourteen exact `[[patch.operations]]` blocks below are the entire selected Support surface.
+# `upstream_sha256` belongs in
+# `specs/zendesk.provenance.toml`; this pointer carries the public `SpecSource` fields and the hash
+# of the scrubbed bytes builds actually ingest.
+# ---------------------------------------------------------------------------------------------
+
+[[spec]]
+path = "specs/zendesk/ticketing-2026-08-02.openapi.yaml"
+service = "default"
+source_url = "https://developer.zendesk.com/zendesk/oas.yaml"
+upstream_version = "2.0.0"
+fetched_at = "2026-08-02T08:47:26Z"
+sha256 = "338adeada0fc0e95bf1cea37320698e5a283fab9f48f496c28ab3bbac9ad0f88"
+
+# The first selected read is intentionally query-free. Zendesk declares seven optional query
+# parameters, including a page value that is either an integer or a deep object and an array-valued
+# `filter_events`. Until Flux gains the structured query encoding C-28 specifies, publishing any of
+# them would let a caller assemble an ambiguous or injectable URL. Every omission is named, so an
+# upstream rename fails rather than quietly bringing the argument back.
+[[patch.operations]]
+select = "ListAuditsForTicket"
+service = "default"
+rename = "zendesk-ticket-audit-list"
+description = "List the read-only audit history for one ticket, including field changes, comments and notifications"
+risk = "low"
+idempotency = "idempotent"
+omit.query = [
+  "page",
+  "sort",
+  "include",
+  "include_boundary_indicators",
+  "include_item_cursors",
+  "filter_events",
+  "sort_order",
+]
+
+# Time-based incremental exports retain only integer cursors and page sizes. Zendesk's optional
+# `support_type_scope` and event `include` values are free-form strings; query interpolation does
+# not percent-encode them, so each is omitted explicitly and an upstream rename fails closed.
+[[patch.operations]]
+select = "IncrementalTicketExportTime"
+service = "default"
+rename = "zendesk-incremental-ticket-list"
+description = "Incrementally export tickets updated at or after a required Unix start time"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["support_type_scope"]
+
+[[patch.operations]]
+select = "IncrementalUserExportTime"
+service = "default"
+rename = "zendesk-incremental-user-list"
+description = "Incrementally export users updated at or after a required Unix start time with an optional integer page size"
+risk = "low"
+idempotency = "idempotent"
+
+[[patch.operations]]
+select = "IncrementalOrganizationExport"
+service = "default"
+rename = "zendesk-incremental-organization-list"
+description = "Incrementally export organizations updated at or after a required Unix start time with an optional integer page size"
+risk = "low"
+idempotency = "idempotent"
+
+[[patch.operations]]
+select = "IncrementalTicketEvents"
+service = "default"
+rename = "zendesk-incremental-ticket-event-list"
+description = "Incrementally export ticket audit events at or after a required Unix start time"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["include", "support_type_scope"]
+
+# This exposes custom-object definitions only. Record reads require a caller-chosen object key in
+# the path and remain withheld until that segment can be encoded safely; multipart record
+# attachments remain withheld until C-426.
+[[patch.operations]]
+select = "ListCustomObjects"
+service = "default"
+rename = "zendesk-custom-object-list"
+description = "List custom-object definitions, optionally including each definition's UI path"
+risk = "low"
+idempotency = "idempotent"
+
+# C-466 adds the remaining inventory-approved Support foundations as eight exact, query-free reads.
+# Every optional query parameter is named below; retaining none avoids publishing raw string query
+# interpolation, ambiguous paging dialects, or filters whose safe wire encoding Flux cannot yet
+# express. The pinned response envelopes are carried as documented without inventing required fields.
+[[patch.operations]]
+select = "ListRecentTickets"
+service = "default"
+rename = "zendesk-ticket-recent-list"
+description = "List the account's most recently created or updated tickets"
+risk = "low"
+idempotency = "idempotent"
+
+[[patch.operations]]
+select = "ListTicketsFromView"
+service = "default"
+rename = "zendesk-view-ticket-list"
+description = "List tickets from one numeric or built-in Zendesk view"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["sort_by", "sort_order"]
+
+# The source permits either a numeric id or one of three built-in string ids. That union lowers to
+# Flux `Any`, whose synthetic rehearsal value is an object and cannot form a path segment. Publish
+# the useful, closed built-in set; account-specific numeric views can join when Flux represents the
+# union without losing its input contract.
+[[patch.operations.params]]
+name = "view_id"
+position = "path"
+required = true
+schema = { type = "string", enum = ["incoming", "my", "my_groups"] }
+
+[[patch.operations]]
+select = "ShowUser"
+service = "default"
+rename = "zendesk-user-show"
+description = "Get one Zendesk user by numeric id"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["include"]
+
+[[patch.operations]]
+select = "ShowOrganization"
+service = "default"
+rename = "zendesk-organization-show"
+description = "Get one Zendesk organization by numeric id"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["include", "include_boundary_indicators", "include_item_cursors"]
+
+[[patch.operations]]
+select = "ListGroups"
+service = "default"
+rename = "zendesk-group-list"
+description = "List the account's Zendesk groups without exposing optional filters or pagination"
+risk = "low"
+idempotency = "idempotent"
+omit.query = [
+  "exclude_deleted",
+  "include",
+  "page",
+  "per_page",
+  "sort",
+  "include_boundary_indicators",
+  "include_item_cursors",
+]
+
+[[patch.operations]]
+select = "ListTicketFields"
+service = "default"
+rename = "zendesk-ticket-field-list"
+description = "List the account's ticket field definitions without optional locale, creator, sort or pagination inputs"
+risk = "low"
+idempotency = "idempotent"
+omit.query = [
+  "locale",
+  "creator",
+  "page",
+  "sort",
+  "include_boundary_indicators",
+  "include_item_cursors",
+]
+
+[[patch.operations]]
+select = "ListTicketForms"
+service = "default"
+rename = "zendesk-ticket-form-list"
+description = "List the account's ticket forms without optional visibility, type, brand, locale, sort or pagination inputs"
+risk = "low"
+idempotency = "idempotent"
+omit.query = [
+  "active",
+  "end_user_visible",
+  "fallback_to_default",
+  "form_type",
+  "associated_to_brand",
+  "page",
+  "per_page",
+  "sort",
+  "include_boundary_indicators",
+  "include_item_cursors",
+  "locale",
+]
+
+[[patch.operations]]
+select = "ListCustomStatuses"
+service = "default"
+rename = "zendesk-custom-status-list"
+description = "List the account's custom ticket statuses without optional category, activity or default filters"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["status_categories", "active", "default"]
+
+# ---------------------------------------------------------------------------------------------
+# First-party Help Center OpenAPI — a named sibling, never an expansion of Support by accident.
+#
+# C-460 approved exactly seven operationIds. Every string-valued query and every optional filter is
+# named in `omit.query`; the two safe integer `start_time` values remain. The bodyless article and
+# translation writes stay absent and are pinned by `zendesk_help_center.rs` against these bytes.
+# ---------------------------------------------------------------------------------------------
+
+[[spec]]
+path = "specs/zendesk/help-center-2026-08-02.openapi.yaml"
+service = "help-center"
+source_url = "https://developer.zendesk.com/help_center/oas.yaml"
+upstream_version = "2.0.0"
+fetched_at = "2026-08-02T08:47:26Z"
+sha256 = "49d74afb9e1538ca8fb08f3dd2ac48c6f6f7af575845eb4ca2adff72bdc33525"
+
+[[patch.operations]]
+select = "ListCategoriesNoLocale"
+service = "help-center"
+rename = "zendesk-help-center-category-list"
+description = "List Help Center categories; this zero-argument read also verifies that the shared Zendesk account and credential can reach the knowledge base"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["sort_by", "sort_order"]
+
+[[patch.operations]]
+select = "ListSectionsNoLocale"
+service = "help-center"
+rename = "zendesk-help-center-section-list"
+description = "List Help Center sections across all categories"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["sort_by", "sort_order"]
+
+[[patch.operations]]
+select = "ListArticlesNoLocale"
+service = "help-center"
+rename = "zendesk-help-center-article-list"
+description = "List Help Center articles, optionally limited to articles updated since a Unix timestamp"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["sort_by", "sort_order", "label_names"]
+
+[[patch.operations]]
+select = "ShowArticleNoLocale"
+service = "help-center"
+rename = "zendesk-help-center-article-get"
+description = "Get one Help Center article by its numeric id"
+risk = "low"
+idempotency = "idempotent"
+
+[[patch.operations]]
+select = "ListTranslations"
+service = "help-center"
+rename = "zendesk-help-center-translation-list"
+description = "List every translation of one Help Center article without exposing unencoded locale filters"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["locales", "outdated", "draft"]
+
+[[patch.operations]]
+select = "ListArticlesIncremental"
+service = "help-center"
+rename = "zendesk-help-center-article-incremental-list"
+description = "Incrementally list Help Center articles updated since an optional integer Unix timestamp"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["sort_by", "sort_order", "label_names"]
+
+[[patch.operations]]
+select = "CreateArticleBySection"
+service = "help-center"
+rename = "zendesk-help-center-article-create"
+description = "Publish a new externally visible Help Center article in one numeric section"
+risk = "high"
+idempotency = "non_idempotent"
+# The optional top-level switch is omitted rather than emitted as `null`; the required `article`
+# object retains its required title and locale and its optional content/access fields.
+omit.body = ["notify_subscribers"]
+
+# ---------------------------------------------------------------------------------------------
+# First-party Messaging OpenAPI — Sunshine Conversations, published as the `messaging` service.
+#
+# The app id is connection configuration and is omitted from every caller signature. The document
+# declares Basic and bearer alternatives with account/app/integration scopes; this tranche chooses
+# one app-scoped Basic key explicitly on every operation. The current IR has no scope consumer, so
+# `app` remains a reviewed comment rather than an invented field (C-443).
+#
+# Create/Get/Update/List webhook operations are absent because their response schemas return the
+# live webhook signing secret. DeleteWebhook stays with that withheld lifecycle rather than shipping
+# as an orphaned destructive call. Deep-object pagination and optional `brandId` queries are also
+# omitted because the current query emitter cannot encode them structurally.
+# ---------------------------------------------------------------------------------------------
+
+[[spec]]
+path = "specs/zendesk/messaging-2026-08-02.openapi.yaml"
+service = "messaging"
+source_url = "https://raw.githubusercontent.com/zendesk/sunshine-conversations-api-spec/master/openapi.yaml"
+upstream_version = "17.12.1"
+fetched_at = "2026-08-02T08:47:26Z"
+sha256 = "cde5a1f4d54038bb4d52df965f0eb7824c2074be2a5a36835dfc20c82f121da6"
+
+[[patch.operations]]
+select = "CreateConversation"
+service = "messaging"
+rename = "zendesk-messaging-conversation-create"
+description = "Create an empty SDK group conversation in the configured Zendesk Messaging app"
+risk = "high"
+idempotency = "non_idempotent"
+auth = [{ credentials = ["zendesk.messaging_key"] }]
+omit.path = ["appId"]
+omit.body = ["participants", "displayName", "description", "iconUrl", "metadata"]
+
+# Pin the only supported conversation kind. `personal` requires exactly one participant by prose;
+# `sdkGroup` explicitly permits no participants, so the narrowed one-field body remains useful and
+# cannot become a vacuous create.
+[[patch.operations.params]]
+name = "type"
+position = "body"
+required = true
+schema = { type = "string", const = "sdkGroup" }
+
+[[patch.operations]]
+select = "GetConversation"
+service = "messaging"
+rename = "zendesk-messaging-conversation-get"
+description = "Get one conversation by id; this bounded read is the Messaging service's diagnostic operation"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["zendesk.messaging_key"] }]
+omit.path = ["appId"]
+
+[[patch.operations]]
+select = "UpdateConversation"
+service = "messaging"
+rename = "zendesk-messaging-conversation-update"
+description = "Set one conversation's display name to an absolute non-empty value"
+risk = "medium"
+idempotency = "non_idempotent"
+auth = [{ credentials = ["zendesk.messaging_key"] }]
+omit.path = ["appId"]
+omit.body = ["description", "iconUrl", "metadata"]
+
+# Zendesk's source body has zero required members. Requiring `displayName` turns the PATCH into a
+# nonvacuous absolute target-state write. The emitted request replays byte-identically, but Flux
+# still classifies PATCH as non-idempotent because `idempotent` also licenses cached substitution.
+[[patch.operations.params]]
+name = "displayName"
+position = "body"
+required = true
+schema = { type = "string", minLength = 1, maxLength = 100 }
+
+[[patch.operations]]
+select = "ListParticipants"
+service = "messaging"
+rename = "zendesk-messaging-participant-list"
+description = "List the participants of one conversation without exposing deep-object pagination"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["zendesk.messaging_key"] }]
+omit.path = ["appId"]
+omit.query = ["page"]
+
+[[patch.operations]]
+select = "CreateUser"
+service = "messaging"
+rename = "zendesk-messaging-user-create"
+description = "Create a Zendesk Messaging user with one required external id"
+risk = "medium"
+idempotency = "non_idempotent"
+auth = [{ credentials = ["zendesk.messaging_key"] }]
+omit.path = ["appId"]
+omit.body = ["brandId", "signedUpAt", "toBeRetained", "profile", "metadata"]
+
+# The vendor permits an empty object. `externalId` is the stable customer-owned identity this
+# operation exists to establish, and requiring it prevents a no-op-shaped create.
+[[patch.operations.params]]
+name = "externalId"
+position = "body"
+required = true
+
+[[patch.operations]]
+select = "GetUser"
+service = "messaging"
+rename = "zendesk-messaging-user-get"
+description = "Get one Zendesk Messaging user by its vendor id or external id"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["zendesk.messaging_key"] }]
+omit.path = ["appId"]
+omit.query = ["brandId"]
+
+[[patch.operations]]
+select = "UpdateUser"
+service = "messaging"
+rename = "zendesk-messaging-user-update"
+description = "Set whether one Zendesk Messaging user is retained after becoming inactive"
+risk = "medium"
+idempotency = "non_idempotent"
+auth = [{ credentials = ["zendesk.messaging_key"] }]
+omit.path = ["appId"]
+omit.query = ["brandId"]
+omit.body = ["signedUpAt", "profile", "metadata"]
+
+# The source body has zero required members. Requiring this boolean makes the PATCH a nonvacuous
+# absolute target-state write whose identical replay produces the same retention setting. It stays
+# conservatively non-idempotent because Flux never grants PATCH its stronger cache license.
+[[patch.operations.params]]
+name = "toBeRetained"
+position = "body"
+required = true
+schema = { type = "boolean" }
 
 # ---------------------------------------------------------------------------------------------
 # Credentials
@@ -72,6 +486,13 @@ user_env = ["ZENDESK_USER"]
 # (`docs/designs/auth-seam.md` §7.5).
 user_suffix = "/token"
 description = "Zendesk API token; the user half is the agent email with Zendesk's /token marker"
+
+[[auth]]
+name = "zendesk.messaging_key"
+scheme = "basic"
+env = ["ZENDESK_MESSAGING_KEY_SECRET"]
+user_env = ["ZENDESK_MESSAGING_KEY_ID"]
+description = "App-scoped Zendesk Messaging API key id and secret"
 
 # ---------------------------------------------------------------------------------------------
 # Operations — 7 of 7 (inventory §3.2)
@@ -115,16 +536,89 @@ description = "Zendesk API token; the user half is the agent email with Zendesk'
 # ---------------------------------------------------------------------------------------------
 
 [[services]]
-# C-153. `default` is the reserved implicit service, and a provider with one API surface
-# declares no services at all — so this entry exists for exactly one reason: a tag attaches
-# to a service, and there is no other service here to attach it to. It carries `tags` and
-# nothing else, which is what keeps `default` implicit and this file emitting the same
-# `zendesk.flux` it emitted before.
+# C-458's explicit legacy marker is what lets the already-published, address-elided Support service
+# coexist with Help Center. `service = "default"` serializes back to the same operation ownership;
+# the hash fence in `zendesk_help_center.rs` proves its unsuffixed artifacts do not move.
 name = "default"
+legacy = true
 tags = ["support"]
+
+[[services]]
+name = "help-center"
+description = "Zendesk Help Center knowledge base: read categories, sections, articles and translations, and publish articles"
+base_url = "https://{subdomain}.zendesk.com"
+api_version = "v2"
+tags = ["knowledge-base"]
+
+[[services]]
+name = "messaging"
+description = "Zendesk Messaging conversations, messages, participants and users"
+base_url = "https://{subdomain}.zendesk.com/sc"
+api_version = "v2"
+tags = ["messaging"]
+
+# The source response graph for both message endpoints is recursive:
+# `message -> quotedMessage -> quotedMessageMessage -> message`. OpenAPI ingest deliberately skips a
+# schema with no finite resolved form, so these two operations use the supported mixed front-end:
+# paths, methods, bodies and bounded response members are transcribed from the pinned document while
+# the seven cycle-free siblings remain exact `[[patch.operations]]` selections. The bounded message
+# shape stops before `quotedMessage`; no credential-shaped member is omitted.
+
+[[operations]]
+id = "zendesk-messaging-message-create"
+service = "messaging"
+method = "POST"
+path = "/v2/apps/{appId}/conversations/{conversationId}/messages"
+description = "Send an externally visible text message to one conversation as the stated author"
+risk = "high"
+idempotency = "non_idempotent"
+auth = [{ credentials = ["zendesk.messaging_key"] }]
+
+[[operations.params.path]]
+name = "conversationId"
+description = "The conversation id; caller values containing a path delimiter are refused"
+required = true
+schema = { type = "string" }
+
+[[operations.params.body]]
+name = "author"
+description = "The message author; business sends on behalf of the business and user identifies an end user"
+required = true
+schema = { type = "object", required = ["type"], properties = { type = { type = "string", enum = ["business", "user"] } } }
+
+[[operations.params.body]]
+name = "content"
+description = "A non-empty text message"
+required = true
+schema = { type = "object", required = ["type", "text"], properties = { type = { type = "string", const = "text" }, text = { type = "string", minLength = 1, maxLength = 4096 } } }
+
+[operations.response_schema]
+type = "object"
+properties = { messages = { type = "array", description = "Messages created by this request", items = { type = "object", properties = { id = { type = "string" }, received = { type = "string", format = "date-time" }, author = { type = "object" }, content = { type = "object" }, deleted = { type = "boolean" } } } } }
+
+[[operations]]
+id = "zendesk-messaging-message-list"
+service = "messaging"
+method = "GET"
+path = "/v2/apps/{appId}/conversations/{conversationId}/messages"
+description = "List messages in one conversation without exposing deep-object cursor pagination"
+risk = "low"
+idempotency = "idempotent"
+auth = [{ credentials = ["zendesk.messaging_key"] }]
+
+[[operations.params.path]]
+name = "conversationId"
+description = "The conversation id; caller values containing a path delimiter are refused"
+required = true
+schema = { type = "string" }
+
+[operations.response_schema]
+type = "object"
+properties = { messages = { type = "array", description = "Messages in this page, without recursively expanding quoted messages", items = { type = "object", properties = { id = { type = "string" }, received = { type = "string", format = "date-time" }, author = { type = "object" }, content = { type = "object" }, deleted = { type = "boolean" } } } }, meta = { type = "object" }, links = { type = "object" } }
 
 [[operations]]
 id = "zendesk-test"
+service = "default"
 method = "GET"
 path = "/api/v2/users/me.json"
 description = "Verify credentials by fetching the authenticated Zendesk user"
@@ -147,6 +641,7 @@ properties = { user = { type = "object", required = ["id"], properties = { id = 
 
 [[operations]]
 id = "zendesk-ticket-search"
+service = "default"
 method = "GET"
 path = "/api/v2/search.json"
 description = "Search tickets with Zendesk search syntax, e.g. `type:ticket status:new`"
@@ -195,6 +690,7 @@ page = { page_param = "page", size_param = "per_page", page_size = 100, max_page
 
 [[operations]]
 id = "zendesk-ticket-show"
+service = "default"
 method = "GET"
 path = "/api/v2/tickets/{ticket_id}.json"
 description = "Show one ticket"
@@ -223,6 +719,7 @@ properties = { ticket = { type = "object", required = ["id"], properties = { id 
 
 [[operations]]
 id = "zendesk-ticket-comment-list"
+service = "default"
 method = "GET"
 path = "/api/v2/tickets/{ticket_id}/comments.json"
 description = "List a ticket's comments"
@@ -284,6 +781,7 @@ page = { page_param = "page", size_param = "per_page", page_size = 100, max_page
 
 [[operations]]
 id = "zendesk-ticket-update"
+service = "default"
 method = "PUT"
 path = "/api/v2/tickets/{ticket_id}.json"
 description = "Safe-update selected ticket fields against the caller's updated_stamp; at least one of status, priority, assignee_id, group_id or type must be supplied"
@@ -375,6 +873,7 @@ properties = { ticket = { type = "object", description = "The ticket **after** t
 
 [[operations]]
 id = "zendesk-ticket-comment-add"
+service = "default"
 method = "PUT"
 path = "/api/v2/tickets/{ticket_id}.json"
 description = "Add a comment to a ticket; the comment is an internal note unless public is explicitly true"
@@ -431,6 +930,7 @@ properties = { ticket = { type = "object", description = "The ticket after the c
 
 [[operations]]
 id = "zendesk-ticket-tag-add"
+service = "default"
 method = "PUT"
 path = "/api/v2/tickets/{ticket_id}.json"
 description = "Add tags to a ticket without replacing the tags it already has"
@@ -492,6 +992,7 @@ properties = { ticket = { type = "object", description = "The ticket after taggi
 
 [[config]]
 name = "subdomain"
+service = "default"
 label = "Zendesk subdomain"
 help = "The part of your Zendesk URL before `.zendesk.com` — if you sign in at `acme.zendesk.com`, this is `acme`"
 example = "acme"
@@ -501,6 +1002,7 @@ binds = "endpoint.subdomain"
 
 [[config]]
 name = "email"
+service = "default"
 label = "Agent email"
 help = "The email of the Zendesk agent whose API token you are using. Zendesk sends it as the username half of the request, with its own `/token` marker appended — you do not type that part"
 example = "agent@acme.com"
@@ -511,9 +1013,81 @@ binds = "username.zendesk.api_token"
 
 [[config]]
 name = "api_token"
+service = "default"
 label = "API token"
 help = "Create one under Admin Center → Apps and integrations → Zendesk API. Zendesk shows it once"
 format = "token"
 secret = true
 docs_url = "https://support.zendesk.com/hc/en-us/articles/4408889192858"
 binds = "credential.zendesk.api_token"
+
+# Help Center reuses the same account host and Basic credential contract. Configuration is
+# service-addressed at runtime, so these named declarations bind the same three destinations under
+# `help-center`; the credential itself remains the one connector-level `zendesk.api_token` address.
+[[config]]
+name = "help_center_subdomain"
+service = "help-center"
+label = "Zendesk subdomain"
+help = "The part of your Zendesk URL before `.zendesk.com` — the same account subdomain used by Support"
+example = "acme"
+format = "subdomain"
+docs_url = "https://support.zendesk.com/hc/en-us/articles/4409381383578"
+binds = "endpoint.subdomain"
+
+[[config]]
+name = "help_center_email"
+service = "help-center"
+label = "Agent email"
+help = "The Zendesk agent email used by the shared Support and Help Center API token; Zendesk appends `/token` on the wire"
+example = "agent@acme.com"
+format = "email"
+binds = "username.zendesk.api_token"
+
+[[config]]
+name = "help_center_api_token"
+service = "help-center"
+label = "API token"
+help = "Reuse the Zendesk API token created under Admin Center → Apps and integrations → Zendesk API"
+format = "token"
+secret = true
+docs_url = "https://support.zendesk.com/hc/en-us/articles/4408889192858"
+binds = "credential.zendesk.api_token"
+
+# Messaging uses the same Zendesk tenant host but a distinct app-scoped Sunshine Conversations
+# Basic credential. `appId` is pinned into every selected path and never caller-controlled.
+[[config]]
+name = "messaging_subdomain"
+service = "messaging"
+label = "Zendesk subdomain"
+help = "The part of your Zendesk URL before `.zendesk.com` — the same account subdomain used by Support"
+example = "acme"
+format = "subdomain"
+docs_url = "https://support.zendesk.com/hc/en-us/articles/4409381383578"
+binds = "endpoint.subdomain"
+
+[[config]]
+name = "messaging_app_id"
+service = "messaging"
+label = "Messaging app id"
+help = "The Sunshine Conversations app id this connection manages, as one path-safe identifier"
+example = "app_123"
+docs_url = "https://developer.zendesk.com/api-reference/apps/apps-api/apps/"
+binds = "path.appId"
+
+[[config]]
+name = "messaging_key_id"
+service = "messaging"
+label = "Messaging key id"
+help = "The id half of an app-scoped Sunshine Conversations API key"
+example = "key_123"
+binds = "username.zendesk.messaging_key"
+
+[[config]]
+name = "messaging_key_secret"
+service = "messaging"
+label = "Messaging key secret"
+help = "The secret half of the app-scoped Sunshine Conversations API key; Zendesk shows it only when the key is created"
+format = "token"
+secret = true
+docs_url = "https://developer.zendesk.com/documentation/conversations/getting-started/using-the-api/"
+binds = "credential.zendesk.messaging_key"

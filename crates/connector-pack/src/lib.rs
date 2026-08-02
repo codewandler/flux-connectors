@@ -344,6 +344,24 @@ pub enum Error {
         parameter: String,
     },
 
+    /// A caller-supplied path parameter that would leave its reviewed URL segment (C-478).
+    ///
+    /// Unlike [`UnsafeConfig`](Self::UnsafeConfig), this value arrives with an operation call and
+    /// is addressed by the operation parameter name. It is refused while the request environment is
+    /// being bound, before authentication or the transport sees a request.
+    #[error(
+        "`{operation}` cannot place caller parameter `{parameter}` in one path segment: {reason}; \
+         the request was not sent"
+    )]
+    UnsafePathParameter {
+        /// The operation id.
+        operation: String,
+        /// The caller-visible parameter the emitted Flux places in the path.
+        parameter: String,
+        /// Why its value would escape or reshape one segment.
+        reason: String,
+    },
+
     /// An operation whose emitted body this pack cannot evaluate into a request.
     ///
     /// The refusal is the point. `connector-flux` emits one closed shape and

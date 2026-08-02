@@ -1,11 +1,7 @@
-# Twilio — hand-authored, no vendored OpenAPI spec.
-#
-# Twilio publishes a machine-readable OpenAPI description (github.com/twilio/twilio-oai), but this
-# file is transcribed by hand from its published REST API reference
-# (twilio.com/docs/messaging/api/message-resource, twilio.com/docs/voice/api/call-resource,
-# twilio.com/docs/iam/api/account) rather than vendored, consistent with how zendesk.toml and
-# freshdesk.toml are authored today (§1.2 in `docs/designs/provider-operation-inventory.md`). Drift
-# is therefore undetectable by machine until a `[spec]` pointer replaces this list.
+# Twilio — five established hand-authored reads plus four exact reads selected from Twilio's
+# first-party API v2010 OpenAPI description. The established operations remain inline so their
+# public ids and Flux bytes do not move; OpenAPI is evidence for the additions, not permission to
+# sweep Twilio's broad messaging and voice surface into the catalogue.
 #
 # ---------------------------------------------------------------------------------------------
 # THE SHIP CUT: reads only. No operation here sends a body.
@@ -25,8 +21,9 @@
 # `GET` requests carry no body, so every read below is unaffected: the request line and the query
 # string (curated to what is safe — see the per-operation comments) are all that go out, and Basic
 # auth's Authorization header is composed host-side, never templated here. So the connector ships
-# five reads: fetch the account (also `verify`), list and fetch messages, list and fetch calls.
-# Sending, and every other write, waits for the form encoder to publish.
+# nine reads: fetch the account (also `verify`), list and fetch messages, list and fetch calls,
+# list/fetch recordings, list usage records and list conferences. Sending, calling and every other
+# write wait for the form encoder to publish and still require their own high-risk review.
 
 id = "twilio"
 vendor = "Twilio"
@@ -60,13 +57,93 @@ api_version = "2010-04-01"
 # Account SID actually goes, and why it is *not* templated into this string.
 base_url = "https://api.twilio.com/2010-04-01"
 
-description = "Twilio programmable messaging and voice: read messages, calls and the authenticated account"
+description = "Twilio programmable messaging and voice: read the account, messages, calls, recordings, usage and conferences"
 
 # The "Test connection" operation: a bounded read of the account itself, over the same Basic
 # credential every other operation uses.
 verify = "twilio-account-get"
 
 default_auth = [{ credentials = ["twilio.basic_auth"] }]
+
+# ---------------------------------------------------------------------------------------------
+# First-party OpenAPI — pinned, scrubbed and narrowed by C-473.
+#
+# `scripts/vendor-twilio-spec.py` verifies the immutable first-party bytes, strips every example
+# value, and emits one reference-closed document containing only the four operationIds below. The
+# source paths include `/2010-04-01`, which the established `base_url` already carries; extraction
+# strips exactly that prefix and proves the resulting URL is unchanged. The API document's
+# Apache-2.0 declaration and the source repository's MIT notice are both retained under
+# `specs/twilio/`, with full and extracted hashes in `specs/twilio.provenance.toml`.
+# ---------------------------------------------------------------------------------------------
+
+[spec]
+path = "specs/twilio/selected-2026-08-02.openapi.json"
+source_url = "https://raw.githubusercontent.com/twilio/twilio-oai/97418cf0e4d6cf35b02333dd624090a8c62fa25d/spec/json/twilio_api_v2010.json"
+upstream_version = "1.0.0"
+fetched_at = "2026-08-02T11:34:37Z"
+sha256 = "2ab609f9daeddae92f339c6c8d646dae9058f8f11baa53fab12e98fd3f37700d"
+
+# Query interpolation still has no percent-encoder. Keep only integer pagination and boolean
+# toggles, whose renderings cannot add a query pair. Omit dates, categories, statuses, SIDs and the
+# opaque PageToken. AccountSid is operator-pinned by the existing `account_sid` config field below.
+[[patch.operations]]
+select = "ListRecording"
+rename = "twilio-recording-list"
+description = "List recordings for the configured Twilio account with bounded pagination"
+risk = "low"
+idempotency = "idempotent"
+omit.path = ["AccountSid"]
+omit.query = [
+  "DateCreated",
+  "DateCreated<",
+  "DateCreated>",
+  "CallSid",
+  "ConferenceSid",
+  "PageToken",
+]
+
+[[patch.operations]]
+select = "FetchRecording"
+rename = "twilio-recording-get"
+description = "Fetch one recording's metadata from the configured Twilio account"
+risk = "low"
+idempotency = "idempotent"
+omit.path = ["AccountSid"]
+
+[[patch.operations]]
+select = "ListUsageRecord"
+rename = "twilio-usage-record-list"
+description = "List usage records for the configured Twilio account with bounded pagination"
+risk = "low"
+idempotency = "idempotent"
+omit.path = ["AccountSid"]
+omit.query = ["Category", "StartDate", "EndDate", "PageToken"]
+
+[[patch.operations]]
+select = "ListConference"
+rename = "twilio-conference-list"
+description = "List conferences for the configured Twilio account with bounded pagination"
+risk = "low"
+idempotency = "idempotent"
+omit.path = ["AccountSid"]
+omit.query = [
+  "DateCreated",
+  "DateCreated<",
+  "DateCreated>",
+  "DateUpdated",
+  "DateUpdated<",
+  "DateUpdated>",
+  "FriendlyName",
+  "Status",
+  "PageToken",
+]
+
+# Deliberate write deferrals. `CreateMessage` and `CreateCall` are form-encoded writes carrying
+# caller-supplied destinations, content and callback URLs. Until the structured form encoder is on
+# this repository's pinned flux-lang line, `&`, `=` and `+` can reshape those bodies. Neither
+# operation is selected here. A future implementation still declares `risk = "high"`,
+# `idempotency = "non_idempotent"` and `effects = ["network", "send_external"]`; source adoption
+# must never downgrade sending a message or placing a call into an ordinary POST.
 
 # ---------------------------------------------------------------------------------------------
 # Credentials
@@ -108,7 +185,7 @@ env = ["TWILIO_AUTH_TOKEN"]
 description = "The same Auth Token as twilio.basic_auth, used here to verify X-Twilio-Signature on inbound status callbacks. Never sent to Twilio"
 
 # ---------------------------------------------------------------------------------------------
-# Operations — 5, all reads (see the header comment on why nothing else ships)
+# Established inline operations — 5, all reads (see the header comment on why nothing else ships)
 #
 # **The Account SID is a required path parameter on every operation, not a `base_url` template.**
 # This is the second genuinely new thing C-109 measures: the same identifier is both this
@@ -129,18 +206,12 @@ description = "The same Auth Token as twilio.basic_auth, used here to verify X-T
 #     One collected answer cannot feed both without the host resolving one from the other, which
 #     nothing here declares.
 #
-# So this file has exactly one visible `[[config]]` field for the SID — satisfying "ask once" — and
-# it binds to the credential's username, because that is the acceptance this story is built to prove
-# out. The consequence is the one this comment exists to record: `account_sid` is a real, required,
-# caller-facing path parameter on every operation below, each of whose description says it is the
-# same value already entered for this connection's Basic-auth username. A caller (or the flow that
-# assembles a call) supplies it again rather than the connection form asking for it twice. That
-# duplication — call-time, not config-time — is the finding this story's Notes invite rather than
-# hand-wave: today's configuration model has no path from a `username.*` (or `endpoint.*`) binding
-# into an operation's path template, only into `base_url`, and `base_url` cannot absorb it here
-# because the fixed-host account resource itself (`/Accounts/{Sid}.json`, no separating slash before
-# `.json`) would need a path that does not start with `/` once split from a templated `base_url` —
-# which the loader refuses outright (`crates/connector-spec/src/provider.rs:2160`).
+# So this file has exactly one visible `[[config]]` field for the SID — satisfying "ask once". Its
+# head binding remains the credential username, preserving the established Basic-auth slot. C-229's
+# `also_binds` now lets that same collected answer pin `path.AccountSid` on the four spec-backed
+# additions. The five established inline operations deliberately keep lowercase `account_sid` as a
+# caller parameter so their emitted Flux bytes stay stable; a future breaking migration may move
+# them onto the pin, but C-473 does not disguise that contract change as source adoption.
 #
 # RESPONSE SHAPES are read from Twilio's own reference pages (URLs on each operation below). Two
 # vendor quirks are worth stating once rather than on every field: **numeric-looking fields travel as
@@ -508,6 +579,7 @@ example = "ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 format = "token"
 docs_url = "https://www.twilio.com/docs/iam/api/account"
 binds = "username.twilio.basic_auth"
+also_binds = ["path.AccountSid"]
 
 [[config]]
 name = "auth_token"

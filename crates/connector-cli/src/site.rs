@@ -52,7 +52,8 @@ use serde::Serialize;
 
 use connector_spec::{
     AuthScheme, ChannelBinding, Connector, EventDecl, HttpMethod, Idempotency, JsonSchema,
-    ManualSetup, Operation, Param, Reply, Risk, Selector, Subscription, VerificationScheme,
+    ManualSetup, Operation, OperationSpecSource, Param, Reply, Risk, Selector, Subscription,
+    VerificationScheme,
 };
 
 use crate::catalog::{self, OperationRendering};
@@ -480,6 +481,9 @@ struct OperationEntry {
     method: HttpMethod,
     /// The path template, relative to [`ProviderEntry::base_url`].
     path: String,
+    /// The exact vendor operation and pinned document this operation was selected from. `null` for
+    /// an inline operation; repository-local paths and fetch timestamps never enter this type.
+    spec_source: Option<SpecSourceEntry>,
     /// Every named parameter, in request-position order, each carrying its JSON Schema verbatim.
     parameters: Vec<ParameterEntry>,
     /// **One JSON Schema for everything the operation receives**, composed from the parameters
@@ -512,6 +516,30 @@ struct OperationEntry {
     flux: String,
     /// Whether it currently works, and if not, why. See [`crate::status`].
     status: Status,
+}
+
+/// The public subset of one patch-selected operation's derived provenance.
+///
+/// This is deliberately a separate projection from [`OperationSpecSource`]. All keys remain
+/// present even when a private vendoring source has no publishable URL, while the IR's canonical
+/// encoding may elide absent provenance values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct SpecSourceEntry {
+    operation_id: String,
+    source_url: Option<String>,
+    upstream_version: String,
+    sha256: String,
+}
+
+impl From<&OperationSpecSource> for SpecSourceEntry {
+    fn from(source: &OperationSpecSource) -> Self {
+        Self {
+            operation_id: source.operation_id.clone(),
+            source_url: source.source_url.clone(),
+            upstream_version: source.upstream_version.clone(),
+            sha256: source.sha256.clone(),
+        }
+    }
 }
 
 /// One request parameter, with the vendor's schema intact.
@@ -781,6 +809,11 @@ fn operation_entry(
         repeatable_because: operation.repeatability_condition().map(str::to_owned),
         method: operation.method,
         path: operation.path.clone(),
+        spec_source: connector
+            .provenance
+            .operation_specs
+            .get(&operation.id)
+            .map(SpecSourceEntry::from),
         parameters: parameters(operation),
         input_schema: operation.input_schema(),
         body_schema: operation.params.body_schema.clone(),
@@ -1019,6 +1052,44 @@ mod tests {
         assert_eq!(operation["method"], json!("GET"));
     }
 
+    #[test]
+    fn an_inline_operation_publishes_a_null_spec_source() {
+        assert_eq!(
+            rendered()["providers"][0]["operations"][0]["spec_source"],
+            Value::Null
+        );
+    }
+
+    #[test]
+    fn a_selected_operation_publishes_only_the_public_source_fields() {
+        let mut connector = connector();
+        connector.provenance.operation_specs.insert(
+            "acme-thing-list".into(),
+            OperationSpecSource {
+                operation_id: "listThings".into(),
+                source_url: Some("https://api.acme.test/openapi.json".into()),
+                upstream_version: "2026-08-02".into(),
+                sha256: "a".repeat(64),
+            },
+        );
+
+        let entry = provider_entry(&connector, &renderings()).unwrap();
+        let document: Value = serde_json::from_str(&self::document(vec![entry]).unwrap()).unwrap();
+        let source = &document["providers"][0]["operations"][0]["spec_source"];
+        assert_eq!(
+            source,
+            &json!({
+                "operation_id": "listThings",
+                "source_url": "https://api.acme.test/openapi.json",
+                "upstream_version": "2026-08-02",
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            })
+        );
+        assert!(source.get("path").is_none());
+        assert!(source.get("fetched_at").is_none());
+        assert!(source.get("planning").is_none());
+    }
+
     /// **The AND/OR shape survives.** Two credentials on one request must not read as two ways to
     /// authenticate — the same property `crates/catalog` holds, from the same walk.
     #[test]
@@ -1216,6 +1287,15 @@ mod tests {
         connector.operations[0].response_schema = Some(json!({"type": "object"}));
         connector.operations[0].params.body_schema = Some(json!({"type": "object"}));
         connector.auth[0].user_suffix = Some("/token".to_string());
+        connector.provenance.operation_specs.insert(
+            "acme-thing-list".into(),
+            OperationSpecSource {
+                operation_id: "listThings".into(),
+                source_url: None,
+                upstream_version: "2026-08-02".into(),
+                sha256: "a".repeat(64),
+            },
+        );
 
         let entry = provider_entry(&connector, &renderings()).unwrap();
         serde_json::from_str(&document(vec![entry]).unwrap()).unwrap()
@@ -1345,6 +1425,7 @@ mod tests {
         connector.services = vec![
             connector_spec::Service {
                 name: "mail".to_string(),
+                legacy: false,
                 description: "Mail.".to_string(),
                 base_url: Some("https://mail.acme.example".to_string()),
                 api_version: Some("v1".to_string()),
@@ -1353,6 +1434,7 @@ mod tests {
             },
             connector_spec::Service {
                 name: "calendar".to_string(),
+                legacy: false,
                 description: "Calendar.".to_string(),
                 base_url: None,
                 api_version: Some("v3".to_string()),

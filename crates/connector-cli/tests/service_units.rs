@@ -182,10 +182,12 @@ fn the_shipped_artifacts_are_byte_identical() {
 /// `<provider>-default.flux`. The reserved service is elided from the file name for the same reason it
 /// is elided from an address.
 ///
-/// A provider that declares services emits one suffixed pair per service and **no unsuffixed one**:
-/// `google.flux` would be an installable unit no service owns, carrying three unrelated APIs. Derived
-/// from each provider's own declaration rather than from a list here, so the two shapes are asserted
-/// against the same plan.
+/// A provider that declares only named services emits one suffixed pair per service and **no
+/// unsuffixed one**: `google.flux` would be an installable unit no service owns, carrying three
+/// unrelated APIs. C-458's explicitly preserved legacy `default` remains the third intentional
+/// shape: its pair stays unsuffixed while every named sibling is suffixed. Derived from each
+/// provider's own declaration rather than from a list here, so all shapes are asserted against the
+/// same plan.
 #[test]
 fn every_shipped_provider_emits_the_pair_its_shape_calls_for() {
     let workspace = Workspace::new(repo_root());
@@ -200,23 +202,15 @@ fn every_shipped_provider_emits_the_pair_its_shape_calls_for() {
     for provider in shipped() {
         let connector = load(&provider);
 
-        if connector.is_default_only() {
-            for expected in [
-                format!("connectors/{provider}.flux"),
-                format!("connectors/{provider}.connector.toml"),
-            ] {
-                assert!(
-                    paths.contains(&expected),
-                    "a build must still plan {expected}; it planned {paths:?}"
-                );
-            }
-            continue;
-        }
-
         for service in connector.service_names() {
+            let stem = if service == connector_spec::DEFAULT_SERVICE {
+                provider.clone()
+            } else {
+                format!("{provider}-{service}")
+            };
             for expected in [
-                format!("connectors/{provider}-{service}.flux"),
-                format!("connectors/{provider}-{service}.connector.toml"),
+                format!("connectors/{stem}.flux"),
+                format!("connectors/{stem}.connector.toml"),
             ] {
                 assert!(
                     paths.contains(&expected),
@@ -225,15 +219,20 @@ fn every_shipped_provider_emits_the_pair_its_shape_calls_for() {
                 );
             }
         }
-        for unowned in [
-            format!("connectors/{provider}.flux"),
-            format!("connectors/{provider}.connector.toml"),
-        ] {
-            assert!(
-                !paths.contains(&unowned),
-                "{provider} declares named services, so {unowned} would be an installable unit no \
-                 service owns"
-            );
+        if !connector
+            .service_names()
+            .contains(&connector_spec::DEFAULT_SERVICE)
+        {
+            for unowned in [
+                format!("connectors/{provider}.flux"),
+                format!("connectors/{provider}.connector.toml"),
+            ] {
+                assert!(
+                    !paths.contains(&unowned),
+                    "{provider} declares only named services, so {unowned} would be an installable \
+                     unit no service owns"
+                );
+            }
         }
     }
     // **Scoped to `connectors/`, because that is the only namespace where a `-default` suffix means
@@ -255,6 +254,77 @@ fn every_shipped_provider_emits_the_pair_its_shape_calls_for() {
         "the reserved `default` service must not reach an installable unit's file name: \
          {suffixed:?}"
     );
+}
+
+/// A provider whose original address-elided service is already published can grow a named sibling
+/// without moving either unit — C-458.
+const LEGACY_DEFAULT: &str = r#"
+id = "acme"
+vendor = "Acme"
+authority = "com.acme.api"
+api_version = "v1"
+base_url = "https://api.acme.example"
+description = "A published API growing a named sibling."
+
+[[services]]
+name = "default"
+legacy = true
+
+[[services]]
+name = "chat"
+description = "Chat completions."
+
+[[operations]]
+id = "acme-models-list"
+service = "default"
+method = "GET"
+path = "/v1/models"
+description = "List models."
+risk = "low"
+idempotency = "idempotent"
+
+[[operations]]
+id = "acme-chat-completion"
+service = "chat"
+method = "POST"
+path = "/v1/chat"
+description = "Create a chat completion."
+risk = "medium"
+idempotency = "non_idempotent"
+"#;
+
+#[test]
+fn a_legacy_default_keeps_unsuffixed_artifacts_beside_a_suffixed_sibling() {
+    let fixture = Fixture::new("legacy-default-service");
+    fixture.write_provider("acme", LEGACY_DEFAULT);
+    run(&["build", "--root", fixture.root().to_str().unwrap()]).expect("build succeeds");
+
+    for expected in [
+        "connectors/acme.flux",
+        "connectors/acme.connector.toml",
+        "connectors/acme-chat.flux",
+        "connectors/acme-chat.connector.toml",
+    ] {
+        assert!(fixture.exists(expected), "{expected} was not written");
+    }
+    assert!(!fixture.exists("connectors/acme-default.flux"));
+    assert!(!fixture.exists("connectors/acme-default.connector.toml"));
+
+    let legacy = fixture.read("connectors/acme.flux");
+    assert!(legacy.contains("op acme-models-list"), "{legacy}");
+    assert!(!legacy.contains("acme-chat-completion"), "{legacy}");
+    let named = fixture.read("connectors/acme-chat.flux");
+    assert!(named.contains("op acme-chat-completion"), "{named}");
+    assert!(!named.contains("acme-models-list"), "{named}");
+
+    let legacy_manifest = fixture.read("connectors/acme.connector.toml");
+    assert!(legacy_manifest.contains("gid = \"com.acme.api:v1\""));
+    assert!(legacy_manifest.contains("module = \"acme.flux\""));
+    assert!(!legacy_manifest.contains("service = \"default\""));
+    let named_manifest = fixture.read("connectors/acme-chat.connector.toml");
+    assert!(named_manifest.contains("service = \"chat\""));
+    assert!(named_manifest.contains("gid = \"com.acme.api/chat:v1\""));
+    assert!(named_manifest.contains("module = \"acme-chat.flux\""));
 }
 
 /// A two-service provider, AWS-shaped: one authority, one host and one API date per service.

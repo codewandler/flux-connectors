@@ -2,7 +2,7 @@
 id: C-81
 title: Make the documented provider and artifact counts a checked claim
 pillar: Build
-status: ready
+status: done
 priority: 5
 design:
 epic: connectors-v1
@@ -18,21 +18,36 @@ verifies — the numbers drifted five times in a single session, and every imple
 none could safely fix them.
 
 ## Acceptance
-- [ ] A test compares the counts stated in `AGENTS.md` and `README.md` against a real build:
+- [x] A test compares the counts stated in `AGENTS.md` and `README.md` against a real build:
       providers in `providers/`, curated operations, and planned artifacts. It fails when they
       disagree. `crates/connector-cli/tests/readme_snippet.rs` is the existing home for
       README-derived claims.
-- [ ] The `diff` output line both documents quote (`N artifacts up to date (M providers checked)`) is
+- [x] The `diff` output line both documents quote (`N artifacts up to date (M providers checked)`) is
       checked as a string against the real command output, since that one is copy-pasteable and
       therefore the most likely to be trusted.
-- [ ] Failing-first: bump a stated number, watch the test fail, restore it.
-- [ ] The test names what to do when it fails — regenerate the number, do not relax the test — because
+- [x] Failing-first: bump a stated number, watch the test fail, restore it.
+- [x] The test names what to do when it fails — regenerate the number, do not relax the test — because
       the count legitimately changes with every provider.
-- [ ] `AGENTS.md`'s existing caveat that the artifact count is "not a permanent invariant" is
+- [x] `AGENTS.md`'s existing caveat that the artifact count is "not a permanent invariant" is
       reconciled with the test: not permanent, but *checked at every commit*.
 
 ## Progress
-- Not started. Filed 2026-07-30 after the fleet push.
+- 2026-08-02: implementation started alongside the coordinator-owned whole-catalogue integration;
+  the check will be proven against the final catalogue counts before release.
+- 2026-08-02: failing-first evidence — after the real-plan figures were stated, `README.md`'s
+  provider count was deliberately bumped from 54 to 55. `cargo test -p connector-cli --test
+  readme_snippet the_documented_catalogue_counts_match_the_build_plan -- --exact --nocapture`
+  failed with `README.md does not state the full build's 54 providers, 65 services and 727 curated
+  operations (997 artifacts total). Regenerate these stated numbers from pipeline::plan; do not
+  relax this test.` The count was then restored to 54.
+- 2026-08-02: `cargo fmt --all --check` and `cargo clippy -p connector-cli --test readme_snippet --
+  -D warnings` pass. The restored focused test reaches the coordinator-owned integration boundary:
+  `cargo run -p connector-cli -- diff | tail -1` reports `2 artifacts would change (54 providers
+  checked)`, and the test names those two whole-catalogue artifacts as `connectors.lock` and
+  `web/public/catalog.json`. C-81 does not regenerate either file.
+- 2026-08-02: coordinator integration regenerated the full catalogue and remeasured 54 providers,
+  65 services, 735 curated operations, and 1,005 artifacts. The focused checked-count test and exact
+  `1005 artifacts up to date (54 providers checked)` assertion pass against the committed plan.
 
 ## Notes
 - **This is the same failure C-54 removed one layer down.** C-54 deleted five hand-maintained provider

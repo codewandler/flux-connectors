@@ -3,8 +3,8 @@
 generator = "flux-connectors 0.13.0"
 connector = "github"
 vendor = "GitHub"
-description = "GitHub REST API: read repositories, issues and pull requests, and write issues and issue comments"
+description = "GitHub REST API: read repositories, commits, issues, pull requests and Actions workflow runs, and write issues and issue comments"
 runtime = "http"
 base_url = "https://api.github.com"
 module = "github.flux"
-operations = ["github-repo-get", "github-issue-get", "github-pull-get", "github-issue-create", "github-issue-comment-add"]
+operations = ["github-repo-get", "github-issue-get", "github-pull-get", "github-issue-create", "github-issue-comment-add", "github-issue-list", "github-pull-files-list", "github-workflow-run-list", "github-commit-list"]

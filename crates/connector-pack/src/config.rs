@@ -128,6 +128,20 @@ pub enum Field<'a> {
 }
 
 impl Field<'_> {
+    /// Interpret one placeholder emitted for request configuration.
+    ///
+    /// Bare names are the established endpoint/request-pin vocabulary. `username.` is the one
+    /// reserved qualifier: it lets a Basic username also scope a request without being looked up
+    /// through the unrelated endpoint address. Provider validation prevents any other field kind
+    /// from minting this prefix.
+    pub(crate) fn from_placeholder(variable: &str) -> Field<'_> {
+        variable
+            .strip_prefix("username.")
+            .filter(|name| !name.is_empty())
+            .map(Field::Username)
+            .unwrap_or(Field::Endpoint(variable))
+    }
+
     /// The kind, as a stable key a store can index on.
     fn kind(&self) -> &'static str {
         match self {

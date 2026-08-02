@@ -43,10 +43,10 @@ import {
   encodeView,
   facet,
   narrowView,
+  operationMatchesView,
   operationService,
-  ownsDefect,
-  searchablePath,
   serviceFacet,
+  serviceLabel,
   type Operation,
   type Provider,
 } from '../../../data/catalog.mts'
@@ -99,25 +99,9 @@ const idempotencies = computed(() =>
 const services = computed(() => serviceFacet(props.providers, view.value.provider))
 
 const matching = computed(() =>
-  entries.value.filter(({ operation, owner }) => {
-    const { query, provider, service, risk, idempotency, defect } = view.value
-    if (provider !== ANY && owner.id !== provider) return false
-    if (service !== ANY && operation.service !== service) return false
-    if (risk !== ANY && operation.risk !== risk) return false
-    if (idempotency !== ANY && operation.idempotency !== idempotency) return false
-    if (defect === 'own' && !ownsDefect(operation)) return false
-    if (defect === 'none' && ownsDefect(operation)) return false
-
-    const needle = query.trim().toLowerCase()
-    if (!needle) return true
-    return (
-      operation.id.toLowerCase().includes(needle) ||
-      operation.description.toLowerCase().includes(needle) ||
-      // C-408. A path this source did not publish matches nothing, rather than throwing on every
-      // keystroke — the search is over what the document carries, not over what it might have.
-      searchablePath(operation).includes(needle)
-    )
-  })
+  entries.value.filter(({ operation, owner }) =>
+    operationMatchesView(owner, operation, view.value)
+  )
 )
 
 // Sorting is over the whole row, and the comparator is over the operation: the vendor travels with
@@ -191,7 +175,9 @@ function reset() {
       <span>Service</span>
       <select v-model="view.service" :disabled="!services.length">
         <option :value="ANY">Any</option>
-        <option v-for="value in services" :key="value" :value="value">{{ value }}</option>
+        <option v-for="value in services" :key="value" :value="value">
+          {{ serviceLabel(value) }}
+        </option>
       </select>
     </label>
 

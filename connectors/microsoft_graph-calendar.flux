@@ -40,3 +40,57 @@ op microsoft_graph-calendar-calendar-get -> Any
   url = fmt("{base}/v1.0/me/calendar")
   response = http.request(method: "GET", url)
   return response
+
+op microsoft_graph-calendar-category-list(_top: Number, _skip: Number) -> Any
+  description "List the signed-in user's Outlook master categories with the Microsoft Graph MailboxSettings.Read permission"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://graph.microsoft.com"
+  url = fmt("{base}/v1.0/me/outlook/masterCategories")
+  sep = "?"
+  when _top
+    url = fmt("{url}{sep}$top={_top}")
+    sep = "&"
+  when _skip
+    url = fmt("{url}{sep}$skip={_skip}")
+  response = http.request(method: "GET", url)
+  return response
+
+op microsoft_graph-calendar-time-zone-list(_top: Number, _skip: Number) -> Any
+  description "List the mailbox server's supported time zones with the Microsoft Graph MailboxSettings.Read permission"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://graph.microsoft.com"
+  url = fmt("{base}/v1.0/me/outlook/supportedTimeZones()")
+  sep = "?"
+  when _top
+    url = fmt("{url}{sep}$top={_top}")
+    sep = "&"
+  when _skip
+    url = fmt("{url}{sep}$skip={_skip}")
+  response = http.request(method: "GET", url)
+  return response
+
+op microsoft_graph-calendar-language-list(_top: Number, _skip: Number) -> Any
+  description "List the mailbox server's supported languages and locales with the Microsoft Graph MailboxSettings.Read permission"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://graph.microsoft.com"
+  url = fmt("{base}/v1.0/me/outlook/supportedLanguages()")
+  sep = "?"
+  when _top
+    url = fmt("{url}{sep}$top={_top}")
+    sep = "&"
+  when _skip
+    url = fmt("{url}{sep}$skip={_skip}")
+  response = http.request(method: "GET", url)
+  return response

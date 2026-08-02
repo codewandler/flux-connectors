@@ -58,8 +58,8 @@ use crate::inbound::{
 use crate::lock::sha256_hex;
 use crate::{
     response_location_exists, AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod,
-    Idempotency, JsonSchema, Operation, Param, ParamSet, Provenance, Quirks, Risk, Role, Runtime,
-    Service, Tag, DEFAULT_SERVICE, MIN_REPEATABILITY_CONDITION,
+    Idempotency, JsonSchema, Operation, OperationSpecSource, Param, ParamSet, Provenance, Quirks,
+    Risk, Role, Runtime, Service, Tag, DEFAULT_SERVICE, MIN_REPEATABILITY_CONDITION,
 };
 
 /// The documented JSON Schema for `providers/<name>.toml`.
@@ -108,6 +108,16 @@ pub struct LoadedProvider {
     /// Empty for a hand-authored connector, and also for a spec-backed one loaded through plain
     /// [`load`], which is given no document to ingest.
     pub ingested: Vec<IngestedDocument>,
+    /// Members whose TOML table omitted `service` before serde normalized that omission to
+    /// [`DEFAULT_SERVICE`]. Needed only for C-458's mixed legacy-default shape, where explicit
+    /// `service = "default"` and omission must remain different authoring decisions.
+    implicit_service_members: Vec<ImplicitServiceMember>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ImplicitServiceMember {
+    kind: &'static str,
+    name: String,
 }
 
 impl LoadedProvider {
@@ -727,8 +737,8 @@ pub struct ParamPatch {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ParamOmission {
-    /// Path parameters to drop. Always refused — see [`omit`] — and present so that naming one is a
-    /// refusal that explains itself rather than an unknown-key error.
+    /// Path parameters to drop. Permitted only when the same service declares an exact
+    /// operator-pinned `path.<name>` configuration value; otherwise see [`omit`] for the refusal.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub path: Vec<String>,
     /// Query-string parameters to drop. The synonym flood lives here.
@@ -1040,11 +1050,12 @@ fn load_inner(
             });
         }
     };
+    let implicit_service_members = implicit_service_members(source);
 
     // Kept before `assemble` distributes it, so a provider-level constant header is reported once
     // rather than once per operation that inherited it.
     let provider_headers = file.const_headers.clone();
-    let mut loaded = assemble(file, source);
+    let mut loaded = assemble(file, source, implicit_service_members);
 
     // The ids the file writes out **inline**, captured before selection appends to them. C-6's
     // `validate_patch` asks whether a `rename` collides with one, and after selection every rename
@@ -1192,8 +1203,20 @@ fn ingest_specs(
         }
     }
 
-    let selected = publish(&loaded.patch, &specs, &ingested, problems);
+    let (selected, operation_specs) = publish(
+        &loaded.patch,
+        &specs,
+        &ingested,
+        documents,
+        &loaded.connector.config,
+        problems,
+    );
     loaded.connector.operations.extend(selected);
+    loaded
+        .connector
+        .provenance
+        .operation_specs
+        .extend(operation_specs);
     loaded.ingested = ingested;
 }
 
@@ -1278,8 +1301,10 @@ fn publish(
     patch: &Patch,
     specs: &[SpecSource],
     ingested: &[IngestedDocument],
+    documents: &[SpecDocument<'_>],
+    config: &[ConfigField],
     problems: &mut Vec<String>,
-) -> Vec<Operation> {
+) -> (Vec<Operation>, BTreeMap<String, OperationSpecSource>) {
     if let Some(naming) = patch.naming.as_ref() {
         check_pins(naming, ingested, problems);
     }
@@ -1333,6 +1358,7 @@ fn publish(
     // **3 · per-operation patch.** File order, and it wins field by field over any selector that
     // also matched — which is why the selector's statement is looked up rather than discarded.
     let mut published: Vec<Operation> = Vec::new();
+    let mut operation_specs: BTreeMap<String, OperationSpecSource> = BTreeMap::new();
     let mut taken: BTreeMap<String, Claim> = BTreeMap::new();
     let mut claimed: BTreeSet<(&str, &str)> = BTreeSet::new();
 
@@ -1372,6 +1398,7 @@ fn publish(
         }
 
         let stated = matched.get(&(document.service.as_str(), select));
+        let source = source_of(specs, document);
         if let Some((operation, claim)) = compose(
             document,
             spec,
@@ -1379,15 +1406,24 @@ fn publish(
             stated.is_some(),
             stated.unwrap_or(&Stated::EMPTY),
             naming,
-            problems,
+            &mut ComposeContext { config, problems },
         ) {
-            offer(&mut taken, &mut published, operation, claim, problems);
+            offer(
+                &mut taken,
+                &mut published,
+                &mut operation_specs,
+                operation,
+                claim,
+                operation_source(source, document, documents, select),
+                problems,
+            );
         }
     }
 
     // Everything a selector matched that no block named, in document order per `[[spec]]` entry —
     // so the published order is a function of the inputs and of nothing else.
     for document in ingested {
+        let source = source_of(specs, document);
         for spec in &document.ingested.operations {
             let key = (document.service.as_str(), spec.operation_id.as_str());
             if claimed.contains(&key) {
@@ -1396,15 +1432,60 @@ fn publish(
             let Some(stated) = matched.get(&key) else {
                 continue;
             };
-            if let Some((operation, claim)) =
-                compose(document, spec, None, true, stated, naming, problems)
-            {
-                offer(&mut taken, &mut published, operation, claim, problems);
+            if let Some((operation, claim)) = compose(
+                document,
+                spec,
+                None,
+                true,
+                stated,
+                naming,
+                &mut ComposeContext { config, problems },
+            ) {
+                offer(
+                    &mut taken,
+                    &mut published,
+                    &mut operation_specs,
+                    operation,
+                    claim,
+                    operation_source(source, document, documents, &spec.operation_id),
+                    problems,
+                );
             }
         }
     }
 
-    published
+    (published, operation_specs)
+}
+
+/// The exact pin that produced one ingested document.
+///
+/// Both path and service participate. A service-only lookup would recreate C-481's defect for a
+/// mixed or multi-document provider. [`ingest_specs`] establishes this pair when it resolves each
+/// [`SpecSource`], so absence here is an internal invariant failure rather than provider input.
+fn source_of<'a>(specs: &'a [SpecSource], document: &IngestedDocument) -> &'a SpecSource {
+    specs
+        .iter()
+        .find(|source| source.path == document.path && source.service() == document.service)
+        .expect("every ingested document came from one exact SpecSource")
+}
+
+/// Public operation provenance projected from one pin, with no local refresh metadata.
+fn operation_source(
+    source: &SpecSource,
+    ingested: &IngestedDocument,
+    documents: &[SpecDocument<'_>],
+    operation_id: &str,
+) -> OperationSpecSource {
+    let document = documents
+        .iter()
+        .find(|document| document.path == ingested.path)
+        .expect("every ingested document came from one provided document");
+    OperationSpecSource {
+        operation_id: operation_id.to_owned(),
+        source_url: source.source_url.clone(),
+        upstream_version: ingested.ingested.upstream_version.clone(),
+        sha256: sha256_hex(document.document.as_bytes()),
+    }
 }
 
 /// What the selectors that matched one operation stated about it, and which one stated each field.
@@ -1417,6 +1498,12 @@ struct Stated {
     risk: Option<(Risk, String)>,
     idempotency: Option<(Idempotency, String)>,
     expose: Option<(bool, String)>,
+}
+
+/// The provider facts one operation composition needs beyond the overlay statements themselves.
+struct ComposeContext<'a> {
+    config: &'a [ConfigField],
+    problems: &'a mut Vec<String>,
 }
 
 impl Stated {
@@ -1528,12 +1615,15 @@ struct Claim {
 fn offer(
     taken: &mut BTreeMap<String, Claim>,
     published: &mut Vec<Operation>,
+    operation_specs: &mut BTreeMap<String, OperationSpecSource>,
     operation: Operation,
     claim: Claim,
+    spec_source: OperationSpecSource,
     problems: &mut Vec<String>,
 ) {
     if let Some(first) = taken.get(&operation.id) {
         if first.source == IdSource::Renamed && claim.source == IdSource::Renamed {
+            operation_specs.insert(operation.id.clone(), spec_source);
             published.push(operation);
             return;
         }
@@ -1548,6 +1638,7 @@ fn offer(
         return;
     }
     taken.insert(operation.id.clone(), claim);
+    operation_specs.insert(operation.id.clone(), spec_source);
     published.push(operation);
 }
 
@@ -1562,8 +1653,10 @@ fn compose(
     selected: bool,
     stated: &Stated,
     naming: Option<&Naming>,
-    problems: &mut Vec<String>,
+    context: &mut ComposeContext<'_>,
 ) -> Option<(Operation, Claim)> {
+    let config = context.config;
+    let problems = &mut *context.problems;
     let select = spec.operation_id.as_str();
 
     // **Naming: `rename`, then a pin, then the rule.** An op id is a public contract users and
@@ -1675,7 +1768,15 @@ fn compose(
         // argument into the tool with no way out, and the way out has to stay a written statement —
         // correct the flag, then drop the parameter.
         for (position, name) in patch.omit.entries() {
-            omit(&mut params, position, name, select, problems);
+            omit(
+                &mut params,
+                position,
+                name,
+                select,
+                &document.service,
+                config,
+                problems,
+            );
         }
     }
 
@@ -1827,16 +1928,18 @@ fn correct(
 ///   silence would be actively unsafe rather than merely unhelpful. Judged *after* corrections, so
 ///   an author who believes the vendor's flag is wrong says so in `params` and is then free to drop
 ///   it.
-/// - **A path parameter**, whatever its flag says. The path template keeps its placeholder, so
-///   dropping `id` from `/tickets/{id}` leaves a URL nothing can fill — the `PUT /tickets/` defect
-///   [`ParamPatch::required`] exists to correct, arrived at from the other direction. There is no
-///   legitimate case: a parameter can only leave the path by the path changing, which is a different
-///   operation.
+/// - **A path parameter without an exact configuration pin.** The path template keeps its
+///   placeholder, so dropping `id` from `/tickets/{id}` leaves a URL nothing can fill — unless the
+///   operation's service declares `path.id`, in which case omission is what prevents the same tenant
+///   scope from also being a caller argument. The pin is exact and service-scoped; no name or service
+///   inference is performed.
 fn omit(
     params: &mut ParamSet,
     position: ParamPosition,
     name: &str,
     select: &str,
+    service: &str,
+    config: &[ConfigField],
     problems: &mut Vec<String>,
 ) {
     let group = match position {
@@ -1853,10 +1956,24 @@ fn omit(
         return;
     };
     if position == ParamPosition::Path {
+        let pinned = config
+            .iter()
+            .filter(|field| field.service == service)
+            .any(|field| {
+                field
+                    .pins()
+                    .iter()
+                    .any(|pin| pin.position == Position::Path && pin.name == name)
+            });
+        if pinned {
+            group.remove(index);
+            return;
+        }
         problems.push(format!(
             "patch for {select:?} omits the path parameter {name:?}, which cannot be dropped: the \
              path template still carries `{{{name}}}` and nothing composes a URL with that left in \
-             it. A path parameter leaves only when the path does"
+             it. A path parameter leaves only when the path does, or when this service declares an \
+             exact `path.{name}` configuration pin"
         ));
         return;
     }
@@ -1948,7 +2065,11 @@ fn declares_provider_roles(source: &str) -> bool {
 /// provenance and distributing provider-level constant headers onto every operation. No validation
 /// happens here — assembling and judging are separate so that validation can see the finished value
 /// and report on all of it at once.
-fn assemble(file: ProviderFile, source: &str) -> LoadedProvider {
+fn assemble(
+    file: ProviderFile,
+    source: &str,
+    implicit_service_members: Vec<ImplicitServiceMember>,
+) -> LoadedProvider {
     let specs = file.specs;
     let mut operations = file.operations;
     distribute_const_headers(&file.const_headers, &mut operations);
@@ -1964,6 +2085,7 @@ fn assemble(file: ProviderFile, source: &str) -> LoadedProvider {
         fetched_at: sole.and_then(|s| s.fetched_at.clone()),
         spec_sha256: sole.and_then(|s| s.sha256.clone()),
         specs: specs.clone(),
+        operation_specs: BTreeMap::new(),
         toml_sha256: Some(sha256_hex(source.as_bytes())),
     };
 
@@ -1991,7 +2113,77 @@ fn assemble(file: ProviderFile, source: &str) -> LoadedProvider {
         patch: file.patch,
         // Filled by `ingest_specs` when documents were supplied; assembling reads the TOML alone.
         ingested: Vec::new(),
+        implicit_service_members,
     }
+}
+
+/// Records which service-bearing TOML tables omitted `service` before serde turns that omission
+/// into `default`.
+///
+/// The normalized IR deliberately has one spelling for the default service. That stays correct for
+/// default-only connectors; C-458 adds one authoring-time distinction in a mixed connector, so the
+/// loader retains only the presence bit and discards the raw TOML immediately after validation.
+fn implicit_service_members(source: &str) -> Vec<ImplicitServiceMember> {
+    let table: toml::Table = source
+        .parse()
+        .expect("ProviderFile already parsed this source as TOML");
+    let mut omitted = Vec::new();
+
+    for (key, kind, identity) in [
+        ("operations", "operation", "id"),
+        ("events", "event", "name"),
+        ("channels", "channel binding", "name"),
+        ("config", "configuration field", "name"),
+        ("graphs", "graph", "name"),
+    ] {
+        let Some(entries) = table.get(key).and_then(toml::Value::as_array) else {
+            continue;
+        };
+        for entry in entries.iter().filter_map(toml::Value::as_table) {
+            if entry.contains_key("service") {
+                continue;
+            }
+            omitted.push(ImplicitServiceMember {
+                kind,
+                name: entry
+                    .get(identity)
+                    .and_then(toml::Value::as_str)
+                    .unwrap_or("<unnamed>")
+                    .to_owned(),
+            });
+        }
+    }
+
+    match table.get("spec") {
+        Some(toml::Value::Table(spec)) if !spec.contains_key("service") => {
+            omitted.push(ImplicitServiceMember {
+                kind: "spec document",
+                name: spec
+                    .get("path")
+                    .and_then(toml::Value::as_str)
+                    .unwrap_or("<unnamed>")
+                    .to_owned(),
+            });
+        }
+        Some(toml::Value::Array(specs)) => {
+            for spec in specs.iter().filter_map(toml::Value::as_table) {
+                if spec.contains_key("service") {
+                    continue;
+                }
+                omitted.push(ImplicitServiceMember {
+                    kind: "spec document",
+                    name: spec
+                        .get("path")
+                        .and_then(toml::Value::as_str)
+                        .unwrap_or("<unnamed>")
+                        .to_owned(),
+                });
+            }
+        }
+        _ => {}
+    }
+
+    omitted
 }
 
 /// Copies the provider's constant headers onto every operation, an operation's own entry winning.
@@ -2075,6 +2267,7 @@ fn validate(
     validate_specs(loaded, &mut problems);
 
     validate_services(connector, &mut problems);
+    validate_legacy_default_members(loaded, &mut problems);
     validate_credentials(connector, &mut problems);
     validate_const_headers(connector, provider_headers, &mut problems);
     validate_operations(connector, &mut problems);
@@ -2428,6 +2621,17 @@ fn validate_binding(connector: &Connector, field: &ConfigField, problems: &mut V
 ///    that fails to parse is reported against the field like `binds` is.
 fn validate_destinations(field: &ConfigField, problems: &mut Vec<String>) {
     let name = field.name.as_str();
+    if let Ok(head) = parse_binding(&field.binds) {
+        if !matches!(head, Binding::Username { .. }) && head.target().starts_with("username.") {
+            problems.push(format!(
+                "configuration field {name:?} binds {:?}, whose target uses the reserved \
+                 `username.` placeholder prefix. That prefix identifies the non-secret half of a \
+                 Basic credential when a value also pins a request; choose a target that does not \
+                 impersonate another configuration kind",
+                field.binds
+            ));
+        }
+    }
     let mut seen: Vec<&str> = vec![field.binds.as_str()];
     for binds in field.also_binds.iter().map(String::as_str) {
         if seen.contains(&binds) {
@@ -2791,7 +2995,7 @@ fn validate_slot_is_not_shared(
     }
     let name = field.name.as_str();
     let service = field.service.as_str();
-    let Some(slot) = field.slot() else {
+    let Some(binding) = field.binding() else {
         return;
     };
 
@@ -2799,13 +3003,18 @@ fn validate_slot_is_not_shared(
         if std::ptr::eq(other, field) {
             continue;
         }
-        if other.slot() == Some(slot) {
+        if other.binding().is_some_and(|other| {
+            config_address_kind(other) == config_address_kind(binding)
+                && other.target() == binding.target()
+        }) {
             problems.push(format!(
-                "configuration fields {name:?} and {:?} both resolve `{{{slot}}}` in service \
-                 {service:?}, so a host would key them to one value under one slot. Two questions \
+                "configuration fields {name:?} and {:?} both resolve `{}.{}` in service \
+                 {service:?}, so a host would key them to one value under one address. Two questions \
                  that share an answer are one question — bind one of them to a different name, or \
                  make them one field with an `also_binds`",
-                other.name
+                other.name,
+                config_address_kind(binding),
+                binding.target()
             ));
         }
         for theirs in other.pins() {
@@ -2828,6 +3037,19 @@ fn validate_slot_is_not_shared(
                 ));
             }
         }
+    }
+}
+
+/// The host-side kind one binding is stored under.
+///
+/// Bare request pins are carried through the established endpoint-configuration port, so an
+/// endpoint and a request pin of one target still share an address (C-229). A Basic username and a
+/// credential secret are separate ports and therefore separate addresses even when both name the
+/// same credential — the distinction C-475's qualified placeholder preserves.
+fn config_address_kind(binding: Binding<'_>) -> &'static str {
+    match binding {
+        Binding::Request { .. } => "endpoint",
+        other => other.kind(),
     }
 }
 
@@ -3922,10 +4144,15 @@ fn validate_services(connector: &Connector, problems: &mut Vec<String>) {
             ));
             continue;
         }
-        // The reserved name is the *implicit* service. A second definition of something that already
-        // exists could disagree with it about a base URL or a version, with nothing to say which one
-        // an operation meant — so the entry is admitted for exactly one purpose, and refused for
-        // every other. See `validate_default_service_entry`.
+        if service.legacy && name != DEFAULT_SERVICE {
+            problems.push(format!(
+                "service {name:?} sets `legacy = true`, but the marker belongs only to the reserved \
+                 {DEFAULT_SERVICE:?} service whose already-published addresses must stay elided"
+            ));
+        }
+        // The reserved name is normally the *implicit* service. C-458 also admits an explicitly
+        // marked legacy default beside named siblings without changing its published addresses.
+        // See `validate_default_service_entry`.
         if name == DEFAULT_SERVICE {
             validate_default_service_entry(connector, service, problems);
         }
@@ -3983,54 +4210,61 @@ fn validate_service_tags(service: &Service, problems: &mut Vec<String>) {
     }
 }
 
-/// Checks the one `[[services]]` entry that may name the reserved [`DEFAULT_SERVICE`] — C-120.
+/// Checks the one `[[services]]` entry that may name the reserved [`DEFAULT_SERVICE`] — C-120,
+/// C-458.
 ///
 /// C-49 refused the name outright, and the reason was sound: `default` is the service an operation
 /// belongs to when it names none, so declaring it is a second definition of something that already
 /// exists, and the two could disagree about a base URL or a version.
 ///
-/// Roles and tags are the one thing that argument does not cover, and only for **a provider with a
-/// single API surface**, which has no other service to attach either to. The exception is scoped to
-/// exactly that case, along two axes:
+/// Roles and tags are the one thing that argument does not cover for **a provider with a single API
+/// surface**, which has no other service to attach either to. C-458 adds a second, explicitly marked
+/// shape for a published default service growing named siblings. The exceptions are scoped along
+/// two axes:
 ///
 /// 1. **What the entry may carry.** `roles` and `tags`, and nothing else. Neither has a
 ///    connector-level spelling, so neither has anything to contradict, while `base_url`,
 ///    `api_version` and `description` all do. `tags` joined the exception with C-153, which is what
 ///    makes the *forty-seven* single-surface providers taggable at all.
-/// 2. **Whether the provider has any other service.** A `default` entry beside a named one would
-///    hand back the implicit `default` that a multi-service provider must not have — and the harm is
-///    concrete, not doctrinal: [`validate_operation_service`] refuses an operation that omits
-///    `service` in a multi-service file precisely so it is not emitted into a
-///    `<provider>-default.flux` nobody declared. Declaring the entry would make that operation legal
-///    again. So the entry is refused unless `default` is the only service there is.
+/// 2. **Whether the provider has any other service.** A `default` entry beside a named one remains
+///    refused unless it sets `legacy = true`. That marker says the elided address already exists and
+///    must not move. In that shape every service-bearing source table must state `service`, so the
+///    declaration cannot silently catch omissions.
 ///
-/// It stays the *implicit* service when it is admitted: [`Connector::is_default_only`] remains true,
-/// so a provider that writes the entry emits the same `<provider>.flux` it emitted before.
+/// The reserved service stays address-elided in both admitted forms. A single-surface provider still
+/// satisfies [`Connector::is_default_only`]; a mixed legacy provider does not, but artifact and
+/// address rendering elide `default` by name and therefore keep its existing `<provider>.flux`.
 fn validate_default_service_entry(
     connector: &Connector,
     service: &Service,
     problems: &mut Vec<String>,
 ) {
-    // Scoped by "no service other than `default` is declared" rather than by a count, so that a file
+    // Scoped by "a service other than `default` is declared" rather than by a count, so that a file
     // declaring `default` twice reports the duplicate once and does not also report this twice.
-    if let Some(other) = connector
+    let named_sibling = connector
         .services
         .iter()
-        .find(|other| other.name != DEFAULT_SERVICE)
-    {
+        .find(|other| other.name != DEFAULT_SERVICE);
+
+    if let Some(other) = named_sibling.filter(|_| !service.legacy) {
         problems.push(format!(
             "`[[services]]` declares {DEFAULT_SERVICE:?} beside the named service {:?}. \
-             {DEFAULT_SERVICE:?} may be declared only by a provider whose *only* API surface it is, \
-             and only to carry `roles` and `tags` — which a single-surface provider has nowhere else \
-             to put. \
-             A provider that declares named services has no implicit {DEFAULT_SERVICE:?} for an \
-             operation to fall into, and declaring one here would hand it back: an operation that \
-             omitted `service` would become legal and be emitted into a \
-             `<provider>-{DEFAULT_SERVICE}.flux` nobody asked for. Declare the roles and tags on the \
-             service that actually has them",
+             Set `legacy = true` only when this is an already-published, address-elided service that \
+             must retain its old GID, OIP, credential address and unsuffixed artifacts while named \
+             siblings are added. Otherwise declare the roles and tags on the named service that \
+             actually has them",
             other.name
         ));
         return;
+    }
+
+    if named_sibling.is_none() && service.legacy {
+        problems.push(format!(
+            "`[[services]]` declares {DEFAULT_SERVICE:?} with `legacy = true` but has no named \
+             sibling. The marker is an address-migration capability for preserving an \
+             already-published default while named services are added, not shorthand for a new or \
+             default-only connector"
+        ));
     }
 
     let mut overreaching: Vec<&str> = Vec::new();
@@ -4054,12 +4288,47 @@ fn validate_default_service_entry(
              second definition could disagree with it",
             overreaching.join("`, `")
         ));
-    } else if service.roles.is_empty() && service.tags.is_empty() {
+    } else if named_sibling.is_none()
+        && !service.legacy
+        && service.roles.is_empty()
+        && service.tags.is_empty()
+    {
         problems.push(format!(
             "`[[services]]` declares {DEFAULT_SERVICE:?} and nothing else. {DEFAULT_SERVICE:?} is \
              reserved: it is the service an operation belongs to when it names none, and a provider \
              with one API surface declares no services at all. The two reasons to write the entry \
              are to carry `roles` and to carry `tags`"
+        ));
+    }
+}
+
+/// Refuses the ambiguity C-458's explicit legacy-default shape would otherwise reintroduce.
+///
+/// Serde intentionally normalizes an omitted `service` to `default` for every existing connector.
+/// Only a mixed connector preserving an old default needs to distinguish those authoring forms, so
+/// [`implicit_service_members`] retains that presence bit until this check and nowhere beyond it.
+fn validate_legacy_default_members(loaded: &LoadedProvider, problems: &mut Vec<String>) {
+    let connector = &loaded.connector;
+    let preserves_legacy_default = connector
+        .services
+        .iter()
+        .any(|service| service.name == DEFAULT_SERVICE && service.legacy)
+        && connector
+            .services
+            .iter()
+            .any(|service| service.name != DEFAULT_SERVICE);
+
+    if !preserves_legacy_default {
+        return;
+    }
+
+    for member in &loaded.implicit_service_members {
+        problems.push(format!(
+            "{} {:?} names no `service` in a connector preserving legacy {DEFAULT_SERVICE:?} \
+             beside named services. State `service = {DEFAULT_SERVICE:?}` for the published legacy \
+             owner or name its sibling; omission remains refused so a new member cannot silently \
+             enter the address-elided service",
+            member.kind, member.name
         ));
     }
 }
@@ -5279,6 +5548,7 @@ pub fn accepted_keys() -> Vec<(&'static str, Vec<String>)> {
         ("rateLimit", probe::<crate::RateLimit>()),
         ("errorEnvelope", probe::<crate::ErrorEnvelope>()),
         ("provenance", probe::<Provenance>()),
+        ("operationSpecSource", probe::<OperationSpecSource>()),
     ]
 }
 

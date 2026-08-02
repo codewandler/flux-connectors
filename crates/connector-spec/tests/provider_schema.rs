@@ -138,7 +138,7 @@ fn the_schema_marks_the_mandatory_keys_required() {
             .unwrap_or_default()
     };
 
-    let cases: [(&str, &[&str]); 7] = [
+    let cases: [(&str, &[&str]); 8] = [
         ("provider", &["id", "base_url"]),
         // No default for `scheme`: how a secret reaches the wire is not decided by silence.
         ("authMethod", &["name", "scheme"]),
@@ -151,6 +151,10 @@ fn the_schema_marks_the_mandatory_keys_required() {
         ("authRequirement", &["credentials"]),
         ("spec", &["path"]),
         ("operationPatch", &["select"]),
+        (
+            "operationSpecSource",
+            &["operation_id", "upstream_version", "sha256"],
+        ),
     ];
 
     for (object, expected) in cases {

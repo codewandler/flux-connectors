@@ -824,6 +824,112 @@ pub(crate) fn endpoint_slots(declaration: &CompositeOpDecl) -> BTreeMap<String, 
     slots
 }
 
+/// **Caller parameters that the emitted declaration places in a URL path segment.**
+///
+/// This is deliberately read from the Flux body rather than from catalogue IR or parameter names:
+/// the pack executes the declaration, so the declaration is the only source that cannot disagree
+/// with the request. Every `fmt` is visited recursively through both arms of a [`Node::When`], which
+/// matters for a guarded path extension even when the current call does not take that branch.
+///
+/// Literal symbols are expanded before placement. In particular, the emitter's `sep` alternates
+/// between `?` and `&`; treating that closed pair as a query boundary keeps guarded query arguments
+/// out of the path set without evaluating one caller's branch choices at projection time.
+pub(crate) fn caller_path_parameters(declaration: &CompositeOpDecl) -> BTreeSet<String> {
+    let parameters: BTreeSet<&str> = declaration
+        .params
+        .iter()
+        .map(|parameter| parameter.name.0.as_str())
+        .collect();
+    let mut literals: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    collect_literal_alternatives(&declaration.body.body, &mut literals);
+
+    let mut path = BTreeSet::new();
+    collect_caller_path_parameters(&declaration.body.body, &parameters, &literals, &mut path);
+    path
+}
+
+/// Every literal spelling a symbol may have across guarded branches.
+fn collect_literal_alternatives(nodes: &[Node], literals: &mut BTreeMap<String, BTreeSet<String>>) {
+    for node in nodes {
+        match node {
+            Node::Bind { name, value, .. } => {
+                if let Node::Lit {
+                    value: Value::String(text),
+                } = value.as_ref()
+                {
+                    literals
+                        .entry(name.0.clone())
+                        .or_default()
+                        .insert(text.clone());
+                }
+            }
+            Node::When {
+                then, otherwise, ..
+            } => {
+                collect_literal_alternatives(then, literals);
+                collect_literal_alternatives(otherwise, literals);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Locate caller symbols in every interpolation the emitted body can evaluate.
+fn collect_caller_path_parameters(
+    nodes: &[Node],
+    parameters: &BTreeSet<&str>,
+    literals: &BTreeMap<String, BTreeSet<String>>,
+    path: &mut BTreeSet<String>,
+) {
+    for node in nodes {
+        match node {
+            Node::Bind { value, .. } => {
+                if let Node::Fmt { template } = value.as_ref() {
+                    place_caller_parameters(template, parameters, literals, path);
+                }
+            }
+            Node::When {
+                then, otherwise, ..
+            } => {
+                collect_caller_path_parameters(then, parameters, literals, path);
+                collect_caller_path_parameters(otherwise, parameters, literals, path);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Place caller markers relative to the URL's first query/fragment delimiter.
+fn place_caller_parameters(
+    template: &str,
+    parameters: &BTreeSet<&str>,
+    literals: &BTreeMap<String, BTreeSet<String>>,
+    path: &mut BTreeSet<String>,
+) {
+    let expanded = scan_template(template, |symbol| {
+        if parameters.contains(symbol) {
+            return Some(mark(symbol));
+        }
+        let alternatives = literals.get(symbol)?;
+        if alternatives.len() == 1 {
+            return alternatives.first().cloned();
+        }
+        // `sep` is `?` before the first included query argument and `&` thereafter. Both place
+        // everything following them in the query, so `?` is the stable positional representative.
+        (alternatives.contains("?")
+            && alternatives
+                .iter()
+                .all(|literal| matches!(literal.as_str(), "?" | "&")))
+        .then(|| "?".to_owned())
+    });
+    let query_start = expanded.find(['?', '#']).unwrap_or(expanded.len());
+    for (offset, parameter) in marked_placeholders(&expanded) {
+        if offset < query_start {
+            path.insert(parameter.to_owned());
+        }
+    }
+}
+
 /// Walk every statement, recording pin binds, literal binds, and the placements a URL literal
 /// settles on its own.
 fn collect_binds(
@@ -1039,6 +1145,8 @@ fn record(slots: &mut BTreeMap<String, Slot>, variable: &str, slot: Slot) {
 /// # Errors
 ///
 /// [`Error::MissingParameter`] when the caller omitted a parameter the operation declares,
+/// [`Error::UnsafePathParameter`] when a caller string would escape the URL path segment the
+/// emitted Flux places it in,
 /// [`Error::Unbuildable`] when the body contains something this evaluator does not model or a
 /// free-form body is not JSON, [`Error::UnsafeConfig`] when a configuration value would reshape the
 /// request it is substituted into (C-214), and [`Error::UnresolvedEndpoint`] when a configuration
@@ -1050,6 +1158,7 @@ pub(crate) fn build(
     params: &Value,
     endpoints: &BTreeMap<String, String>,
     slots: &BTreeMap<String, Slot>,
+    caller_path_parameters: &BTreeSet<String>,
 ) -> Result<Request, Error> {
     // **The invariant, executed** (C-232). Checked before a single parameter is bound, because the
     // question it answers is whether this body's braces mean what this module thinks they mean —
@@ -1072,6 +1181,17 @@ pub(crate) fn build(
                 parameter: name.to_owned(),
             })?
             .clone();
+        if caller_path_parameters.contains(name) {
+            if let Value::String(text) = &value {
+                Slot::Path
+                    .validate(text)
+                    .map_err(|reason| Error::UnsafePathParameter {
+                        operation: operation.to_owned(),
+                        parameter: name.to_owned(),
+                        reason,
+                    })?;
+            }
+        }
         env.insert(name.to_string(), value);
     }
 
@@ -2057,6 +2177,7 @@ mod tests {
             &json!({}),
             &BTreeMap::new(),
             &slots,
+            &caller_path_parameters(&declaration),
         )
         .expect_err("a document literal is not configuration and cannot be built through");
         assert!(
@@ -2075,7 +2196,8 @@ mod tests {
                 &declaration,
                 &json!({}),
                 &fabricated,
-                &slots
+                &slots,
+                &caller_path_parameters(&declaration),
             )
             .is_err(),
             "supplying values made the operation buildable again, which is the fabrication this \
@@ -2146,6 +2268,7 @@ mod tests {
             &json!({}),
             &BTreeMap::new(),
             &BTreeMap::new(),
+            &caller_path_parameters(&declaration),
         )
         .expect_err("a document literal is not configuration and cannot be built through");
 

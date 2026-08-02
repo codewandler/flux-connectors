@@ -130,6 +130,18 @@ fn a_template_variable_nothing_binds_is_refused() {
 }
 
 #[test]
+fn the_username_placeholder_prefix_is_reserved_from_endpoint_fields() {
+    let source = fixture(GOOD)
+        .replace("{tenant}", "{username.tenant}")
+        .replace("endpoint.tenant", "endpoint.username.tenant");
+    let error = refuse(&source);
+    assert!(
+        error.contains("reserved `username.` placeholder prefix"),
+        "an endpoint must not impersonate the qualified Basic-username address:\n{error}"
+    );
+}
+
+#[test]
 fn a_connector_with_no_configuration_at_all_is_refused_when_it_needs_some() {
     let error = refuse(&fixture(""));
     assert!(
@@ -553,10 +565,13 @@ fn the_four_tenant_providers_ask_for_their_tenant() {
 #[test]
 fn zendesk_declares_a_complete_connect_form() {
     let connector = shipped("zendesk");
-    let names: Vec<&str> = connector.config.iter().map(|f| f.name.as_str()).collect();
+    let support: Vec<_> = connector
+        .config_of(connector_spec::DEFAULT_SERVICE)
+        .collect();
+    let names: Vec<&str> = support.iter().map(|f| f.name.as_str()).collect();
     assert_eq!(names, ["subdomain", "email", "api_token"]);
 
-    let secret: Vec<bool> = connector.config.iter().map(|f| f.secret).collect();
+    let secret: Vec<bool> = support.iter().map(|f| f.secret).collect();
     assert_eq!(
         secret,
         [false, false, true],
@@ -808,7 +823,7 @@ fn a_path_pin_no_operation_carries_is_refused() {
 
 /// **The C-197 collapse, made unreachable.** A host keys a configuration value by
 /// `(tenant, provider, service, kind, name)` and the module carries one placeholder per pinned
-/// value, so two declarations sharing a placeholder are one slot — which is how a management write
+/// value, so two declarations sharing a placeholder are one address — which is how a management write
 /// once landed in whichever space the delivery reads had been configured with.
 #[test]
 fn two_fields_that_would_share_one_placeholder_are_refused() {
@@ -823,7 +838,7 @@ binds = "path.zone_id"
     ));
     let error = refuse(&source);
     assert!(
-        error.contains("one value under one slot"),
+        error.contains("one value under one address"),
         "two questions that share an answer are one question:\n{error}"
     );
 }
@@ -974,7 +989,7 @@ also_binds = ["header.X-Acme-Application-Id"]
         vec![Pin {
             position: Position::Header,
             name: "X-Acme-Application-Id",
-            variable: "app_id",
+            variable: "app_id".into(),
         }],
         "the header pin carries the slot's placeholder, not a second one"
     );

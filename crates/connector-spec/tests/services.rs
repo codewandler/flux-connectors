@@ -425,17 +425,25 @@ fn every_shipped_service_is_spellable_and_a_single_service_provider_declares_non
         multi_service.push(name.clone());
 
         for service in connector.service_names() {
+            if service == connector_spec::DEFAULT_SERVICE {
+                assert!(
+                    connector
+                        .service(service)
+                        .is_some_and(|declared| declared.legacy),
+                    "providers/{name} may retain the reserved default only as an explicit legacy service"
+                );
+                assert!(
+                    connector.operations_of(service).next().is_some(),
+                    "providers/{name} declares legacy default with no operation"
+                );
+                continue;
+            }
             if let Err(reason) = connector_spec::address::validate_service_name(service) {
                 panic!(
                     "providers/{name} declares service {service:?}, which the address grammar \
                      refuses: {reason}. The name reaches `connectors/*-{service}.flux`"
                 );
             }
-            assert_ne!(
-                service,
-                connector_spec::DEFAULT_SERVICE,
-                "providers/{name} declares the reserved service name"
-            );
             assert!(
                 connector.operations_of(service).next().is_some(),
                 "providers/{name} declares service {service:?} with no operation in it, so a build \
@@ -444,13 +452,15 @@ fn every_shipped_service_is_spellable_and_a_single_service_provider_declares_non
         }
 
         for operation in &connector.operations {
-            assert_ne!(
-                operation.service,
-                connector_spec::DEFAULT_SERVICE,
-                "providers/{name} declares named services, so operation `{}` cannot fall into the \
-                 reserved one",
-                operation.id
-            );
+            if operation.service == connector_spec::DEFAULT_SERVICE {
+                assert!(
+                    connector
+                        .service(connector_spec::DEFAULT_SERVICE)
+                        .is_some_and(|service| service.legacy),
+                    "providers/{name} operation `{}` falls into a non-legacy default beside named services",
+                    operation.id
+                );
+            }
         }
     }
 

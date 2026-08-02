@@ -97,3 +97,63 @@ op stripe-charge-refund-create(charge: String, idempotency_key: String) -> Any
   url = fmt("{base}/v1/charges/{charge}/refunds")
   response = http.request(headers: { "Idempotency-Key": idempotency_key }, method: "POST", url)
   return response
+
+op stripe-country-spec-list(limit: Number) -> Any
+  description "List country-specific requirements, supported currencies and payment capabilities without changing an account"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.stripe.com"
+  url = fmt("{base}/v1/country_specs")
+  sep = "?"
+  when limit
+    url = fmt("{url}{sep}limit={limit}")
+  response = http.request(method: "GET", url)
+  return response
+
+op stripe-event-list(limit: Number) -> Any
+  description "List Stripe account events for operational visibility without replaying or changing an event"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.stripe.com"
+  url = fmt("{base}/v1/events")
+  sep = "?"
+  when limit
+    url = fmt("{url}{sep}limit={limit}")
+  response = http.request(method: "GET", url)
+  return response
+
+op stripe-exchange-rate-list(limit: Number) -> Any
+  description "List current Stripe exchange rates without creating a conversion or moving funds"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.stripe.com"
+  url = fmt("{base}/v1/exchange_rates")
+  sep = "?"
+  when limit
+    url = fmt("{url}{sep}limit={limit}")
+  response = http.request(method: "GET", url)
+  return response
+
+op stripe-billing-meter-list(limit: Number) -> Any
+  description "List usage-billing meter definitions without creating, changing or deactivating one"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.stripe.com"
+  url = fmt("{base}/v1/billing/meters")
+  sep = "?"
+  when limit
+    url = fmt("{url}{sep}limit={limit}")
+  response = http.request(method: "GET", url)
+  return response

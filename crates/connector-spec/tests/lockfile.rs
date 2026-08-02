@@ -191,6 +191,16 @@ fn the_hash_domain_excludes_every_provenance_field() {
             sha256: Some("a".repeat(64)),
             ..Default::default()
         }],
+        operation_specs: [(
+            "zendesk-ticket-list".into(),
+            connector_spec::OperationSpecSource {
+                operation_id: "ListTickets".into(),
+                source_url: Some("https://example.test/openapi.json".into()),
+                upstream_version: "0.7.0".into(),
+                sha256: "a".repeat(64),
+            },
+        )]
+        .into(),
         toml_sha256: Some("b".repeat(64)),
     });
 
@@ -208,6 +218,7 @@ fn the_hash_domain_excludes_every_provenance_field() {
     let complete = full.canonical_json().expect("serialize");
     assert!(complete.contains("2026-07-30T12:00:00Z"));
     assert!(complete.contains("https://example.test/openapi.json"));
+    assert!(complete.contains("ListTickets"));
 }
 
 /// The other half of the contract: everything that *does* decide what gets generated is in the

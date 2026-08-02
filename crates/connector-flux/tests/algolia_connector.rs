@@ -221,7 +221,7 @@ fn the_two_destinations_carry_one_placeholder_into_the_emitted_module() {
         vec![Pin {
             position: Position::Header,
             name: "X-Algolia-Application-Id",
-            variable: "app_id",
+            variable: "app_id".into(),
         }],
         "the pin's wire name is the vendor's; the placeholder it carries is the field's slot"
     );
@@ -437,7 +437,7 @@ binds = "header.X-Algolia-Application-Id"
     assert!(
         message.contains("app_id")
             && message.contains("application_id_header")
-            && message.contains("one slot"),
+            && message.contains("one address"),
         "expected the C-197 shared-slot refusal naming both fields, got: {message}"
     );
 

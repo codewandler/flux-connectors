@@ -1,17 +1,8 @@
-# GitHub REST API — hand-authored, curated to the surface this pipeline can express honestly.
-#
-# WHY THIS IS NOT A `[spec]` POINTER, even though an excellent OpenAPI document exists.
-# GitHub publishes `github/rest-api-description` — a generated, versioned OpenAPI 3.x description of
-# the whole REST API (`descriptions/api.github.com/api.github.com.json`). Nothing is vendored under
-# `specs/` for it here because ingest (C-4) and the overlay (C-6) do not exist yet, and the document
-# describes roughly a thousand operations: without a selection mechanism, pointing at it would be
-# pointing at a thousand LLM tools. When C-14's fetch and C-4's ingest land, this file becomes
-# `[spec]` plus a `[[patch.operations]]` selection, and **the five operations below are the selection
-# to reproduce** — by `operationId`: `repos/get`, `issues/get`, `issues/create`,
-# `issues/create-comment`, `pulls/get`.
-#
-# Until then drift is undetectable by machine, exactly as for zendesk and freshdesk
-# (`docs/designs/provider-operation-inventory.md` §6.7).
+# GitHub REST API — five hand-authored public contracts plus four exact selections from GitHub's
+# first-party OpenAPI document. The five existing operations stay inline because their ids and Flux
+# bytes are already published; the document is upstream evidence for the new collection reads, not
+# permission to expose its 1,216 operations. Each addition is therefore one `[[patch.operations]]`
+# block and `patch.select` remains empty.
 #
 # ---------------------------------------------------------------------------------------------
 # `Accept: application/vnd.github+json` is declared below, in `[const_headers]`.
@@ -24,9 +15,11 @@
 # argument with the constraint silently dropped. C-55 refuses that spelling outright and adds
 # `const_headers` as the honest one.
 #
-# What this buys is **version pinning**. GitHub serves requests with no `Accept` header by
-# defaulting to this value, so the operations below were well-formed without it — the explicit
-# header is what protects a client from a future change to that default.
+# What this buys is an explicit media type, not dated API-version pinning. GitHub serves requests
+# with no `Accept` header by defaulting to this value, so the operations below were well-formed
+# without it; the explicit header protects the representation contract if that default changes.
+# The generated module currently sends no `X-GitHub-Api-Version`; C-477 owns the compatibility
+# decision because adding it would intentionally move already-published request bytes.
 #
 # `content-type: application/json` remains hard-coded in the emitter and is still not declarable;
 # C-144 tracks the related gap that no connector can send a non-JSON body at all.
@@ -67,13 +60,84 @@ base_url = "https://api.github.com"
 # scalar after it into that table.
 const_headers = { "Accept" = "application/vnd.github+json" }
 
-description = "GitHub REST API: read repositories, issues and pull requests, and write issues and issue comments"
+description = "GitHub REST API: read repositories, commits, issues, pull requests and Actions workflow runs, and write issues and issue comments"
 
 # One credential covers the whole selection. GitHub Apps' installation tokens, fine-grained personal
 # access tokens and classic PATs all present identically as `Authorization: Bearer <token>`, so the
 # token *type* is operator configuration rather than connector shape; what differs between them is
 # which scopes the token carries, which is not something this file can or should assert.
 default_auth = [{ credentials = ["github.token"] }]
+
+# ---------------------------------------------------------------------------------------------
+# First-party REST OpenAPI — pinned, scrubbed and provenanced by C-469.
+#
+# The source bytes are GitHub's commit-pinned `api.github.com.2022-11-28.json`. The vendor script
+# removes every `example`/`examples` value, so a future credential, personal address or telephone
+# example is scrubbed by default while paths, schemas and GitHub's MIT license declaration remain.
+# The complete upstream and vendored hashes live in `specs/github.provenance.toml`; this pointer
+# carries the hash of the exact bytes the offline build ingests.
+# ---------------------------------------------------------------------------------------------
+
+[spec]
+path = "specs/github/api.github.com.2022-11-28-2026-08-02.openapi.json"
+source_url = "https://raw.githubusercontent.com/github/rest-api-description/5e28810649ba41b5483753ba74f976f83856a504/descriptions/api.github.com/api.github.com.2022-11-28.json"
+upstream_version = "1.1.4"
+fetched_at = "2026-08-02T00:00:00Z"
+sha256 = "a7a3293268f062d09eb576806f0e5af271c039b9427f9852c8280c8fecc692e7"
+
+# Only integer pagination is caller-visible. Query values are not percent-encoded yet, so every
+# string, array and boolean filter is explicitly omitted and an upstream rename fails closed.
+[[patch.operations]]
+select = "issues/list-for-repo"
+rename = "github-issue-list"
+description = "List a repository's issues and pull requests with bounded integer pagination"
+risk = "low"
+idempotency = "idempotent"
+omit.query = [
+  "milestone",
+  "state",
+  "assignee",
+  "type",
+  "creator",
+  "mentioned",
+  "issue_field_values",
+  "labels",
+  "sort",
+  "direction",
+  "since",
+]
+
+[[patch.operations]]
+select = "pulls/list-files"
+rename = "github-pull-files-list"
+description = "List the files changed by one pull request with bounded integer pagination"
+risk = "low"
+idempotency = "idempotent"
+
+[[patch.operations]]
+select = "actions/list-workflow-runs-for-repo"
+rename = "github-workflow-run-list"
+description = "List a repository's GitHub Actions workflow runs with bounded integer pagination"
+risk = "low"
+idempotency = "idempotent"
+omit.query = [
+  "actor",
+  "branch",
+  "event",
+  "status",
+  "created",
+  "exclude_pull_requests",
+  "check_suite_id",
+  "head_sha",
+]
+
+[[patch.operations]]
+select = "repos/list-commits"
+rename = "github-commit-list"
+description = "List commits in a repository with bounded integer pagination"
+risk = "low"
+idempotency = "idempotent"
+omit.query = ["sha", "path", "author", "committer", "since", "until"]
 
 # ---------------------------------------------------------------------------------------------
 # Credentials
@@ -87,26 +151,24 @@ env = ["GITHUB_TOKEN"]
 description = "GitHub token sent as a bearer — a GitHub App installation token, a fine-grained PAT, or a classic PAT"
 
 # ---------------------------------------------------------------------------------------------
-# Operations — 5, all addressed by path parameters only
+# Operations — 9: five established calls plus four spec-backed collection reads
 #
-# WHY THERE IS NOT A SINGLE QUERY PARAMETER, and why the most-wanted GitHub operations are missing.
-# Nothing in this pipeline percent-encodes a query value: the emitter interpolates it verbatim into a
-# `fmt` template and flux registers no URL-encoding op (C-30 is unimplemented;
-# `crates/connector-flux/src/op.rs`). `zendesk-ticket-search` is the standing demonstration and
-# AGENTS.md lists it under *Intentional gaps* — a value carrying `&` does not filter, it injects a
-# parameter. GitHub's listing and search endpoints are exactly that shape: `GET /issues` filters on
-# `state`, `labels` and `assignee`, and `GET /search/issues` takes a free-form `q` full of the
-# colons and spaces that make the gap bite. Shipping them would be shipping five more
-# `zendesk-ticket-search`es, so `github-issue-list`, `github-pull-list` and every search endpoint are
-# **deliberately excluded pending C-30** and named in the story's Notes.
+# WHY THERE IS NO CALLER-SUPPLIED STRING QUERY. Nothing in this pipeline percent-encodes a query
+# value: the emitter interpolates it verbatim into a `fmt` template and flux registers no
+# URL-encoding op (C-30 is unimplemented; `crates/connector-flux/src/op.rs`).
+# `zendesk-ticket-search` is the standing demonstration and AGENTS.md lists it under *Intentional
+# gaps* — a value carrying `&` does not filter, it injects a parameter. The new repository-scoped
+# issue list therefore omits `state`, `labels`, `assignee` and every other string filter while
+# retaining only integer `per_page` and `page`. Pull-request collections and every search endpoint
+# remain excluded pending C-30.
 #
 # The path surface, by contrast, is genuinely safe rather than merely untested: `{owner}` and
 # `{repo}` are GitHub names restricted to `[A-Za-z0-9._-]`, and `{issue_number}` / `{pull_number}`
 # are integers. None of those can carry a character that changes the shape of the request. That
 # asymmetry is the whole selection principle for this connector.
 #
-# `crates/connector-flux/tests/github_connector.rs` asserts the absence — both on the IR and on the
-# emitted URL — so this stays a property of the connector rather than of this comment.
+# `crates/connector-flux/tests/github_connector.rs` asserts those omissions on both the IR and the
+# emitted URL, so this stays a property of the connector rather than of this comment.
 #
 # Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
 # alphanumerics, `_` and `-` only (C-8, C-23).

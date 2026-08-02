@@ -69,7 +69,7 @@ const IDEMPOTENCY_HEADER: &str = "Idempotency-Key";
 /// See [`IDEMPOTENCY_HEADER`]. The Flux symbol a write's declaration takes.
 const IDEMPOTENCY_PARAM: &str = "idempotency_key";
 
-/// The curated operation set, in the order `providers/stripe.toml` declares it, each with the risk
+/// The curated operation set, in published order, each with the risk
 /// and idempotency C-106 requires it to carry.
 ///
 /// One table rather than three, because the point of this connector is that the three columns agree:
@@ -100,6 +100,31 @@ const OPERATIONS: &[(&str, Risk, Idempotency)] = &[
         Risk::Destructive,
         Idempotency::Conditional,
     ),
+    (
+        "stripe-country-spec-list",
+        Risk::Low,
+        Idempotency::Idempotent,
+    ),
+    ("stripe-event-list", Risk::Low, Idempotency::Idempotent),
+    (
+        "stripe-exchange-rate-list",
+        Risk::Low,
+        Idempotency::Idempotent,
+    ),
+    (
+        "stripe-billing-meter-list",
+        Risk::Low,
+        Idempotency::Idempotent,
+    ),
+];
+
+/// The only operations allowed to assemble a query string before C-30 lands. Closed by public id:
+/// a future operation ending in `-list` earns no permission merely from its name.
+const INTEGER_LIMIT_LISTS: [&str; 4] = [
+    "stripe-country-spec-list",
+    "stripe-event-list",
+    "stripe-exchange-rate-list",
+    "stripe-billing-meter-list",
 ];
 
 /// The events C-106 declares. Stripe publishes some 250 event types; these are the four that
@@ -400,19 +425,21 @@ fn stripe_grades_its_operations_by_what_they_do_to_money() {
     }
 }
 
-/// **No query parameter at all** — the strong form, on the IR and on every emitted `url` binding.
+/// **No injectable query parameter** — the strong form, on the IR and on every emitted `url`
+/// binding.
 ///
 /// Nothing in this pipeline percent-encodes a query value (C-30), and `zendesk-ticket-search` is the
 /// standing demonstration AGENTS.md lists under *Intentional gaps*. Stripe's collection surface is
 /// exactly that shape — `GET /v1/charges?customer=…&created[gte]=…` uses bracketed nested keys that
-/// need encoding to survive at all — so every list endpoint is excluded and the connector addresses
-/// single objects by id.
+/// need encoding to survive at all. C-470's four lists expose only integer `limit`, whose decimal
+/// rendering cannot add a query pair; every cursor, string, boolean, array and object filter stays
+/// omitted.
 ///
 /// Every `url = ` line is checked, not just the first: the emitter re-binds `$url` once per *optional*
 /// query parameter inside a `when` guard, so inspecting only the first binding would pass while an
 /// operation quietly appended filters.
 #[test]
-fn no_stripe_operation_assembles_a_query_string() {
+fn stripe_queries_are_absent_or_the_one_safe_integer_limit() {
     let connector = load();
 
     for operation in &connector.operations {
@@ -422,13 +449,28 @@ fn no_stripe_operation_assembles_a_query_string() {
             .iter()
             .map(|param| param.name.as_str())
             .collect();
-        assert!(
-            declared.is_empty(),
-            "operation `{}` declares query parameters {declared:?}. Nothing percent-encodes a query \
-             value (C-30), and Stripe's own filters are bracketed keys (`created[gte]`) that cannot \
-             survive unencoded. If C-30 has landed, change this test deliberately",
-            operation.id
-        );
+        let is_list = INTEGER_LIMIT_LISTS.contains(&operation.id.as_str());
+        if is_list {
+            assert_eq!(
+                declared,
+                ["limit"],
+                "{} widened its query surface",
+                operation.id
+            );
+            assert_eq!(
+                operation.params.query[0].schema["type"],
+                serde_json::json!("integer"),
+                "{} can interpolate limit safely only while it is numeric",
+                operation.id
+            );
+        } else {
+            assert!(
+                declared.is_empty(),
+                "operation `{}` declares query parameters {declared:?}. Nothing percent-encodes a \
+                 query value (C-30); only the four reviewed integer-limit lists may carry one",
+                operation.id
+            );
+        }
 
         let emitted = emit_operation(&connector, operation)
             .unwrap_or_else(|error| panic!("`{}` does not emit: {error}", operation.id));
@@ -437,20 +479,25 @@ fn no_stripe_operation_assembles_a_query_string() {
             .map(str::trim_start)
             .filter(|line| line.starts_with("url = "))
             .collect();
-        assert_eq!(
-            url_lines.len(),
-            1,
-            "`{}` binds $url {} times; the emitter does that once for the path and once per optional \
-             query parameter, so anything but one binding means a query string:\n{emitted}",
-            operation.id,
-            url_lines.len()
-        );
-        assert!(
-            !url_lines[0].contains('?') && !emitted.contains("sep = "),
-            "`{}` emits a query string: {}",
-            operation.id,
-            url_lines[0]
-        );
+        if is_list {
+            assert_eq!(
+                url_lines.len(),
+                2,
+                "{} must append exactly one query",
+                operation.id
+            );
+            assert!(emitted.contains("sep = \"?\""));
+            assert!(emitted.contains("{sep}limit={limit}"));
+            assert_eq!(emitted.matches("={limit}").count(), 1);
+        } else {
+            assert_eq!(
+                url_lines.len(),
+                1,
+                "{} unexpectedly appends a query",
+                operation.id
+            );
+            assert!(!url_lines[0].contains('?') && !emitted.contains("sep = "));
+        }
     }
 }
 
