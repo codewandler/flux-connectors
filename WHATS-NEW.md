@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-08-02
+
 ### New
 
 - **Asterisk ARI is now available as a complete REST connector.** It covers all 108 ordinary HTTP

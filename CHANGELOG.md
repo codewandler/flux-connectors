@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-08-02
+
 ### Changed — breaking for Zendesk catalogue consumers
 
 - **Every Zendesk operation now comes from its vendored first-party API description** (C-487).
