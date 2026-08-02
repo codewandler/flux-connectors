@@ -155,8 +155,9 @@ async fn a_withheld_credential_is_not_served_as_a_vendor_that_needs_none() {
 /// surface and which no ordinary request carries.
 ///
 /// The unit here is the **operation**, so the answer is a count rather than a boolean: two of
-/// Anthropic's five operations are callable with `api_key` alone, and the three admin ones say for
-/// themselves that they are not.
+/// Anthropic's eleven operations are callable with `api_key` alone, and the nine admin ones say for
+/// themselves that they are not. C-441 widened the admin service from three reads to nine, which
+/// moved the denominator and left the numerator alone — which is the property this test is for.
 #[tokio::test]
 async fn supplying_one_credential_makes_the_operations_that_use_it_callable() {
     let idp = Idp::start().await;
@@ -188,7 +189,7 @@ async fn supplying_one_credential_makes_the_operations_that_use_it_callable() {
          and nothing else: {after}"
     );
     assert_eq!(
-        after["operation_count"], 5,
+        after["operation_count"], 11,
         "the denominator is the connector's own operation count"
     );
 

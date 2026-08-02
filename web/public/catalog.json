@@ -1202,7 +1202,7 @@
       "id": "anthropic",
       "authority": "com.anthropic.api",
       "vendor": "Anthropic",
-      "description": "Anthropic platform: the live model catalogue, and organization info, workspaces and API keys from the Admin API",
+      "description": "Anthropic platform: the live model catalogue, and organization info, members, workspaces, workspace members, API keys and outstanding invites from the Admin API — all read-only",
       "runtime": "http",
       "base_url": "https://api.anthropic.com",
       "api_version": "v1",
@@ -1230,7 +1230,7 @@
           ],
           "api_version": "v1",
           "gid": "com.anthropic.api/admin:v1",
-          "operation_count": 3
+          "operation_count": 9
         }
       ],
       "auth": {
@@ -1260,7 +1260,7 @@
               "name": "x-api-key",
               "prefix": ""
             },
-            "description": "Anthropic Admin API key (starts sk-ant-admin), sent as x-api-key. Required only for the organization, workspace and API-key operations below — the model catalogue uses the regular API key",
+            "description": "Anthropic Admin API key (starts sk-ant-admin), sent as x-api-key. Required only for the Admin API operations below — organization, members, workspaces, workspace members, API keys and invites — the model catalogue uses the regular API key",
             "env": [
               "ANTHROPIC_ADMIN_KEY"
             ],
@@ -1275,7 +1275,7 @@
           ]
         ]
       },
-      "operation_count": 5,
+      "operation_count": 11,
       "operations": [
         {
           "id": "anthropic-models-list",
@@ -1514,6 +1514,193 @@
           }
         },
         {
+          "id": "anthropic-organization-members-list",
+          "provider": "anthropic",
+          "service": "admin",
+          "description": "List the people in this organization, with each member's name, email address, organization role and the date they joined. Returns personal data about real individuals. Unpaginated — this connector cannot request a further page, so on an organization larger than one page this is a sample and not a roster",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/v1/organizations/users",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "description": "One entry per member of the organization",
+                "items": {
+                  "properties": {
+                    "added_at": {
+                      "description": "When the member joined the organization",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "email": {
+                      "description": "The member's email address. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "The member's stable user id, and what anthropic-organization-member-get and anthropic-workspace-member-get address them by. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "The member's name as Anthropic holds it. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that",
+                      "type": "string"
+                    },
+                    "role": {
+                      "description": "The member's organization role — one of admin, billing, claude_code_user, developer, managed, membership_admin, owner, primary_owner, user. An open set in practice: Anthropic has added to it and this connector does not constrain the value",
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "user"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "first_id": {
+                "description": "First id in `data`. This connector cannot use it as `before_id` — no query parameter is encodable (C-30)",
+                "type": "string"
+              },
+              "has_more": {
+                "description": "True when the organization has more members than this unpaginated call returned",
+                "type": "boolean"
+              },
+              "last_id": {
+                "description": "Last id in `data`, likewise unusable as `after_id` here",
+                "type": "string"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "anthropic.admin_key"
+            ]
+          ],
+          "hosts": [
+            "api.anthropic.com"
+          ],
+          "flux": "op anthropic-organization-members-list -> Any\n  description \"List the people in this organization, with each member's name, email address, organization role and the date they joined. Returns personal data about real individuals. Unpaginated — this connector cannot request a further page, so on an organization larger than one page this is a sample and not a roster. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.anthropic.com\"\n  url = fmt(\"{base}/v1/organizations/users\")\n  anthropic_version = \"2023-06-01\"\n  response = http.request(headers: { \"anthropic-version\": anthropic_version }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "anthropic-organization-member-get",
+          "provider": "anthropic",
+          "service": "admin",
+          "description": "Retrieve one organization member by user id, returning their name, email address, organization role and join date. Returns personal data about a real individual",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/v1/organizations/users/{user_id}",
+          "parameters": [
+            {
+              "name": "user_id",
+              "in": "path",
+              "wire": null,
+              "description": "The member's user id, as returned in `id` by anthropic-organization-members-list or in `user_id` by anthropic-workspace-members-list",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "user_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "user_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "added_at": {
+                "description": "When the member joined the organization",
+                "format": "date-time",
+                "type": "string"
+              },
+              "email": {
+                "description": "The member's email address. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that",
+                "type": "string"
+              },
+              "id": {
+                "description": "The user id, echoed back. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that",
+                "type": "string"
+              },
+              "name": {
+                "description": "The member's name as Anthropic holds it. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that",
+                "type": "string"
+              },
+              "role": {
+                "description": "The member's organization role — one of admin, billing, claude_code_user, developer, managed, membership_admin, owner, primary_owner, user. An open set in practice; this connector does not constrain the value",
+                "type": "string"
+              },
+              "type": {
+                "const": "user"
+              }
+            },
+            "required": [
+              "id",
+              "type"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "anthropic.admin_key"
+            ]
+          ],
+          "hosts": [
+            "api.anthropic.com"
+          ],
+          "flux": "op anthropic-organization-member-get(user_id: String) -> Any\n  description \"Retrieve one organization member by user id, returning their name, email address, organization role and join date. Returns personal data about a real individual. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.anthropic.com\"\n  url = fmt(\"{base}/v1/organizations/users/{user_id}\")\n  anthropic_version = \"2023-06-01\"\n  response = http.request(headers: { \"anthropic-version\": anthropic_version }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
           "id": "anthropic-workspaces-list",
           "provider": "anthropic",
           "service": "admin",
@@ -1559,6 +1746,7 @@
                 "type": "array"
               },
               "first_id": {
+                "description": "First id in `data`. This connector cannot use it as `before_id` — no query parameter is encodable (C-30)",
                 "type": "string"
               },
               "has_more": {
@@ -1566,6 +1754,7 @@
                 "type": "boolean"
               },
               "last_id": {
+                "description": "Last id in `data`, likewise unusable as `after_id` here",
                 "type": "string"
               }
             },
@@ -1583,6 +1772,329 @@
             "api.anthropic.com"
           ],
           "flux": "op anthropic-workspaces-list -> Any\n  description \"List the organization's workspaces. Unpaginated and excludes archived workspaces by default — this connector cannot request a further page or ask for archived ones. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.anthropic.com\"\n  url = fmt(\"{base}/v1/organizations/workspaces\")\n  anthropic_version = \"2023-06-01\"\n  response = http.request(headers: { \"anthropic-version\": anthropic_version }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "anthropic-workspace-get",
+          "provider": "anthropic",
+          "service": "admin",
+          "description": "Retrieve one workspace by id, including its name, creation date, whether it is archived, and its data-residency configuration. Unlike anthropic-workspaces-list this reaches an archived workspace, since the id is given rather than filtered for",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/v1/organizations/workspaces/{workspace_id}",
+          "parameters": [
+            {
+              "name": "workspace_id",
+              "in": "path",
+              "wire": null,
+              "description": "The workspace id, as returned in `id` by anthropic-workspaces-list",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "workspace_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "workspace_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "archived_at": {
+                "description": "When the workspace was archived, or null if it is not archived",
+                "format": "date-time",
+                "type": "string"
+              },
+              "compartment_id": {
+                "description": "This workspace's encryption-compartment identifier, referenced in a customer-managed KMS key policy on AWS. An identifier, never key material",
+                "type": "string"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "data_residency": {
+                "description": "Where this workspace's data is stored and which inference geos it permits",
+                "properties": {
+                  "allowed_inference_geos": {
+                    "description": "The permitted inference geos: either an array of geo names or the string `unrestricted`. Left untyped rather than given a type, because the vendor documents it as either shape and this file states only what it can name with confidence"
+                  },
+                  "default_inference_geo": {
+                    "description": "The inference geo applied when a request names none",
+                    "type": "string"
+                  },
+                  "workspace_geo": {
+                    "description": "The region this workspace's data is stored in. Immutable after creation",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "display_color": {
+                "description": "The hex colour the Anthropic Console shows this workspace in",
+                "type": "string"
+              },
+              "external_key_id": {
+                "description": "The customer-managed encryption key configuration attached to this workspace, when one is. An identifier, never key material",
+                "type": "string"
+              },
+              "id": {
+                "description": "The workspace id, echoed back",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "tags": {
+                "description": "User-defined string key-value tags on the workspace. Keys may not begin with `anthropic`. Left otherwise untyped — the keys are the operator's own",
+                "type": "object"
+              },
+              "type": {
+                "const": "workspace"
+              }
+            },
+            "required": [
+              "id",
+              "type"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "anthropic.admin_key"
+            ]
+          ],
+          "hosts": [
+            "api.anthropic.com"
+          ],
+          "flux": "op anthropic-workspace-get(workspace_id: String) -> Any\n  description \"Retrieve one workspace by id, including its name, creation date, whether it is archived, and its data-residency configuration. Unlike anthropic-workspaces-list this reaches an archived workspace, since the id is given rather than filtered for. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.anthropic.com\"\n  url = fmt(\"{base}/v1/organizations/workspaces/{workspace_id}\")\n  anthropic_version = \"2023-06-01\"\n  response = http.request(headers: { \"anthropic-version\": anthropic_version }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "anthropic-workspace-members-list",
+          "provider": "anthropic",
+          "service": "admin",
+          "description": "List who belongs to one workspace and the role each holds in it. Returns the user ids of real individuals; resolve one to a name and email with anthropic-organization-member-get. Unpaginated — this connector cannot request a further page, so on a workspace larger than one page this is a sample and not a roster",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/v1/organizations/workspaces/{workspace_id}/members",
+          "parameters": [
+            {
+              "name": "workspace_id",
+              "in": "path",
+              "wire": null,
+              "description": "The workspace id, as returned in `id` by anthropic-workspaces-list",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "workspace_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "workspace_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "description": "One entry per member of the workspace",
+                "items": {
+                  "properties": {
+                    "type": {
+                      "const": "workspace_member"
+                    },
+                    "user_id": {
+                      "description": "The member's organization-wide user id, and what anthropic-organization-member-get resolves to a name and email address. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that",
+                      "type": "string"
+                    },
+                    "workspace_id": {
+                      "description": "The workspace this membership is in — the same id that was passed in",
+                      "type": "string"
+                    },
+                    "workspace_role": {
+                      "description": "The member's role in this workspace — one of workspace_admin, workspace_billing, workspace_developer, workspace_restricted_developer, workspace_user. Distinct from the organization-wide `role` on anthropic-organization-members-list",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "user_id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "first_id": {
+                "description": "First id in `data`. This connector cannot use it as `before_id` — no query parameter is encodable (C-30)",
+                "type": "string"
+              },
+              "has_more": {
+                "description": "True when the workspace has more members than this unpaginated call returned",
+                "type": "boolean"
+              },
+              "last_id": {
+                "description": "Last id in `data`, likewise unusable as `after_id` here",
+                "type": "string"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "anthropic.admin_key"
+            ]
+          ],
+          "hosts": [
+            "api.anthropic.com"
+          ],
+          "flux": "op anthropic-workspace-members-list(workspace_id: String) -> Any\n  description \"List who belongs to one workspace and the role each holds in it. Returns the user ids of real individuals; resolve one to a name and email with anthropic-organization-member-get. Unpaginated — this connector cannot request a further page, so on a workspace larger than one page this is a sample and not a roster. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.anthropic.com\"\n  url = fmt(\"{base}/v1/organizations/workspaces/{workspace_id}/members\")\n  anthropic_version = \"2023-06-01\"\n  response = http.request(headers: { \"anthropic-version\": anthropic_version }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "anthropic-workspace-member-get",
+          "provider": "anthropic",
+          "service": "admin",
+          "description": "Retrieve one person's membership of one workspace, and the role they hold in it. This is the direct answer to whether a given user is in a given workspace; it returns the user id of a real individual",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/v1/organizations/workspaces/{workspace_id}/members/{user_id}",
+          "parameters": [
+            {
+              "name": "workspace_id",
+              "in": "path",
+              "wire": null,
+              "description": "The workspace id, as returned in `id` by anthropic-workspaces-list",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "user_id",
+              "in": "path",
+              "wire": null,
+              "description": "The member's user id, as returned in `id` by anthropic-organization-members-list",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "user_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "workspace_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "workspace_id",
+              "user_id"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "type": {
+                "const": "workspace_member"
+              },
+              "user_id": {
+                "description": "The member's organization-wide user id, echoed back. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that",
+                "type": "string"
+              },
+              "workspace_id": {
+                "description": "The workspace this membership is in — the same id that was passed in",
+                "type": "string"
+              },
+              "workspace_role": {
+                "description": "The member's role in this workspace — one of workspace_admin, workspace_billing, workspace_developer, workspace_restricted_developer, workspace_user",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "user_id"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "anthropic.admin_key"
+            ]
+          ],
+          "hosts": [
+            "api.anthropic.com"
+          ],
+          "flux": "op anthropic-workspace-member-get(workspace_id: String, user_id: String) -> Any\n  description \"Retrieve one person's membership of one workspace, and the role they hold in it. This is the direct answer to whether a given user is in a given workspace; it returns the user id of a real individual. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.anthropic.com\"\n  url = fmt(\"{base}/v1/organizations/workspaces/{workspace_id}/members/{user_id}\")\n  anthropic_version = \"2023-06-01\"\n  response = http.request(headers: { \"anthropic-version\": anthropic_version }, method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -1647,12 +2159,14 @@
                 "type": "array"
               },
               "first_id": {
+                "description": "First id in `data`. This connector cannot use it as `before_id` — no query parameter is encodable (C-30)",
                 "type": "string"
               },
               "has_more": {
                 "type": "boolean"
               },
               "last_id": {
+                "description": "Last id in `data`, likewise unusable as `after_id` here",
                 "type": "string"
               }
             },
@@ -1670,6 +2184,120 @@
             "api.anthropic.com"
           ],
           "flux": "op anthropic-api-keys-list -> Any\n  description \"List the organization's API keys, with each key's name, status and a redacted hint — never the key itself. Unpaginated and unfiltered. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.anthropic.com\"\n  url = fmt(\"{base}/v1/organizations/api_keys\")\n  anthropic_version = \"2023-06-01\"\n  response = http.request(headers: { \"anthropic-version\": anthropic_version }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "anthropic-invites-list",
+          "provider": "anthropic",
+          "service": "admin",
+          "description": "List the organization's invites, with the email address invited, the role offered, and whether the invite is still pending. Returns personal data — an email address for a real person. Unpaginated and unfiltered by status, so a `pending` invite must be selected from the returned entries rather than asked for",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/v1/organizations/invites",
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "properties": {
+              "data": {
+                "description": "One entry per invite, in whatever status the vendor holds it",
+                "items": {
+                  "properties": {
+                    "accepted_at": {
+                      "description": "When the invite was accepted, or null if it has not been",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "email": {
+                      "description": "The email address the invitation was sent to. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that",
+                      "type": "string"
+                    },
+                    "expires_at": {
+                      "description": "When the invite expires",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "The invite's own id — an identifier for the invitation, not for the person",
+                      "type": "string"
+                    },
+                    "invited_at": {
+                      "description": "When the invite was created",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "rbac_group_ids": {
+                      "description": "RBAC group ids to assign on acceptance, `[]` when none. A Claude Enterprise beta field; present but empty on organizations not using it",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "role": {
+                      "description": "The organization role the invitee is offered — one of admin, billing, claude_code_user, developer, managed, membership_admin, owner, primary_owner, user",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "One of accepted, deleted, expired, pending. This call cannot filter on it",
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "invite"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type",
+                    "status"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "first_id": {
+                "description": "First id in `data`. This connector cannot use it as `before_id` — no query parameter is encodable (C-30)",
+                "type": "string"
+              },
+              "has_more": {
+                "description": "True when the organization has more invites than this unpaginated call returned",
+                "type": "boolean"
+              },
+              "last_id": {
+                "description": "Last id in `data`, likewise unusable as `after_id` here",
+                "type": "string"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          },
+          "credentials": [
+            [
+              "anthropic.admin_key"
+            ]
+          ],
+          "hosts": [
+            "api.anthropic.com"
+          ],
+          "flux": "op anthropic-invites-list -> Any\n  description \"List the organization's invites, with the email address invited, the role offered, and whether the invite is still pending. Returns personal data — an email address for a real person. Unpaginated and unfiltered by status, so a `pending` invite must be selected from the returned entries rather than asked for. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body.\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://api.anthropic.com\"\n  url = fmt(\"{base}/v1/organizations/invites\")\n  anthropic_version = \"2023-06-01\"\n  response = http.request(headers: { \"anthropic-version\": anthropic_version }, method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [

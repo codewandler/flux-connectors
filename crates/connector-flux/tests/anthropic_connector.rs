@@ -188,8 +188,15 @@ fn every_anthropic_operation_emits_an_analyzable_module() {
     }
 }
 
-/// The curated set C-122 selected, exactly. Named rather than counted so that adding an operation —
-/// in particular an inference one — is a deliberate edit here.
+/// The curated set, exactly — C-122's five, widened to eleven by C-441. Named rather than counted
+/// so that adding an operation — in particular an inference one — is a deliberate edit here.
+///
+/// C-441 made that edit for the six Admin API reads it added: organization members (list and get),
+/// one workspace by id, workspace members (list and get), and outstanding invites. The charter
+/// claim this assertion protects is unchanged and is about *inference*, not about size — so growing
+/// the management surface is in scope for an edit here and `POST /v1/messages` never is. The
+/// per-service half of the same claim, including that every Admin operation is a read on the admin
+/// credential, lives in `crates/connector-spec/tests/anthropic_admin_surface.rs`.
 #[test]
 fn the_curated_operation_set_is_the_one_the_story_selected() {
     let connector = anthropic();
@@ -204,9 +211,15 @@ fn the_curated_operation_set_is_the_one_the_story_selected() {
         ids,
         [
             "anthropic-api-keys-list",
+            "anthropic-invites-list",
             "anthropic-model-get",
             "anthropic-models-list",
             "anthropic-organization-get",
+            "anthropic-organization-member-get",
+            "anthropic-organization-members-list",
+            "anthropic-workspace-get",
+            "anthropic-workspace-member-get",
+            "anthropic-workspace-members-list",
             "anthropic-workspaces-list",
         ],
         "the curated set changed — this connector ships management surface and model catalogue \
