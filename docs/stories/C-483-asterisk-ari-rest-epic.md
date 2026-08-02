@@ -19,12 +19,12 @@ the normal `flux-connectors` pipeline, with no Asterisk plugin or runtime invent
 
 ## Acceptance
 
-- [ ] C-484 vendors and deterministically normalizes the official ARI descriptions with an exact
+- [x] C-484 vendors and deterministically normalizes the official ARI descriptions with an exact
       109-total / 108-REST / 1-WebSocket census.
-- [ ] C-485 selects all 108 REST operations into one callable Asterisk connector and proves request
+- [x] C-485 selects all 108 REST operations into one callable Asterisk connector and proves request
       composition through the scoped provider gate.
-- [ ] Event WebSocket handling is absent and explicitly deferred to future channel work.
-- [ ] C-486 regenerates the whole catalogue, passes every repository gate, and cuts the immediate
+- [x] Event WebSocket handling is absent and explicitly deferred to future channel work.
+- [x] C-486 regenerates the whole catalogue, passes every repository gate, and cuts the immediate
       new-provider release.
 - [ ] The separate Flux correction removes the entire Asterisk plugin rather than retaining AMI.
 
@@ -35,6 +35,9 @@ the normal `flux-connectors` pipeline, with no Asterisk plugin or runtime invent
   more design work.
 - 2026-08-02: `python3` over the 11 first-party documents measured 76 paths and 109 operations:
   108 ordinary HTTP operations and one `upgrade = "websocket"` operation.
+- 2026-08-02: `flux-connectors` v0.15.0 published the complete 108-operation REST connector after
+  its crates.io workflow completed successfully; the epic remains open only for the separate Flux
+  correction that removes the mistaken plugin.
 
 ## Notes
 

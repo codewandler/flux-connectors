@@ -28,7 +28,6 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 - [C-90 — Credential addressing and the secret-store seam (epic)](C-90-credential-addressing-epic.md) · Spec · EPIC — a hosted product needs two customers' Zendesk tokens in two places, and neither repo could say where. This repo owns the ADDRESS (pure, derived from pid + service, version deliberately omitted); a host library owns the client. Pure layer landed
 - [C-94 — The flow graph — connector members composed into one Flux op (epic)](C-94-flow-graph-epic.md) · Spec · EPIC — four waves built the vocabulary (Operation=call node, EventDecl=source, oip=node id, wire paths=edges); this is the graph. NOT a second language: every past rejection was an EXPRESSION language, every acceptance was declarative structure. IR landed
 - [C-483 — Asterisk ARI ships as a spec-generated REST connector (epic)](C-483-asterisk-ari-rest-epic.md) · Agent · EPIC — 108 REST operations from official ARI Swagger; event WebSocket deferred to future channels
-- [C-486 — Integrate and release the Asterisk ARI connector](C-486-integrate-release-asterisk-ari.md) · Build · coordinator-owned catalogue regeneration, full gates and immediate new-provider release
 
 ## Next (ready — take the top one unless the user named a story)
 - [C-155 — An operation cannot say it costs money, and all 110 of them claim only `network`](C-155-semantic-effects.md) · Spec · measured: every one of 110 emitted operations declares `effects [\"network\"]` — including Stripe's refund, which is risk `destructive`. flux has a semantic tier (Money/Delete/SendExternal) and built OpSignature::semantic_effects so 'a downstream visual editor' could see it
@@ -448,6 +447,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-482 — Render a legacy default service beside named siblings](C-482-render-legacy-default-service.md) · Surfaces · an explicit legacy default is a real filterable surface; only an implicit single-service default stays hidden
 - [C-484 — Vendor and normalize the official Asterisk ARI descriptions](C-484-vendor-normalize-asterisk-ari.md) · Spec · first-party Swagger 1.1/1.2 becomes deterministic OpenAPI 3 input; exact REST/WebSocket accounting
 - [C-485 — Generate the complete Asterisk ARI REST provider](C-485-generate-asterisk-ari-provider.md) · Connector · all 108 non-WebSocket operations; Basic auth and configured deployment authority; no eventing
+- [C-486 — Integrate and release the Asterisk ARI connector](C-486-integrate-release-asterisk-ari.md) · Build · coordinator-owned catalogue regeneration, full gates and immediate new-provider release
 - [C-487 — Make every Zendesk operation spec-sourced](C-487-retire-zendesk-inline-operations.md) · Connector · greenfield cleanup — replace seven Support and two Messaging inline transcriptions; no compatibility constraint
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._

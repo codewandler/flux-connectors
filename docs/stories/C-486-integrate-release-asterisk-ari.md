@@ -2,7 +2,7 @@
 id: C-486
 title: "Integrate and release the Asterisk ARI connector"
 pillar: Build
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/asterisk-ari-rest.md
 epic: asterisk-ari-rest
@@ -26,7 +26,7 @@ as the newly added provider.
 - [x] The complete Rust, public-site, host-page and publish-dry-run gates pass.
 - [x] Engineering and customer changelogs describe a spec-generated Asterisk ARI REST connector and
       do not claim event/WebSocket or Flux-plugin ownership.
-- [ ] `scripts/cut-release.sh` cuts the required bump; main and tag are pushed, crates publication is
+- [x] `scripts/cut-release.sh` cuts the required bump; main and tag are pushed, crates publication is
       watched green, and the GitHub release is created before the epic closes.
 
 ## Progress
@@ -41,6 +41,9 @@ as the newly added provider.
   catalogue files because Cargo refuses to package a dirty published crate.
 - 2026-08-02: clean-tree publish dry-run packaged and verified all four publishable crates without
   uploading anything.
+- 2026-08-02: `scripts/cut-release.sh minor` created `v0.15.0`; commit `eb83d17` and the tag were
+  pushed, crates.io workflow run 30757477014 completed successfully, and the GitHub release was
+  published at `https://github.com/codewandler/flux-connectors/releases/tag/v0.15.0`.
 
 ## Notes
 
