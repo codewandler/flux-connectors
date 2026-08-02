@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-08-02
+
 ### Changed — breaking for `codewandler-connector-spec` consumers
 
 - **`Service` gained a public `tags` field** (C-153), and the struct is not `#[non_exhaustive]`, so
