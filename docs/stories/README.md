@@ -31,6 +31,7 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 - [C-490 — Declare and publish the socket channel contract](C-490-declare-socket-channel-contract.md) · SocketConnectSpec, channel-scoped query config, event wire values, payload root, full auth/config/event/channel manifest and catalogue facts
 - [C-491 — Compose redacted zero-I/O WebSocket channel plans](C-491-compose-zero-io-channel-plans.md) · connector_pack::channel_plan resolves declared config/auth into exact ws URL, headers and subprotocols without a client, DNS or socket
 - [C-492 — Generate and integrate the Asterisk ARI event channel](C-492-generate-asterisk-ari-events.md) · ari-events /events, Basic auth, app + subscribeAll, exact PascalCase wire values, kebab local names, full schemas and raw payload
+- [C-493 — Move the connector seam to Flux 0.54 for generated channels](C-493-move-flux-engine-line-to-054.md) · release-order bridge: Flux 0.54 publishes guarded WebSockets first, then connector-pack moves every engine pin together so flux-exchange links one runtime line
 
 ## Next (ready — take the top one unless the user named a story)
 - [C-155 — An operation cannot say it costs money, and all 110 of them claim only `network`](C-155-semantic-effects.md) · Spec · measured: every one of 110 emitted operations declares `effects [\"network\"]` — including Stripe's refund, which is risk `destructive`. flux has a semantic tier (Money/Delete/SendExternal) and built OpSignature::semantic_effects so 'a downstream visual editor' could see it
