@@ -46,6 +46,7 @@ const unbound = computed(() => {
         :data-channel-of="provider.id"
         :data-transport="channel.transport"
         :data-verified="String(channel.verification.verified)"
+        :data-payload-root="String(channel.payload_root)"
       >
         <div class="binding__head">
           <code class="binding__name">{{ channel.name }}</code>
@@ -55,6 +56,9 @@ const unbound = computed(() => {
             :class="channel.verification.verified ? 'binding__chip--ok' : 'binding__chip--warn'"
           >
             {{ verificationLabel(channel) }}
+          </span>
+          <span class="binding__payload">
+            {{ channel.payload_root ? 'Complete payload' : 'Mapped payload' }}
           </span>
         </div>
 
@@ -68,9 +72,42 @@ const unbound = computed(() => {
             :data-event="event.name"
           >
             <code class="event__name">{{ event.name }}</code>
+            <span v-if="event.wire_value" class="event__wire">
+              wire <code>{{ event.wire_value }}</code>
+            </span>
             <span v-if="!event.default" class="event__off">off by default</span>
           </li>
         </ul>
+
+        <details v-if="channel.connect" class="binding__connect">
+          <summary>Connection contract</summary>
+          <dl>
+            <div>
+              <dt>Path</dt>
+              <dd><code>{{ channel.connect.path }}</code></dd>
+            </div>
+            <div v-if="Object.keys(channel.connect.query ?? {}).length">
+              <dt>Query</dt>
+              <dd>
+                <code v-for="(value, name) in channel.connect.query" :key="name">
+                  {{ name }}={{ value }}
+                </code>
+              </dd>
+            </div>
+            <div v-if="channel.connect.auth?.length">
+              <dt>Credentials</dt>
+              <dd>
+                <code v-for="(alternative, index) in channel.connect.auth" :key="index">
+                  {{ alternative.credentials.join(' + ') }}
+                </code>
+              </dd>
+            </div>
+            <div v-if="channel.connect.subprotocols?.length">
+              <dt>Subprotocols</dt>
+              <dd><code>{{ channel.connect.subprotocols.join(', ') }}</code></dd>
+            </div>
+          </dl>
+        </details>
 
         <p v-if="replyAddress(channel)" class="binding__reply">
           Replies with <code>{{ replyAddress(channel) }}</code>
@@ -151,6 +188,11 @@ const unbound = computed(() => {
   white-space: nowrap;
 }
 
+.binding__payload {
+  font-size: 11px;
+  color: var(--vp-c-text-3);
+}
+
 .binding__chip--ok {
   background-color: var(--vp-c-tip-soft);
   color: var(--vp-c-tip-1);
@@ -166,6 +208,46 @@ const unbound = computed(() => {
   margin: 4px 0 0;
   font-size: 13px;
   color: var(--vp-c-text-2);
+}
+
+.binding__connect {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--vp-c-text-2);
+}
+
+.binding__connect summary {
+  cursor: pointer;
+  color: var(--vp-c-text-2);
+}
+
+.binding__connect dl {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+}
+
+.binding__connect dl > div {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.binding__connect dt {
+  color: var(--vp-c-text-3);
+}
+
+.binding__connect dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+  margin: 0;
+}
+
+.binding__connect code,
+.event__wire code {
+  overflow-wrap: anywhere;
 }
 
 .binding__reply code,
@@ -196,6 +278,11 @@ const unbound = computed(() => {
   padding: 0 8px;
   background-color: var(--vp-c-warning-soft);
   color: var(--vp-c-warning-1);
+}
+
+.event__wire {
+  font-size: 11px;
+  color: var(--vp-c-text-3);
 }
 
 .inbound__unbound {

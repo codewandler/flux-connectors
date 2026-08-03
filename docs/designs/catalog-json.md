@@ -108,9 +108,20 @@ never a tuple or a positional array.
 | `hosts` | array\<string\> | Hosts reached, templating intact. An array because C-10's `http_hosts` allowlist will hold more than one. |
 | `services` | array\<Service\> | The provider's API surfaces (C-49). **Always at least one**, so a consumer groups by service unconditionally rather than special-casing the providers that have not been split. |
 | `auth` | Auth | See below. |
+| `config` | array\<ConfigField\> | The complete connection form contract, with no collected values. `[]` when the connector declares none. |
 | `operation_count` | number | So a provider list renders without walking `operations`. |
 | `operations` | array\<Operation\> | In the order the provider declares them, which is the order `connectors/<id>.flux` carries them. |
+| `events` | array\<InboundEvent\> | Events the provider receives, in declaration order. `[]` when it declares none. |
+| `channels` | array\<Channel\> | Ingress bindings that carry those events. `[]` when it declares none. |
 | `config_choices` | array\<ConfigChoices\> | The configuration fields whose value comes from a **closed set** (C-225). `[]` for nearly every provider. Added without a `schema_version` bump, per the rule above. |
+
+### ConfigField
+
+The complete, value-free form declaration. Fields whose value equals connector-spec's default are
+omitted; `name`, `label`, `help` and `binds` are always present. Optional keys are `service`,
+`example`, `format`, `choices`, `required`, `default`, `secret`, `docs_url` and `also_binds`.
+`choices` contains [Choice](#choice) objects. A host resolves and stores values; this public document
+never carries one.
 
 ### ConfigChoices
 
@@ -121,10 +132,9 @@ It is here because a set that reached no artifact would be a declaration a produ
 form that cannot see the choices renders a text box, and a wrong New Relic region is a `401` on
 every call that reads exactly like a bad key.
 
-**This is deliberately not the whole configuration surface.** Labels, help text, `format`, `binds`
-and the derived level are [C-87](../stories/C-87-configuration-codegen.md)'s, and that story carries
-a breaking change to `auth.oauth2` which this one must not drag in. What is published here is the
-part a closed set is worthless without.
+This is the indexed compatibility view of the closed-set portion of [`config`](#configfield). A
+consumer rendering a complete form uses `config`; one that only needs the addressed choices may
+continue to use this projection.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -145,6 +155,38 @@ carry yet.
 |---|---|---|
 | `value` | string | What a host stores and what substitution puts on the request. |
 | `label` | string | The human name — `European Union`, not `api.eu.newrelic.com`. Mandatory: a dropdown of bare hostnames is one nobody can answer. |
+
+### InboundEvent
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | Stable local event name. |
+| `wire_value` | string \| null | Exact discriminator spelling when it differs from `name`. |
+| `service` | string | Owning service. |
+| `oip` | string \| null | Rendered member address. |
+| `description` | string | One-line meaning. |
+| `default` | boolean | Whether a connection offers the event enabled initially. |
+| `group` | string | Optional presentation group; empty when unset. |
+| `when` | object | Additional field equalities used to identify the event. |
+| `schema` | object \| null | Vendor payload schema, when published. |
+
+### Channel
+
+| Field | Type | Notes |
+|---|---|---|
+| `name`, `service`, `oip`, `description` | mixed | Binding identity, address and human description. |
+| `transport` | string | `webhook`, `socket` or `poll`. |
+| `connect` | SocketConnect \| null | Inert RFC 6455 handshake facts; `null` for another or vendor-specific transport. |
+| `events` | array\<string\> | Local event names carried by this binding. |
+| `verification` | Verification | Total attribution answer: kind, boolean and optional HMAC declaration. |
+| `discriminator`, `delivery_id` | FieldSelector \| null | Event-kind and stable-delivery selectors. |
+| `payload` | object | Flow symbol to vendor-envelope path projection. |
+| `payload_root` | boolean | Whether the complete decoded event is delivered instead of a projection. |
+| `reply`, `cursor`, `interval`, `subscription`, `setup` | mixed | Transport-specific lifecycle and response declarations; absent answers are `null`. |
+
+`SocketConnect` always carries `path`; it may carry `query`, fixed `headers`, authentication
+alternatives (`credentials` arrays), and ordered `subprotocols`. These are declarations only: the
+catalogue does not resolve templates, credentials, DNS or a socket.
 
 ### Service
 

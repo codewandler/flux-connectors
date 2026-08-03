@@ -752,11 +752,36 @@ test('every declared channel binding is rendered on its connector, with what it 
         body.includes(channel.transport),
         `the binding \`${channel.name}\` does not say which transport it rides on`
       )
+      assert.ok(
+        html.includes(`data-payload-root="${channel.payload_root}"`),
+        `the binding \`${channel.name}\` does not state whether it delivers the complete payload`
+      )
+      if (channel.connect) {
+        assert.ok(
+          body.includes(channel.connect.path),
+          `the binding \`${channel.name}\` does not render its socket path \`${channel.connect.path}\``
+        )
+        for (const alternative of channel.connect.auth ?? []) {
+          for (const credential of alternative.credentials) {
+            assert.ok(
+              body.includes(credential),
+              `the binding \`${channel.name}\` does not name its socket credential \`${credential}\``
+            )
+          }
+        }
+      }
       for (const event of channel.events) {
         assert.ok(
           body.includes(event),
           `the binding \`${channel.name}\` does not name the event \`${event}\` it carries`
         )
+        const declaration = provider.events.find((candidate) => candidate.name === event)
+        if (declaration?.wire_value) {
+          assert.ok(
+            body.includes(declaration.wire_value),
+            `the binding \`${channel.name}\` does not show the wire event \`${declaration.wire_value}\``
+          )
+        }
       }
       // The reply as the address a consumer copies, falling back to the local id for a connector
       // that publishes no authority.
@@ -823,6 +848,7 @@ test('the inbound selectors join a binding to its events and prefer a published 
   const verified = { kind: 'hmac', verified: true, hmac: null }
   const event = (name, rest = {}) => ({
     name,
+    wire_value: null,
     service: RESERVED_SERVICE,
     oip: null,
     description: '',
@@ -838,11 +864,13 @@ test('the inbound selectors join a binding to its events and prefer a published 
     oip: null,
     description: '',
     transport: 'webhook',
+    connect: null,
     events: [],
     verification: verified,
     discriminator: null,
     delivery_id: null,
     payload: {},
+    payload_root: false,
     reply: null,
     cursor: null,
     interval: null,

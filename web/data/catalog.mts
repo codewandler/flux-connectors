@@ -199,6 +199,27 @@ export interface ConfigChoices {
   choices: Choice[]
 }
 
+/** One value a connection form collects, with no stored value or credential material. */
+export interface ConfigField {
+  name: string
+  /** Omitted for the reserved `default` service. */
+  service?: string
+  label: string
+  help: string
+  example?: string
+  /** Omitted for the default `text` format. */
+  format?: string
+  choices?: Choice[]
+  /** Omitted when true, which is the connector-spec default. */
+  required?: boolean
+  default?: string
+  /** Omitted when false. */
+  secret?: boolean
+  docs_url?: string
+  binds: string
+  also_binds?: string[]
+}
+
 export interface Auth {
   schemes: string[]
   credentials: Credential[]
@@ -271,6 +292,8 @@ export interface ManualSetup {
 /** One event a vendor sends, in the vendor's own spelling. */
 export interface InboundEvent {
   name: string
+  /** Exact discriminator spelling when it differs from `name`. */
+  wire_value: string | null
   service: string
   oip: string | null
   description: string
@@ -278,6 +301,20 @@ export interface InboundEvent {
   group: string
   when: Record<string, unknown>
   schema: Record<string, unknown> | null
+}
+
+/** One authentication alternative for a socket handshake. */
+export interface ChannelAuthRequirement {
+  credentials: string[]
+}
+
+/** The inert RFC 6455 handshake a host prepares for a socket binding. */
+export interface SocketConnect {
+  path: string
+  query?: Record<string, string>
+  headers?: Record<string, string>
+  auth?: ChannelAuthRequirement[]
+  subprotocols?: string[]
 }
 
 /**
@@ -294,11 +331,13 @@ export interface Channel {
   oip: string | null
   description: string
   transport: string
+  connect: SocketConnect | null
   events: string[]
   verification: Verification
   discriminator: FieldSelector | null
   delivery_id: FieldSelector | null
   payload: Record<string, string>
+  payload_root: boolean
   reply: Reply | null
   cursor: string | null
   interval: string | null
@@ -332,6 +371,8 @@ export interface Provider {
    * alike. Read it through {@link providerAuth}, never off the field.
    */
   auth: Published<Auth>
+  /** Everything a host needs to render the connector's configuration form. */
+  config: ConfigField[]
   /** Configuration fields that a settings page must render as a choice, not free text. */
   config_choices: ConfigChoices[]
   operation_count: number

@@ -56,12 +56,15 @@ const ROOT = 'Catalog'
  */
 const MUST_BE_EXERCISED = [
   'Provider',
+  'ConfigField',
   'ConfigChoices',
   'Choice',
   'Service',
   'SpecSource',
   'Operation',
   'Channel',
+  'SocketConnect',
+  'ChannelAuthRequirement',
   'InboundEvent',
   'Verification',
   'Hmac',
