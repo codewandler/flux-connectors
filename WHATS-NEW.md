@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-08-03
+
 ### Improved
 
 - **Hosts can keep several connections to the same integration separate.** They can enumerate a

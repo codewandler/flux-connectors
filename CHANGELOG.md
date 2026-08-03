@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-08-03
+
 ### Added
 
 - **Hosts can safely admit several connections to one connector** (C-494). `CredentialScope` and
