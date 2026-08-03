@@ -6,9 +6,6 @@ op calendly-event-type-list(user: String, count: Number) -> Any
   expose true
 
   base = "https://api.calendly.com"
-  url = fmt("{base}/event_types?user={user}")
-  sep = "&"
-  when count
-    url = fmt("{url}{sep}count={count}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/event_types")
+  response = http.request(method: "GET", query: { count, user }, url)
   return response

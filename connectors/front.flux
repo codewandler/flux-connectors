@@ -11,10 +11,7 @@ op front-verify(limit: Number) -> Any
 
   base = "https://api2.frontapp.com"
   url = fmt("{base}/conversations")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response
 
 op front-conversation-list(limit: Number) -> Any
@@ -26,10 +23,7 @@ op front-conversation-list(limit: Number) -> Any
 
   base = "https://api2.frontapp.com"
   url = fmt("{base}/conversations")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response
 
 op front-conversation-get(conversation_id: String) -> Any
@@ -53,10 +47,7 @@ op front-conversation-message-list(conversation_id: String, limit: Number) -> An
 
   base = "https://api2.frontapp.com"
   url = fmt("{base}/conversations/{conversation_id}/messages")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response
 
 op front-conversation-reply(conversation_id: String, body: String) -> Any

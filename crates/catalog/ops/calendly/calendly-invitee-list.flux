@@ -7,11 +7,5 @@ op calendly-invitee-list(uuid: String, status: String, count: Number) -> Any
 
   base = "https://api.calendly.com"
   url = fmt("{base}/scheduled_events/{uuid}/invitees")
-  sep = "?"
-  when status
-    url = fmt("{url}{sep}status={status}")
-    sep = "&"
-  when count
-    url = fmt("{url}{sep}count={count}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { count, status }, url)
   return response

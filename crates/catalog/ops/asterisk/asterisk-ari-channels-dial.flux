@@ -7,11 +7,5 @@ op asterisk-ari-channels-dial(channelId: String, caller: String, timeout: Number
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/channels/{channelId}/dial")
-  sep = "?"
-  when caller
-    url = fmt("{url}{sep}caller={caller}")
-    sep = "&"
-  when $timeout
-    url = fmt("{url}{sep}timeout={timeout}")
-  response = http.request(method: "POST", url)
+  response = http.request(method: "POST", query: { caller, timeout: $timeout }, url)
   return response

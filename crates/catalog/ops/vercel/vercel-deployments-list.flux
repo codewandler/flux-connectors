@@ -7,9 +7,6 @@ op vercel-deployments-list(projectId: String) -> Any
 
   base = "https://api.vercel.com"
   teamId = "{teamId}"
-  url = fmt("{base}/v7/deployments?teamId={teamId}")
-  sep = "&"
-  when projectId
-    url = fmt("{url}{sep}projectId={projectId}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/v7/deployments")
+  response = http.request(method: "GET", query: { projectId, teamId }, url)
   return response

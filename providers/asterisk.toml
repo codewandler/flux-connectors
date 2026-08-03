@@ -3,8 +3,9 @@
 # The vendor publishes eleven legacy Swagger 1.1/1.2 documents rather than OpenAPI 3. They remain
 # committed byte-for-byte under `specs/asterisk/api-docs/`; `scripts/normalize-asterisk-ari.py`
 # deterministically joins them into the OpenAPI 3 document selected below. The source census is 109
-# operations: 108 ordinary HTTP calls selected here and one `GET /events` WebSocket represented by
-# the generated `ari-events` channel at the end of this file.
+# operations: 108 ordinary HTTP calls are available to the overlay and one `GET /events` WebSocket
+# is represented by the generated `ari-events` channel at the end of this file. Twelve REST calls
+# remain deferred below because their array-valued query convention is not declared.
 
 id = "asterisk"
 vendor = "Asterisk"
@@ -33,9 +34,10 @@ sha256 = "7ea540678f8f9930d5582161c7cb0dc1cbf09674c2bc5b5466f94c854210f53e"
 rule = "kebab"
 prefix = "asterisk-ari"
 
-# All REST calls are catalogued and callable. The broad method classes make the conservative safety
-# decision reviewable in four blocks: reads are low/idempotent by construction, while POST, PUT and
-# DELETE never invite an automatic replay against live PBX state. DELETE remains destructive.
+# All scalar-query REST calls are catalogued and callable. The broad method classes make the
+# conservative safety decision reviewable in four blocks: reads are low/idempotent by construction,
+# while POST, PUT and DELETE never invite an automatic replay against live PBX state. DELETE remains
+# destructive.
 # Only the bounded subset below reaches a model as tools.
 [[patch.select]]
 methods = ["GET"]
@@ -59,9 +61,60 @@ risk = "destructive"
 idempotency = "non_idempotent"
 expose = false
 
-# A useful bounded model surface. Named-operation callers retain all 108 operations through
-# connector-pack resolve; these fifteen are the common discovery/control actions advertised in a
-# model prompt.
+# C-30: ARI documents these query values as arrays without saying whether the wire uses repeated
+# keys, comma-separated values, brackets or JSON. Each block narrows the explicitly selected set;
+# publishing one by guess would create a plausible request to a live PBX that ARI may misread.
+[[patch.operations]]
+select = "applications-subscribe"
+defer = "The eventSource query array has no declared wire convention."
+
+[[patch.operations]]
+select = "applications-unsubscribe"
+defer = "The eventSource query array has no declared wire convention."
+
+[[patch.operations]]
+select = "asterisk-getInfo"
+defer = "The only query array has no declared wire convention."
+
+[[patch.operations]]
+select = "bridges-addChannel"
+defer = "The channel query array has no declared wire convention."
+
+[[patch.operations]]
+select = "bridges-play"
+defer = "The media query array has no declared wire convention."
+
+[[patch.operations]]
+select = "bridges-playWithId"
+defer = "The media query array has no declared wire convention."
+
+[[patch.operations]]
+select = "bridges-removeChannel"
+defer = "The channel query array has no declared wire convention."
+
+[[patch.operations]]
+select = "bridges-getBridgeVars"
+defer = "The variables query array has no declared wire convention."
+
+[[patch.operations]]
+select = "channels-play"
+defer = "The media query array has no declared wire convention."
+
+[[patch.operations]]
+select = "channels-playWithId"
+defer = "The media query array has no declared wire convention."
+
+[[patch.operations]]
+select = "channels-getChannelVars"
+defer = "The variables query array has no declared wire convention."
+
+[[patch.operations]]
+select = "events-userEvent"
+defer = "The source query array has no declared wire convention."
+
+# A useful bounded model surface. Named-operation callers retain the 96 operations whose query wire
+# shape is modelled through connector-pack resolve; these fifteen are the common discovery/control
+# actions advertised in a model prompt.
 [[patch.operations]]
 select = "applications-list"
 expose = true

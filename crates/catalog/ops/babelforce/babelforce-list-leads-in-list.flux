@@ -7,11 +7,5 @@ op babelforce-list-leads-in-list(id: String, status: String, format: String) -> 
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/outbound/lists/{id}/leads")
-  sep = "?"
-  when status
-    url = fmt("{url}{sep}status={status}")
-    sep = "&"
-  when format
-    url = fmt("{url}{sep}format={format}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { format, status }, url)
   return response

@@ -152,12 +152,13 @@ fn a_uri_valued_query_parameter_survives_because_it_avoids_the_pipelines_danger_
         let emitted = emit_operation(&connector, operation).unwrap_or_else(|error| {
             panic!("operation `{}` is not emittable: {error}", operation.id)
         });
-        let expected = format!("user={{{}}}", user_param.name);
+        let structured = emitted
+            .lines()
+            .find(|line| line.contains("http.request") && line.contains("query: {"))
+            .unwrap_or_default();
         assert!(
-            emitted.contains(&expected),
-            "`{}` does not interpolate `user` verbatim into the query string as `{expected}` — \
-             the whole point of this connector is that flux's `fmt` puts the value on the wire \
-             unescaped:\n{emitted}",
+            structured.contains(&user_param.name) && !emitted.contains("user={user}"),
+            "`{}` does not pass `user` through Flux's structured encoder:\n{emitted}",
             operation.id
         );
     }

@@ -6,6 +6,6 @@ op asterisk-ari-device-states-update(deviceName: String, deviceState: String) ->
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/deviceStates/{deviceName}?deviceState={deviceState}")
-  response = http.request(method: "PUT", url)
+  url = fmt("{base}/deviceStates/{deviceName}")
+  response = http.request(method: "PUT", query: { deviceState }, url)
   return response

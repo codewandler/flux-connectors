@@ -22,8 +22,8 @@ op docusign-envelope-list(from_date: String) -> Any
   expose true
 
   base = "https://{account_host}/restapi/v2.1/accounts/{account_id}"
-  url = fmt("{base}/envelopes?from_date={from_date}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/envelopes")
+  response = http.request(method: "GET", query: { from_date }, url)
   return response
 
 op docusign-envelope-get(envelope_id: String) -> Any

@@ -7,20 +7,5 @@ op babelforce-list-global-queue-selections(sort: String, order: String, includeM
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/queues/selections")
-  sep = "?"
-  when sort
-    url = fmt("{url}{sep}sort={sort}")
-    sep = "&"
-  when order
-    url = fmt("{url}{sep}order={order}")
-    sep = "&"
-  when includeMembers
-    url = fmt("{url}{sep}includeMembers={includeMembers}")
-    sep = "&"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { includeMembers, max, order, page, sort }, url)
   return response

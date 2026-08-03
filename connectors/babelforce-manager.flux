@@ -3,7 +3,7 @@
 # Service: manager
 # Regenerate with `flux-connectors build`.
 
-op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, name: String, number: String, sourceId: String, state: String, source: String, groupIds: Any, groups: Any, tags: Any) -> Any
+op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, name: String, number: String, sourceId: String, state: String, source: String, groupIds: String, groups: String, tags: String) -> Any
   description "List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint"
   risk "low"
   idempotency "idempotent"
@@ -12,43 +12,7 @@ op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, na
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/agents")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-    sep = "&"
-  when q
-    url = fmt("{url}{sep}q={q}")
-    sep = "&"
-  when enabled
-    url = fmt("{url}{sep}enabled={enabled}")
-    sep = "&"
-  when name
-    url = fmt("{url}{sep}name={name}")
-    sep = "&"
-  when number
-    url = fmt("{url}{sep}number={number}")
-    sep = "&"
-  when sourceId
-    url = fmt("{url}{sep}sourceId={sourceId}")
-    sep = "&"
-  when state
-    url = fmt("{url}{sep}state={state}")
-    sep = "&"
-  when source
-    url = fmt("{url}{sep}source={source}")
-    sep = "&"
-  when groupIds
-    url = fmt("{url}{sep}groupIds={groupIds}")
-    sep = "&"
-  when groups
-    url = fmt("{url}{sep}groups={groups}")
-    sep = "&"
-  when tags
-    url = fmt("{url}{sep}tags={tags}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { enabled, groupIds, groups, max, name, number, page, q, source, sourceId, state, tags }, url)
   return response
 
 op babelforce-agent-get(id: String) -> Any
@@ -77,7 +41,7 @@ op babelforce-agent-status-update(id: String, enabled: Bool, presence: Any) -> A
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
   return response
 
-op babelforce-call-list(page: Number, max: Number, sessionId: String, conversationId: String, id: Any, type: Any, fromNumber: String, toNumber: Any, time_start: Number, time_end: Number, agentId: Any, q: String, state: Any, finishReason: Any) -> Any
+op babelforce-call-list(page: Number, max: Number, sessionId: String, conversationId: String, id: String, type: String, fromNumber: String, toNumber: String, time_start: Number, time_end: Number, agentId: String, q: String, state: String, finishReason: String) -> Any
   description "List and filter calls from the reporting view"
   risk "low"
   idempotency "idempotent"
@@ -86,49 +50,7 @@ op babelforce-call-list(page: Number, max: Number, sessionId: String, conversati
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/calls/reporting")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-    sep = "&"
-  when sessionId
-    url = fmt("{url}{sep}sessionId={sessionId}")
-    sep = "&"
-  when conversationId
-    url = fmt("{url}{sep}conversationId={conversationId}")
-    sep = "&"
-  when id
-    url = fmt("{url}{sep}id={id}")
-    sep = "&"
-  when type
-    url = fmt("{url}{sep}type={type}")
-    sep = "&"
-  when fromNumber
-    url = fmt("{url}{sep}fromNumber={fromNumber}")
-    sep = "&"
-  when toNumber
-    url = fmt("{url}{sep}toNumber={toNumber}")
-    sep = "&"
-  when time_start
-    url = fmt("{url}{sep}time.start={time_start}")
-    sep = "&"
-  when time_end
-    url = fmt("{url}{sep}time.end={time_end}")
-    sep = "&"
-  when agentId
-    url = fmt("{url}{sep}agentId={agentId}")
-    sep = "&"
-  when q
-    url = fmt("{url}{sep}q={q}")
-    sep = "&"
-  when state
-    url = fmt("{url}{sep}state={state}")
-    sep = "&"
-  when finishReason
-    url = fmt("{url}{sep}finishReason={finishReason}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { agentId, conversationId, finishReason, fromNumber, id, max, page, q, sessionId, state, "time.end": time_end, "time.start": time_start, toNumber, type }, url)
   return response
 
 op babelforce-call-get(id: String) -> Any
@@ -195,6 +117,54 @@ op babelforce-session-update(id: String, body: Any) -> Any
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
   return response
 
+op babelforce-list-all-simple-reporting-calls(page: Number, max: Number, sessionId: String, conversationId: String, id: String, parentId: String, type: String, from: String, fromNumber: String, to: String, toNumber: String, time_start: Number, time_end: Number, agentId: String, queueName: String, agentName: String, bridged: Bool, duration_start: Number, duration_end: Number, waitTime_start: Number, waitTime_end: Number, queueWaitTime_start: Number, queueWaitTime_end: Number, bridgeTime_start: Number, bridgeTime_end: Number, talkTime_start: Number, talkTime_end: Number, holdTime_start: Number, holdTime_end: Number, wrapupTime_start: Number, wrapupTime_end: Number, handleTime_start: Number, handleTime_end: Number) -> Any
+  description "List reporting calls (simple)"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose false
+
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/calls/reporting/simple")
+  response = http.request(method: "GET", query: { agentId, agentName, "bridgeTime.end": bridgeTime_end, "bridgeTime.start": bridgeTime_start, bridged, conversationId, "duration.end": duration_end, "duration.start": duration_start, from, fromNumber, "handleTime.end": handleTime_end, "handleTime.start": handleTime_start, "holdTime.end": holdTime_end, "holdTime.start": holdTime_start, id, max, page, parentId, queueName, "queueWaitTime.end": queueWaitTime_end, "queueWaitTime.start": queueWaitTime_start, sessionId, "talkTime.end": talkTime_end, "talkTime.start": talkTime_start, "time.end": time_end, "time.start": time_start, to, toNumber, type, "waitTime.end": waitTime_end, "waitTime.start": waitTime_start, "wrapupTime.end": wrapupTime_end, "wrapupTime.start": wrapupTime_start }, url)
+  return response
+
+op babelforce-list-dashboards(page: Number, max: Number, q: String, uuid: String, sort: String, order: String) -> Any
+  description "List dashboards"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose false
+
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/dashboards")
+  response = http.request(method: "GET", query: { max, order, page, q, sort, uuid }, url)
+  return response
+
+op babelforce-list-live-logs(filters_level: String) -> Any
+  description "List live logs"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose false
+
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/logs")
+  response = http.request(method: "GET", query: { "filters.level": filters_level }, url)
+  return response
+
+op babelforce-list-users(email: String) -> Any
+  description "List users"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose false
+
+  base = "https://services.babelforce.com"
+  url = fmt("{base}/api/v2/users")
+  response = http.request(method: "GET", query: { email }, url)
+  return response
+
 op babelforce-list-actions(type: String) -> Any
   description "List available actions"
   risk "low"
@@ -204,10 +174,7 @@ op babelforce-list-actions(type: String) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/actions")
-  sep = "?"
-  when type
-    url = fmt("{url}{sep}type={type}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { type }, url)
   return response
 
 op babelforce-execute-action(actionType: String, actionName: String, body: Any) -> Any
@@ -285,13 +252,7 @@ op babelforce-list-agent-groups(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/agents/groups")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-agent-group(body: Any) -> Any
@@ -331,13 +292,7 @@ op babelforce-list-agents-in-group(groupId: String, page: Number, max: Number) -
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/agents/groups/{groupId}/agents")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-add-agent-to-group(groupId: String, body: Any) -> Any
@@ -413,13 +368,7 @@ op babelforce-list-all-agent-logs(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/agents/logs")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-list-agent-presences -> Any
@@ -494,8 +443,8 @@ op babelforce-export-agents(format: String) -> Any
   expose false
 
   base = "https://services.babelforce.com"
-  url = fmt("{base}/api/v2/agents/provision?format={format}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/api/v2/agents/provision")
+  response = http.request(method: "GET", query: { format }, url)
   return response
 
 op babelforce-get-agent-import-job(id: String) -> Any
@@ -621,19 +570,7 @@ op babelforce-list-agent-logs(id: String, page: Number, max: Number, filters_fro
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/agents/{id}/logs")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-    sep = "&"
-  when filters_from
-    url = fmt("{url}{sep}filters.from={filters_from}")
-    sep = "&"
-  when filters_to
-    url = fmt("{url}{sep}filters.to={filters_to}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { "filters.from": filters_from, "filters.to": filters_to, max, page }, url)
   return response
 
 op babelforce-update-agent-password(id: String, body: Any) -> Any
@@ -671,13 +608,7 @@ op babelforce-list-applications(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/applications")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-application(body: Any) -> Any
@@ -703,13 +634,7 @@ op babelforce-list-application-actions(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/applications/actions")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-bulk-update-applications(items: List<Any>) -> Any
@@ -773,13 +698,7 @@ op babelforce-list-local-automations(applicationId: String, page: Number, max: N
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/applications/{applicationId}/actions")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-local-automation(applicationId: String, body: Any) -> Any
@@ -892,10 +811,10 @@ op babelforce-dispatch-local-automations(id: String, position: String, async: Bo
   expose false
 
   base = "https://services.babelforce.com"
-  url = fmt("{base}/api/v2/applications/{id}/dispatch/{position}?async={async}")
+  url = fmt("{base}/api/v2/applications/{id}/dispatch/{position}")
   content_type = "application/json"
   payload = parse(body, as: "json")
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { async }, url)
   return response
 
 op babelforce-list-audit-logs(filters_dateCreated_start: Number, filters_dateCreated_end: Number, max: Number, page: Number, sort: String, order: String, filters_operation: String, filters_resource: String) -> Any
@@ -907,31 +826,7 @@ op babelforce-list-audit-logs(filters_dateCreated_start: Number, filters_dateCre
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/audit/request")
-  sep = "?"
-  when filters_dateCreated_start
-    url = fmt("{url}{sep}filters.dateCreated.start={filters_dateCreated_start}")
-    sep = "&"
-  when filters_dateCreated_end
-    url = fmt("{url}{sep}filters.dateCreated.end={filters_dateCreated_end}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-    sep = "&"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when sort
-    url = fmt("{url}{sep}sort={sort}")
-    sep = "&"
-  when order
-    url = fmt("{url}{sep}order={order}")
-    sep = "&"
-  when filters_operation
-    url = fmt("{url}{sep}filters.operation={filters_operation}")
-    sep = "&"
-  when filters_resource
-    url = fmt("{url}{sep}filters.resource={filters_resource}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { "filters.dateCreated.end": filters_dateCreated_end, "filters.dateCreated.start": filters_dateCreated_start, "filters.operation": filters_operation, "filters.resource": filters_resource, max, order, page, sort }, url)
   return response
 
 op babelforce-list-all-local-automations(page: Number, max: Number) -> Any
@@ -943,13 +838,7 @@ op babelforce-list-all-local-automations(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/automations/local")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-list-babeldesks(page: Number, max: Number) -> Any
@@ -961,13 +850,7 @@ op babelforce-list-babeldesks(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/babeldesk/dashboards")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-babeldesk(body: Any) -> Any
@@ -1031,13 +914,7 @@ op babelforce-list-babeldesk-widgets(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/babeldesk/widgets")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-babeldesk-widget(body: Any) -> Any
@@ -1101,13 +978,7 @@ op babelforce-list-business-hours(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/business-hours")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-business-hour(body: Any) -> Any
@@ -1249,13 +1120,7 @@ op babelforce-list-calendars(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/calendars")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-calendar(body: Any) -> Any
@@ -1309,10 +1174,7 @@ op babelforce-test-calendar-date(date: String) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/calendars/test")
-  sep = "?"
-  when date
-    url = fmt("{url}{sep}date={date}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { date }, url)
   return response
 
 op babelforce-get-calendar(id: String) -> Any
@@ -1417,117 +1279,6 @@ op babelforce-remove-calendar-date(id: String, dateId: String) -> Any
   response = http.request(method: "DELETE", url)
   return response
 
-op babelforce-list-all-simple-reporting-calls(page: Number, max: Number, sessionId: String, conversationId: String, id: Any, parentId: Any, type: Any, from: String, fromNumber: String, to: Any, toNumber: Any, time_start: Number, time_end: Number, agentId: Any, queueName: String, agentName: String, bridged: Bool, duration_start: Number, duration_end: Number, waitTime_start: Number, waitTime_end: Number, queueWaitTime_start: Number, queueWaitTime_end: Number, bridgeTime_start: Number, bridgeTime_end: Number, talkTime_start: Number, talkTime_end: Number, holdTime_start: Number, holdTime_end: Number, wrapupTime_start: Number, wrapupTime_end: Number, handleTime_start: Number, handleTime_end: Number) -> Any
-  description "List reporting calls (simple)"
-  risk "low"
-  idempotency "idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://services.babelforce.com"
-  url = fmt("{base}/api/v2/calls/reporting/simple")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-    sep = "&"
-  when sessionId
-    url = fmt("{url}{sep}sessionId={sessionId}")
-    sep = "&"
-  when conversationId
-    url = fmt("{url}{sep}conversationId={conversationId}")
-    sep = "&"
-  when id
-    url = fmt("{url}{sep}id={id}")
-    sep = "&"
-  when parentId
-    url = fmt("{url}{sep}parentId={parentId}")
-    sep = "&"
-  when type
-    url = fmt("{url}{sep}type={type}")
-    sep = "&"
-  when from
-    url = fmt("{url}{sep}from={from}")
-    sep = "&"
-  when fromNumber
-    url = fmt("{url}{sep}fromNumber={fromNumber}")
-    sep = "&"
-  when to
-    url = fmt("{url}{sep}to={to}")
-    sep = "&"
-  when toNumber
-    url = fmt("{url}{sep}toNumber={toNumber}")
-    sep = "&"
-  when time_start
-    url = fmt("{url}{sep}time.start={time_start}")
-    sep = "&"
-  when time_end
-    url = fmt("{url}{sep}time.end={time_end}")
-    sep = "&"
-  when agentId
-    url = fmt("{url}{sep}agentId={agentId}")
-    sep = "&"
-  when queueName
-    url = fmt("{url}{sep}queueName={queueName}")
-    sep = "&"
-  when agentName
-    url = fmt("{url}{sep}agentName={agentName}")
-    sep = "&"
-  when bridged
-    url = fmt("{url}{sep}bridged={bridged}")
-    sep = "&"
-  when duration_start
-    url = fmt("{url}{sep}duration.start={duration_start}")
-    sep = "&"
-  when duration_end
-    url = fmt("{url}{sep}duration.end={duration_end}")
-    sep = "&"
-  when waitTime_start
-    url = fmt("{url}{sep}waitTime.start={waitTime_start}")
-    sep = "&"
-  when waitTime_end
-    url = fmt("{url}{sep}waitTime.end={waitTime_end}")
-    sep = "&"
-  when queueWaitTime_start
-    url = fmt("{url}{sep}queueWaitTime.start={queueWaitTime_start}")
-    sep = "&"
-  when queueWaitTime_end
-    url = fmt("{url}{sep}queueWaitTime.end={queueWaitTime_end}")
-    sep = "&"
-  when bridgeTime_start
-    url = fmt("{url}{sep}bridgeTime.start={bridgeTime_start}")
-    sep = "&"
-  when bridgeTime_end
-    url = fmt("{url}{sep}bridgeTime.end={bridgeTime_end}")
-    sep = "&"
-  when talkTime_start
-    url = fmt("{url}{sep}talkTime.start={talkTime_start}")
-    sep = "&"
-  when talkTime_end
-    url = fmt("{url}{sep}talkTime.end={talkTime_end}")
-    sep = "&"
-  when holdTime_start
-    url = fmt("{url}{sep}holdTime.start={holdTime_start}")
-    sep = "&"
-  when holdTime_end
-    url = fmt("{url}{sep}holdTime.end={holdTime_end}")
-    sep = "&"
-  when wrapupTime_start
-    url = fmt("{url}{sep}wrapupTime.start={wrapupTime_start}")
-    sep = "&"
-  when wrapupTime_end
-    url = fmt("{url}{sep}wrapupTime.end={wrapupTime_end}")
-    sep = "&"
-  when handleTime_start
-    url = fmt("{url}{sep}handleTime.start={handleTime_start}")
-    sep = "&"
-  when handleTime_end
-    url = fmt("{url}{sep}handleTime.end={handleTime_end}")
-  response = http.request(method: "GET", url)
-  return response
-
 op babelforce-list-dialer-simple-reporting-calls(page: Number, max: Number) -> Any
   description "List dialer reporting calls"
   risk "low"
@@ -1537,13 +1288,7 @@ op babelforce-list-dialer-simple-reporting-calls(page: Number, max: Number) -> A
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/calls/reporting/simple/dialer")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-list-inbound-simple-reporting-calls(page: Number, max: Number) -> Any
@@ -1555,13 +1300,7 @@ op babelforce-list-inbound-simple-reporting-calls(page: Number, max: Number) -> 
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/calls/reporting/simple/inbound")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-list-outbound-simple-reporting-calls(page: Number, max: Number) -> Any
@@ -1573,13 +1312,7 @@ op babelforce-list-outbound-simple-reporting-calls(page: Number, max: Number) ->
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/calls/reporting/simple/outbound")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-inbound-test-call(body: Any) -> Any
@@ -1617,13 +1350,7 @@ op babelforce-list-conferences(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/conferences")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-get-conference(id: String) -> Any
@@ -1647,19 +1374,7 @@ op babelforce-list-conversations(page: Number, max: Number, phone: String, state
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/conversations")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-    sep = "&"
-  when phone
-    url = fmt("{url}{sep}phone={phone}")
-    sep = "&"
-  when state
-    url = fmt("{url}{sep}state={state}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page, phone, state }, url)
   return response
 
 op babelforce-create-conversation(body: Any) -> Any
@@ -1685,13 +1400,7 @@ op babelforce-list-all-conversation-events(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/conversations/events")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-close-conversation(conversationId: String) -> Any
@@ -1832,36 +1541,6 @@ op babelforce-delete-conversation(id: String) -> Any
   response = http.request(method: "DELETE", url)
   return response
 
-op babelforce-list-dashboards(page: Number, max: Number, q: String, uuid: Any, sort: String, order: String) -> Any
-  description "List dashboards"
-  risk "low"
-  idempotency "idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://services.babelforce.com"
-  url = fmt("{base}/api/v2/dashboards")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-    sep = "&"
-  when q
-    url = fmt("{url}{sep}q={q}")
-    sep = "&"
-  when uuid
-    url = fmt("{url}{sep}uuid={uuid}")
-    sep = "&"
-  when sort
-    url = fmt("{url}{sep}sort={sort}")
-    sep = "&"
-  when order
-    url = fmt("{url}{sep}order={order}")
-  response = http.request(method: "GET", url)
-  return response
-
 op babelforce-create-dashboard(body: Any) -> Any
   description "Create a dashboard"
   risk "high"
@@ -1973,13 +1652,7 @@ op babelforce-list-timezones(q: String, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/data/timezones")
-  sep = "?"
-  when q
-    url = fmt("{url}{sep}q={q}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, q }, url)
   return response
 
 op babelforce-get-dialer-info -> Any
@@ -2003,13 +1676,7 @@ op babelforce-flush-dialer(id: String, all: Bool) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/dialer/flush")
-  sep = "?"
-  when id
-    url = fmt("{url}{sep}id={id}")
-    sep = "&"
-  when all
-    url = fmt("{url}{sep}all={all}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { all, id }, url)
   return response
 
 op babelforce-echo -> Any
@@ -2033,10 +1700,7 @@ op babelforce-list-events(type: String) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/events")
-  sep = "?"
-  when type
-    url = fmt("{url}{sep}type={type}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { type }, url)
   return response
 
 op babelforce-create-custom-event(body: Any) -> Any
@@ -2074,13 +1738,7 @@ op babelforce-list-global-automations(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/events/triggers")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-global-automation(body: Any) -> Any
@@ -2134,15 +1792,9 @@ op babelforce-dispatch-event-trigger(eventTriggerId: String, timeout: Number, si
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/events/triggers/{eventTriggerId}/dispatch")
-  sep = "?"
-  when $timeout
-    url = fmt("{url}{sep}timeout={timeout}")
-    sep = "&"
-  when simulateCall
-    url = fmt("{url}{sep}simulateCall={simulateCall}")
   content_type = "application/json"
   payload = parse(body, as: "json")
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { simulateCall, timeout: $timeout }, url)
   return response
 
 op babelforce-get-global-automation(id: String) -> Any
@@ -2215,10 +1867,10 @@ op babelforce-evaluate-expression(async: Bool, body: Any) -> Any
   expose false
 
   base = "https://services.babelforce.com"
-  url = fmt("{base}/api/v2/expressions/evaluate?async={async}")
+  url = fmt("{base}/api/v2/expressions/evaluate")
   content_type = "application/json"
   payload = parse(body, as: "json")
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { async }, url)
   return response
 
 op babelforce-list-files(page: Number, max: Number, sort: String, order: String, type: String, state: String, filename: String, q: String) -> Any
@@ -2230,31 +1882,7 @@ op babelforce-list-files(page: Number, max: Number, sort: String, order: String,
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/files")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-    sep = "&"
-  when sort
-    url = fmt("{url}{sep}sort={sort}")
-    sep = "&"
-  when order
-    url = fmt("{url}{sep}order={order}")
-    sep = "&"
-  when type
-    url = fmt("{url}{sep}type={type}")
-    sep = "&"
-  when state
-    url = fmt("{url}{sep}state={state}")
-    sep = "&"
-  when filename
-    url = fmt("{url}{sep}filename={filename}")
-    sep = "&"
-  when q
-    url = fmt("{url}{sep}q={q}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { filename, max, order, page, q, sort, state, type }, url)
   return response
 
 op babelforce-list-backup-files -> Any
@@ -2277,8 +1905,8 @@ op babelforce-get-bulk-file-download(ids: String) -> Any
   expose false
 
   base = "https://services.babelforce.com"
-  url = fmt("{base}/api/v2/files/bulk/download?ids={ids}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/api/v2/files/bulk/download")
+  response = http.request(method: "GET", query: { ids }, url)
   return response
 
 op babelforce-post-bulk-file-download(body: Any) -> Any
@@ -2390,13 +2018,7 @@ op babelforce-list-integrations(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/integrations")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-integration(body: Any) -> Any
@@ -2650,13 +2272,7 @@ op babelforce-dispatch-action-get(integrationId: String, action: String, callId:
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/integrations/{integrationId}/dispatch/{action}")
-  sep = "?"
-  when callId
-    url = fmt("{url}{sep}callId={callId}")
-    sep = "&"
-  when sessionId
-    url = fmt("{url}{sep}sessionId={sessionId}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { callId, sessionId }, url)
   return response
 
 op babelforce-dispatch-action(integrationId: String, action: String, callId: String, sessionId: String, body: Any) -> Any
@@ -2668,15 +2284,9 @@ op babelforce-dispatch-action(integrationId: String, action: String, callId: Str
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/integrations/{integrationId}/dispatch/{action}")
-  sep = "?"
-  when callId
-    url = fmt("{url}{sep}callId={callId}")
-    sep = "&"
-  when sessionId
-    url = fmt("{url}{sep}sessionId={sessionId}")
   content_type = "application/json"
   payload = parse(body, as: "json")
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { callId, sessionId }, url)
   return response
 
 op babelforce-get-integration-provider-logo(providerName: String, size: String) -> Any
@@ -2750,21 +2360,6 @@ op babelforce-get-integration-template(type: String, provider: String) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/integrations/{type}/{provider}/template")
-  response = http.request(method: "GET", url)
-  return response
-
-op babelforce-list-live-logs(filters_level: Any) -> Any
-  description "List live logs"
-  risk "low"
-  idempotency "idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://services.babelforce.com"
-  url = fmt("{base}/api/v2/logs")
-  sep = "?"
-  when filters_level
-    url = fmt("{url}{sep}filters.level={filters_level}")
   response = http.request(method: "GET", url)
   return response
 
@@ -2875,13 +2470,7 @@ op babelforce-list-service-numbers(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/numbers")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-get-service-number(id: String) -> Any
@@ -2933,25 +2522,7 @@ op babelforce-list-outbound-attempts(page: Number, max: Number, campaignId: Stri
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/outbound/attempts")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-    sep = "&"
-  when campaignId
-    url = fmt("{url}{sep}campaignId={campaignId}")
-    sep = "&"
-  when listId
-    url = fmt("{url}{sep}listId={listId}")
-    sep = "&"
-  when leadId
-    url = fmt("{url}{sep}leadId={leadId}")
-    sep = "&"
-  when number
-    url = fmt("{url}{sep}number={number}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { campaignId, leadId, listId, max, number, page }, url)
   return response
 
 op babelforce-list-campaigns -> Any
@@ -3027,10 +2598,7 @@ op babelforce-list-campaign-attempts(id: String, number: String) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/outbound/campaigns/{id}/attempts")
-  sep = "?"
-  when number
-    url = fmt("{url}{sep}number={number}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { number }, url)
   return response
 
 op babelforce-get-campaign-hopper(id: String) -> Any
@@ -3140,13 +2708,7 @@ op babelforce-get-campaign-statistics(id: String, from: Number, to: Number) -> A
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/outbound/campaigns/{id}/statistics")
-  sep = "?"
-  when from
-    url = fmt("{url}{sep}from={from}")
-    sep = "&"
-  when to
-    url = fmt("{url}{sep}to={to}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { from, to }, url)
   return response
 
 op babelforce-get-campaign-status(id: String) -> Any
@@ -3170,13 +2732,7 @@ op babelforce-list-dialer-behaviours(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/outbound/dialer-behaviours")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-dialer-behaviour(body: Any) -> Any
@@ -3240,19 +2796,7 @@ op babelforce-list-outbound-leads(page: Number, max: Number, status: String, lis
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/outbound/leads")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-    sep = "&"
-  when status
-    url = fmt("{url}{sep}status={status}")
-    sep = "&"
-  when listId
-    url = fmt("{url}{sep}listId={listId}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { listId, max, page, status }, url)
   return response
 
 op babelforce-list-processed-outbound-leads(page: Number, max: Number) -> Any
@@ -3264,13 +2808,7 @@ op babelforce-list-processed-outbound-leads(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/outbound/leads/processed")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-list-outbound-lists -> Any
@@ -3346,13 +2884,7 @@ op babelforce-list-leads-in-list(id: String, status: String, format: String) -> 
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/outbound/lists/{id}/leads")
-  sep = "?"
-  when status
-    url = fmt("{url}{sep}status={status}")
-    sep = "&"
-  when format
-    url = fmt("{url}{sep}format={format}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { format, status }, url)
   return response
 
 op babelforce-add-outbound-lead(id: String, body: Any) -> Any
@@ -3456,13 +2988,7 @@ op babelforce-list-phonebook-entrys(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/phonebook")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-phonebook-entry(body: Any) -> Any
@@ -3564,13 +3090,7 @@ op babelforce-list-prompts(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/prompts")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-get-prompt(id: String) -> Any
@@ -3644,13 +3164,7 @@ op babelforce-list-queues(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/queues")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-queue(body: Any) -> Any
@@ -3690,22 +3204,7 @@ op babelforce-list-global-queue-selections(sort: String, order: String, includeM
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/queues/selections")
-  sep = "?"
-  when sort
-    url = fmt("{url}{sep}sort={sort}")
-    sep = "&"
-  when order
-    url = fmt("{url}{sep}order={order}")
-    sep = "&"
-  when includeMembers
-    url = fmt("{url}{sep}includeMembers={includeMembers}")
-    sep = "&"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { includeMembers, max, order, page, sort }, url)
   return response
 
 op babelforce-get-queue(id: String) -> Any
@@ -3769,13 +3268,7 @@ op babelforce-list-queued-calls(queueId: String, page: Number, max: Number) -> A
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/queues/{queueId}/calls")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-get-agents-for-queue-selection(queueId: String, callId: String) -> Any
@@ -3787,10 +3280,7 @@ op babelforce-get-agents-for-queue-selection(queueId: String, callId: String) ->
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/queues/{queueId}/select")
-  sep = "?"
-  when callId
-    url = fmt("{url}{sep}callId={callId}")
-  response = http.request(method: "POST", url)
+  response = http.request(method: "POST", query: { callId }, url)
   return response
 
 op babelforce-list-queue-selections(queueId: String, page: Number, max: Number) -> Any
@@ -3802,13 +3292,7 @@ op babelforce-list-queue-selections(queueId: String, page: Number, max: Number) 
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/queues/{queueId}/selections")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-queue-selection(queueId: String, body: Any) -> Any
@@ -3976,13 +3460,7 @@ op babelforce-list-recordings(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/recordings")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-start-recording(body: Any) -> Any
@@ -4108,13 +3586,7 @@ op babelforce-list-routings(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/routings")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-routing(body: Any) -> Any
@@ -4562,13 +4034,7 @@ op babelforce-list-smss(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/sms")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-send-sms(body: Any) -> Any
@@ -4594,13 +4060,7 @@ op babelforce-report-sms(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/sms/reporting")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-test-inbound-sms(body: Any) -> Any
@@ -4698,13 +4158,7 @@ op babelforce-list-triggers(page: Number, max: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/triggers")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response
 
 op babelforce-create-trigger(body: Any) -> Any
@@ -4767,10 +4221,10 @@ op babelforce-test-triggers(testMode: Bool, body: Any) -> Any
   expose false
 
   base = "https://services.babelforce.com"
-  url = fmt("{base}/api/v2/triggers/test?testMode={testMode}")
+  url = fmt("{base}/api/v2/triggers/test")
   content_type = "application/json"
   payload = parse(body, as: "json")
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { testMode }, url)
   return response
 
 op babelforce-get-trigger(id: String) -> Any
@@ -4858,21 +4312,6 @@ op babelforce-get-trigger-uses(id: String) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/triggers/{id}/uses")
-  response = http.request(method: "GET", url)
-  return response
-
-op babelforce-list-users(email: Any) -> Any
-  description "List users"
-  risk "low"
-  idempotency "idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://services.babelforce.com"
-  url = fmt("{base}/api/v2/users")
-  sep = "?"
-  when email
-    url = fmt("{url}{sep}email={email}")
   response = http.request(method: "GET", url)
   return response
 

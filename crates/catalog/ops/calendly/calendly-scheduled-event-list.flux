@@ -6,12 +6,6 @@ op calendly-scheduled-event-list(user: String, status: String, count: Number) ->
   expose true
 
   base = "https://api.calendly.com"
-  url = fmt("{base}/scheduled_events?user={user}")
-  sep = "&"
-  when status
-    url = fmt("{url}{sep}status={status}")
-    sep = "&"
-  when count
-    url = fmt("{url}{sep}count={count}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/scheduled_events")
+  response = http.request(method: "GET", query: { count, status, user }, url)
   return response

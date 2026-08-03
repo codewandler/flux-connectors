@@ -11,10 +11,7 @@ op freshdesk-test(per_page: Number) -> Any
 
   base = "https://{domain}/api/v2"
   url = fmt("{base}/contacts")
-  sep = "?"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { per_page }, url)
   return response
 
 op freshdesk-ticket-list(req_id: String, req_email: String, company_id: String, updated: String) -> Any
@@ -26,19 +23,7 @@ op freshdesk-ticket-list(req_id: String, req_email: String, company_id: String, 
 
   base = "https://{domain}/api/v2"
   url = fmt("{base}/tickets")
-  sep = "?"
-  when req_id
-    url = fmt("{url}{sep}requester_id={req_id}")
-    sep = "&"
-  when req_email
-    url = fmt("{url}{sep}email={req_email}")
-    sep = "&"
-  when company_id
-    url = fmt("{url}{sep}company_id={company_id}")
-    sep = "&"
-  when updated
-    url = fmt("{url}{sep}updated_since={updated}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { company_id, email: req_email, requester_id: req_id, updated_since: updated }, url)
   return response
 
 op freshdesk-ticket-get(id: String) -> Any
@@ -104,22 +89,7 @@ op freshdesk-contact-list(phone: String, email: String, mobile: String, company_
 
   base = "https://{domain}/api/v2"
   url = fmt("{base}/contacts")
-  sep = "?"
-  when phone
-    url = fmt("{url}{sep}phone={phone}")
-    sep = "&"
-  when email
-    url = fmt("{url}{sep}email={email}")
-    sep = "&"
-  when mobile
-    url = fmt("{url}{sep}mobile={mobile}")
-    sep = "&"
-  when company_id
-    url = fmt("{url}{sep}company_id={company_id}")
-    sep = "&"
-  when state
-    url = fmt("{url}{sep}state={state}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { company_id, email, mobile, phone, state }, url)
   return response
 
 op freshdesk-contact-get(id: String) -> Any

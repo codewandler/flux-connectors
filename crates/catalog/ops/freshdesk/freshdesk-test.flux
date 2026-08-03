@@ -7,8 +7,5 @@ op freshdesk-test(per_page: Number) -> Any
 
   base = "https://{domain}/api/v2"
   url = fmt("{base}/contacts")
-  sep = "?"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { per_page }, url)
   return response

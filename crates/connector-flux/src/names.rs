@@ -31,7 +31,6 @@ use crate::Error;
 const RESERVED: &[&str] = &[
     "base",
     "url",
-    "sep",
     "content_type",
     "payload",
     "form_sep",
@@ -170,7 +169,6 @@ mod tests {
         let mut symbols = Symbols::new();
         assert_eq!(symbols.allocate("op", "url").unwrap(), "url_2");
         assert_eq!(symbols.allocate("op", "base").unwrap(), "base_2");
-        assert_eq!(symbols.allocate("op", "sep").unwrap(), "sep_2");
         assert_eq!(symbols.allocate("op", "payload").unwrap(), "payload_2");
         assert_eq!(symbols.allocate("op", "response").unwrap(), "response_2");
         assert_eq!(

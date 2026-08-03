@@ -1,4 +1,4 @@
-op babelforce-list-live-logs(filters_level: Any) -> Any
+op babelforce-list-live-logs(filters_level: String) -> Any
   description "List live logs"
   risk "low"
   idempotency "idempotent"
@@ -7,8 +7,5 @@ op babelforce-list-live-logs(filters_level: Any) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/logs")
-  sep = "?"
-  when filters_level
-    url = fmt("{url}{sep}filters.level={filters_level}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { "filters.level": filters_level }, url)
   return response

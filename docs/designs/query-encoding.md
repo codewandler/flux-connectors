@@ -1,5 +1,14 @@
 # Design: percent-encoding for generated query values
 
+> **Decision update — 2026-08-03.** The workspace now targets Flux 0.54, whose
+> `http.request(query: ...)` implements the structured contract specified in this record: scalar
+> string/number/boolean values, null omission, RFC 3986 encoding, collection refusal and duplicate
+> key refusal. C-30 therefore ships the permanent path now. Query arrays remain withheld until the
+> connector model declares whether a vendor expects repeated, delimited, bracketed or JSON values;
+> Babelforce parameters documented as scalar-or-array are narrowed explicitly to the scalar branch.
+> Historical references below to Flux 0.38 and a temporary Zendesk refusal record the investigation,
+> not the current implementation decision.
+
 > Parent story: [C-28](../stories/C-28-query-percent-encoding.md) · Found by
 > [C-8](../stories/C-8-flux-op-emitter.md) · Companion handoff:
 > [query-encoding-flux-stories.md](query-encoding-flux-stories.md)

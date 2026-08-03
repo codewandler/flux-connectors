@@ -903,6 +903,11 @@
           "type": "string",
           "description": "The spec's `operationId` this entry selects, e.g. `listReportingCalls`."
         },
+        "defer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Withhold this exact operation from a set already matched by `[[patch.select]]`, with the reviewable reason it cannot publish yet. This is not an opt-out selector and cannot be combined with corrections."
+        },
         "rename": {
           "type": "string",
           "description": "The stable op id to publish it as, e.g. `babelforce.call.list`. Almost always set: `operationId` is a volatile vendor field, while the op name is a public contract users and models call by name."

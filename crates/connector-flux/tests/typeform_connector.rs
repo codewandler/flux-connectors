@@ -154,21 +154,14 @@ fn the_cursor_pair_survives_because_it_avoids_the_pipelines_danger_set() {
     let emitted = emit_operation(&connector, operation)
         .unwrap_or_else(|error| panic!("typeform-response-list is not emittable: {error}"));
 
-    for name in ["before", "after"] {
-        let expected_guard = format!("when {name}");
-        let expected_interpolation = format!("url = fmt(\"{{url}}{{sep}}{name}={{{name}}}\")");
-        assert!(
-            emitted.contains(&expected_guard),
-            "`typeform-response-list` does not guard `{name}` behind `{expected_guard}` — an \
-             absent cursor must not be sent as the literal string \"{{{name}}}\":\n{emitted}"
-        );
-        assert!(
-            emitted.contains(&expected_interpolation),
-            "`typeform-response-list` does not interpolate `{name}` verbatim into the query string \
-             as `{expected_interpolation}` — the whole point of this connector is that flux's `fmt` \
-             puts the value on the wire unescaped:\n{emitted}"
-        );
-    }
+    assert!(
+        emitted.contains(
+            "query: { after, before, page_size, response_type, since, sort, until: $until }"
+        ) && !emitted.contains("when before")
+            && !emitted.contains("before={before}"),
+        "the cursor pair must travel through the structured query record and let null omission \
+         preserve optionality:\n{emitted}"
+    );
 }
 
 /// A crude, dependency-free check that a pattern's character class only ever admits hex digits

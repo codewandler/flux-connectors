@@ -6,6 +6,6 @@ op asterisk-ari-bridges-get-bridge-var(bridgeId: String, variable: String) -> An
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/bridges/{bridgeId}/variable?variable={variable}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/bridges/{bridgeId}/variable")
+  response = http.request(method: "GET", query: { variable }, url)
   return response

@@ -7,12 +7,6 @@ op pagerduty-incident-list(limit: Number, offset: Number) -> Any
 
   base = "https://api.pagerduty.com"
   url = fmt("{base}/incidents")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-    sep = "&"
-  when offset
-    url = fmt("{url}{sep}offset={offset}")
   Accept = "application/vnd.pagerduty+json;version=2"
-  response = http.request(headers: { Accept }, method: "GET", url)
+  response = http.request(headers: { Accept }, method: "GET", query: { limit, offset }, url)
   return response

@@ -7,17 +7,5 @@ op typeform-form-list(page: Number, page_size: Number, sort_by: String, order_by
 
   base = "https://api.typeform.com"
   url = fmt("{base}/forms")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when page_size
-    url = fmt("{url}{sep}page_size={page_size}")
-    sep = "&"
-  when sort_by
-    url = fmt("{url}{sep}sort_by={sort_by}")
-    sep = "&"
-  when order_by
-    url = fmt("{url}{sep}order_by={order_by}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { order_by, page, page_size, sort_by }, url)
   return response

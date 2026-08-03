@@ -6,6 +6,6 @@ op asterisk-ari-recordings-copy-stored(recordingName: String, destinationRecordi
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/recordings/stored/{recordingName}/copy?destinationRecordingName={destinationRecordingName}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/recordings/stored/{recordingName}/copy")
+  response = http.request(method: "POST", query: { destinationRecordingName }, url)
   return response

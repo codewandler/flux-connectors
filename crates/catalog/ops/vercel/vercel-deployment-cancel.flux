@@ -7,6 +7,6 @@ op vercel-deployment-cancel(id: String) -> Any
 
   base = "https://api.vercel.com"
   teamId = "{teamId}"
-  url = fmt("{base}/v12/deployments/{id}/cancel?teamId={teamId}")
-  response = http.request(method: "PATCH", url)
+  url = fmt("{base}/v12/deployments/{id}/cancel")
+  response = http.request(method: "PATCH", query: { teamId }, url)
   return response

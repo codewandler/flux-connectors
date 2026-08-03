@@ -227,8 +227,8 @@ fn every_shipped_operation_carries_its_metadata_and_its_flux() {
 ///
 /// Three facts the repository already states in prose, asserted here as machine-readable data:
 ///
-/// - `zendesk-ticket-search` cannot percent-encode its query value (C-28/C-30), and the six other
-///   zendesk operations are unaffected — the connector is honestly 6/7;
+/// - C-30 closed the query-encoding issue for `zendesk-ticket-search`, so neither it nor the other
+///   Zendesk operations publish the retired status token;
 /// - every freshdesk operation ships with no credential at all (C-17), and zendesk's do not;
 /// - `works` is true only when nothing is wrong, so a consumer can filter on one boolean.
 #[test]
@@ -237,17 +237,15 @@ fn the_status_of_every_operation_is_derived_from_the_ir() {
 
     let search = operation(&document, "zendesk-ticket-search");
     assert!(
-        issue_codes(search).contains(&"unencodable-query-value".to_string()),
-        "`zendesk-ticket-search` does not declare the percent-encoding gap; it is published as \
-         though it worked. Issues: {:?}",
+        !issue_codes(search).contains(&"unencodable-query-value".to_string()),
+        "`zendesk-ticket-search` still publishes the query gap C-30 closed. Issues: {:?}",
         issue_codes(search)
     );
 
     let show = operation(&document, "zendesk-ticket-show");
     assert!(
         !issue_codes(show).contains(&"unencodable-query-value".to_string()),
-        "`zendesk-ticket-show` takes only a numeric path id and is unaffected by the encoding gap, \
-         but it is flagged for it — the refusal rule is too broad. Issues: {:?}",
+        "`zendesk-ticket-show` publishes the retired C-30 issue. Issues: {:?}",
         issue_codes(show)
     );
 

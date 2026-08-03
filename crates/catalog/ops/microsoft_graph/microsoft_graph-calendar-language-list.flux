@@ -7,11 +7,5 @@ op microsoft_graph-calendar-language-list(_top: Number, _skip: Number) -> Any
 
   base = "https://graph.microsoft.com"
   url = fmt("{base}/v1.0/me/outlook/supportedLanguages()")
-  sep = "?"
-  when _top
-    url = fmt("{url}{sep}$top={_top}")
-    sep = "&"
-  when _skip
-    url = fmt("{url}{sep}$skip={_skip}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { "$skip": _skip, "$top": _top }, url)
   return response

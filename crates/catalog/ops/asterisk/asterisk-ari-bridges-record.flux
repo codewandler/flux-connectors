@@ -6,24 +6,6 @@ op asterisk-ari-bridges-record(bridgeId: String, name: String, format: String, r
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/bridges/{bridgeId}/record?name={name}&format={format}")
-  sep = "&"
-  when recorder_format
-    url = fmt("{url}{sep}recorder_format={recorder_format}")
-    sep = "&"
-  when maxDurationSeconds
-    url = fmt("{url}{sep}maxDurationSeconds={maxDurationSeconds}")
-    sep = "&"
-  when maxSilenceSeconds
-    url = fmt("{url}{sep}maxSilenceSeconds={maxSilenceSeconds}")
-    sep = "&"
-  when ifExists
-    url = fmt("{url}{sep}ifExists={ifExists}")
-    sep = "&"
-  when beep
-    url = fmt("{url}{sep}beep={beep}")
-    sep = "&"
-  when terminateOn
-    url = fmt("{url}{sep}terminateOn={terminateOn}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/bridges/{bridgeId}/record")
+  response = http.request(method: "POST", query: { beep, format, ifExists, maxDurationSeconds, maxSilenceSeconds, name, recorder_format, terminateOn }, url)
   return response

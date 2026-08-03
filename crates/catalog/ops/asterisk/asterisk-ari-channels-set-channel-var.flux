@@ -6,12 +6,6 @@ op asterisk-ari-channels-set-channel-var(channelId: String, variable: String, va
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/variable?variable={variable}")
-  sep = "&"
-  when value
-    url = fmt("{url}{sep}value={value}")
-    sep = "&"
-  when report_events
-    url = fmt("{url}{sep}report_events={report_events}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/channels/{channelId}/variable")
+  response = http.request(method: "POST", query: { report_events, value, variable }, url)
   return response

@@ -8,11 +8,5 @@ op twilio-conference-list(PageSize: Number, Page: Number) -> Any
   base = "https://api.twilio.com/2010-04-01"
   AccountSid = "{username.twilio.basic_auth}"
   url = fmt("{base}/Accounts/{AccountSid}/Conferences.json")
-  sep = "?"
-  when PageSize
-    url = fmt("{url}{sep}PageSize={PageSize}")
-    sep = "&"
-  when Page
-    url = fmt("{url}{sep}Page={Page}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { Page, PageSize }, url)
   return response

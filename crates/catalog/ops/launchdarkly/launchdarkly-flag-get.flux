@@ -7,8 +7,5 @@ op launchdarkly-flag-get(project_key: String, feature_flag_key: String, env: Str
 
   base = "https://app.launchdarkly.com/api/v2"
   url = fmt("{base}/flags/{project_key}/{feature_flag_key}")
-  sep = "?"
-  when env
-    url = fmt("{url}{sep}env={env}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { env }, url)
   return response

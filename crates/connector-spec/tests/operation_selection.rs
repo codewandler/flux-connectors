@@ -393,6 +393,88 @@ expose = true
     );
 }
 
+/// A broad selector may be narrowed by an exact, reason-bearing deferral. The operation remains
+/// claimed so the selector pass cannot publish it again.
+#[test]
+fn an_exact_deferral_withholds_one_selector_match() {
+    let connector = load(&with(
+        r#"
+[[patch.select]]
+service = "manager"
+path_prefix = "/api/v2/agents"
+methods = ["GET"]
+
+[[patch.operations]]
+service = "manager"
+select = "listAgents"
+defer = "Its array query parameter has no declared wire convention."
+"#,
+    ));
+
+    assert!(!ids(&connector).contains(&"babelforce-list-agents"));
+    assert!(ids(&connector).contains(&"babelforce-get-agent"));
+}
+
+/// Deferral narrows an explicit set; it is not another spelling of opt-out selection.
+#[test]
+fn deferring_an_operation_no_selector_matched_is_refused() {
+    let refusal = refuse(&with(
+        r#"
+[[patch.operations]]
+service = "manager"
+select = "listAgents"
+defer = "Its array query parameter has no declared wire convention."
+"#,
+    ));
+    assert!(
+        refusal.contains("listAgents") && refusal.contains("[[patch.select]]"),
+        "an unmatched deferral must say which explicit selection is missing: {refusal}"
+    );
+}
+
+#[test]
+fn a_deferral_reason_must_be_nonempty() {
+    let refusal = refuse(&with(
+        r#"
+[[patch.select]]
+service = "manager"
+path_prefix = "/api/v2/agents"
+methods = ["GET"]
+
+[[patch.operations]]
+service = "manager"
+select = "listAgents"
+defer = "   "
+"#,
+    ));
+    assert!(
+        refusal.contains("listAgents") && refusal.contains("non-empty reason"),
+        "an empty reason must not make a disappearance review-proof: {refusal}"
+    );
+}
+
+#[test]
+fn a_deferred_operation_cannot_also_be_corrected() {
+    let refusal = refuse(&with(
+        r#"
+[[patch.select]]
+service = "manager"
+path_prefix = "/api/v2/agents"
+methods = ["GET"]
+
+[[patch.operations]]
+service = "manager"
+select = "listAgents"
+defer = "Its array query parameter has no declared wire convention."
+rename = "babelforce-agent-list"
+"#,
+    ));
+    assert!(
+        refusal.contains("listAgents") && refusal.contains("rename"),
+        "a correction to an operation that will not publish must be refused: {refusal}"
+    );
+}
+
 /// Two selectors may overlap while they agree.
 #[test]
 fn overlapping_selectors_that_agree_are_accepted() {

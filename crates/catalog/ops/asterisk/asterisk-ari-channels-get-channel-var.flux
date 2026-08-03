@@ -6,6 +6,6 @@ op asterisk-ari-channels-get-channel-var(channelId: String, variable: String) ->
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/variable?variable={variable}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/channels/{channelId}/variable")
+  response = http.request(method: "GET", query: { variable }, url)
   return response

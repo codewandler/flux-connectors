@@ -7,16 +7,7 @@ op asterisk-ari-bridges-create(type: String, bridgeId: String, name: String, var
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/bridges")
-  sep = "?"
-  when type
-    url = fmt("{url}{sep}type={type}")
-    sep = "&"
-  when bridgeId
-    url = fmt("{url}{sep}bridgeId={bridgeId}")
-    sep = "&"
-  when name
-    url = fmt("{url}{sep}name={name}")
   content_type = "application/json"
   payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { bridgeId, name, type }, url)
   return response

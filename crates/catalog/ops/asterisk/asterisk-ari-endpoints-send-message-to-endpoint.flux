@@ -6,11 +6,8 @@ op asterisk-ari-endpoints-send-message-to-endpoint(tech: String, resource: Strin
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/endpoints/{tech}/{resource}/sendMessage?from={from}")
-  sep = "&"
-  when body
-    url = fmt("{url}{sep}body={body}")
+  url = fmt("{base}/endpoints/{tech}/{resource}/sendMessage")
   content_type = "application/json"
   payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", query: { body, from }, url)
   return response

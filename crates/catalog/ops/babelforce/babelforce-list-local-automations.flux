@@ -7,11 +7,5 @@ op babelforce-list-local-automations(applicationId: String, page: Number, max: N
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/applications/{applicationId}/actions")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response

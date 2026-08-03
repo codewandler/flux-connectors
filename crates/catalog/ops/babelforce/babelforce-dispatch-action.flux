@@ -7,13 +7,7 @@ op babelforce-dispatch-action(integrationId: String, action: String, callId: Str
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/integrations/{integrationId}/dispatch/{action}")
-  sep = "?"
-  when callId
-    url = fmt("{url}{sep}callId={callId}")
-    sep = "&"
-  when sessionId
-    url = fmt("{url}{sep}sessionId={sessionId}")
   content_type = "application/json"
   payload = parse(body, as: "json")
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { callId, sessionId }, url)
   return response

@@ -23,25 +23,25 @@ fn four_spec_backed_reads_compose_absolute_graph_requests() {
             "mail",
             "microsoft_graph-mail-message-list",
             json!({"_top": 25, "_skip": 2}),
-            "https://graph.microsoft.com/v1.0/me/messages?$top=25&$skip=2",
+            "https://graph.microsoft.com/v1.0/me/messages?%24skip=2&%24top=25",
         ),
         (
             "calendar",
             "microsoft_graph-calendar-category-list",
             json!({"_top": 25, "_skip": 2}),
-            "https://graph.microsoft.com/v1.0/me/outlook/masterCategories?$top=25&$skip=2",
+            "https://graph.microsoft.com/v1.0/me/outlook/masterCategories?%24skip=2&%24top=25",
         ),
         (
             "calendar",
             "microsoft_graph-calendar-time-zone-list",
             json!({"_top": 25, "_skip": 2}),
-            "https://graph.microsoft.com/v1.0/me/outlook/supportedTimeZones()?$top=25&$skip=2",
+            "https://graph.microsoft.com/v1.0/me/outlook/supportedTimeZones()?%24skip=2&%24top=25",
         ),
         (
             "calendar",
             "microsoft_graph-calendar-language-list",
             json!({"_top": 25, "_skip": 2}),
-            "https://graph.microsoft.com/v1.0/me/outlook/supportedLanguages()?$top=25&$skip=2",
+            "https://graph.microsoft.com/v1.0/me/outlook/supportedLanguages()?%24skip=2&%24top=25",
         ),
     ];
 

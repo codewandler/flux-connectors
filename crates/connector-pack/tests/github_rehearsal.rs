@@ -22,22 +22,22 @@ fn the_four_spec_backed_reads_compose_absolute_github_requests() {
         (
             "github-issue-list",
             json!({"owner": "octocat", "repo": "Hello-World", "per_page": 25, "page": 2}),
-            "https://api.github.com/repos/octocat/Hello-World/issues?per_page=25&page=2",
+            "https://api.github.com/repos/octocat/Hello-World/issues?page=2&per_page=25",
         ),
         (
             "github-pull-files-list",
             json!({"owner": "octocat", "repo": "Hello-World", "pull_number": 7, "per_page": 25, "page": 2}),
-            "https://api.github.com/repos/octocat/Hello-World/pulls/7/files?per_page=25&page=2",
+            "https://api.github.com/repos/octocat/Hello-World/pulls/7/files?page=2&per_page=25",
         ),
         (
             "github-workflow-run-list",
             json!({"owner": "octocat", "repo": "Hello-World", "per_page": 25, "page": 2}),
-            "https://api.github.com/repos/octocat/Hello-World/actions/runs?per_page=25&page=2",
+            "https://api.github.com/repos/octocat/Hello-World/actions/runs?page=2&per_page=25",
         ),
         (
             "github-commit-list",
             json!({"owner": "octocat", "repo": "Hello-World", "per_page": 25, "page": 2}),
-            "https://api.github.com/repos/octocat/Hello-World/commits?per_page=25&page=2",
+            "https://api.github.com/repos/octocat/Hello-World/commits?page=2&per_page=25",
         ),
     ];
 

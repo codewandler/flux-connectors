@@ -23,13 +23,7 @@ op twilio-message-list(account_sid: String, page: Number, page_size: Number) -> 
 
   base = "https://api.twilio.com/2010-04-01"
   url = fmt("{base}/Accounts/{account_sid}/Messages.json")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}Page={page}")
-    sep = "&"
-  when page_size
-    url = fmt("{url}{sep}PageSize={page_size}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { Page: page, PageSize: page_size }, url)
   return response
 
 op twilio-message-get(account_sid: String, message_sid: String) -> Any
@@ -53,16 +47,7 @@ op twilio-call-list(account_sid: String, status: String, page: Number, page_size
 
   base = "https://api.twilio.com/2010-04-01"
   url = fmt("{base}/Accounts/{account_sid}/Calls.json")
-  sep = "?"
-  when status
-    url = fmt("{url}{sep}Status={status}")
-    sep = "&"
-  when page
-    url = fmt("{url}{sep}Page={page}")
-    sep = "&"
-  when page_size
-    url = fmt("{url}{sep}PageSize={page_size}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { Page: page, PageSize: page_size, Status: status }, url)
   return response
 
 op twilio-call-get(account_sid: String, call_sid: String) -> Any
@@ -87,16 +72,7 @@ op twilio-recording-list(IncludeSoftDeleted: Bool, PageSize: Number, Page: Numbe
   base = "https://api.twilio.com/2010-04-01"
   AccountSid = "{username.twilio.basic_auth}"
   url = fmt("{base}/Accounts/{AccountSid}/Recordings.json")
-  sep = "?"
-  when IncludeSoftDeleted
-    url = fmt("{url}{sep}IncludeSoftDeleted={IncludeSoftDeleted}")
-    sep = "&"
-  when PageSize
-    url = fmt("{url}{sep}PageSize={PageSize}")
-    sep = "&"
-  when Page
-    url = fmt("{url}{sep}Page={Page}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { IncludeSoftDeleted, Page, PageSize }, url)
   return response
 
 op twilio-recording-get(Sid: String, IncludeSoftDeleted: Bool) -> Any
@@ -109,10 +85,7 @@ op twilio-recording-get(Sid: String, IncludeSoftDeleted: Bool) -> Any
   base = "https://api.twilio.com/2010-04-01"
   AccountSid = "{username.twilio.basic_auth}"
   url = fmt("{base}/Accounts/{AccountSid}/Recordings/{Sid}.json")
-  sep = "?"
-  when IncludeSoftDeleted
-    url = fmt("{url}{sep}IncludeSoftDeleted={IncludeSoftDeleted}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { IncludeSoftDeleted }, url)
   return response
 
 op twilio-usage-record-list(IncludeSubaccounts: Bool, PageSize: Number, Page: Number) -> Any
@@ -125,16 +98,7 @@ op twilio-usage-record-list(IncludeSubaccounts: Bool, PageSize: Number, Page: Nu
   base = "https://api.twilio.com/2010-04-01"
   AccountSid = "{username.twilio.basic_auth}"
   url = fmt("{base}/Accounts/{AccountSid}/Usage/Records.json")
-  sep = "?"
-  when IncludeSubaccounts
-    url = fmt("{url}{sep}IncludeSubaccounts={IncludeSubaccounts}")
-    sep = "&"
-  when PageSize
-    url = fmt("{url}{sep}PageSize={PageSize}")
-    sep = "&"
-  when Page
-    url = fmt("{url}{sep}Page={Page}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { IncludeSubaccounts, Page, PageSize }, url)
   return response
 
 op twilio-conference-list(PageSize: Number, Page: Number) -> Any
@@ -147,11 +111,5 @@ op twilio-conference-list(PageSize: Number, Page: Number) -> Any
   base = "https://api.twilio.com/2010-04-01"
   AccountSid = "{username.twilio.basic_auth}"
   url = fmt("{base}/Accounts/{AccountSid}/Conferences.json")
-  sep = "?"
-  when PageSize
-    url = fmt("{url}{sep}PageSize={PageSize}")
-    sep = "&"
-  when Page
-    url = fmt("{url}{sep}Page={Page}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { Page, PageSize }, url)
   return response

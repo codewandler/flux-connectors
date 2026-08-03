@@ -9,12 +9,12 @@ use serde_json::Value;
 mod shipped_provider;
 
 #[test]
-fn every_non_websocket_ari_operation_is_selected_from_the_vendor_document() {
+fn every_ari_operation_with_a_modelled_query_shape_is_published() {
     let loaded = shipped_provider::load("asterisk");
     let connector = &loaded.connector;
 
-    assert_eq!(connector.operations.len(), 108);
-    assert_eq!(connector.provenance.operation_specs.len(), 108);
+    assert_eq!(connector.operations.len(), 96);
+    assert_eq!(connector.provenance.operation_specs.len(), 96);
     assert!(connector
         .provenance
         .operation_specs
@@ -30,10 +30,36 @@ fn every_non_websocket_ari_operation_is_selected_from_the_vendor_document() {
             .filter(|operation| operation.method == method)
             .count()
     };
-    assert_eq!(count(HttpMethod::Get), 32);
-    assert_eq!(count(HttpMethod::Post), 48);
+    assert_eq!(count(HttpMethod::Get), 29);
+    assert_eq!(count(HttpMethod::Post), 40);
     assert_eq!(count(HttpMethod::Put), 8);
-    assert_eq!(count(HttpMethod::Delete), 20);
+    assert_eq!(count(HttpMethod::Delete), 19);
+
+    let deferred = loaded
+        .patch
+        .operations
+        .iter()
+        .filter(|patch| patch.defer.is_some())
+        .map(|patch| patch.select.as_str())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        deferred,
+        BTreeSet::from([
+            "applications-subscribe",
+            "applications-unsubscribe",
+            "asterisk-getInfo",
+            "bridges-addChannel",
+            "bridges-getBridgeVars",
+            "bridges-play",
+            "bridges-playWithId",
+            "bridges-removeChannel",
+            "channels-getChannelVars",
+            "channels-play",
+            "channels-playWithId",
+            "events-userEvent",
+        ]),
+        "only operations with unmodelled array-valued query parameters may be deferred"
+    );
 }
 
 #[test]
@@ -162,7 +188,7 @@ fn basic_auth_and_deployment_authority_use_the_existing_connector_ports() {
 }
 
 #[test]
-fn the_complete_catalogue_does_not_become_a_108_tool_prompt() {
+fn the_complete_catalogue_does_not_become_a_96_tool_prompt() {
     let connector = shipped_provider::load("asterisk").connector;
     let exposed = connector
         .operations

@@ -7,8 +7,5 @@ op stripe-country-spec-list(limit: Number) -> Any
 
   base = "https://api.stripe.com"
   url = fmt("{base}/v1/country_specs")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response

@@ -6,9 +6,6 @@ op asterisk-ari-channels-move(channelId: String, app: String, appArgs: String) -
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/move?app={app}")
-  sep = "&"
-  when appArgs
-    url = fmt("{url}{sep}appArgs={appArgs}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/channels/{channelId}/move")
+  response = http.request(method: "POST", query: { app, appArgs }, url)
   return response

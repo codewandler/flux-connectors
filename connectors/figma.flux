@@ -34,8 +34,8 @@ op figma-file-nodes-get(file_key: String, ids: String) -> Any
   expose true
 
   base = "https://api.figma.com"
-  url = fmt("{base}/v1/files/{file_key}/nodes?ids={ids}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/v1/files/{file_key}/nodes")
+  response = http.request(method: "GET", query: { ids }, url)
   return response
 
 op figma-image-render-get(file_key: String, ids: String) -> Any
@@ -46,8 +46,8 @@ op figma-image-render-get(file_key: String, ids: String) -> Any
   expose true
 
   base = "https://api.figma.com"
-  url = fmt("{base}/v1/images/{file_key}?ids={ids}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/v1/images/{file_key}")
+  response = http.request(method: "GET", query: { ids }, url)
   return response
 
 op figma-project-files-list(project_id: Number) -> Any

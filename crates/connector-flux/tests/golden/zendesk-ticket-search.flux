@@ -6,12 +6,6 @@ op zendesk-ticket-search(query: String, page: Number, per_page: Number) -> Any
   expose true
 
   base = "https://example.zendesk.com"
-  url = fmt("{base}/api/v2/search.json?query={query}")
-  sep = "&"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/api/v2/search.json")
+  response = http.request(method: "GET", query: { page, per_page, query }, url)
   return response

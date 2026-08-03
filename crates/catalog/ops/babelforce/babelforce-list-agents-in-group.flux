@@ -7,11 +7,5 @@ op babelforce-list-agents-in-group(groupId: String, page: Number, max: Number) -
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/agents/groups/{groupId}/agents")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { max, page }, url)
   return response

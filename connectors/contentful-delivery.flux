@@ -24,13 +24,7 @@ op contentful-entries-list(limit: Number, skip: Number) -> Any
 
   base = "https://cdn.contentful.com/spaces/{space_id}/environments/{environment_id}"
   url = fmt("{base}/entries")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-    sep = "&"
-  when skip
-    url = fmt("{url}{sep}skip={skip}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit, skip }, url)
   return response
 
 op contentful-asset-get(asset_id: String) -> Any

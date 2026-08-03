@@ -22,8 +22,8 @@ op zendesk-incremental-ticket-list(start_time: Number) -> Any
   expose true
 
   base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/incremental/tickets?start_time={start_time}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/api/v2/incremental/tickets")
+  response = http.request(method: "GET", query: { start_time }, url)
   return response
 
 op zendesk-incremental-user-list(start_time: Number, per_page: Number) -> Any
@@ -34,11 +34,8 @@ op zendesk-incremental-user-list(start_time: Number, per_page: Number) -> Any
   expose true
 
   base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/incremental/users?start_time={start_time}")
-  sep = "&"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/api/v2/incremental/users")
+  response = http.request(method: "GET", query: { per_page, start_time }, url)
   return response
 
 op zendesk-incremental-organization-list(start_time: Number, per_page: Number) -> Any
@@ -49,11 +46,8 @@ op zendesk-incremental-organization-list(start_time: Number, per_page: Number) -
   expose true
 
   base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/incremental/organizations?start_time={start_time}")
-  sep = "&"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/api/v2/incremental/organizations")
+  response = http.request(method: "GET", query: { per_page, start_time }, url)
   return response
 
 op zendesk-incremental-ticket-event-list(start_time: Number) -> Any
@@ -64,8 +58,8 @@ op zendesk-incremental-ticket-event-list(start_time: Number) -> Any
   expose true
 
   base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/incremental/ticket_events?start_time={start_time}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/api/v2/incremental/ticket_events")
+  response = http.request(method: "GET", query: { start_time }, url)
   return response
 
 op zendesk-custom-object-list(include_ui_path: Bool) -> Any
@@ -77,10 +71,7 @@ op zendesk-custom-object-list(include_ui_path: Bool) -> Any
 
   base = "https://{subdomain}.zendesk.com"
   url = fmt("{base}/api/v2/custom_objects")
-  sep = "?"
-  when include_ui_path
-    url = fmt("{url}{sep}include_ui_path={include_ui_path}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { include_ui_path }, url)
   return response
 
 op zendesk-ticket-recent-list -> Any
@@ -199,8 +190,8 @@ op zendesk-ticket-search(query: String) -> Any
   expose true
 
   base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/search?query={query}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/api/v2/search")
+  response = http.request(method: "GET", query: { query }, url)
   return response
 
 op zendesk-ticket-show(ticket_id: Number) -> Any
@@ -224,13 +215,7 @@ op zendesk-ticket-comment-list(ticket_id: Number, include_inline_images: Bool, p
 
   base = "https://{subdomain}.zendesk.com"
   url = fmt("{base}/api/v2/tickets/{ticket_id}/comments")
-  sep = "?"
-  when include_inline_images
-    url = fmt("{url}{sep}include_inline_images={include_inline_images}")
-    sep = "&"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { include_inline_images, per_page }, url)
   return response
 
 op zendesk-ticket-update(ticket_id: Number, ticket: Any) -> Any

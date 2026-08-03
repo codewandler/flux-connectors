@@ -93,8 +93,8 @@ The coordinator failures from the same session, and each of them cost a rework r
 ## Current project boundary
 
 **Snapshot: v0.15.0.** `cargo run -p connector-cli -- build` compiles **55 providers**, **66 services**
-and **841 curated connector operations** — plus 53 events, 5 channel bindings and 77 Flux core entries
-(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **1114 artifacts**. The
+and **829 curated connector operations** — plus 53 events, 5 channel bindings and 77 Flux core entries
+(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **1102 artifacts**. The
 compiler, the embedded Rust catalogue, the JSON catalogue, the Tool pack and the public explorer all
 work. **The repository now also ships a host**, `connectors-api` (C-200), which makes live API calls
 — it is fenced away from the compile path in both directions, and the compiler itself still reaches
@@ -174,7 +174,7 @@ cargo run -p connector-cli -- build
 cargo run -p connector-cli -- diff
 ```
 
-`diff` must finish with `1114 artifacts up to date (55 providers checked)` for the current catalogue.
+`diff` must finish with `1102 artifacts up to date (55 providers checked)` for the current catalogue.
 The artifact count legitimately changes when providers or operations change: it is not a permanent
 invariant, but it is checked at every commit against the real build plan. Regenerate this sentence
 and the counts under [Current project boundary](#current-project-boundary) when that plan changes;
@@ -846,17 +846,13 @@ These failures are recorded decisions. Do not “fix” one without reading its 
 - **Freshdesk declares no credential.** Its API key occupies the Basic username position, which the
   current model treats as non-secret config. Emitting it would bypass secret gating and redaction;
   the deliberate result is a fail-closed 401.
-- **`zendesk-ticket-search` is non-functional.** Query values are not percent-encoded. Spaces are a
-  misleading test because URL parsing can rescue them; `&`, `#`, and `+` corrupt the request, and
-  `x&per_page=1` injects a parameter. **A `form` request body has the same gap** (C-144): flux exposes
-  no form encoder and no percent-encoder a Flux *program* can call, so the emitter assembles the pairs
-  with `fmt` and each value is interpolated verbatim. Half-encoding in emitted Flux would look correct
-  and be wrong, and hand-rolling it out of `replace` chains is the connector-specific DSL this
-  repository refuses — so the fix is a flux-side encoder. **The body half now exists in flux as L-101**
-  (`parse($record, as: "form")`), and it reaches this repository only when flux-lang publishes it,
-  because the pin is a crates.io version and must stay one. The *query* half is still open and is the
-  structured-`query` handoff in
-  [docs/designs/query-encoding-flux-stories.md](docs/designs/query-encoding-flux-stories.md).
+- **A `form` request body is not percent-encoded** (C-144): flux exposes no form encoder a Flux
+  *program* can call, so the emitter assembles the pairs with `fmt` and each value is interpolated
+  verbatim. Half-encoding in emitted Flux would look correct and be wrong, and hand-rolling it out of
+  `replace` chains is the connector-specific DSL this repository refuses. **The body half now exists
+  in flux as L-101** (`parse($record, as: "form")`), and it reaches this repository only when
+  flux-lang publishes it, because the pin is a crates.io version and must stay one. C-30 closed the
+  query half through Flux 0.54's structured `http.request(query: ...)` field.
 - **Some operations are refused during emission.** Examples include a nested body path without a
   `wire` field, a dotted operation id, and an ambiguous free-form body — and, under
   `body_encoding = "form"`, a nested field, a free-form `body_schema`, or an encoding declared on an
@@ -1113,4 +1109,4 @@ That is CI's, and the contract below says why.
   whole-value `{"$secret"}` marker never has to grow a prefix or an encoder.
   [docs/designs/auth-seam.md](docs/designs/auth-seam.md) is kept as the composite-path design; C-26's
   paste-ready flux drafts should not be filed as written. What still genuinely waits on a flux release
-  is the **form/query encoder** (upstream `L-101`) — see the `zendesk-ticket-search` gap above.
+  is the **form encoder** (upstream `L-101`) — see the form-body gap above.

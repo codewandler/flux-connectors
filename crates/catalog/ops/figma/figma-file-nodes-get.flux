@@ -6,6 +6,6 @@ op figma-file-nodes-get(file_key: String, ids: String) -> Any
   expose true
 
   base = "https://api.figma.com"
-  url = fmt("{base}/v1/files/{file_key}/nodes?ids={ids}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/v1/files/{file_key}/nodes")
+  response = http.request(method: "GET", query: { ids }, url)
   return response

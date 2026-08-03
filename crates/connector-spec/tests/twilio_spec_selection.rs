@@ -33,7 +33,8 @@ const ORIGINAL_FLUX: [OriginalFlux; 5] = [
     ),
     (
         "twilio-call-list",
-        "c6481d383dedefb4e7a0c6865d83fa6bb4ac095872aedda45401945eecfc6b6e",
+        // C-30 moved query values from URL interpolation into `http.request(query: ...)`.
+        "f96095a213ff0fa1a0b46d0310cc1eab29b8d70f7ee8f36d807f8f112413fc8f",
     ),
     (
         "twilio-message-get",
@@ -41,7 +42,7 @@ const ORIGINAL_FLUX: [OriginalFlux; 5] = [
     ),
     (
         "twilio-message-list",
-        "5b2cb0c168a9df7e83514b61db1ef20b4635cfde2312cdeba71f403c6a9f3b9f",
+        "fcf1e33d180efe929418a0077f48f4d2581df183dcc9f62f3c2b0e688fd6f9f4",
     ),
 ];
 

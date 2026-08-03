@@ -6,32 +6,8 @@ op asterisk-ari-channels-external-media(channelId: String, app: String, external
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/externalMedia?app={app}&format={format}")
-  sep = "&"
-  when channelId
-    url = fmt("{url}{sep}channelId={channelId}")
-    sep = "&"
-  when external_host
-    url = fmt("{url}{sep}external_host={external_host}")
-    sep = "&"
-  when encapsulation
-    url = fmt("{url}{sep}encapsulation={encapsulation}")
-    sep = "&"
-  when transport
-    url = fmt("{url}{sep}transport={transport}")
-    sep = "&"
-  when connection_type
-    url = fmt("{url}{sep}connection_type={connection_type}")
-    sep = "&"
-  when direction
-    url = fmt("{url}{sep}direction={direction}")
-    sep = "&"
-  when data
-    url = fmt("{url}{sep}data={data}")
-    sep = "&"
-  when transport_data
-    url = fmt("{url}{sep}transport_data={transport_data}")
+  url = fmt("{base}/channels/externalMedia")
   content_type = "application/json"
   payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { app, channelId, connection_type, data, direction, encapsulation, external_host, format, transport, transport_data }, url)
   return response

@@ -197,7 +197,7 @@ fn zendesk_ticket_search() -> Connector {
 
 /// `babelforce-call-list` — the name-safety fixture. `time.start` / `time.end` carry dots, which
 /// are **not** identifier-safe in Flux (inventory §6.5, `manager-0.7.0.openapi.json:2472`), and
-/// `agentId` is a `oneOf` scalar-or-array that Flux's `TypeRef` cannot express.
+/// `agentId` is the scalar branch C-30 publishes from the vendor's scalar-or-array declaration.
 fn babelforce_call_list() -> Connector {
     connector(
         "babelforce",
@@ -222,10 +222,7 @@ fn babelforce_call_list() -> Connector {
                         "agentId",
                         "Filter by agent.",
                         false,
-                        json!({"oneOf": [
-                            {"type": "string", "format": "uuid"},
-                            {"type": "array", "items": {"type": "string", "format": "uuid"}}
-                        ]}),
+                        json!({"type": "string", "format": "uuid"}),
                     ),
                     param(
                         "time.start",
@@ -579,18 +576,17 @@ fn path_parameters_substitute_into_the_url() {
     );
 }
 
-/// Query parameters assemble onto the request: a required one is always present, an optional one is
-/// guarded so an unsupplied filter never reaches the vendor as an empty `key=`.
+/// Query parameters travel as structure: Flux owns percent-encoding and omits a null optional value.
 #[test]
 fn query_parameters_assemble_into_the_request() {
     let emitted = emit_only_operation(&zendesk_ticket_search());
     assert!(
-        emitted.contains(r#"url = fmt("{base}/api/v2/search.json?query={query}")"#),
-        "a required query parameter belongs in the base URL:\n{emitted}"
+        emitted.contains(r#"url = fmt("{base}/api/v2/search.json")"#),
+        "query data must not be interpolated into the URL:\n{emitted}"
     );
     assert!(
-        emitted.contains("when page\n") && emitted.contains(r#"fmt("{url}{sep}page={page}")"#),
-        "an optional query parameter must be guarded:\n{emitted}"
+        emitted.contains("query: { page, per_page, query }") && !emitted.contains("when page\n"),
+        "required and optional values belong in one structured query record:\n{emitted}"
     );
 }
 
@@ -605,8 +601,8 @@ fn dotted_vendor_names_map_to_flux_symbols_without_losing_the_wire_name() {
         "the declared params must be spellable Flux symbols:\n{emitted}"
     );
     assert!(
-        emitted.contains(r#"fmt("{url}{sep}time.start={time_start}")"#),
-        "the query string must keep the vendor's wire name:\n{emitted}"
+        emitted.contains(r#""time.start": time_start"#),
+        "the structured query record must keep the vendor's wire name:\n{emitted}"
     );
     assert!(
         !emitted.contains("{time.start}"),
@@ -614,14 +610,41 @@ fn dotted_vendor_names_map_to_flux_symbols_without_losing_the_wire_name() {
     );
 }
 
-/// Flux's `TypeRef` has four scalars, a homogeneous list and named types; a `oneOf` union is none of
-/// those, so it lands on the documented `Any` fallback rather than being guessed at.
+/// `Any` may carry a collection at runtime, so it is refused in a query even though it remains the
+/// general type projection for unions elsewhere.
 #[test]
-fn a_shape_flux_cannot_express_falls_back_to_any() {
-    let emitted = emit_only_operation(&babelforce_call_list());
+fn an_any_typed_query_is_refused() {
+    let mut connector = babelforce_call_list();
+    connector.operations[0].params.query[2].schema = json!({"oneOf": [
+        {"type": "string", "format": "uuid"},
+        {"type": "array", "items": {"type": "string", "format": "uuid"}}
+    ]});
+    let refusal = emit_operation(&connector, &connector.operations[0])
+        .expect_err("an Any query could carry a collection")
+        .to_string();
     assert!(
-        emitted.contains("agentId: Any"),
-        "a scalar-or-array union must degrade to Any:\n{emitted}"
+        refusal.contains("C-30") && refusal.contains("agentId") && refusal.contains("Any"),
+        "the refusal must name the ambiguous parameter and derived type: {refusal}"
+    );
+}
+
+/// Query collections are not a scalar encoding problem: the vendor must declare repeated,
+/// delimited, bracketed or JSON semantics before one can be sent.
+#[test]
+fn an_unmodelled_query_collection_is_refused() {
+    let mut connector = zendesk_ticket_search();
+    connector.operations[0].params.query[0].schema =
+        json!({"type": "array", "items": {"type": "string"}});
+
+    let refusal = emit_operation(&connector, &connector.operations[0])
+        .expect_err("an array query value has no declared wire convention")
+        .to_string();
+    assert!(
+        refusal.contains("C-30")
+            && refusal.contains("zendesk-ticket-search")
+            && refusal.contains("query")
+            && refusal.contains("List<String>"),
+        "the refusal must identify the story, operation, parameter and shape: {refusal}"
     );
 }
 
@@ -1178,12 +1201,13 @@ fn a_query_alias_travels_under_its_wire_name() {
 
     let emitted = emit_only_operation(&connector);
     assert!(
-        emitted.contains(r#"url = fmt("{base}/api/v2/search.json?query={q}")"#),
-        "a required alias must reach the vendor under its wire name:\n{emitted}"
+        emitted.contains(r#"url = fmt("{base}/api/v2/search.json")"#),
+        "query aliases must not enter the URL template:\n{emitted}"
     );
     assert!(
-        emitted.contains(r#"fmt("{url}{sep}requester_id={req_id}")"#),
-        "an optional alias must too:\n{emitted}"
+        emitted.contains("query: { query: q, requester_id: req_id }")
+            && !emitted.contains("when req_id\n"),
+        "required and optional aliases must keep their wire names in the query record:\n{emitted}"
     );
     let signature = emitted.lines().next().expect("a declaration line");
     assert!(

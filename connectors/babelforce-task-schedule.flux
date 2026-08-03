@@ -12,13 +12,7 @@ op babelforce-get-task-schedules(page: Number, page_size: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v3/tasks/schedules")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when page_size
-    url = fmt("{url}{sep}page_size={page_size}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { page, page_size }, url)
   return response
 
 op babelforce-submit-task-schedule(cron: String, name: String, task: Any, template_id: String, template_style: String, timezone: String) -> Any

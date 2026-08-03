@@ -8,8 +8,5 @@ op twilio-recording-get(Sid: String, IncludeSoftDeleted: Bool) -> Any
   base = "https://api.twilio.com/2010-04-01"
   AccountSid = "{username.twilio.basic_auth}"
   url = fmt("{base}/Accounts/{AccountSid}/Recordings/{Sid}.json")
-  sep = "?"
-  when IncludeSoftDeleted
-    url = fmt("{url}{sep}IncludeSoftDeleted={IncludeSoftDeleted}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { IncludeSoftDeleted }, url)
   return response

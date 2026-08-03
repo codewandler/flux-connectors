@@ -7,11 +7,5 @@ op zendesk-ticket-comment-list(ticket_id: Number, page: Number, per_page: Number
 
   base = "https://example.zendesk.com"
   url = fmt("{base}/api/v2/tickets/{ticket_id}/comments.json")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { page, per_page }, url)
   return response

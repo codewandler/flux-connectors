@@ -11,14 +11,8 @@ op pagerduty-incident-list(limit: Number, offset: Number) -> Any
 
   base = "https://api.pagerduty.com"
   url = fmt("{base}/incidents")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-    sep = "&"
-  when offset
-    url = fmt("{url}{sep}offset={offset}")
   Accept = "application/vnd.pagerduty+json;version=2"
-  response = http.request(headers: { Accept }, method: "GET", url)
+  response = http.request(headers: { Accept }, method: "GET", query: { limit, offset }, url)
   return response
 
 op pagerduty-incident-get(id: String) -> Any
@@ -43,14 +37,8 @@ op pagerduty-service-list(limit: Number, offset: Number) -> Any
 
   base = "https://api.pagerduty.com"
   url = fmt("{base}/services")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-    sep = "&"
-  when offset
-    url = fmt("{url}{sep}offset={offset}")
   Accept = "application/vnd.pagerduty+json;version=2"
-  response = http.request(headers: { Accept }, method: "GET", url)
+  response = http.request(headers: { Accept }, method: "GET", query: { limit, offset }, url)
   return response
 
 op pagerduty-oncall-list(limit: Number, offset: Number) -> Any
@@ -62,14 +50,8 @@ op pagerduty-oncall-list(limit: Number, offset: Number) -> Any
 
   base = "https://api.pagerduty.com"
   url = fmt("{base}/oncalls")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-    sep = "&"
-  when offset
-    url = fmt("{url}{sep}offset={offset}")
   Accept = "application/vnd.pagerduty+json;version=2"
-  response = http.request(headers: { Accept }, method: "GET", url)
+  response = http.request(headers: { Accept }, method: "GET", query: { limit, offset }, url)
   return response
 
 op pagerduty-incident-acknowledge(id: String, from_email: String) -> Any

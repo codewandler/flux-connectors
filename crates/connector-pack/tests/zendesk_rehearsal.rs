@@ -29,12 +29,12 @@ fn thirteen_spec_backed_reads_compose_absolute_zendesk_requests() {
         (
             "zendesk-incremental-user-list",
             json!({"start_time": 1_700_000_000, "per_page": 100}),
-            "https://acme.zendesk.com/api/v2/incremental/users?start_time=1700000000&per_page=100",
+            "https://acme.zendesk.com/api/v2/incremental/users?per_page=100&start_time=1700000000",
         ),
         (
             "zendesk-incremental-organization-list",
             json!({"start_time": 1_700_000_000, "per_page": 100}),
-            "https://acme.zendesk.com/api/v2/incremental/organizations?start_time=1700000000&per_page=100",
+            "https://acme.zendesk.com/api/v2/incremental/organizations?per_page=100&start_time=1700000000",
         ),
         (
             "zendesk-incremental-ticket-event-list",
@@ -124,7 +124,7 @@ fn five_greenfield_support_replacements_compose_the_vendor_requests() {
             "zendesk-ticket-search",
             "GET",
             json!({"query": "type:ticket"}),
-            "https://acme.zendesk.com/api/v2/search?query=type:ticket",
+            "https://acme.zendesk.com/api/v2/search?query=type%3Aticket",
             None,
         ),
         (
@@ -138,7 +138,7 @@ fn five_greenfield_support_replacements_compose_the_vendor_requests() {
             "zendesk-ticket-comment-list",
             "GET",
             json!({"ticket_id": 35436, "include_inline_images": false, "per_page": 100}),
-            "https://acme.zendesk.com/api/v2/tickets/35436/comments?per_page=100",
+            "https://acme.zendesk.com/api/v2/tickets/35436/comments?include_inline_images=false&per_page=100",
             None,
         ),
         (

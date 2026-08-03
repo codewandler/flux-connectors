@@ -7,13 +7,7 @@ op babelforce-dispatch-event-trigger(eventTriggerId: String, timeout: Number, si
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/events/triggers/{eventTriggerId}/dispatch")
-  sep = "?"
-  when $timeout
-    url = fmt("{url}{sep}timeout={timeout}")
-    sep = "&"
-  when simulateCall
-    url = fmt("{url}{sep}simulateCall={simulateCall}")
   content_type = "application/json"
   payload = parse(body, as: "json")
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { simulateCall, timeout: $timeout }, url)
   return response

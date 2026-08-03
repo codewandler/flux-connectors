@@ -11,18 +11,17 @@
 //!
 //! **A hard-coded list of broken operation ids is exactly the hand-maintained truth this repository
 //! exists to correct.** So every issue below is a *rule applied to the IR*, and the rule is what is
-//! written down — not its current answer. Add a fourth provider with a free-text query parameter
-//! and it is flagged without anyone editing this file; close the percent-encoding gap in
-//! `connector-flux` and the flag disappears from all of them at once.
+//! written down — not its current answer. C-30 is the example of the lifecycle working: structured
+//! query encoding closed the gap in `connector-flux`, so this module no longer publishes the
+//! operation-level issue it used to derive for text queries.
 //!
-//! The rules are stated so that they reproduce, from the IR alone, the four limits README.md
+//! The rules are stated so that they reproduce, from the IR alone, the remaining limits README.md
 //! publishes under "Known limits":
 //!
 //! | Issue | Rule over the IR | Owning story |
 //! |---|---|---|
 //! | [`NO_CREDENTIAL`] | the operation's effective auth is empty, and it did not *declare* it so | C-17 |
 //! | [`CREDENTIAL_NOT_INJECTED`] | the operation's effective auth is **not** empty | C-10 |
-//! | [`UNENCODABLE_QUERY_VALUE`] | a query parameter whose schema is not numeric or boolean | C-30 |
 //! | [`UNBOUND_BASE_URL_TEMPLATE`] | the connector's base URL carries a `{name}` placeholder | C-17 |
 //!
 //! The first two are complementary over every operation that has *not* declared itself public: one
@@ -70,7 +69,7 @@
 
 use serde::Serialize;
 
-use connector_spec::{Connector, JsonSchema, Operation, Param};
+use connector_spec::{Connector, Operation};
 
 /// Whether the emitter attaches a declared credential to the request it generates.
 ///
@@ -95,7 +94,9 @@ const CREDENTIALS_REACH_THE_REQUEST: bool = false;
 pub const NO_CREDENTIAL: &str = "no-credential";
 /// See [`NO_CREDENTIAL`].
 pub const CREDENTIAL_NOT_INJECTED: &str = "credential-not-injected";
-/// See [`NO_CREDENTIAL`].
+/// The retired C-30 token. Kept as a public spelling for consumers that still deserialize older
+/// catalogue documents; current catalogues never produce it because scalar queries are structured
+/// and unmodelled collections fail before an operation can publish.
 pub const UNENCODABLE_QUERY_VALUE: &str = "unencodable-query-value";
 /// See [`NO_CREDENTIAL`].
 pub const UNBOUND_BASE_URL_TEMPLATE: &str = "unbound-base-url-template";
@@ -295,26 +296,7 @@ pub fn of(connector: &Connector, operation: &Operation) -> Status {
         }
     }
 
-    // 2. Query values reach the wire raw.
-    let unencodable: Vec<String> = operation
-        .params
-        .query
-        .iter()
-        .filter(|param| !is_safely_interpolated(&param.schema))
-        .map(|param| wire_name(param).to_string())
-        .collect();
-    if !unencodable.is_empty() {
-        issues.push(Issue {
-            code: UNENCODABLE_QUERY_VALUE,
-            scope: Scope::Operation,
-            story: "C-30",
-            summary: "Text query parameters cannot yet be encoded safely. Calling this operation could change the meaning of the request, so live use is disabled."
-                .to_string(),
-            params: unencodable,
-        });
-    }
-
-    // 3. The base URL names a tenant nobody has bound. Read through the operation's **service**
+    // 2. The base URL names a tenant nobody has bound. Read through the operation's **service**
     //    (C-49): a service may override the connector's base URL, and it is the URL the call
     //    actually reaches that decides whether the destination is bound.
     //
@@ -368,38 +350,12 @@ fn declares_no_credential_is_needed(operation: &Operation) -> bool {
     matches!(operation.auth.as_deref(), Some([]))
 }
 
-/// Whether a query parameter of this schema can be interpolated into a URL without encoding.
-///
-/// **C-30's rule, and deliberately narrow** (`docs/designs/query-encoding.md` §4): a `Number` or
-/// `Boolean` value cannot contain `&`, `#`, `+` or a space, so the six zendesk operations that take
-/// only numeric ids and page bounds are unaffected and must not be flagged. Everything else is
-/// treated as string-ish — including an untyped or unresolved schema, which `connector-flux` maps
-/// to `Any` and which therefore *may* carry text (`crates/connector-flux/src/types.rs`).
-///
-/// The rule is stated over the JSON Schema rather than over the Flux type because the schema is
-/// what the IR carries and what this crate can see; the two agree on every scalar, which is the
-/// only case that can be safe. It inherits the limit the design records: a free-form parameter
-/// mistyped as `integer` in a provider TOML is still reported as working.
-fn is_safely_interpolated(schema: &JsonSchema) -> bool {
-    matches!(
-        schema.get("type").and_then(|kind| kind.as_str()),
-        Some("integer" | "number" | "boolean")
-    )
-}
-
-/// The spelling the vendor sees — [`Param::wire`] when it differs, the caller-facing name otherwise.
-///
-/// The wire name is the right one to report here: the issue is about what lands in the query
-/// string.
-fn wire_name(param: &Param) -> &str {
-    param.wire.as_deref().unwrap_or(&param.name)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use connector_spec::{
-        AuthMethod, AuthRequirement, HttpMethod, Idempotency, Operation, ParamSet, Quirks, Risk,
+        AuthMethod, AuthRequirement, HttpMethod, Idempotency, Operation, Param, ParamSet, Quirks,
+        Risk,
     };
     use serde_json::json;
 
@@ -573,70 +529,17 @@ mod tests {
         );
     }
 
-    /// **The narrow half of C-30's rule.** A numeric or boolean query value cannot carry `&` or
-    /// `#`, so flagging it would make the catalogue cry wolf over the six zendesk operations that
-    /// are genuinely fine.
+    /// C-30 moved scalar queries into `http.request(query: ...)`. Status must therefore stop
+    /// repeating the old URL-interpolation refusal for every schema shape the emitter admits.
     #[test]
-    fn numeric_and_boolean_query_values_are_not_flagged() {
+    fn scalar_query_values_are_not_flagged_after_c30() {
         let mut connector = connector();
         connector.operations[0].params.query = vec![
+            param("query", json!({"type": "string"})),
             param("page", json!({"type": "integer", "minimum": 1})),
             param("ratio", json!({"type": "number"})),
             param("enabled", json!({"type": "boolean"})),
         ];
-        assert_eq!(
-            codes(&of(&connector, &connector.operations[0])),
-            vec![CREDENTIAL_NOT_INJECTED]
-        );
-    }
-
-    /// The wide half: a string, and anything whose type the IR cannot resolve, must be treated as
-    /// free-form text — an `Any` parameter *may* carry it.
-    #[test]
-    fn string_ish_and_untyped_query_values_are_flagged() {
-        for schema in [
-            json!({"type": "string"}),
-            json!({"type": "string", "enum": ["a", "b"]}),
-            json!({"type": ["string", "null"]}),
-            json!({"$ref": "#/components/schemas/Query"}),
-            json!({}),
-        ] {
-            let mut connector = connector();
-            connector.operations[0].params.query = vec![param("q", schema.clone())];
-            assert!(
-                codes(&of(&connector, &connector.operations[0])).contains(&UNENCODABLE_QUERY_VALUE),
-                "{schema} should be treated as string-ish"
-            );
-        }
-    }
-
-    /// The issue names the parameters, and it names them as the **vendor** spells them — the query
-    /// string is where the value lands.
-    #[test]
-    fn the_query_issue_names_the_wire_parameters_it_is_about() {
-        let mut connector = connector();
-        let mut aliased = param("req_id", json!({"type": "string"}));
-        aliased.wire = Some("requester_id".to_string());
-        connector.operations[0].params.query =
-            vec![aliased, param("page", json!({"type": "integer"}))];
-
-        let status = of(&connector, &connector.operations[0]);
-        let issue = status
-            .issues
-            .iter()
-            .find(|issue| issue.code == UNENCODABLE_QUERY_VALUE)
-            .expect("the query issue fires");
-        assert_eq!(issue.params, vec!["requester_id".to_string()]);
-    }
-
-    /// Path and header parameters have the identical gap and are deliberately **not** reported:
-    /// C-30 scopes the refusal to query values, and widening it here would put the catalogue and
-    /// the emitter's own rule out of step.
-    #[test]
-    fn only_query_parameters_are_examined_for_encoding() {
-        let mut connector = connector();
-        connector.operations[0].params.path = vec![param("slug", json!({"type": "string"}))];
-        connector.operations[0].params.header = vec![param("trace", json!({"type": "string"}))];
         assert_eq!(
             codes(&of(&connector, &connector.operations[0])),
             vec![CREDENTIAL_NOT_INJECTED]
@@ -687,8 +590,7 @@ mod tests {
 
     /// A note is a fact about the operation, not a licence to stop reporting defects.
     ///
-    /// A public endpoint with a free-text query parameter and an unbound host is still broken in
-    /// both of those ways, and `works` says so.
+    /// A public endpoint with an unbound host is still broken, and `works` says so.
     #[test]
     fn a_public_operation_still_reports_every_defect_it_has() {
         let mut connector = connector();
@@ -697,10 +599,7 @@ mod tests {
         connector.operations[0].params.query = vec![param("q", json!({"type": "string"}))];
 
         let status = of(&connector, &connector.operations[0]);
-        assert_eq!(
-            codes(&status),
-            vec![UNENCODABLE_QUERY_VALUE, UNBOUND_BASE_URL_TEMPLATE]
-        );
+        assert_eq!(codes(&status), vec![UNBOUND_BASE_URL_TEMPLATE]);
         assert_eq!(note_codes(&status), vec![NO_CREDENTIAL_REQUIRED]);
         assert!(!status.works);
     }

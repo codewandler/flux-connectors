@@ -6,8 +6,8 @@ op babelforce-evaluate-expression(async: Bool, body: Any) -> Any
   expose false
 
   base = "https://services.babelforce.com"
-  url = fmt("{base}/api/v2/expressions/evaluate?async={async}")
+  url = fmt("{base}/api/v2/expressions/evaluate")
   content_type = "application/json"
   payload = parse(body, as: "json")
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { async }, url)
   return response

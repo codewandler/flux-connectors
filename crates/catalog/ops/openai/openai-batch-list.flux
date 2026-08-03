@@ -7,8 +7,5 @@ op openai-batch-list(limit: Number) -> Any
 
   base = "https://api.openai.com"
   url = fmt("{base}/v1/batches")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response

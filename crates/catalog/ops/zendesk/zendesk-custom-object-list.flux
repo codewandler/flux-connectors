@@ -7,8 +7,5 @@ op zendesk-custom-object-list(include_ui_path: Bool) -> Any
 
   base = "https://{subdomain}.zendesk.com"
   url = fmt("{base}/api/v2/custom_objects")
-  sep = "?"
-  when include_ui_path
-    url = fmt("{url}{sep}include_ui_path={include_ui_path}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { include_ui_path }, url)
   return response

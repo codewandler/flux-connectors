@@ -22,11 +22,8 @@ op calendly-event-type-list(user: String, count: Number) -> Any
   expose true
 
   base = "https://api.calendly.com"
-  url = fmt("{base}/event_types?user={user}")
-  sep = "&"
-  when count
-    url = fmt("{url}{sep}count={count}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/event_types")
+  response = http.request(method: "GET", query: { count, user }, url)
   return response
 
 op calendly-scheduled-event-list(user: String, status: String, count: Number) -> Any
@@ -37,14 +34,8 @@ op calendly-scheduled-event-list(user: String, status: String, count: Number) ->
   expose true
 
   base = "https://api.calendly.com"
-  url = fmt("{base}/scheduled_events?user={user}")
-  sep = "&"
-  when status
-    url = fmt("{url}{sep}status={status}")
-    sep = "&"
-  when count
-    url = fmt("{url}{sep}count={count}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/scheduled_events")
+  response = http.request(method: "GET", query: { count, status, user }, url)
   return response
 
 op calendly-scheduled-event-get(uuid: String) -> Any
@@ -68,11 +59,5 @@ op calendly-invitee-list(uuid: String, status: String, count: Number) -> Any
 
   base = "https://api.calendly.com"
   url = fmt("{base}/scheduled_events/{uuid}/invitees")
-  sep = "?"
-  when status
-    url = fmt("{url}{sep}status={status}")
-    sep = "&"
-  when count
-    url = fmt("{url}{sep}count={count}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { count, status }, url)
   return response

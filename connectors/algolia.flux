@@ -24,17 +24,8 @@ op algolia-index-search(index_name: String, query: String, hits_per_page: Number
 
   base = "https://{app_id}.algolia.net"
   X_Algolia_Application_Id = "{app_id}"
-  url = fmt("{base}/1/indexes/{index_name}?query={query}")
-  sep = "&"
-  when hits_per_page
-    url = fmt("{url}{sep}hitsPerPage={hits_per_page}")
-    sep = "&"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when filters
-    url = fmt("{url}{sep}filters={filters}")
-  response = http.request(headers: { "X-Algolia-Application-Id": X_Algolia_Application_Id }, method: "GET", url)
+  url = fmt("{base}/1/indexes/{index_name}")
+  response = http.request(headers: { "X-Algolia-Application-Id": X_Algolia_Application_Id }, method: "GET", query: { filters, hitsPerPage: hits_per_page, page, query }, url)
   return response
 
 op algolia-object-get(index_name: String, object_id: String) -> Any

@@ -1,4 +1,4 @@
-op babelforce-list-users(email: Any) -> Any
+op babelforce-list-users(email: String) -> Any
   description "List users"
   risk "low"
   idempotency "idempotent"
@@ -7,8 +7,5 @@ op babelforce-list-users(email: Any) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/users")
-  sep = "?"
-  when email
-    url = fmt("{url}{sep}email={email}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { email }, url)
   return response

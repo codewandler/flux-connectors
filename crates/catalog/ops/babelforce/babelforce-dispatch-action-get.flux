@@ -7,11 +7,5 @@ op babelforce-dispatch-action-get(integrationId: String, action: String, callId:
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/integrations/{integrationId}/dispatch/{action}")
-  sep = "?"
-  when callId
-    url = fmt("{url}{sep}callId={callId}")
-    sep = "&"
-  when sessionId
-    url = fmt("{url}{sep}sessionId={sessionId}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { callId, sessionId }, url)
   return response

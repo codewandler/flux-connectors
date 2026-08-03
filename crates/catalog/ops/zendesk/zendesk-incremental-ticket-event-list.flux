@@ -6,6 +6,6 @@ op zendesk-incremental-ticket-event-list(start_time: Number) -> Any
   expose true
 
   base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/incremental/ticket_events?start_time={start_time}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/api/v2/incremental/ticket_events")
+  response = http.request(method: "GET", query: { start_time }, url)
   return response

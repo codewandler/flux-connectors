@@ -7,8 +7,5 @@ op babelforce-test-calendar-date(date: String) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/calendars/test")
-  sep = "?"
-  when date
-    url = fmt("{url}{sep}date={date}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { date }, url)
   return response

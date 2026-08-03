@@ -75,10 +75,7 @@ op openai-response-input-item-list(response_id: String, limit: Number) -> Any
 
   base = "https://api.openai.com"
   url = fmt("{base}/v1/responses/{response_id}/input_items")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response
 
 op openai-file-list(limit: Number) -> Any
@@ -90,10 +87,7 @@ op openai-file-list(limit: Number) -> Any
 
   base = "https://api.openai.com"
   url = fmt("{base}/v1/files")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response
 
 op openai-batch-list(limit: Number) -> Any
@@ -105,8 +99,5 @@ op openai-batch-list(limit: Number) -> Any
 
   base = "https://api.openai.com"
   url = fmt("{base}/v1/batches")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response

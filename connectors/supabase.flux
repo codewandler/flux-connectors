@@ -23,10 +23,7 @@ op supabase-rows-list(table: String, limit: Number) -> Any
 
   base = "https://{project_ref}.supabase.co"
   url = fmt("{base}/rest/v1/{table}")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response
 
 op supabase-auth-settings -> Any

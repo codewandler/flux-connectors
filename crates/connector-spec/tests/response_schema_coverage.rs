@@ -85,7 +85,10 @@ mod shipped_provider;
 // Raised 606 -> 715 at C-486 integration. Asterisk ARI adds 50 source-declared response shapes and
 // the accumulated spec-backed catalogue now measures 715 of 841; recording the measured figure
 // keeps the upward ratchet honest.
-const COVERED_FLOOR: usize = 715;
+// C-30 withholds twelve Asterisk operations whose array query serialization is undeclared. Nine
+// carried response shapes, leaving 706 covered operations; the floor stays one below that measured
+// count so one honest documented absence can still land without defeating the arrival guard.
+const COVERED_FLOOR: usize = 705;
 
 /// The other half of the same measurement: operations that ship **without** a response shape. This
 /// is the half that notices a connector arriving with no response shapes at all.
@@ -131,7 +134,10 @@ const COVERED_FLOOR: usize = 715;
 // its 108 REST responses without a constraining schema, taking the catalogue to 126 absences. The
 // extra one-operation allowance preserves the guard's stated rule while a two-operation connector
 // arriving wholly unschematized still fails.
-const ABSENCE_CEILING: usize = 127;
+// The same C-30 deferral leaves 123 measured absences. The ceiling stays one above that figure so
+// one honest absence remains admissible while the smallest shipped two-operation connector arriving
+// with no response shapes still fails.
+const ABSENCE_CEILING: usize = 124;
 
 /// How far [`ABSENCE_CEILING`] may sit above the measured absence. This is the guard's resolution,
 /// and the only number in this file that was chosen rather than read off the catalogue, so it is the

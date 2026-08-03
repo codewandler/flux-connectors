@@ -11,13 +11,7 @@ op launchdarkly-project-list(limit: Number, offset: Number) -> Any
 
   base = "https://app.launchdarkly.com/api/v2"
   url = fmt("{base}/projects")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-    sep = "&"
-  when offset
-    url = fmt("{url}{sep}offset={offset}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit, offset }, url)
   return response
 
 op launchdarkly-environment-list(project_key: String, limit: Number, offset: Number) -> Any
@@ -29,13 +23,7 @@ op launchdarkly-environment-list(project_key: String, limit: Number, offset: Num
 
   base = "https://app.launchdarkly.com/api/v2"
   url = fmt("{base}/projects/{project_key}/environments")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-    sep = "&"
-  when offset
-    url = fmt("{url}{sep}offset={offset}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit, offset }, url)
   return response
 
 op launchdarkly-flag-list(project_key: String, env: String, limit: Number, offset: Number) -> Any
@@ -47,16 +35,7 @@ op launchdarkly-flag-list(project_key: String, env: String, limit: Number, offse
 
   base = "https://app.launchdarkly.com/api/v2"
   url = fmt("{base}/flags/{project_key}")
-  sep = "?"
-  when env
-    url = fmt("{url}{sep}env={env}")
-    sep = "&"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-    sep = "&"
-  when offset
-    url = fmt("{url}{sep}offset={offset}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { env, limit, offset }, url)
   return response
 
 op launchdarkly-flag-get(project_key: String, feature_flag_key: String, env: String) -> Any
@@ -68,10 +47,7 @@ op launchdarkly-flag-get(project_key: String, feature_flag_key: String, env: Str
 
   base = "https://app.launchdarkly.com/api/v2"
   url = fmt("{base}/flags/{project_key}/{feature_flag_key}")
-  sep = "?"
-  when env
-    url = fmt("{url}{sep}env={env}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { env }, url)
   return response
 
 op launchdarkly-flag-toggle(project_key: String, feature_flag_key: String, body: List<Any>) -> Any

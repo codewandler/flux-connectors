@@ -156,9 +156,13 @@ fn every_operation_sends_the_pinned_team() {
             "`{id}` must bind the pinned team as a literal carrying its placeholder:\n{flux}"
         );
         assert!(
-            flux.contains("teamId={teamId}"),
-            "`{id}` must send `?teamId=` unconditionally — no `when` guard, because a pinned value \
-             has no \"not supplied\" state:\n{flux}"
+            flux.lines().any(|line| {
+                line.contains("http.request")
+                    && line.contains("query: {")
+                    && line.contains("teamId")
+            }) && !flux.contains("when teamId"),
+            "`{id}` must send the structured `teamId` field unconditionally — a pinned value has \
+             no \"not supplied\" state:\n{flux}"
         );
         assert!(
             !flux.starts_with(&format!("op {id}(teamId")),

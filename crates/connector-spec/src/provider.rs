@@ -627,6 +627,14 @@ pub struct OperationPatch {
     pub service: Option<String>,
     /// The spec's `operationId` this patch selects, e.g. `listReportingCalls`.
     pub select: String,
+    /// Withhold this exact operation from a set selected in bulk, with the reason review needs.
+    ///
+    /// This is deliberately **not** operation selection by exclusion: it is legal only when a
+    /// `[[patch.select]]` already matched the operation. The selector remains the positive review
+    /// boundary; this field records why one member of that stated set cannot publish yet. Nothing
+    /// else may be corrected on a deferred operation because no corrected operation would exist.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub defer: Option<String>,
     /// The stable op id to publish it as, e.g. `babelforce.call.list`.
     ///
     /// Almost always set: `operationId` is a volatile vendor field and the op name is a public
@@ -1398,6 +1406,59 @@ fn publish(
         }
 
         let stated = matched.get(&(document.service.as_str(), select));
+        if let Some(reason) = block.defer.as_deref() {
+            let mut incompatible = Vec::new();
+            if block.rename.is_some() {
+                incompatible.push("rename");
+            }
+            if block.description.is_some() {
+                incompatible.push("description");
+            }
+            if block.risk.is_some() {
+                incompatible.push("risk");
+            }
+            if block.idempotency.is_some() {
+                incompatible.push("idempotency");
+            }
+            if block.auth.is_some() {
+                incompatible.push("auth");
+            }
+            if block.quirks.is_some() {
+                incompatible.push("quirks");
+            }
+            if !block.params.is_empty() {
+                incompatible.push("params");
+            }
+            if !block.omit.is_empty() {
+                incompatible.push("omit");
+            }
+            if block.expose.is_some() {
+                incompatible.push("expose");
+            }
+
+            if stated.is_none() {
+                problems.push(format!(
+                    "`[[patch.operations]] select = {select:?}` uses `defer`, but no \
+                     `[[patch.select]]` matched that operation. Deferral may only narrow an \
+                     explicitly selected set; it is not an opt-out selection mechanism"
+                ));
+            }
+            if reason.trim().is_empty() {
+                problems.push(format!(
+                    "`[[patch.operations]] select = {select:?}` uses `defer` without a non-empty \
+                     reason. A withheld operation must say what model or prerequisite keeps it out"
+                ));
+            }
+            if !incompatible.is_empty() {
+                problems.push(format!(
+                    "`[[patch.operations]] select = {select:?}` defers the operation and also \
+                     states {}, but corrections to an operation that will not publish have no \
+                     effect. Keep only `service`, `select` and `defer`",
+                    incompatible.join(", ")
+                ));
+            }
+            continue;
+        }
         let source = source_of(specs, document);
         if let Some((operation, claim)) = compose(
             document,

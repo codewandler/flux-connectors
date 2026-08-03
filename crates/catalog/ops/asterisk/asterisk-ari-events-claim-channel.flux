@@ -6,6 +6,6 @@ op asterisk-ari-events-claim-channel(channelId: String, application: String) -> 
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/events/claim?channelId={channelId}&application={application}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/events/claim")
+  response = http.request(method: "POST", query: { application, channelId }, url)
   return response

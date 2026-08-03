@@ -501,12 +501,22 @@ test('the site is built for the path GitHub Pages actually serves it from', () =
   }
 })
 
-test('an operation that owns a defect says so wherever it appears', () => {
+test('operation-owned defects are rendered exactly when the catalogue publishes one', () => {
   const document = catalog()
   const explorer = page('explorer.html')
   const owners = operations(document).filter((operation) => ownIssues(operation).length > 0)
 
-  assert.ok(owners.length > 0, 'no operation owns a defect; this assertion would pass vacuously')
+  if (owners.length === 0) {
+    const falseOwners = operations(document).filter((operation) =>
+      defectMarkers(explorer, operation.id).includes('own')
+    )
+    assert.deepEqual(
+      falseOwners,
+      [],
+      'the explorer marks an operation as owning a defect even though the catalogue publishes none'
+    )
+    return
+  }
 
   for (const operation of owners) {
     assert.deepEqual(

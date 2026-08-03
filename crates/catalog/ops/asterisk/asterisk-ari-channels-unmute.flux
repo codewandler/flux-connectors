@@ -7,8 +7,5 @@ op asterisk-ari-channels-unmute(channelId: String, direction: String) -> Any
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/channels/{channelId}/mute")
-  sep = "?"
-  when direction
-    url = fmt("{url}{sep}direction={direction}")
-  response = http.request(method: "DELETE", url)
+  response = http.request(method: "DELETE", query: { direction }, url)
   return response

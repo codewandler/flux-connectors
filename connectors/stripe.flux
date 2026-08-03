@@ -107,10 +107,7 @@ op stripe-country-spec-list(limit: Number) -> Any
 
   base = "https://api.stripe.com"
   url = fmt("{base}/v1/country_specs")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response
 
 op stripe-event-list(limit: Number) -> Any
@@ -122,10 +119,7 @@ op stripe-event-list(limit: Number) -> Any
 
   base = "https://api.stripe.com"
   url = fmt("{base}/v1/events")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response
 
 op stripe-exchange-rate-list(limit: Number) -> Any
@@ -137,10 +131,7 @@ op stripe-exchange-rate-list(limit: Number) -> Any
 
   base = "https://api.stripe.com"
   url = fmt("{base}/v1/exchange_rates")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response
 
 op stripe-billing-meter-list(limit: Number) -> Any
@@ -152,8 +143,5 @@ op stripe-billing-meter-list(limit: Number) -> Any
 
   base = "https://api.stripe.com"
   url = fmt("{base}/v1/billing/meters")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response

@@ -7,11 +7,5 @@ op babelforce-flush-dialer(id: String, all: Bool) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/dialer/flush")
-  sep = "?"
-  when id
-    url = fmt("{url}{sep}id={id}")
-    sep = "&"
-  when all
-    url = fmt("{url}{sep}all={all}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { all, id }, url)
   return response

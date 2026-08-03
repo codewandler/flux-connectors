@@ -6,6 +6,6 @@ op zendesk-ticket-search(query: String) -> Any
   expose true
 
   base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/search?query={query}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/api/v2/search")
+  response = http.request(method: "GET", query: { query }, url)
   return response

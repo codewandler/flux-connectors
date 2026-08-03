@@ -6,11 +6,5 @@ op babelforce-task-usage-types(start: String, end: String) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v3/tasks/usage/types")
-  sep = "?"
-  when start
-    url = fmt("{url}{sep}start={start}")
-    sep = "&"
-  when end
-    url = fmt("{url}{sep}end={end}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { end, start }, url)
   return response

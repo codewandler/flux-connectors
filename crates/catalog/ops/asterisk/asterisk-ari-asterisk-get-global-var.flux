@@ -6,6 +6,6 @@ op asterisk-ari-asterisk-get-global-var(variable: String) -> Any
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/asterisk/variable?variable={variable}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/asterisk/variable")
+  response = http.request(method: "GET", query: { variable }, url)
   return response

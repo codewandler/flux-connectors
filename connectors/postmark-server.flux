@@ -37,8 +37,8 @@ op postmark-bounce-list(count: Number, offset: Number) -> Any
   expose true
 
   base = "https://api.postmarkapp.com"
-  url = fmt("{base}/bounces?count={count}&offset={offset}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/bounces")
+  response = http.request(method: "GET", query: { count, offset }, url)
   return response
 
 op postmark-bounce-get(bounce_id: Number) -> Any

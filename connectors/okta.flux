@@ -11,10 +11,7 @@ op okta-user-list(limit: Number) -> Any
 
   base = "https://{domain}/api/v1"
   url = fmt("{base}/users")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response
 
 op okta-user-get(user_id: String) -> Any
@@ -38,10 +35,7 @@ op okta-group-list(limit: Number) -> Any
 
   base = "https://{domain}/api/v1"
   url = fmt("{base}/groups")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response
 
 op okta-user-group-list(user_id: String, limit: Number) -> Any
@@ -53,10 +47,7 @@ op okta-user-group-list(user_id: String, limit: Number) -> Any
 
   base = "https://{domain}/api/v1"
   url = fmt("{base}/users/{user_id}/groups")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response
 
 op okta-user-deactivate(user_id: String, send_email: Bool) -> Any
@@ -68,8 +59,5 @@ op okta-user-deactivate(user_id: String, send_email: Bool) -> Any
 
   base = "https://{domain}/api/v1"
   url = fmt("{base}/users/{user_id}/lifecycle/deactivate")
-  sep = "?"
-  when send_email
-    url = fmt("{url}{sep}sendEmail={send_email}")
-  response = http.request(method: "POST", url)
+  response = http.request(method: "POST", query: { sendEmail: send_email }, url)
   return response

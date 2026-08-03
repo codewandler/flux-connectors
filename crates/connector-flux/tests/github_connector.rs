@@ -137,8 +137,8 @@ fn github_query_parameters_are_closed_over_integer_pagination() {
     }
 }
 
-/// The emitted URL assembly agrees: the reviewed reads append exactly `per_page` then `page`, and
-/// every other GitHub operation has one URL binding and no query separator.
+/// The emitted request agrees: the reviewed reads carry exactly `page` and `per_page` as structured
+/// values, and every other GitHub operation carries no query record.
 #[test]
 fn github_emits_only_the_reviewed_pagination_query() {
     let connector = github();
@@ -156,21 +156,20 @@ fn github_emits_only_the_reviewed_pagination_query() {
             operation.id
         );
         if PAGINATED_READS.contains(&operation.id.as_str()) {
-            assert_eq!(url_lines.len(), 3, "{} query assembly moved", operation.id);
+            assert_eq!(
+                url_lines.len(),
+                1,
+                "{} query data entered the URL",
+                operation.id
+            );
             assert!(
-                url_lines[1].contains("per_page={per_page}")
-                    && url_lines[2].contains("page={page}"),
+                emitted.contains("query: { page, per_page }"),
                 "{} emits a query other than per_page/page:\n{emitted}",
                 operation.id,
             );
-            assert!(emitted
-                .lines()
-                .any(|line| line.trim_start() == "sep = \"?\""));
         } else {
             assert_eq!(url_lines.len(), 1, "{} gained a query", operation.id);
-            assert!(!emitted
-                .lines()
-                .any(|line| line.trim_start().starts_with("sep = ")));
+            assert!(!emitted.contains("query: {"));
         }
     }
 }

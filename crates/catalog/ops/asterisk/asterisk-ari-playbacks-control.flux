@@ -6,6 +6,6 @@ op asterisk-ari-playbacks-control(playbackId: String, operation: String) -> Any
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/playbacks/{playbackId}/control?operation={operation}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/playbacks/{playbackId}/control")
+  response = http.request(method: "POST", query: { operation }, url)
   return response

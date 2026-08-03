@@ -7,11 +7,5 @@ op sendgrid-template-list(generations: String, page_size: Number) -> Any
 
   base = "https://api.sendgrid.com"
   url = fmt("{base}/v3/templates")
-  sep = "?"
-  when generations
-    url = fmt("{url}{sep}generations={generations}")
-    sep = "&"
-  when page_size
-    url = fmt("{url}{sep}page_size={page_size}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { generations, page_size }, url)
   return response

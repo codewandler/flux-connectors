@@ -85,11 +85,10 @@ fn build_emits_the_operations_a_provider_declares() {
         "expose true",
         r#"base = "https://api.acme.example""#,
         r#"url = fmt("{base}/v2/tickets/{ticket_id}")"#,
-        // `$include` keeps its sigil where the bare locals above lost theirs: flux-lang 0.39 elides
-        // `$` only where the name cannot collide, and `include` is a keyword. Asserting the sigil
-        // here pins that rule rather than the general spelling.
-        "when $include",
-        r#"response = http.request(method: "GET", url)"#,
+        // `$include` keeps its sigil where a bare record value would lose it: `include` is a Flux
+        // keyword. C-30 keeps the value structural instead of guarding URL interpolation.
+        "query: { include: $include }",
+        r#"response = http.request(method: "GET", query: { include: $include }, url)"#,
         "return response",
     ] {
         assert!(

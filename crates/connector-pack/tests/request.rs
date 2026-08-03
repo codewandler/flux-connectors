@@ -549,11 +549,7 @@ fn a_nested_body_operation_nests_rather_than_flattening() {
     );
 }
 
-/// **A query string opens with `?` and continues with `&`.** `freshdesk-ticket-list` has four
-/// optional filters and no required one, so the separator is carried by the emitted `$sep` symbol
-/// and only the first *surviving* filter opens the query. Getting this wrong sends the vendor
-/// `...tickets?requester_id=7?email=…`, which parses to one filter and drops the rest — answered
-/// `200`, with a list that is simply not the list that was asked for.
+/// Structured query values are appended once with RFC 3986 encoding, and null fields are omitted.
 #[test]
 fn a_query_string_operation_separates_its_parameters() {
     // Every filter supplied: `?` then `&&&`.
@@ -568,7 +564,7 @@ fn a_query_string_operation_separates_its_parameters() {
     );
     assert_eq!(
         all.url,
-        "https://acme.freshdesk.com/api/v2/tickets?requester_id=7&email=a@b.c&company_id=9\
+        "https://acme.freshdesk.com/api/v2/tickets?company_id=9&email=a%40b.c&requester_id=7\
          &updated_since=2026-07-30"
     );
     assert_eq!(all.method, "GET");
@@ -611,22 +607,22 @@ fn a_query_string_operation_separates_its_parameters() {
     assert_eq!(none.url, "https://acme.freshdesk.com/api/v2/tickets");
 }
 
-/// A required query parameter owns the first `?` and remains part of the spec-selected request.
+/// A free-form required value cannot inject a sibling key or fragment through the structured map.
 #[test]
 fn a_required_query_parameter_opens_the_string_and_optional_ones_follow() {
     let both = request(
         "zendesk-ticket-search",
-        json!({"query": "type:ticket status:new"}),
+        json!({"query": "type:ticket status:new&admin=true#tail"}),
     );
     assert_eq!(
         both.url,
-        "https://acme.zendesk.com/api/v2/search?query=type:ticket status:new"
+        "https://acme.zendesk.com/api/v2/search?query=type%3Aticket%20status%3Anew%26admin%3Dtrue%23tail"
     );
 
     let required_only = request("zendesk-ticket-search", json!({"query": "type:ticket"}));
     assert_eq!(
         required_only.url,
-        "https://acme.zendesk.com/api/v2/search?query=type:ticket"
+        "https://acme.zendesk.com/api/v2/search?query=type%3Aticket"
     );
 }
 

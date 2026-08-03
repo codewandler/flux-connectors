@@ -6,6 +6,6 @@ op asterisk-ari-channels-transfer_progress(channelId: String, states: String) ->
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/transfer_progress?states={states}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/channels/{channelId}/transfer_progress")
+  response = http.request(method: "POST", query: { states }, url)
   return response

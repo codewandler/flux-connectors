@@ -7,20 +7,5 @@ op freshdesk-contact-list(phone: String, email: String, mobile: String, company_
 
   base = "https://{domain}/api/v2"
   url = fmt("{base}/contacts")
-  sep = "?"
-  when phone
-    url = fmt("{url}{sep}phone={phone}")
-    sep = "&"
-  when email
-    url = fmt("{url}{sep}email={email}")
-    sep = "&"
-  when mobile
-    url = fmt("{url}{sep}mobile={mobile}")
-    sep = "&"
-  when company_id
-    url = fmt("{url}{sep}company_id={company_id}")
-    sep = "&"
-  when state
-    url = fmt("{url}{sep}state={state}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { company_id, email, mobile, phone, state }, url)
   return response

@@ -7,8 +7,5 @@ op babelforce-get-agents-for-queue-selection(queueId: String, callId: String) ->
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/queues/{queueId}/select")
-  sep = "?"
-  when callId
-    url = fmt("{url}{sep}callId={callId}")
-  response = http.request(method: "POST", url)
+  response = http.request(method: "POST", query: { callId }, url)
   return response

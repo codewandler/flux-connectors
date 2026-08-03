@@ -36,7 +36,7 @@
 
 use std::collections::BTreeSet;
 
-use connector_spec::{HttpMethod, Idempotency, LoadedProvider, Risk};
+use connector_spec::{HttpMethod, Idempotency, LoadedProvider, ParamPosition, Risk};
 
 #[path = "support/shipped_provider.rs"]
 mod shipped_provider;
@@ -54,6 +54,61 @@ const CANONICAL: usize = 397;
 /// This is a claim about the *documents*, so a re-vendor that moves it is expected to move this
 /// number in the same commit — and to say, in the story that moved it, what the vendor added.
 const DECLARED: usize = 398;
+
+/// C-30: every vendor-declared string-or-array query union deliberately publishes its scalar arm.
+#[test]
+fn ambiguous_query_collections_are_narrowed_to_their_scalar_branch() {
+    let loaded = load();
+    let narrowed = loaded
+        .patch
+        .operations
+        .iter()
+        .flat_map(|operation| {
+            operation
+                .params
+                .iter()
+                .filter(|parameter| parameter.position == ParamPosition::Query)
+                .map(move |parameter| {
+                    assert_eq!(
+                        parameter
+                            .schema
+                            .as_ref()
+                            .and_then(|schema| schema["type"].as_str()),
+                        Some("string"),
+                        "{} query parameter {} was not narrowed to a scalar string",
+                        operation.select,
+                        parameter.name
+                    );
+                    (operation.select.as_str(), parameter.name.as_str())
+                })
+        })
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(
+        narrowed,
+        BTreeSet::from([
+            ("listAgents", "groupIds"),
+            ("listAgents", "groups"),
+            ("listAgents", "tags"),
+            ("listAllSimpleReportingCalls", "agentId"),
+            ("listAllSimpleReportingCalls", "id"),
+            ("listAllSimpleReportingCalls", "parentId"),
+            ("listAllSimpleReportingCalls", "to"),
+            ("listAllSimpleReportingCalls", "toNumber"),
+            ("listAllSimpleReportingCalls", "type"),
+            ("listDashboards", "uuid"),
+            ("listLiveLogs", "filters.level"),
+            ("listReportingCalls", "agentId"),
+            ("listReportingCalls", "finishReason"),
+            ("listReportingCalls", "id"),
+            ("listReportingCalls", "state"),
+            ("listReportingCalls", "toNumber"),
+            ("listReportingCalls", "type"),
+            ("listUsers", "email"),
+        ]),
+        "the explicit scalar-branch inventory changed"
+    );
+}
 
 /// **The endpoints of the one vendored document the connector no longer reads.**
 ///

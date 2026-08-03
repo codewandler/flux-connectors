@@ -23,19 +23,7 @@ op typeform-form-list(page: Number, page_size: Number, sort_by: String, order_by
 
   base = "https://api.typeform.com"
   url = fmt("{base}/forms")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when page_size
-    url = fmt("{url}{sep}page_size={page_size}")
-    sep = "&"
-  when sort_by
-    url = fmt("{url}{sep}sort_by={sort_by}")
-    sep = "&"
-  when order_by
-    url = fmt("{url}{sep}order_by={order_by}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { order_by, page, page_size, sort_by }, url)
   return response
 
 op typeform-form-get(form_id: String) -> Any
@@ -59,28 +47,7 @@ op typeform-response-list(form_id: String, page_size: Number, before: String, af
 
   base = "https://api.typeform.com"
   url = fmt("{base}/forms/{form_id}/responses")
-  sep = "?"
-  when page_size
-    url = fmt("{url}{sep}page_size={page_size}")
-    sep = "&"
-  when before
-    url = fmt("{url}{sep}before={before}")
-    sep = "&"
-  when after
-    url = fmt("{url}{sep}after={after}")
-    sep = "&"
-  when since
-    url = fmt("{url}{sep}since={since}")
-    sep = "&"
-  when $until
-    url = fmt("{url}{sep}until={until}")
-    sep = "&"
-  when response_type
-    url = fmt("{url}{sep}response_type={response_type}")
-    sep = "&"
-  when sort
-    url = fmt("{url}{sep}sort={sort}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { after, before, page_size, response_type, since, sort, until: $until }, url)
   return response
 
 op typeform-response-delete(form_id: String, included_response_ids: String) -> Any
@@ -91,6 +58,6 @@ op typeform-response-delete(form_id: String, included_response_ids: String) -> A
   expose true
 
   base = "https://api.typeform.com"
-  url = fmt("{base}/forms/{form_id}/responses?included_response_ids={included_response_ids}")
-  response = http.request(method: "DELETE", url)
+  url = fmt("{base}/forms/{form_id}/responses")
+  response = http.request(method: "DELETE", query: { included_response_ids }, url)
   return response

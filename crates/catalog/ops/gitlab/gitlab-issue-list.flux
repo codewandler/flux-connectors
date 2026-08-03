@@ -7,14 +7,5 @@ op gitlab-issue-list(project_id: Number, state: String, page: Number, per_page: 
 
   base = "https://gitlab.com/api/v4"
   url = fmt("{base}/projects/{project_id}/issues")
-  sep = "?"
-  when state
-    url = fmt("{url}{sep}state={state}")
-    sep = "&"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { page, per_page, state }, url)
   return response

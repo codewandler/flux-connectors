@@ -35,16 +35,7 @@ op babelforce-tasks(filter: String, page: Number, page_size: Number) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v3/tasks")
-  sep = "?"
-  when filter
-    url = fmt("{url}{sep}filter={filter}")
-    sep = "&"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when page_size
-    url = fmt("{url}{sep}page_size={page_size}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { filter, page, page_size }, url)
   return response
 
 op babelforce-submit-task(actions: Any, body: Any, id: String, queue_id: String, scheduled_at: String, selection_settings: Any, task_completion: Any, type: String) -> Any
@@ -195,25 +186,7 @@ op babelforce-list(filter: String, type: String, details: String, page_size: Num
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v3/tasks/logs/customer")
-  sep = "?"
-  when filter
-    url = fmt("{url}{sep}filter={filter}")
-    sep = "&"
-  when type
-    url = fmt("{url}{sep}type={type}")
-    sep = "&"
-  when details
-    url = fmt("{url}{sep}details={details}")
-    sep = "&"
-  when page_size
-    url = fmt("{url}{sep}page_size={page_size}")
-    sep = "&"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when context
-    url = fmt("{url}{sep}context={context}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { context, details, filter, page, page_size, type }, url)
   return response
 
 op babelforce-agent-interaction-duration(agentId: String) -> Any
@@ -257,16 +230,7 @@ op babelforce-list-scripts(type: String, filter: String, page: Number, page_size
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v3/tasks/scripts/{type}")
-  sep = "?"
-  when filter
-    url = fmt("{url}{sep}filter={filter}")
-    sep = "&"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when page_size
-    url = fmt("{url}{sep}page_size={page_size}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { filter, page, page_size }, url)
   return response
 
 op babelforce-submit-script(type: String, file: String, metadata: Any) -> Any
@@ -290,10 +254,7 @@ op babelforce-get-script(codeId: String, type: String, response_2: String) -> An
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v3/tasks/scripts/{type}/{codeId}")
-  sep = "?"
-  when response_2
-    url = fmt("{url}{sep}response={response_2}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { response: response_2 }, url)
   return response
 
 op babelforce-update-script(codeId: String, type: String, file: String, metadata: Any) -> Any
@@ -328,12 +289,9 @@ op babelforce-submit-task-template(template: String, style: String, body: Any) -
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v3/tasks/template/{template}")
-  sep = "?"
-  when style
-    url = fmt("{url}{sep}style={style}")
   content_type = "application/json"
   payload = parse(body, as: "json")
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { style }, url)
   return response
 
 op babelforce-task-usage(type: String, start: String, end: String, rate: String) -> Any
@@ -344,19 +302,7 @@ op babelforce-task-usage(type: String, start: String, end: String, rate: String)
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v3/tasks/usage")
-  sep = "?"
-  when type
-    url = fmt("{url}{sep}type={type}")
-    sep = "&"
-  when start
-    url = fmt("{url}{sep}start={start}")
-    sep = "&"
-  when end
-    url = fmt("{url}{sep}end={end}")
-    sep = "&"
-  when rate
-    url = fmt("{url}{sep}rate={rate}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { end, rate, start, type }, url)
   return response
 
 op babelforce-task-usage-types(start: String, end: String) -> Any
@@ -367,13 +313,7 @@ op babelforce-task-usage-types(start: String, end: String) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v3/tasks/usage/types")
-  sep = "?"
-  when start
-    url = fmt("{url}{sep}start={start}")
-    sep = "&"
-  when end
-    url = fmt("{url}{sep}end={end}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { end, start }, url)
   return response
 
 op babelforce-task(taskId: String) -> Any

@@ -47,18 +47,9 @@ op asterisk-ari-bridges-create(type: String, bridgeId: String, name: String, var
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/bridges")
-  sep = "?"
-  when type
-    url = fmt("{url}{sep}type={type}")
-    sep = "&"
-  when bridgeId
-    url = fmt("{url}{sep}bridgeId={bridgeId}")
-    sep = "&"
-  when name
-    url = fmt("{url}{sep}name={name}")
   content_type = "application/json"
   payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { bridgeId, name, type }, url)
   return response
 
 op asterisk-ari-bridges-destroy(bridgeId: String) -> Any
@@ -93,46 +84,10 @@ op asterisk-ari-channels-originate(endpoint: String, extension: String, context:
   expose true
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels?endpoint={endpoint}")
-  sep = "&"
-  when extension
-    url = fmt("{url}{sep}extension={extension}")
-    sep = "&"
-  when context
-    url = fmt("{url}{sep}context={context}")
-    sep = "&"
-  when priority
-    url = fmt("{url}{sep}priority={priority}")
-    sep = "&"
-  when label
-    url = fmt("{url}{sep}label={label}")
-    sep = "&"
-  when app
-    url = fmt("{url}{sep}app={app}")
-    sep = "&"
-  when appArgs
-    url = fmt("{url}{sep}appArgs={appArgs}")
-    sep = "&"
-  when callerId
-    url = fmt("{url}{sep}callerId={callerId}")
-    sep = "&"
-  when $timeout
-    url = fmt("{url}{sep}timeout={timeout}")
-    sep = "&"
-  when channelId
-    url = fmt("{url}{sep}channelId={channelId}")
-    sep = "&"
-  when otherChannelId
-    url = fmt("{url}{sep}otherChannelId={otherChannelId}")
-    sep = "&"
-  when originator
-    url = fmt("{url}{sep}originator={originator}")
-    sep = "&"
-  when formats
-    url = fmt("{url}{sep}formats={formats}")
+  url = fmt("{base}/channels")
   content_type = "application/json"
   payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { app, appArgs, callerId, channelId, context, endpoint, extension, formats, label, originator, otherChannelId, priority, timeout: $timeout }, url)
   return response
 
 op asterisk-ari-channels-hangup(channelId: String, reason_code: String, reason: String) -> Any
@@ -144,13 +99,7 @@ op asterisk-ari-channels-hangup(channelId: String, reason_code: String, reason: 
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/channels/{channelId}")
-  sep = "?"
-  when reason_code
-    url = fmt("{url}{sep}reason_code={reason_code}")
-    sep = "&"
-  when reason
-    url = fmt("{url}{sep}reason={reason}")
-  response = http.request(method: "DELETE", url)
+  response = http.request(method: "DELETE", query: { reason, reason_code }, url)
   return response
 
 op asterisk-ari-device-states-list -> Any
@@ -234,13 +183,7 @@ op asterisk-ari-sounds-list(lang: String, format: String) -> Any
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/sounds")
-  sep = "?"
-  when lang
-    url = fmt("{url}{sep}lang={lang}")
-    sep = "&"
-  when format
-    url = fmt("{url}{sep}format={format}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { format, lang }, url)
   return response
 
 op asterisk-ari-applications-get(applicationName: String) -> Any
@@ -267,30 +210,6 @@ op asterisk-ari-applications-filter(applicationName: String, body: Any) -> Any
   content_type = "application/json"
   payload = parse(body, as: "json")
   response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
-  return response
-
-op asterisk-ari-applications-subscribe(applicationName: String, eventSource: List<String>) -> Any
-  description "Subscribe an application to a event source."
-  risk "high"
-  idempotency "non_idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://{host}:8089/ari"
-  url = fmt("{base}/applications/{applicationName}/subscription?eventSource={eventSource}")
-  response = http.request(method: "POST", url)
-  return response
-
-op asterisk-ari-applications-unsubscribe(applicationName: String, eventSource: List<String>) -> Any
-  description "Unsubscribe an application from an event source."
-  risk "destructive"
-  idempotency "non_idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://{host}:8089/ari"
-  url = fmt("{base}/applications/{applicationName}/subscription?eventSource={eventSource}")
-  response = http.request(method: "DELETE", url)
   return response
 
 op asterisk-ari-asterisk-get-object(configClass: String, objectType: String, id: String) -> Any
@@ -331,21 +250,6 @@ op asterisk-ari-asterisk-delete-object(configClass: String, objectType: String, 
   response = http.request(method: "DELETE", url)
   return response
 
-op asterisk-ari-asterisk-get-info(only: List<String>) -> Any
-  description "Gets Asterisk system information."
-  risk "low"
-  idempotency "idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://{host}:8089/ari"
-  url = fmt("{base}/asterisk/info")
-  sep = "?"
-  when only
-    url = fmt("{url}{sep}only={only}")
-  response = http.request(method: "GET", url)
-  return response
-
 op asterisk-ari-asterisk-list-log-channels -> Any
   description "Gets Asterisk log channel information."
   risk "low"
@@ -366,8 +270,8 @@ op asterisk-ari-asterisk-add-log(logChannelName: String, configuration: String) 
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/asterisk/logging/{logChannelName}?configuration={configuration}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/asterisk/logging/{logChannelName}")
+  response = http.request(method: "POST", query: { configuration }, url)
   return response
 
 op asterisk-ari-asterisk-delete-log(logChannelName: String) -> Any
@@ -462,8 +366,8 @@ op asterisk-ari-asterisk-get-global-var(variable: String) -> Any
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/asterisk/variable?variable={variable}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/asterisk/variable")
+  response = http.request(method: "GET", query: { variable }, url)
   return response
 
 op asterisk-ari-asterisk-set-global-var(variable: String, value: String) -> Any
@@ -474,11 +378,8 @@ op asterisk-ari-asterisk-set-global-var(variable: String, value: String) -> Any
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/asterisk/variable?variable={variable}")
-  sep = "&"
-  when value
-    url = fmt("{url}{sep}value={value}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/asterisk/variable")
+  response = http.request(method: "POST", query: { value, variable }, url)
   return response
 
 op asterisk-ari-bridges-get(bridgeId: String) -> Any
@@ -502,39 +403,9 @@ op asterisk-ari-bridges-create-with-id(bridgeId: String, type: String, name: Str
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/bridges/{bridgeId}")
-  sep = "?"
-  when type
-    url = fmt("{url}{sep}type={type}")
-    sep = "&"
-  when name
-    url = fmt("{url}{sep}name={name}")
   content_type = "application/json"
   payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
-  return response
-
-op asterisk-ari-bridges-add-channel(bridgeId: String, channel: List<String>, role: String, absorbDTMF: Bool, mute: Bool, inhibitConnectedLineUpdates: Bool) -> Any
-  description "Add a channel to a bridge."
-  risk "high"
-  idempotency "non_idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://{host}:8089/ari"
-  url = fmt("{base}/bridges/{bridgeId}/addChannel?channel={channel}")
-  sep = "&"
-  when role
-    url = fmt("{url}{sep}role={role}")
-    sep = "&"
-  when absorbDTMF
-    url = fmt("{url}{sep}absorbDTMF={absorbDTMF}")
-    sep = "&"
-  when mute
-    url = fmt("{url}{sep}mute={mute}")
-    sep = "&"
-  when inhibitConnectedLineUpdates
-    url = fmt("{url}{sep}inhibitConnectedLineUpdates={inhibitConnectedLineUpdates}")
-  response = http.request(method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { name, type }, url)
   return response
 
 op asterisk-ari-bridges-start-moh(bridgeId: String, mohClass: String) -> Any
@@ -546,10 +417,7 @@ op asterisk-ari-bridges-start-moh(bridgeId: String, mohClass: String) -> Any
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/bridges/{bridgeId}/moh")
-  sep = "?"
-  when mohClass
-    url = fmt("{url}{sep}mohClass={mohClass}")
-  response = http.request(method: "POST", url)
+  response = http.request(method: "POST", query: { mohClass }, url)
   return response
 
 op asterisk-ari-bridges-stop-moh(bridgeId: String) -> Any
@@ -564,57 +432,6 @@ op asterisk-ari-bridges-stop-moh(bridgeId: String) -> Any
   response = http.request(method: "DELETE", url)
   return response
 
-op asterisk-ari-bridges-play(bridgeId: String, media: List<String>, announcer_format: String, lang: String, offsetms: Number, skipms: Number, playbackId: String) -> Any
-  description "Start playback of media on a bridge."
-  risk "high"
-  idempotency "non_idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://{host}:8089/ari"
-  url = fmt("{base}/bridges/{bridgeId}/play?media={media}")
-  sep = "&"
-  when announcer_format
-    url = fmt("{url}{sep}announcer_format={announcer_format}")
-    sep = "&"
-  when lang
-    url = fmt("{url}{sep}lang={lang}")
-    sep = "&"
-  when offsetms
-    url = fmt("{url}{sep}offsetms={offsetms}")
-    sep = "&"
-  when skipms
-    url = fmt("{url}{sep}skipms={skipms}")
-    sep = "&"
-  when playbackId
-    url = fmt("{url}{sep}playbackId={playbackId}")
-  response = http.request(method: "POST", url)
-  return response
-
-op asterisk-ari-bridges-play-with-id(bridgeId: String, playbackId: String, media: List<String>, announcer_format: String, lang: String, offsetms: Number, skipms: Number) -> Any
-  description "Start playback of media on a bridge."
-  risk "high"
-  idempotency "non_idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://{host}:8089/ari"
-  url = fmt("{base}/bridges/{bridgeId}/play/{playbackId}?media={media}")
-  sep = "&"
-  when announcer_format
-    url = fmt("{url}{sep}announcer_format={announcer_format}")
-    sep = "&"
-  when lang
-    url = fmt("{url}{sep}lang={lang}")
-    sep = "&"
-  when offsetms
-    url = fmt("{url}{sep}offsetms={offsetms}")
-    sep = "&"
-  when skipms
-    url = fmt("{url}{sep}skipms={skipms}")
-  response = http.request(method: "POST", url)
-  return response
-
 op asterisk-ari-bridges-record(bridgeId: String, name: String, format: String, recorder_format: String, maxDurationSeconds: Number, maxSilenceSeconds: Number, ifExists: String, beep: Bool, terminateOn: String) -> Any
   description "Start a recording."
   risk "high"
@@ -623,38 +440,8 @@ op asterisk-ari-bridges-record(bridgeId: String, name: String, format: String, r
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/bridges/{bridgeId}/record?name={name}&format={format}")
-  sep = "&"
-  when recorder_format
-    url = fmt("{url}{sep}recorder_format={recorder_format}")
-    sep = "&"
-  when maxDurationSeconds
-    url = fmt("{url}{sep}maxDurationSeconds={maxDurationSeconds}")
-    sep = "&"
-  when maxSilenceSeconds
-    url = fmt("{url}{sep}maxSilenceSeconds={maxSilenceSeconds}")
-    sep = "&"
-  when ifExists
-    url = fmt("{url}{sep}ifExists={ifExists}")
-    sep = "&"
-  when beep
-    url = fmt("{url}{sep}beep={beep}")
-    sep = "&"
-  when terminateOn
-    url = fmt("{url}{sep}terminateOn={terminateOn}")
-  response = http.request(method: "POST", url)
-  return response
-
-op asterisk-ari-bridges-remove-channel(bridgeId: String, channel: List<String>) -> Any
-  description "Remove a channel from a bridge."
-  risk "high"
-  idempotency "non_idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://{host}:8089/ari"
-  url = fmt("{base}/bridges/{bridgeId}/removeChannel?channel={channel}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/bridges/{bridgeId}/record")
+  response = http.request(method: "POST", query: { beep, format, ifExists, maxDurationSeconds, maxSilenceSeconds, name, recorder_format, terminateOn }, url)
   return response
 
 op asterisk-ari-bridges-get-bridge-var(bridgeId: String, variable: String) -> Any
@@ -665,8 +452,8 @@ op asterisk-ari-bridges-get-bridge-var(bridgeId: String, variable: String) -> An
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/bridges/{bridgeId}/variable?variable={variable}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/bridges/{bridgeId}/variable")
+  response = http.request(method: "GET", query: { variable }, url)
   return response
 
 op asterisk-ari-bridges-set-bridge-var(bridgeId: String, variable: String, value: String, report_events: Bool) -> Any
@@ -677,26 +464,8 @@ op asterisk-ari-bridges-set-bridge-var(bridgeId: String, variable: String, value
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/bridges/{bridgeId}/variable?variable={variable}")
-  sep = "&"
-  when value
-    url = fmt("{url}{sep}value={value}")
-    sep = "&"
-  when report_events
-    url = fmt("{url}{sep}report_events={report_events}")
-  response = http.request(method: "POST", url)
-  return response
-
-op asterisk-ari-bridges-get-bridge-vars(bridgeId: String, variables: List<String>) -> Any
-  description "Get the value of multiple bridge variables or functions."
-  risk "low"
-  idempotency "idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://{host}:8089/ari"
-  url = fmt("{base}/bridges/{bridgeId}/variables?variables={variables}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/bridges/{bridgeId}/variable")
+  response = http.request(method: "POST", query: { report_events, value, variable }, url)
   return response
 
 op asterisk-ari-bridges-set-bridge-vars(bridgeId: String, variables: Any) -> Any
@@ -745,25 +514,10 @@ op asterisk-ari-channels-create(endpoint: String, app: String, appArgs: String, 
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/create?endpoint={endpoint}&app={app}")
-  sep = "&"
-  when appArgs
-    url = fmt("{url}{sep}appArgs={appArgs}")
-    sep = "&"
-  when channelId
-    url = fmt("{url}{sep}channelId={channelId}")
-    sep = "&"
-  when otherChannelId
-    url = fmt("{url}{sep}otherChannelId={otherChannelId}")
-    sep = "&"
-  when originator
-    url = fmt("{url}{sep}originator={originator}")
-    sep = "&"
-  when formats
-    url = fmt("{url}{sep}formats={formats}")
+  url = fmt("{base}/channels/create")
   content_type = "application/json"
   payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { app, appArgs, channelId, endpoint, formats, originator, otherChannelId }, url)
   return response
 
 op asterisk-ari-channels-external-media(channelId: String, app: String, external_host: String, encapsulation: String, transport: String, connection_type: String, format: String, direction: String, data: String, transport_data: String, variables: Any) -> Any
@@ -774,34 +528,10 @@ op asterisk-ari-channels-external-media(channelId: String, app: String, external
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/externalMedia?app={app}&format={format}")
-  sep = "&"
-  when channelId
-    url = fmt("{url}{sep}channelId={channelId}")
-    sep = "&"
-  when external_host
-    url = fmt("{url}{sep}external_host={external_host}")
-    sep = "&"
-  when encapsulation
-    url = fmt("{url}{sep}encapsulation={encapsulation}")
-    sep = "&"
-  when transport
-    url = fmt("{url}{sep}transport={transport}")
-    sep = "&"
-  when connection_type
-    url = fmt("{url}{sep}connection_type={connection_type}")
-    sep = "&"
-  when direction
-    url = fmt("{url}{sep}direction={direction}")
-    sep = "&"
-  when data
-    url = fmt("{url}{sep}data={data}")
-    sep = "&"
-  when transport_data
-    url = fmt("{url}{sep}transport_data={transport_data}")
+  url = fmt("{base}/channels/externalMedia")
   content_type = "application/json"
   payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { app, channelId, connection_type, data, direction, encapsulation, external_host, format, transport, transport_data }, url)
   return response
 
 op asterisk-ari-channels-get(channelId: String) -> Any
@@ -824,43 +554,10 @@ op asterisk-ari-channels-originate-with-id(channelId: String, endpoint: String, 
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}?endpoint={endpoint}")
-  sep = "&"
-  when extension
-    url = fmt("{url}{sep}extension={extension}")
-    sep = "&"
-  when context
-    url = fmt("{url}{sep}context={context}")
-    sep = "&"
-  when priority
-    url = fmt("{url}{sep}priority={priority}")
-    sep = "&"
-  when label
-    url = fmt("{url}{sep}label={label}")
-    sep = "&"
-  when app
-    url = fmt("{url}{sep}app={app}")
-    sep = "&"
-  when appArgs
-    url = fmt("{url}{sep}appArgs={appArgs}")
-    sep = "&"
-  when callerId
-    url = fmt("{url}{sep}callerId={callerId}")
-    sep = "&"
-  when $timeout
-    url = fmt("{url}{sep}timeout={timeout}")
-    sep = "&"
-  when otherChannelId
-    url = fmt("{url}{sep}otherChannelId={otherChannelId}")
-    sep = "&"
-  when originator
-    url = fmt("{url}{sep}originator={originator}")
-    sep = "&"
-  when formats
-    url = fmt("{url}{sep}formats={formats}")
+  url = fmt("{base}/channels/{channelId}")
   content_type = "application/json"
   payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { app, appArgs, callerId, context, endpoint, extension, formats, label, originator, otherChannelId, priority, timeout: $timeout }, url)
   return response
 
 op asterisk-ari-channels-answer(channelId: String) -> Any
@@ -884,19 +581,7 @@ op asterisk-ari-channels-continue-in-dialplan(channelId: String, context: String
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/channels/{channelId}/continue")
-  sep = "?"
-  when context
-    url = fmt("{url}{sep}context={context}")
-    sep = "&"
-  when extension
-    url = fmt("{url}{sep}extension={extension}")
-    sep = "&"
-  when priority
-    url = fmt("{url}{sep}priority={priority}")
-    sep = "&"
-  when label
-    url = fmt("{url}{sep}label={label}")
-  response = http.request(method: "POST", url)
+  response = http.request(method: "POST", query: { context, extension, label, priority }, url)
   return response
 
 op asterisk-ari-channels-dial(channelId: String, caller: String, timeout: Number) -> Any
@@ -908,13 +593,7 @@ op asterisk-ari-channels-dial(channelId: String, caller: String, timeout: Number
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/channels/{channelId}/dial")
-  sep = "?"
-  when caller
-    url = fmt("{url}{sep}caller={caller}")
-    sep = "&"
-  when $timeout
-    url = fmt("{url}{sep}timeout={timeout}")
-  response = http.request(method: "POST", url)
+  response = http.request(method: "POST", query: { caller, timeout: $timeout }, url)
   return response
 
 op asterisk-ari-channels-send-dtmf(channelId: String, dtmf: String, before: Number, between: Number, duration: Number, after: Number) -> Any
@@ -926,22 +605,7 @@ op asterisk-ari-channels-send-dtmf(channelId: String, dtmf: String, before: Numb
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/channels/{channelId}/dtmf")
-  sep = "?"
-  when dtmf
-    url = fmt("{url}{sep}dtmf={dtmf}")
-    sep = "&"
-  when before
-    url = fmt("{url}{sep}before={before}")
-    sep = "&"
-  when between
-    url = fmt("{url}{sep}between={between}")
-    sep = "&"
-  when duration
-    url = fmt("{url}{sep}duration={duration}")
-    sep = "&"
-  when after
-    url = fmt("{url}{sep}after={after}")
-  response = http.request(method: "POST", url)
+  response = http.request(method: "POST", query: { after, before, between, dtmf, duration }, url)
   return response
 
 op asterisk-ari-channels-hold(channelId: String) -> Any
@@ -977,10 +641,7 @@ op asterisk-ari-channels-start-moh(channelId: String, mohClass: String) -> Any
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/channels/{channelId}/moh")
-  sep = "?"
-  when mohClass
-    url = fmt("{url}{sep}mohClass={mohClass}")
-  response = http.request(method: "POST", url)
+  response = http.request(method: "POST", query: { mohClass }, url)
   return response
 
 op asterisk-ari-channels-stop-moh(channelId: String) -> Any
@@ -1003,11 +664,8 @@ op asterisk-ari-channels-move(channelId: String, app: String, appArgs: String) -
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/move?app={app}")
-  sep = "&"
-  when appArgs
-    url = fmt("{url}{sep}appArgs={appArgs}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/channels/{channelId}/move")
+  response = http.request(method: "POST", query: { app, appArgs }, url)
   return response
 
 op asterisk-ari-channels-mute(channelId: String, direction: String) -> Any
@@ -1019,10 +677,7 @@ op asterisk-ari-channels-mute(channelId: String, direction: String) -> Any
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/channels/{channelId}/mute")
-  sep = "?"
-  when direction
-    url = fmt("{url}{sep}direction={direction}")
-  response = http.request(method: "POST", url)
+  response = http.request(method: "POST", query: { direction }, url)
   return response
 
 op asterisk-ari-channels-unmute(channelId: String, direction: String) -> Any
@@ -1034,55 +689,7 @@ op asterisk-ari-channels-unmute(channelId: String, direction: String) -> Any
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/channels/{channelId}/mute")
-  sep = "?"
-  when direction
-    url = fmt("{url}{sep}direction={direction}")
-  response = http.request(method: "DELETE", url)
-  return response
-
-op asterisk-ari-channels-play(channelId: String, media: List<String>, lang: String, offsetms: Number, skipms: Number, playbackId: String) -> Any
-  description "Start playback of media."
-  risk "high"
-  idempotency "non_idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/play?media={media}")
-  sep = "&"
-  when lang
-    url = fmt("{url}{sep}lang={lang}")
-    sep = "&"
-  when offsetms
-    url = fmt("{url}{sep}offsetms={offsetms}")
-    sep = "&"
-  when skipms
-    url = fmt("{url}{sep}skipms={skipms}")
-    sep = "&"
-  when playbackId
-    url = fmt("{url}{sep}playbackId={playbackId}")
-  response = http.request(method: "POST", url)
-  return response
-
-op asterisk-ari-channels-play-with-id(channelId: String, playbackId: String, media: List<String>, lang: String, offsetms: Number, skipms: Number) -> Any
-  description "Start playback of media and specify the playbackId."
-  risk "high"
-  idempotency "non_idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/play/{playbackId}?media={media}")
-  sep = "&"
-  when lang
-    url = fmt("{url}{sep}lang={lang}")
-    sep = "&"
-  when offsetms
-    url = fmt("{url}{sep}offsetms={offsetms}")
-    sep = "&"
-  when skipms
-    url = fmt("{url}{sep}skipms={skipms}")
-  response = http.request(method: "POST", url)
+  response = http.request(method: "DELETE", query: { direction }, url)
   return response
 
 op asterisk-ari-channels-progress(channelId: String) -> Any
@@ -1105,23 +712,8 @@ op asterisk-ari-channels-record(channelId: String, name: String, format: String,
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/record?name={name}&format={format}")
-  sep = "&"
-  when maxDurationSeconds
-    url = fmt("{url}{sep}maxDurationSeconds={maxDurationSeconds}")
-    sep = "&"
-  when maxSilenceSeconds
-    url = fmt("{url}{sep}maxSilenceSeconds={maxSilenceSeconds}")
-    sep = "&"
-  when ifExists
-    url = fmt("{url}{sep}ifExists={ifExists}")
-    sep = "&"
-  when beep
-    url = fmt("{url}{sep}beep={beep}")
-    sep = "&"
-  when terminateOn
-    url = fmt("{url}{sep}terminateOn={terminateOn}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/channels/{channelId}/record")
+  response = http.request(method: "POST", query: { beep, format, ifExists, maxDurationSeconds, maxSilenceSeconds, name, terminateOn }, url)
   return response
 
 op asterisk-ari-channels-redirect(channelId: String, endpoint: String) -> Any
@@ -1132,8 +724,8 @@ op asterisk-ari-channels-redirect(channelId: String, endpoint: String) -> Any
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/redirect?endpoint={endpoint}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/channels/{channelId}/redirect")
+  response = http.request(method: "POST", query: { endpoint }, url)
   return response
 
 op asterisk-ari-channels-ring(channelId: String) -> Any
@@ -1204,20 +796,8 @@ op asterisk-ari-channels-snoop-channel(channelId: String, spy: String, whisper: 
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/snoop?app={app}")
-  sep = "&"
-  when spy
-    url = fmt("{url}{sep}spy={spy}")
-    sep = "&"
-  when whisper
-    url = fmt("{url}{sep}whisper={whisper}")
-    sep = "&"
-  when appArgs
-    url = fmt("{url}{sep}appArgs={appArgs}")
-    sep = "&"
-  when snoopId
-    url = fmt("{url}{sep}snoopId={snoopId}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/channels/{channelId}/snoop")
+  response = http.request(method: "POST", query: { app, appArgs, snoopId, spy, whisper }, url)
   return response
 
 op asterisk-ari-channels-snoop-channel-with-id(channelId: String, snoopId: String, spy: String, whisper: String, app: String, appArgs: String) -> Any
@@ -1228,17 +808,8 @@ op asterisk-ari-channels-snoop-channel-with-id(channelId: String, snoopId: Strin
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/snoop/{snoopId}?app={app}")
-  sep = "&"
-  when spy
-    url = fmt("{url}{sep}spy={spy}")
-    sep = "&"
-  when whisper
-    url = fmt("{url}{sep}whisper={whisper}")
-    sep = "&"
-  when appArgs
-    url = fmt("{url}{sep}appArgs={appArgs}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/channels/{channelId}/snoop/{snoopId}")
+  response = http.request(method: "POST", query: { app, appArgs, spy, whisper }, url)
   return response
 
 op asterisk-ari-channels-transfer_progress(channelId: String, states: String) -> Any
@@ -1249,8 +820,8 @@ op asterisk-ari-channels-transfer_progress(channelId: String, states: String) ->
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/transfer_progress?states={states}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/channels/{channelId}/transfer_progress")
+  response = http.request(method: "POST", query: { states }, url)
   return response
 
 op asterisk-ari-channels-get-channel-var(channelId: String, variable: String) -> Any
@@ -1261,8 +832,8 @@ op asterisk-ari-channels-get-channel-var(channelId: String, variable: String) ->
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/variable?variable={variable}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/channels/{channelId}/variable")
+  response = http.request(method: "GET", query: { variable }, url)
   return response
 
 op asterisk-ari-channels-set-channel-var(channelId: String, variable: String, value: String, report_events: Bool) -> Any
@@ -1273,26 +844,8 @@ op asterisk-ari-channels-set-channel-var(channelId: String, variable: String, va
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/variable?variable={variable}")
-  sep = "&"
-  when value
-    url = fmt("{url}{sep}value={value}")
-    sep = "&"
-  when report_events
-    url = fmt("{url}{sep}report_events={report_events}")
-  response = http.request(method: "POST", url)
-  return response
-
-op asterisk-ari-channels-get-channel-vars(channelId: String, variables: List<String>) -> Any
-  description "Get the value of multiple channel variables or functions."
-  risk "low"
-  idempotency "idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://{host}:8089/ari"
-  url = fmt("{base}/channels/{channelId}/variables?variables={variables}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/channels/{channelId}/variable")
+  response = http.request(method: "POST", query: { report_events, value, variable }, url)
   return response
 
 op asterisk-ari-channels-set-channel-vars(channelId: String, variables: Any) -> Any
@@ -1329,8 +882,8 @@ op asterisk-ari-device-states-update(deviceName: String, deviceState: String) ->
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/deviceStates/{deviceName}?deviceState={deviceState}")
-  response = http.request(method: "PUT", url)
+  url = fmt("{base}/deviceStates/{deviceName}")
+  response = http.request(method: "PUT", query: { deviceState }, url)
   return response
 
 op asterisk-ari-device-states-delete(deviceName: String) -> Any
@@ -1353,13 +906,10 @@ op asterisk-ari-endpoints-refer(to: String, from: String, refer_to: String, to_s
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/endpoints/refer?to={to}&from={from}&refer_to={refer_to}")
-  sep = "&"
-  when to_self
-    url = fmt("{url}{sep}to_self={to_self}")
+  url = fmt("{base}/endpoints/refer")
   content_type = "application/json"
   payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { from, refer_to, to, to_self }, url)
   return response
 
 op asterisk-ari-endpoints-send-message(to: String, from: String, body: String, variables: Any) -> Any
@@ -1370,13 +920,10 @@ op asterisk-ari-endpoints-send-message(to: String, from: String, body: String, v
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/endpoints/sendMessage?to={to}&from={from}")
-  sep = "&"
-  when body
-    url = fmt("{url}{sep}body={body}")
+  url = fmt("{base}/endpoints/sendMessage")
   content_type = "application/json"
   payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", query: { body, from, to }, url)
   return response
 
 op asterisk-ari-endpoints-list-by-tech(tech: String) -> Any
@@ -1411,13 +958,10 @@ op asterisk-ari-endpoints-refer-to-endpoint(tech: String, resource: String, from
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/endpoints/{tech}/{resource}/refer?from={from}&refer_to={refer_to}")
-  sep = "&"
-  when to_self
-    url = fmt("{url}{sep}to_self={to_self}")
+  url = fmt("{base}/endpoints/{tech}/{resource}/refer")
   content_type = "application/json"
   payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { from, refer_to, to_self }, url)
   return response
 
 op asterisk-ari-endpoints-send-message-to-endpoint(tech: String, resource: String, from: String, body: String, variables: Any) -> Any
@@ -1428,13 +972,10 @@ op asterisk-ari-endpoints-send-message-to-endpoint(tech: String, resource: Strin
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/endpoints/{tech}/{resource}/sendMessage?from={from}")
-  sep = "&"
-  when body
-    url = fmt("{url}{sep}body={body}")
+  url = fmt("{base}/endpoints/{tech}/{resource}/sendMessage")
   content_type = "application/json"
   payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "PUT", query: { body, from }, url)
   return response
 
 op asterisk-ari-events-claim-channel(channelId: String, application: String) -> Any
@@ -1445,25 +986,8 @@ op asterisk-ari-events-claim-channel(channelId: String, application: String) -> 
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/events/claim?channelId={channelId}&application={application}")
-  response = http.request(method: "POST", url)
-  return response
-
-op asterisk-ari-events-user-event(eventName: String, application: String, source: List<String>, variables: Any) -> Any
-  description "Generate a user event."
-  risk "high"
-  idempotency "non_idempotent"
-  effects ["network"]
-  expose false
-
-  base = "https://{host}:8089/ari"
-  url = fmt("{base}/events/user/{eventName}?application={application}")
-  sep = "&"
-  when source
-    url = fmt("{url}{sep}source={source}")
-  content_type = "application/json"
-  payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  url = fmt("{base}/events/claim")
+  response = http.request(method: "POST", query: { application, channelId }, url)
   return response
 
 op asterisk-ari-mailboxes-get(mailboxName: String) -> Any
@@ -1486,8 +1010,8 @@ op asterisk-ari-mailboxes-update(mailboxName: String, oldMessages: Number, newMe
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/mailboxes/{mailboxName}?oldMessages={oldMessages}&newMessages={newMessages}")
-  response = http.request(method: "PUT", url)
+  url = fmt("{base}/mailboxes/{mailboxName}")
+  response = http.request(method: "PUT", query: { newMessages, oldMessages }, url)
   return response
 
 op asterisk-ari-mailboxes-delete(mailboxName: String) -> Any
@@ -1510,8 +1034,8 @@ op asterisk-ari-playbacks-control(playbackId: String, operation: String) -> Any
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/playbacks/{playbackId}/control?operation={operation}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/playbacks/{playbackId}/control")
+  response = http.request(method: "POST", query: { operation }, url)
   return response
 
 op asterisk-ari-recordings-get-live(recordingName: String) -> Any
@@ -1630,8 +1154,8 @@ op asterisk-ari-recordings-copy-stored(recordingName: String, destinationRecordi
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/recordings/stored/{recordingName}/copy?destinationRecordingName={destinationRecordingName}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/recordings/stored/{recordingName}/copy")
+  response = http.request(method: "POST", query: { destinationRecordingName }, url)
   return response
 
 op asterisk-ari-recordings-get-stored-file(recordingName: String) -> Any

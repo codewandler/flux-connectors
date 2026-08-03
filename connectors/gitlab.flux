@@ -23,16 +23,7 @@ op gitlab-issue-list(project_id: Number, state: String, page: Number, per_page: 
 
   base = "https://gitlab.com/api/v4"
   url = fmt("{base}/projects/{project_id}/issues")
-  sep = "?"
-  when state
-    url = fmt("{url}{sep}state={state}")
-    sep = "&"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { page, per_page, state }, url)
   return response
 
 op gitlab-issue-get(project_id: Number, issue_iid: Number) -> Any
@@ -70,16 +61,7 @@ op gitlab-merge-request-list(project_id: Number, state: String, page: Number, pe
 
   base = "https://gitlab.com/api/v4"
   url = fmt("{base}/projects/{project_id}/merge_requests")
-  sep = "?"
-  when state
-    url = fmt("{url}{sep}state={state}")
-    sep = "&"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { page, per_page, state }, url)
   return response
 
 op gitlab-pipeline-get(project_id: Number, pipeline_id: Number) -> Any
@@ -103,11 +85,5 @@ op gitlab-branch-list(project_id: Number, page: Number, per_page: Number) -> Any
 
   base = "https://gitlab.com/api/v4"
   url = fmt("{base}/projects/{project_id}/repository/branches")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { page, per_page }, url)
   return response

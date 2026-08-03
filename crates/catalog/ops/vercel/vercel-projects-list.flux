@@ -7,6 +7,6 @@ op vercel-projects-list -> Any
 
   base = "https://api.vercel.com"
   teamId = "{teamId}"
-  url = fmt("{base}/v10/projects?teamId={teamId}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/v10/projects")
+  response = http.request(method: "GET", query: { teamId }, url)
   return response

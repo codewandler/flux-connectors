@@ -308,6 +308,25 @@ pub enum Error {
         second: &'static str,
     },
 
+    /// A query value whose wire representation is not a JSON scalar — C-30.
+    ///
+    /// Flux 0.54 encodes strings, numbers and booleans through `http.request(query: ...)`, but
+    /// arrays and objects require a vendor-specific convention (repeated keys, delimiters,
+    /// brackets or JSON). `Any` is refused with them because it could carry either at runtime.
+    #[error(
+        "C-30: operation `{operation}` query parameter `{name}` has type `{kind}`, which cannot be \
+         encoded without choosing a vendor-specific collection convention. Declare a scalar \
+         schema, or withhold the operation until its query serialization is modelled"
+    )]
+    UnencodableQueryValue {
+        /// The operation id.
+        operation: String,
+        /// The caller-facing parameter name.
+        name: String,
+        /// The Flux type derived from its schema.
+        kind: String,
+    },
+
     /// An operation declares both named body fields and a free-form `body_schema`.
     ///
     /// "The body is these fields" and "the body is this schema" are two answers to one question,

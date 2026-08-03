@@ -759,7 +759,9 @@ fn opens_an_item(prefix: &str) -> bool {
 fn freshdesk_query_aliases_travel_under_their_wire_name() {
     let module = planned("freshdesk", "freshdesk.flux");
     assert!(
-        module.contains("fmt(\"{url}{sep}requester_id={req_id}\")"),
+        module.contains(
+            "query: { company_id, email: req_email, requester_id: req_id, updated_since: updated }"
+        ),
         "`req_id` must reach Freshdesk as `requester_id`:\n{module}"
     );
     assert!(

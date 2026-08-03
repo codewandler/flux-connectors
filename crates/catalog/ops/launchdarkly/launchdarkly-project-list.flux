@@ -7,11 +7,5 @@ op launchdarkly-project-list(limit: Number, offset: Number) -> Any
 
   base = "https://app.launchdarkly.com/api/v2"
   url = fmt("{base}/projects")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-    sep = "&"
-  when offset
-    url = fmt("{url}{sep}offset={offset}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit, offset }, url)
   return response

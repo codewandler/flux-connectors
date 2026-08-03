@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Generated scalar query parameters are encoded structurally instead of interpolated into URLs**
+  (C-30). String, numeric, boolean and configured query values now use Flux 0.54's RFC 3986 query
+  map; null alone is omitted, so explicit `false` and `0` survive. Collection-shaped query values
+  fail closed until their vendor wire convention is declared: 12 Asterisk ARI operations are
+  deferred with reasons, while Babelforce's 18 scalar-or-array parameters explicitly select their
+  documented string branch. The public catalogue no longer reports the retired
+  `unencodable-query-value` issue for scalar queries.
+
 ## [0.17.0] — 2026-08-03
 
 ### Changed — breaking for `connector-pack` consumers

@@ -16,9 +16,9 @@ queryable Rust catalogue, and a flux Tool pack.
 > this repository is `crates/connectors-api` — `publish = false`, loopback-only, and the thing that has
 > actually sent bytes to a vendor. See [Current limitations](#current-limitations).
 
-The repository currently contains **841 curated connector operations across 55 providers and 66
+The repository currently contains **829 curated connector operations across 55 providers and 66
 services**, plus 53 events and 5 channel bindings. It also publishes 77 Flux-owned core operations, node
-kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **1114
+kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **1102
 committed, reviewable artifacts** without contacting a vendor. Browse them in the
 [catalogue explorer](https://flux.codewandler.org/explorer).
 
@@ -69,7 +69,7 @@ cargo run -p connector-cli -- build
 On a clean checkout, `diff` reports:
 
 ```text
-1114 artifacts up to date (55 providers checked)
+1102 artifacts up to date (55 providers checked)
 ```
 
 Then inspect [`connectors/zendesk.flux`](connectors/zendesk.flux), browse the
@@ -163,10 +163,11 @@ fails closed:
 - **Freshdesk ships with no credential at all**, deliberately. Its `base64(<api_key>:X)` places the
   secret in a position the current IR cannot mark as secret. Emitting it would bypass secret gating
   and redaction, so the connector fails closed with a 401 instead.
-- **`zendesk-ticket-search` is non-functional.** Query values are not percent-encoded and flux has
-  no operation a Flux *program* can call to encode them. Spaces can appear to work while `&`, `#`, and
-  `+` corrupt the request; `x&per_page=1` can inject a parameter. The same gap applies to `form` request
-  bodies. See [docs/designs/query-encoding.md](docs/designs/query-encoding.md).
+- **Form request bodies still lack percent-encoding.** C-30 closed the query half with Flux 0.54's
+  structured `http.request(query: ...)` field, but form bodies are still assembled as text. A value
+  containing `&` or `=` can reshape that body, so operations needing unconstrained form values stay
+  out until the runtime's form encoder is available. See
+  [docs/designs/query-encoding.md](docs/designs/query-encoding.md).
 - **Base URLs can contain template variables**, such as `https://{subdomain}.zendesk.com`. A connector
   binds each one with a `[[config]]` field — but since `config` reaches no artifact, a host cannot yet
   discover what to ask for.

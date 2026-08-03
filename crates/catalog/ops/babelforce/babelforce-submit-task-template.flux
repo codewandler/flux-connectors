@@ -6,10 +6,7 @@ op babelforce-submit-task-template(template: String, style: String, body: Any) -
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v3/tasks/template/{template}")
-  sep = "?"
-  when style
-    url = fmt("{url}{sep}style={style}")
   content_type = "application/json"
   payload = parse(body, as: "json")
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { style }, url)
   return response

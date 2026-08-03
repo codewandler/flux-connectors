@@ -6,6 +6,6 @@ op asterisk-ari-mailboxes-update(mailboxName: String, oldMessages: Number, newMe
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/mailboxes/{mailboxName}?oldMessages={oldMessages}&newMessages={newMessages}")
-  response = http.request(method: "PUT", url)
+  url = fmt("{base}/mailboxes/{mailboxName}")
+  response = http.request(method: "PUT", query: { newMessages, oldMessages }, url)
   return response

@@ -36,11 +36,10 @@
 //! declaring `risk = "low"` (which the gate waves through) or a `POST`/`PATCH` declaring itself
 //! idempotent (which makes a `retry` around it unsound).
 //!
-//! **Required query parameters go in the URL template; optional ones are guarded.** An unbound
-//! `{name}` placeholder is left *verbatim* in the string by flux's interpolator
-//! (`interpolate_str`), so interpolating an unsupplied filter would send the vendor a literal
-//! `?page={page}`. A `when $page` guard is what makes "not supplied" mean "not sent", and `$sep`
-//! carries the `?`/`&` that only the first surviving parameter needs.
+//! **Query parameters are structured data, never URL text — C-30.** Flux 0.54's
+//! `http.request(query: ...)` owns RFC 3986 encoding and omits null values, so optional `false` and
+//! `0` remain real values instead of disappearing behind a truthiness guard. Arrays, objects and
+//! `Any` are refused because the IR does not yet declare a vendor's collection convention.
 //!
 //! **The body is a record bound to a symbol, never an inline one.** `http.request` reads its `body`
 //! argument with `Value::as_str` (`../flux/crates/flux-web/src/http.rs:183-186`), so an inline
@@ -167,16 +166,7 @@
 //! `composite_signature` puts every param in `required_params` with `optional_params` left empty
 //! (`../flux/crates/flux-flow/src/registry.rs:183-184`). So an IR parameter with
 //! `required: false` still appears in the declaration — what optionality means here is that the
-//! caller may pass **null**, and the `when` guard turns that into "do not send this filter". The
-//! guard is truthiness, so a deliberate `0` or `false` is also treated as absent; no real filter in
-//! the launch inventory is affected, but a future `?offset=0` would be.
-//!
-//! **Query values are interpolated verbatim — nothing percent-encodes them.** flux registers no
-//! URL-encoding op (`../flux/crates/flux-flow/docs/ops-reference.md:15`), so a value carrying a
-//! space, `&`, `#` or `=` corrupts the query string. Zendesk's search expressions are exactly this
-//! shape, and its plugin percent-encodes them strictly for exactly this reason (inventory §3.3.5).
-//! Half-encoding here would look correct and be wrong, so this emitter does not encode at all; the
-//! fix belongs upstream in flux or in a quirk story, and is recorded rather than papered over.
+//! caller may pass **null**, and Flux omits that field from the structured query map.
 
 use std::collections::BTreeMap;
 
@@ -194,8 +184,6 @@ use crate::{Error, Result};
 const BASE: &str = "base";
 /// The symbol holding the request URL as it is assembled.
 const URL: &str = "url";
-/// The symbol holding the next query-string separator (`?` then `&`).
-const SEP: &str = "sep";
 /// The symbol holding the media type of the request body.
 const CONTENT_TYPE: &str = "content_type";
 /// The header that media type travels in — the one constant header the emitter owns, because it
@@ -204,8 +192,7 @@ const CONTENT_TYPE_HEADER: &str = "content-type";
 /// The symbol holding the assembled request body.
 const PAYLOAD: &str = "payload";
 /// The symbol holding the next separator between form pairs, for a form body whose every field is
-/// optional. The body-side twin of [`SEP`], and needed for the same reason: the first *surviving*
-/// pair must not be preceded by an `&`.
+/// optional. The first *surviving* pair must not be preceded by an `&`.
 const FORM_SEP: &str = "form_sep";
 /// The symbol holding the HTTP response.
 const RESPONSE: &str = "response";
@@ -531,6 +518,7 @@ fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl
     } = &bound;
 
     check_pins(operation, &bound, &pinned)?;
+    check_query_values(operation, query)?;
 
     for bound in header {
         // `const` on a header parameter used to be a silent no-op: the pin was dropped and the
@@ -603,6 +591,21 @@ fn lower(connector: &Connector, operation: &Operation) -> Result<CompositeOpDecl
             ..DraftAst::default()
         },
     })
+}
+
+/// Refuse query shapes for which neither the IR nor Flux states a wire convention — C-30.
+fn check_query_values(operation: &Operation, query: &[Bound<'_>]) -> Result<()> {
+    for bound in query {
+        let ty = flux_type(&bound.param.schema);
+        if !matches!(ty, TypeRef::String | TypeRef::Number | TypeRef::Bool) {
+            return Err(Error::UnencodableQueryValue {
+                operation: operation.id.clone(),
+                name: bound.param.name.clone(),
+                kind: ty.label(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// **A pin and a parameter may not claim one request slot** — C-187.
@@ -980,26 +983,10 @@ fn request_body(
     } = bound;
     let free_form = free_form.as_ref();
 
-    let (required, optional): (Vec<_>, Vec<_>) = query.iter().partition(|b| b.param.required);
     let pinned_query = pins_at(pinned, Position::Query);
 
     let mut template = String::from("{base}");
     template.push_str(&path_template(operation, path, pinned)?);
-    let mut opened = false;
-    for bound in &required {
-        template.push(if opened { '&' } else { '?' });
-        opened = true;
-        template.push_str(&format!("{}={{{}}}", wire_name(bound.param), bound.symbol));
-    }
-    // After the caller's required arguments and before the guarded optional ones. A pinned parameter
-    // is unconditional — that is what distinguishes it from an optional filter, and it is why it
-    // needs no `when` guard: the symbol holds a placeholder a host always substitutes, so there is
-    // no "not supplied" state for a guard to describe.
-    for pin in &pinned_query {
-        template.push(if opened { '&' } else { '?' });
-        opened = true;
-        template.push_str(&format!("{}={{{}}}", pin.name, pin.symbol));
-    }
 
     let mut body = vec![
         // A literal today. When the endpoint moves into operator config (C-10) this one statement
@@ -1034,33 +1021,6 @@ fn request_body(
     }
     body.push(bind_fmt(URL, template));
 
-    if !optional.is_empty() {
-        // The first *surviving* optional parameter opens the query string — unless a required or a
-        // pinned one already did.
-        body.push(bind_string(SEP, if opened { "&" } else { "?" }));
-        for (i, bound) in optional.iter().enumerate() {
-            let mut guarded = vec![bind_fmt(
-                URL,
-                format!(
-                    "{{{URL}}}{{{SEP}}}{}={{{}}}",
-                    wire_name(bound.param),
-                    bound.symbol
-                ),
-            )];
-            // The last parameter never needs to hand a separator on.
-            if i + 1 < optional.len() {
-                guarded.push(bind_string(SEP, "&"));
-            }
-            body.push(Node::When {
-                cond: Box::new(Node::Var {
-                    name: SymbolName(bound.symbol.clone()),
-                }),
-                then: guarded,
-                otherwise: Vec::new(),
-            });
-        }
-    }
-
     let mut request = BTreeMap::from([
         ("url".to_string(), Box::new(symbol(URL))),
         (
@@ -1070,6 +1030,29 @@ fn request_body(
             }),
         ),
     ]);
+
+    let query_fields: BTreeMap<String, Box<Node>> = query
+        .iter()
+        .map(|bound| {
+            (
+                wire_name(bound.param).to_owned(),
+                Box::new(symbol(&bound.symbol)),
+            )
+        })
+        .chain(
+            pinned_query
+                .iter()
+                .map(|pin| (pin.name.to_owned(), Box::new(symbol(&pin.symbol)))),
+        )
+        .collect();
+    if !query_fields.is_empty() {
+        request.insert(
+            "query".to_owned(),
+            Box::new(Node::Obj {
+                fields: query_fields,
+            }),
+        );
+    }
 
     // Headers: the media type the payload is encoded in, the ones the vendor fixes, plus whatever
     // the caller supplies. Auth headers are deliberately absent — C-10 adds the credential
@@ -1483,14 +1466,13 @@ fn body_tree(operation: &Operation, body_params: &[Bound<'_>]) -> Result<BodyNod
 /// has no equivalent for a form body**: `parse`'s `as_type` is restricted to
 /// `f64`/`i64`/`bool`/`json`/`string` by flux-lang's own analyzer, no node or `expr` function
 /// serializes to a form, and nothing in flux's core catalogue percent-encodes. So `fmt` — the same
-/// construction the query string already uses — is the only one available, and hand-rolling
-/// percent-encoding out of `replace` chains in emitted Flux is not an improvement on it but a
-/// connector-specific DSL this repository refuses.
+/// construction used before structured query fields were available — is the only one available,
+/// and hand-rolling percent-encoding out of `replace` chains in emitted Flux is not an improvement
+/// on it but a connector-specific DSL this repository refuses.
 ///
-/// **The cost, stated plainly: form values are interpolated verbatim, exactly as query values are.**
-/// A value carrying `&` or `=` corrupts the body and can inject a field. That is the same gap
-/// AGENTS.md records for `zendesk-ticket-search`, now reaching a second request position, and the fix
-/// is a flux-side encoder rather than anything this emitter can do.
+/// **The cost, stated plainly: form values are interpolated verbatim.** A value carrying `&` or `=`
+/// corrupts the body and can inject a field. Query values no longer share that gap (C-30); the form
+/// fix needs its own structured runtime field or a Flux-side encoder.
 ///
 /// # Which pairs are guarded
 ///

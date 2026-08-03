@@ -7,8 +7,5 @@ op okta-group-list(limit: Number) -> Any
 
   base = "https://{domain}/api/v1"
   url = fmt("{base}/groups")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response

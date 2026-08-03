@@ -6,8 +6,8 @@ op babelforce-dispatch-local-automations(id: String, position: String, async: Bo
   expose false
 
   base = "https://services.babelforce.com"
-  url = fmt("{base}/api/v2/applications/{id}/dispatch/{position}?async={async}")
+  url = fmt("{base}/api/v2/applications/{id}/dispatch/{position}")
   content_type = "application/json"
   payload = parse(body, as: "json")
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { async }, url)
   return response

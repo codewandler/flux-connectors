@@ -7,23 +7,5 @@ op babelforce-list-outbound-attempts(page: Number, max: Number, campaignId: Stri
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/outbound/attempts")
-  sep = "?"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when max
-    url = fmt("{url}{sep}max={max}")
-    sep = "&"
-  when campaignId
-    url = fmt("{url}{sep}campaignId={campaignId}")
-    sep = "&"
-  when listId
-    url = fmt("{url}{sep}listId={listId}")
-    sep = "&"
-  when leadId
-    url = fmt("{url}{sep}leadId={leadId}")
-    sep = "&"
-  when number
-    url = fmt("{url}{sep}number={number}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { campaignId, leadId, listId, max, number, page }, url)
   return response

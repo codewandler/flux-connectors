@@ -141,9 +141,8 @@ fn an_operation_whose_path_carries_no_placeholder_is_untouched() {
     assert!(flux.contains(r#"url = fmt("{base}/v1/tenants")"#), "{flux}");
 }
 
-/// **The query case**, including the separators. A pinned parameter is unconditional — it needs no
-/// `when` guard, because a pinned value has no "not supplied" state — and it lands after the
-/// caller's required arguments and before the guarded optional ones.
+/// **The query case.** A pinned parameter is unconditional and travels beside caller values in the
+/// structured record, so neither a separator nor a truthiness guard can change its meaning.
 #[test]
 fn a_pinned_query_parameter_is_unconditional_and_keeps_the_separators_right() {
     let connector = connector(PINNED_QUERY);
@@ -158,12 +157,12 @@ fn a_pinned_query_parameter_is_unconditional_and_keeps_the_separators_right() {
         "the pin must be a literal carrying its placeholder:\n{flux}"
     );
     assert!(
-        flux.contains(r#"url = fmt("{base}/v1/widgets?kind={kind}&accountId={accountId}")"#),
-        "the required argument opens the query string and the pin follows it:\n{flux}"
+        flux.contains(r#"url = fmt("{base}/v1/widgets")"#),
+        "the URL must carry no query data:\n{flux}"
     );
     assert!(
-        flux.contains(r#"sep = "&""#),
-        "the query string is already open, so the optional filter hands on `&`:\n{flux}"
+        flux.contains("query: { accountId, cursor, kind }") && !flux.contains("sep ="),
+        "the pin and caller values must share the structured query record:\n{flux}"
     );
     assert!(
         !flux.contains("when accountId"),
@@ -171,8 +170,7 @@ fn a_pinned_query_parameter_is_unconditional_and_keeps_the_separators_right() {
     );
 }
 
-/// A pin with nothing before it opens the query string itself, so the `?` is not lost when an
-/// operation declares no required argument of its own.
+/// A pin needs no caller-supplied value before it: it is an ordinary field of the query record.
 #[test]
 fn a_pin_with_no_required_argument_before_it_opens_the_query_string() {
     let source = PINNED_QUERY.replace(
@@ -188,13 +186,10 @@ schema = { type = "string" }
     let connector = connector(&source);
     let flux = emit(&connector, "vendor-widget-list");
 
+    assert!(flux.contains(r#"url = fmt("{base}/v1/widgets")"#), "{flux}");
     assert!(
-        flux.contains(r#"url = fmt("{base}/v1/widgets?accountId={accountId}")"#),
-        "{flux}"
-    );
-    assert!(
-        flux.contains(r#"sep = "&""#),
-        "the pin opened the query string, so the optional filter must hand on `&`:\n{flux}"
+        flux.contains("query: { accountId, cursor }") && !flux.contains("sep ="),
+        "the pin and optional value need no separator state:\n{flux}"
     );
 }
 

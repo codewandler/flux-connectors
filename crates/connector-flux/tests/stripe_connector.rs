@@ -482,13 +482,12 @@ fn stripe_queries_are_absent_or_the_one_safe_integer_limit() {
         if is_list {
             assert_eq!(
                 url_lines.len(),
-                2,
-                "{} must append exactly one query",
+                1,
+                "{} put query data in its URL",
                 operation.id
             );
-            assert!(emitted.contains("sep = \"?\""));
-            assert!(emitted.contains("{sep}limit={limit}"));
-            assert_eq!(emitted.matches("={limit}").count(), 1);
+            assert!(emitted.contains("query: { limit }"));
+            assert!(!emitted.contains("sep = "));
         } else {
             assert_eq!(
                 url_lines.len(),

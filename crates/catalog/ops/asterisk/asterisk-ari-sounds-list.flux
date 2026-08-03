@@ -7,11 +7,5 @@ op asterisk-ari-sounds-list(lang: String, format: String) -> Any
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/sounds")
-  sep = "?"
-  when lang
-    url = fmt("{url}{sep}lang={lang}")
-    sep = "&"
-  when format
-    url = fmt("{url}{sep}format={format}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { format, lang }, url)
   return response

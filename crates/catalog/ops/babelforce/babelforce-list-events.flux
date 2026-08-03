@@ -7,8 +7,5 @@ op babelforce-list-events(type: String) -> Any
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v2/events")
-  sep = "?"
-  when type
-    url = fmt("{url}{sep}type={type}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { type }, url)
   return response

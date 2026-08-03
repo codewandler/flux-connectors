@@ -278,8 +278,8 @@ fn only_four_named_reads_declare_integer_paging_queries() {
     }
 }
 
-/// The same closed exception over emitted Flux: four named modules assemble precisely two integer
-/// options, while every previously shipped module remains byte-shaped as one fixed URL.
+/// The same closed exception over emitted Flux: four named modules carry precisely two structured
+/// integer options, while every previously shipped module has no query record.
 #[test]
 fn only_four_named_modules_assemble_integer_paging() {
     let connector = load();
@@ -296,13 +296,12 @@ fn only_four_named_modules_assemble_integer_paging() {
         if INTEGER_PAGED_READS.contains(&operation.id.as_str()) {
             assert_eq!(
                 url_lines.len(),
-                3,
-                "{} emitted an unexpected query shape",
+                1,
+                "{} interpolated query data into its URL",
                 operation.id
             );
-            assert!(emitted.contains(r#"url = fmt("{url}{sep}$top={_top}")"#));
-            assert!(emitted.contains(r#"url = fmt("{url}{sep}$skip={_skip}")"#));
-            assert_eq!(emitted.matches("sep = ").count(), 2);
+            assert!(emitted.contains(r#"query: { "$skip": _skip, "$top": _top }"#));
+            assert!(!emitted.contains("sep = "));
         } else {
             assert_eq!(
                 url_lines.len(),

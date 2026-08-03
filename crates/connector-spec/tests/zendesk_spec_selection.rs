@@ -135,23 +135,23 @@ const EXISTING_SUPPORT_FLUX: [(&str, &str); 6] = [
     ),
     (
         "zendesk-incremental-ticket-list",
-        "a9bb1e84d935251f12378839916f726b6b1598b4c9e404a51125eea1778d5bfc",
+        "627c924c1803461607de4895fedd299b094fb597481bf0ae8cdd0271a8263908",
     ),
     (
         "zendesk-incremental-user-list",
-        "fdddb2e407569ffb8d370c6305f44908864ce8d6d1cb4aa6c5bfa222e019bea7",
+        "e7c00dbf348a86080b8309f050abb12f04248ce0a9360e1ba6c651e7fcc20ee2",
     ),
     (
         "zendesk-incremental-organization-list",
-        "c505ca40dd42432b33ff5253a5d15b7cd46415fa8bb81a77e330e0ba1938a02b",
+        "ad7a54f1effacd43ed04f95ff9c59613aee7e103fc31595e6a480b2fca9ae405",
     ),
     (
         "zendesk-incremental-ticket-event-list",
-        "a51207b84c61a8d4d073f5757cf0e379ef41fa908167d6575a85ceb6d47ea171",
+        "a4443933645b6890043ca02382fe310ae93e56170be83dddd3ff1edf2266c669",
     ),
     (
         "zendesk-custom-object-list",
-        "3dbbc14f46c868dd4258f458309d67f32549cfa284ff5e756dd50e6e5a9b5218",
+        "25b96b055e8ea38678aaede2d0e35c4e203ff18c8a43d9ec016a0350c8b21ef4",
     ),
 ];
 
@@ -166,11 +166,11 @@ const EXISTING_NAMED_SERVICE_OPERATION_FLUX: [(&str, &str); 14] = [
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-article-incremental-list.flux",
-        "604b37ccbccffb7a23f3d6f2106fd416a2d3f224b3c88b0df92c55f3c5e88281",
+        "81937fb7abaa3e1c76fe49dd83f22c691417279da3cda8723c00db460ce266d2",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-article-list.flux",
-        "74f0a40369f03cbd85e8e20e393eeb4b3c8f14eee48bbd6c792192891b9a7617",
+        "345308f0c4bf6096087fc0ffc6a34d29ca90248a4028d2cdf2769e5395d85a95",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-category-list.flux",

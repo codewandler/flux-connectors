@@ -6,6 +6,6 @@ op asterisk-ari-asterisk-add-log(logChannelName: String, configuration: String) 
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/asterisk/logging/{logChannelName}?configuration={configuration}")
-  response = http.request(method: "POST", url)
+  url = fmt("{base}/asterisk/logging/{logChannelName}")
+  response = http.request(method: "POST", query: { configuration }, url)
   return response

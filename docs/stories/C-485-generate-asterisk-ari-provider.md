@@ -31,6 +31,9 @@ existing spec selection and HTTP execution path.
       required by `AGENTS.md`.
 
 ## Progress
+- 2026-08-03: C-30 subsequently narrowed the published REST surface to 96 operations. Twelve
+  array-query operations remain present in the normalized source but are withheld by exact,
+  reason-bearing provider deferrals until their serialization convention is modelled.
 
 - 2026-08-02: scoped after the owner explicitly deferred eventing and rejected a cross-repository
   plugin implementation.

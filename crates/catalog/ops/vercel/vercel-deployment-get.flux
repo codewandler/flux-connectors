@@ -7,6 +7,6 @@ op vercel-deployment-get(idOrUrl: String) -> Any
 
   base = "https://api.vercel.com"
   teamId = "{teamId}"
-  url = fmt("{base}/v13/deployments/{idOrUrl}?teamId={teamId}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/v13/deployments/{idOrUrl}")
+  response = http.request(method: "GET", query: { teamId }, url)
   return response

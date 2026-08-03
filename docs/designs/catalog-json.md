@@ -331,11 +331,11 @@ clears the flag from every operation at once.
 |---|---|---|---|---|
 | `no-credential` | issue | provider | C-17 | `Connector::effective_auth(op)` is **empty** and the operation did not declare it so — a credential exists and cannot be held safely yet, so the request would go out unauthenticated. |
 | `credential-not-injected` | issue | catalog | C-10 | `Connector::effective_auth(op)` is **not** empty. The operation names its credential, but the generated Flux does not yet attach it. |
-| `unencodable-query-value` | issue | operation | C-30 | Any query parameter whose JSON Schema `type` is not `integer`, `number` or `boolean`. |
+| `unencodable-query-value` | retired issue token | operation | C-30 | Produced only by older catalogue documents. Current scalar queries are encoded structurally and unmodelled collections fail before publication. |
 | `unbound-base-url-template` | issue | provider | C-17 | `base_url` contains a `{name}` placeholder. |
 | `no-credential-required` | **note** | operation | C-206 | `Operation::auth` is `Some([])` — the author **declared** that the vendor needs no credential. |
 
-Together the four issues reproduce, per operation and from the IR alone, the four entries README.md
+Together the current issues reproduce, per operation and from the IR alone, the entries README.md
 publishes under **Known limits**.
 
 The first two are **complementary** over every operation that has not declared itself public: one of
@@ -402,13 +402,9 @@ It is also the honest answer. The `credential-not-injected` condition is about a
 to a request, and there is no credential to attach; the generated Flux for a public operation builds
 its URL and calls `http.request`, which is the whole of what the endpoint needs.
 
-`unencodable-query-value` follows [query-encoding.md](query-encoding.md) §4 exactly, including its
-deliberate narrowness: a `Number` or `Boolean` value cannot contain `&`, `#`, `+` or a space, so the
-six zendesk operations that take only numeric ids and page bounds are **not** flagged and the
-connector reads as an honest 6/7. It inherits that design's recorded limit too — a free-form
-parameter mistyped as `integer` in a provider TOML is still reported as working. Path and header
-parameters have the identical gap and are deliberately not reported, because C-30 scopes the
-emitter's refusal to query values and the catalogue must not disagree with the emitter.
+`unencodable-query-value` remains in the vocabulary so consumers can read older checked catalogue
+documents. C-30 stopped producing it: Flux 0.54 encodes scalar query fields structurally, while the
+emitter refuses arrays, objects and unknown values before an operation reaches this document.
 
 ### The one fact that is not derived
 
@@ -441,8 +437,6 @@ One operation, elided to the fields that matter:
     "works": false,
     "issues": [
       { "code": "credential-not-injected", "scope": "catalog", "story": "C-10", "params": [] },
-      { "code": "unencodable-query-value", "scope": "operation", "story": "C-30",
-        "params": ["query"] },
       { "code": "unbound-base-url-template", "scope": "provider", "story": "C-17", "params": [] }
     ]
   }

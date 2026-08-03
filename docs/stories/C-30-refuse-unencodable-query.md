@@ -1,33 +1,50 @@
 ---
 id: C-30
-title: Refuse query values the emitter cannot encode safely
+title: Encode scalar query values structurally and defer unmodelled arrays
 pillar: Codegen
-status: ready
+status: done
 priority: 6
 design: docs/designs/query-encoding.md
 epic: connectors-v1
 areas: [connector-flux]
-note: **security** · a model-supplied query value can inject request parameters today
+note: **security** · Flux 0.54 has structured RFC 3986 query encoding; arrays stay withheld until their wire shape is declared
 ---
 
-# Refuse query values the emitter cannot encode safely
+# Encode scalar query values structurally and defer unmodelled arrays
 
 ## Goal
-Stop the emitter producing operations whose query values can be injected into, by refusing to emit
-what it cannot encode — until flux gains a structured `query` map.
+Stop model- and operator-supplied query values from changing request structure. Emit scalar values
+through Flux 0.54's structured `http.request(query: ...)` map, and withhold operations whose array
+serialization is not declared rather than guessing a vendor convention.
 
 ## Acceptance
-- [ ] `connector-flux` gains an `UnencodableQueryValue` error following C-8's existing refusal
-      pattern, naming this story and the operation and parameter involved.
-- [ ] String-ish and `Any`-typed query parameters are refused; `Number` and `Boolean` are allowed.
-      The narrow scope is deliberate — see the risk below.
-- [ ] `zendesk-ticket-search` is refused rather than emitted, and the other six zendesk operations
-      still emit. The connector is honestly 6/7 until flux lands the structured `query` map.
-- [ ] A test asserts the refusal fires, and a golden pins that the six unaffected operations are
-      unchanged.
+- [x] `connector-flux` emits every required, optional and operator-pinned scalar query parameter in
+      the structured `query` object passed to `http.request`; the URL contains path data only.
+- [x] The generated path accepts string, number and boolean values, preserves explicit `false` and
+      `0`, omits absent optional values as `null`, and refuses array/object/unknown values with an
+      `UnencodableQueryValue` naming C-30, the operation and the parameter.
+- [x] `connector-pack` evaluates the structured query object and appends keys and scalar values with
+      Flux's RFC 3986 semantics (`%20`, never `+`) exactly once, including configured query pins.
+- [x] Provider overlays can defer one operation selected by a broad selector with a non-empty
+      reason. Deferral is exact, fail-closed on absent or unmatched operations, and cannot be mixed
+      with corrections to an operation that will not publish.
+- [x] Asterisk ARI defers the 12 selected operations whose query parameters are arrays. Babelforce's
+      18 string-or-array query parameters are narrowed explicitly to their documented scalar branch.
+- [x] Generated connector, catalogue, lockfile and public-site artifacts are regenerated; the full
+      Rust and web gates pass.
 
 ## Progress
-- (not started)
+- 2026-08-03 — Flux 0.54 is now the workspace baseline and implements the structured query contract
+  specified by this story's design. The temporary "refuse strings" plan is superseded by the
+  permanent structured path; only unmodelled collection serialization remains refused.
+- 2026-08-03 — Failing-first emitter coverage produced the old `?query={query}` / `$sep` output, and
+  the overlay fixture rejected the then-unknown `defer` key. The implementation now emits scalar
+  query records, mirrors their exact wire URL in `connector-pack`, and fails closed on collection
+  types or invalid deferrals.
+- 2026-08-03 — Full integration measured 829 published operations and 1102 generated artifacts after
+  withholding 12 Asterisk array-query operations. `connector-cli diff` reports `1102 artifacts up
+  to date (55 providers checked)`; the full workspace build/tests/Clippy/format and web build/tests
+  pass.
 
 ## Notes
 - **This is a security finding, not a correctness one.** C-28 established that a query value of
@@ -40,17 +57,12 @@ what it cannot encode — until flux gains a structured `query` map.
   **spaces**. So `type:ticket status:new` — the canonical broken example — works today by accident.
   `&`, `#`, `+` and newline do not. Anyone verifying by trying a space will wrongly conclude the gap
   is closed.
-- **Emitting the fix early is worse than refusing.** Both halves verified by C-28: flux's analyzer
-  *accepts* unknown call arguments (`analyze.rs:548-549`, "extra fields are not errors") and the
-  runtime *ignores* them (`http.rs:137-160` reads only url/method/headers/body/timeout). So emitting
-  a `query` map against an older flux silently drops every filter and returns 200 OK with the wrong
-  result set.
-- The permanent fix is a structured `query` map on `http.request`, drafted for flux in
-  [query-encoding-flux-stories.md](../designs/query-encoding-flux-stories.md) (F-1). It must encode
-  **RFC 3986**, not `append_pair`, which form-encodes space to `+`.
-- **Known limit of this refusal:** it is type-based, so a free-form parameter mistyped as `Number` in
-  a provider TOML is still emitted and still corrupts silently. The tighter alternative — refuse all
-  query parameters — is recorded in the design and was not recommended.
+- **The Flux prerequisite is now present.** Flux 0.54 reads `query`, accepts scalar values, omits
+  null, rejects arrays/objects, uses RFC 3986 encoding, and refuses duplicate keys already embedded
+  in `url`. C-30 now adopts that contract rather than its earlier temporary refusal.
+- **Arrays remain a modelling decision.** APIs variously use repeated keys, comma-separated values,
+  bracketed keys or JSON. The connector IR does not declare one of those, so emitting an array would
+  replace a known absence with a plausible wrong request.
 - Path parameters have the identical gap and are **not** covered here: `path_template` interpolates
   verbatim, so a string path parameter containing `/` or `?` escapes its segment. Harmless for the
   current inventory (all numeric ids) and not fixed by the structured `query` map.

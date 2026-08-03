@@ -6,9 +6,6 @@ op zendesk-incremental-organization-list(start_time: Number, per_page: Number) -
   expose true
 
   base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/incremental/organizations?start_time={start_time}")
-  sep = "&"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/api/v2/incremental/organizations")
+  response = http.request(method: "GET", query: { per_page, start_time }, url)
   return response

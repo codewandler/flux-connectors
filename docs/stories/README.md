@@ -10,7 +10,7 @@ the stories, not the generated region. New work? Copy [`_TEMPLATE.md`](_TEMPLATE
 ## Status
 
 **Snapshot: v0.17.0 (2026-08-03).** Measured with `ls providers/*.toml | wc -l` and
-`cargo run -p connector-cli -- diff`: 55 provider definitions compile to a fixed point of 1114
+`cargo run -p connector-cli -- diff`: 55 provider definitions compile to a fixed point of 1102
 artifacts. The publishable host seam is prepared on Flux 0.54, and the generated board below is the current
 story state rather than the original scaffold plan.
 
@@ -95,7 +95,6 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-80 — Let a connector declare more than one error shape](C-80-error-envelope-alternatives.md) · Spec · five providers declared pointers that resolve to nothing against the vendor's other shape
 - [C-37 — Give providers and operations stable global addresses](C-37-global-addressing.md) · Spec · pid / gid / oip · the global half; C-23 stays the local half
 - [C-56 — Omit an optional body field instead of sending an explicit null](C-56-omit-optional-body-fields.md) · Codegen · query params get a `when` guard; body fields do not
-- [C-30 — Refuse query values the emitter cannot encode safely](C-30-refuse-unencodable-query.md) · Codegen · **security** · a model-supplied query value can inject request parameters today
 - [C-67 — Declare the scopes an operation requires](C-67-required-scopes.md) · Spec · least privilege, and mechanical 403 diagnosis
 - [C-68 — Bind a service's endpoint to operator configuration](C-68-endpoint-binding.md) · Spec · closes the SCHEMA GAP every shipped provider records in a comment
 - [C-10 — Emit the $auth marker and the connector manifest](C-10-auth-injection-and-manifest.md) · Codegen · pairs with C-16 · the second generated artifact
@@ -262,6 +261,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-27 — Wire the CLI seams to the loader and the emitter](C-27-wire-cli-seams.md) · Build · two functions · mechanical once C-3 and C-8 land
 - [C-28 — Resolve percent-encoding for query values](C-28-query-percent-encoding.md) · Codegen · blocks zendesk ticket search · flux has no urlencode op at all
 - [C-29 — Close the request-body modelling gaps in the IR](C-29-body-modelling-gaps.md) · Spec · found by C-17 transcribing real providers · blocks correct write operations
+- [C-30 — Encode scalar query values structurally and defer unmodelled arrays](C-30-refuse-unencodable-query.md) · Codegen · **security** · Flux 0.54 has structured RFC 3986 query encoding; arrays stay withheld until their wire shape is declared
 - [C-34 — Decide whether a connectors proxy belongs in this project](C-34-proxy-charter-decision.md) · Bridge · **decision, not code** · blocks the whole epic · contradicts a stated non-goal
 - [C-38 — Render Flux per operation and embed it in a catalog crate](C-38-operation-catalog-crate.md) · Build · **the goal** · one .flux per expanded op, consumable as a Rust crate
 - [C-40 — Ship provider icons as bundle assets](C-40-provider-icons.md) · Build · CLOSED 2026-08-01 by C-437's answer, and refused as worded. No vendor mark is vendored: a brand guideline grants identification use to the DISPLAYER, revocably and non-sublicensably, while this repo's MIT/Apache-2.0 grants copy, modify and sublicense to everyone irrevocably — and git makes that unwithdrawable. The story's SHAPE survives: a mark ships beside the .flux, never base64 inside it

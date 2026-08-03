@@ -7,8 +7,5 @@ op okta-user-deactivate(user_id: String, send_email: Bool) -> Any
 
   base = "https://{domain}/api/v1"
   url = fmt("{base}/users/{user_id}/lifecycle/deactivate")
-  sep = "?"
-  when send_email
-    url = fmt("{url}{sep}sendEmail={send_email}")
-  response = http.request(method: "POST", url)
+  response = http.request(method: "POST", query: { sendEmail: send_email }, url)
   return response

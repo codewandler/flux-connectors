@@ -7,8 +7,5 @@ op asterisk-ari-bridges-start-moh(bridgeId: String, mohClass: String) -> Any
 
   base = "https://{host}:8089/ari"
   url = fmt("{base}/bridges/{bridgeId}/moh")
-  sep = "?"
-  when mohClass
-    url = fmt("{url}{sep}mohClass={mohClass}")
-  response = http.request(method: "POST", url)
+  response = http.request(method: "POST", query: { mohClass }, url)
   return response

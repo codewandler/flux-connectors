@@ -6,17 +6,5 @@ op babelforce-task-usage(type: String, start: String, end: String, rate: String)
 
   base = "https://services.babelforce.com"
   url = fmt("{base}/api/v3/tasks/usage")
-  sep = "?"
-  when type
-    url = fmt("{url}{sep}type={type}")
-    sep = "&"
-  when start
-    url = fmt("{url}{sep}start={start}")
-    sep = "&"
-  when end
-    url = fmt("{url}{sep}end={end}")
-    sep = "&"
-  when rate
-    url = fmt("{url}{sep}rate={rate}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { end, rate, start, type }, url)
   return response

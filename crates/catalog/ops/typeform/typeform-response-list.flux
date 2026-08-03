@@ -7,26 +7,5 @@ op typeform-response-list(form_id: String, page_size: Number, before: String, af
 
   base = "https://api.typeform.com"
   url = fmt("{base}/forms/{form_id}/responses")
-  sep = "?"
-  when page_size
-    url = fmt("{url}{sep}page_size={page_size}")
-    sep = "&"
-  when before
-    url = fmt("{url}{sep}before={before}")
-    sep = "&"
-  when after
-    url = fmt("{url}{sep}after={after}")
-    sep = "&"
-  when since
-    url = fmt("{url}{sep}since={since}")
-    sep = "&"
-  when $until
-    url = fmt("{url}{sep}until={until}")
-    sep = "&"
-  when response_type
-    url = fmt("{url}{sep}response_type={response_type}")
-    sep = "&"
-  when sort
-    url = fmt("{url}{sep}sort={sort}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { after, before, page_size, response_type, since, sort, until: $until }, url)
   return response

@@ -6,6 +6,6 @@ op babelforce-get-bulk-file-download(ids: String) -> Any
   expose false
 
   base = "https://services.babelforce.com"
-  url = fmt("{base}/api/v2/files/bulk/download?ids={ids}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/api/v2/files/bulk/download")
+  response = http.request(method: "GET", query: { ids }, url)
   return response

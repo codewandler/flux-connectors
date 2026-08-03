@@ -576,6 +576,23 @@ expose = true
 # The document's summary is "List agents", which loses the reason this operation is `verify`.
 description = "List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint"
 
+# C-30: the document permits one string or an array. This connector deliberately publishes the
+# scalar branch until its IR can state how babelforce serializes a collection in a query string.
+[[patch.operations.params]]
+name = "groupIds"
+position = "query"
+schema = { type = "string" }
+
+[[patch.operations.params]]
+name = "groups"
+position = "query"
+schema = { type = "string" }
+
+[[patch.operations.params]]
+name = "tags"
+position = "query"
+schema = { type = "string" }
+
 # Not in any spec, so stated here. The manager document paginates uniformly on `page`/`max`;
 # attaching that per operation is a repetition C-415's per-service quirks are meant to end, and
 # widening to 391 operations makes the case for a service-level `quirks` block considerably louder —
@@ -697,6 +714,36 @@ omit.query = [
 [patch.operations.quirks.pagination]
 page = { page_param = "page", size_param = "max", page_size = 100, max_pages = 20 }
 
+[[patch.operations.params]]
+name = "id"
+position = "query"
+schema = { type = "string", format = "uuid" }
+
+[[patch.operations.params]]
+name = "type"
+position = "query"
+schema = { type = "string", enum = ["inbound", "outbound"] }
+
+[[patch.operations.params]]
+name = "toNumber"
+position = "query"
+schema = { type = "string" }
+
+[[patch.operations.params]]
+name = "agentId"
+position = "query"
+schema = { type = "string", format = "uuid" }
+
+[[patch.operations.params]]
+name = "state"
+position = "query"
+schema = { type = "string", enum = ["init", "scheduled", "ringing", "in-progress", "queued", "bridged", "canceled", "busy", "no-answer", "purged", "completed", "failed"] }
+
+[[patch.operations.params]]
+name = "finishReason"
+position = "query"
+schema = { type = "string", enum = ["unknown", "hangup", "passive-hangup", "system-hangup", "failed", "timeout", "unreachable", "busy", "declined", "canceled", "transferred", "network-unreachable", "unallocated-number", "invalid-number", "no-answer", "dropped"] }
+
 # ---------------------------------------------------------------------------------------------
 
 [[patch.operations]]
@@ -797,6 +844,72 @@ expose = true
 # This is the one of the two untyped bodies that stayed untyped; `babelforce-call-session-set` above
 # is the one that did not.
 description = "Update the user-scoped variables of a session. The body is the variable map itself"
+
+# ---------------------------------------------------------------------------------------------
+
+# C-30 scalar branches for selector-published operations. These exact blocks do not curate or
+# expose the operations; they narrow only the ambiguous query parameters the vendor documents as
+# string-or-array.
+[[patch.operations]]
+service = "manager"
+select = "listAllSimpleReportingCalls"
+
+[[patch.operations.params]]
+name = "id"
+position = "query"
+schema = { type = "string", format = "uuid" }
+
+[[patch.operations.params]]
+name = "parentId"
+position = "query"
+schema = { type = "string", format = "uuid" }
+
+[[patch.operations.params]]
+name = "type"
+position = "query"
+schema = { type = "string", enum = ["inbound", "outbound"] }
+
+[[patch.operations.params]]
+name = "to"
+position = "query"
+schema = { type = "string" }
+
+[[patch.operations.params]]
+name = "toNumber"
+position = "query"
+schema = { type = "string" }
+
+[[patch.operations.params]]
+name = "agentId"
+position = "query"
+schema = { type = "string", format = "uuid" }
+
+[[patch.operations]]
+service = "manager"
+select = "listDashboards"
+
+[[patch.operations.params]]
+name = "uuid"
+position = "query"
+schema = { type = "string", format = "uuid" }
+
+[[patch.operations]]
+service = "manager"
+select = "listLiveLogs"
+
+[[patch.operations.params]]
+name = "filters.level"
+position = "query"
+schema = { type = "string" }
+
+[[patch.operations]]
+service = "manager"
+select = "listUsers"
+
+[[patch.operations.params]]
+name = "email"
+position = "query"
+schema = { type = "string" }
 
 # ---------------------------------------------------------------------------------------------
 

@@ -6,6 +6,6 @@ op typeform-response-delete(form_id: String, included_response_ids: String) -> A
   expose true
 
   base = "https://api.typeform.com"
-  url = fmt("{base}/forms/{form_id}/responses?included_response_ids={included_response_ids}")
-  response = http.request(method: "DELETE", url)
+  url = fmt("{base}/forms/{form_id}/responses")
+  response = http.request(method: "DELETE", query: { included_response_ids }, url)
   return response

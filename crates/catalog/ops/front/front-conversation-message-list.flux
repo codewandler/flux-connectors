@@ -7,8 +7,5 @@ op front-conversation-message-list(conversation_id: String, limit: Number) -> An
 
   base = "https://api2.frontapp.com"
   url = fmt("{base}/conversations/{conversation_id}/messages")
-  sep = "?"
-  when limit
-    url = fmt("{url}{sep}limit={limit}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { limit }, url)
   return response

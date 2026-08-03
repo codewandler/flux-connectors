@@ -31,7 +31,7 @@ fn four_spec_backed_reads_compose_absolute_account_pinned_twilio_requests() {
         (
             "twilio-recording-list",
             json!({"IncludeSoftDeleted": true, "PageSize": 25, "Page": 2}),
-            "https://api.twilio.com/2010-04-01/Accounts/AC00000000000000000000000000000000/Recordings.json?IncludeSoftDeleted=true&PageSize=25&Page=2",
+            "https://api.twilio.com/2010-04-01/Accounts/AC00000000000000000000000000000000/Recordings.json?IncludeSoftDeleted=true&Page=2&PageSize=25",
         ),
         (
             "twilio-recording-get",
@@ -41,12 +41,12 @@ fn four_spec_backed_reads_compose_absolute_account_pinned_twilio_requests() {
         (
             "twilio-usage-record-list",
             json!({"IncludeSubaccounts": true, "PageSize": 25, "Page": 2}),
-            "https://api.twilio.com/2010-04-01/Accounts/AC00000000000000000000000000000000/Usage/Records.json?IncludeSubaccounts=true&PageSize=25&Page=2",
+            "https://api.twilio.com/2010-04-01/Accounts/AC00000000000000000000000000000000/Usage/Records.json?IncludeSubaccounts=true&Page=2&PageSize=25",
         ),
         (
             "twilio-conference-list",
             json!({"PageSize": 25, "Page": 2}),
-            "https://api.twilio.com/2010-04-01/Accounts/AC00000000000000000000000000000000/Conferences.json?PageSize=25&Page=2",
+            "https://api.twilio.com/2010-04-01/Accounts/AC00000000000000000000000000000000/Conferences.json?Page=2&PageSize=25",
         ),
     ];
 

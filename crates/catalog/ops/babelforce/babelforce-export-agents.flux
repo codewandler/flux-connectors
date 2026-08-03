@@ -6,6 +6,6 @@ op babelforce-export-agents(format: String) -> Any
   expose false
 
   base = "https://services.babelforce.com"
-  url = fmt("{base}/api/v2/agents/provision?format={format}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/api/v2/agents/provision")
+  response = http.request(method: "GET", query: { format }, url)
   return response

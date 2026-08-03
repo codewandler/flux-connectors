@@ -6,11 +6,8 @@ op asterisk-ari-endpoints-refer(to: String, from: String, refer_to: String, to_s
   expose false
 
   base = "https://{host}:8089/ari"
-  url = fmt("{base}/endpoints/refer?to={to}&from={from}&refer_to={refer_to}")
-  sep = "&"
-  when to_self
-    url = fmt("{url}{sep}to_self={to_self}")
+  url = fmt("{base}/endpoints/refer")
   content_type = "application/json"
   payload = { variables }
-  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", url)
+  response = http.request(body: payload, headers: { "content-type": content_type }, method: "POST", query: { from, refer_to, to, to_self }, url)
   return response

@@ -11,8 +11,8 @@ op vercel-projects-list -> Any
 
   base = "https://api.vercel.com"
   teamId = "{teamId}"
-  url = fmt("{base}/v10/projects?teamId={teamId}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/v10/projects")
+  response = http.request(method: "GET", query: { teamId }, url)
   return response
 
 op vercel-project-get(idOrName: String) -> Any
@@ -24,8 +24,8 @@ op vercel-project-get(idOrName: String) -> Any
 
   base = "https://api.vercel.com"
   teamId = "{teamId}"
-  url = fmt("{base}/v9/projects/{idOrName}?teamId={teamId}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/v9/projects/{idOrName}")
+  response = http.request(method: "GET", query: { teamId }, url)
   return response
 
 op vercel-deployments-list(projectId: String) -> Any
@@ -37,11 +37,8 @@ op vercel-deployments-list(projectId: String) -> Any
 
   base = "https://api.vercel.com"
   teamId = "{teamId}"
-  url = fmt("{base}/v7/deployments?teamId={teamId}")
-  sep = "&"
-  when projectId
-    url = fmt("{url}{sep}projectId={projectId}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/v7/deployments")
+  response = http.request(method: "GET", query: { projectId, teamId }, url)
   return response
 
 op vercel-deployment-get(idOrUrl: String) -> Any
@@ -53,8 +50,8 @@ op vercel-deployment-get(idOrUrl: String) -> Any
 
   base = "https://api.vercel.com"
   teamId = "{teamId}"
-  url = fmt("{base}/v13/deployments/{idOrUrl}?teamId={teamId}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/v13/deployments/{idOrUrl}")
+  response = http.request(method: "GET", query: { teamId }, url)
   return response
 
 op vercel-deployment-cancel(id: String) -> Any
@@ -66,6 +63,6 @@ op vercel-deployment-cancel(id: String) -> Any
 
   base = "https://api.vercel.com"
   teamId = "{teamId}"
-  url = fmt("{base}/v12/deployments/{id}/cancel?teamId={teamId}")
-  response = http.request(method: "PATCH", url)
+  url = fmt("{base}/v12/deployments/{id}/cancel")
+  response = http.request(method: "PATCH", query: { teamId }, url)
   return response

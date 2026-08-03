@@ -111,11 +111,11 @@ const HELP_CENTER_OPERATION_HASHES: [(&str, &str); 7] = [
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-article-incremental-list.flux",
-        "604b37ccbccffb7a23f3d6f2106fd416a2d3f224b3c88b0df92c55f3c5e88281",
+        "81937fb7abaa3e1c76fe49dd83f22c691417279da3cda8723c00db460ce266d2",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-article-list.flux",
-        "74f0a40369f03cbd85e8e20e393eeb4b3c8f14eee48bbd6c792192891b9a7617",
+        "345308f0c4bf6096087fc0ffc6a34d29ca90248a4028d2cdf2769e5395d85a95",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-category-list.flux",

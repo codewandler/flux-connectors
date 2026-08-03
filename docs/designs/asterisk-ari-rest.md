@@ -34,6 +34,13 @@ upstream tag, commit, URL, every raw-file hash, and the normalized-file hash.
 
 ## Release surface
 
+> **C-30 update — 2026-08-03.** The source and normalized census remains 108 REST operations. The
+> published connector now contains 96: twelve operations declare array-valued query parameters but
+> do not declare whether ARI expects repeated keys, delimiters, brackets or JSON, so exact
+> reason-bearing deferrals withhold them. The remaining scalar query values use Flux 0.54's
+> structured RFC 3986 encoding. The paragraphs below describe the v0.17.0 release surface before
+> that fail-closed narrowing.
+
 This release includes all 108 non-WebSocket operations declared by the source. That census includes
 `events.userEvent`, which is an ordinary outbound POST. It excludes only
 `events.eventWebsocket`, whose `upgrade = "websocket"` is not REST.

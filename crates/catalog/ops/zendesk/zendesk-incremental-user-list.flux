@@ -6,9 +6,6 @@ op zendesk-incremental-user-list(start_time: Number, per_page: Number) -> Any
   expose true
 
   base = "https://{subdomain}.zendesk.com"
-  url = fmt("{base}/api/v2/incremental/users?start_time={start_time}")
-  sep = "&"
-  when per_page
-    url = fmt("{url}{sep}per_page={per_page}")
-  response = http.request(method: "GET", url)
+  url = fmt("{base}/api/v2/incremental/users")
+  response = http.request(method: "GET", query: { per_page, start_time }, url)
   return response

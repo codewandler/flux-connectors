@@ -7,8 +7,5 @@ op clickup-space-folder-list(space_id: String, archived: Bool) -> Any
 
   base = "https://api.clickup.com/api/v2"
   url = fmt("{base}/space/{space_id}/folder")
-  sep = "?"
-  when archived
-    url = fmt("{url}{sep}archived={archived}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { archived }, url)
   return response

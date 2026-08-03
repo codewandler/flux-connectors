@@ -22,12 +22,12 @@
 //!
 //! | node | where it appears |
 //! |---|---|
-//! | `Bind` of a `Lit` | `base`, `sep`, `content_type`, a `const`-pinned body field |
-//! | `Bind` of a `Fmt` | `url`, and each optional query parameter's re-binding |
+//! | `Bind` of a `Lit` | `base`, `content_type`, a pin, a `const`-pinned body field |
+//! | `Bind` of a `Fmt` | `url` |
 //! | `Bind` of an `Obj` | `payload`, nested at the wire paths the emitter honours |
 //! | `Bind` of a `Parse` | `payload`, for a free-form body supplied whole by the caller |
 //! | `Bind` of a `Call` | `response = http.request(…)` — the request itself |
-//! | `When` over a `Var` | the guard that makes an unsupplied filter *not sent* |
+//! | `Obj` on `query` | scalar query values; null fields are omitted |
 //! | `Return` of a `Var` | the end of the body |
 //!
 //! Anything else is [`Error::Unbuildable`](crate::Error::Unbuildable) rather than ignored. That is
@@ -42,13 +42,9 @@
 //! invented — `interpolate_str`, `json_truthy` and `lit_text` in flux-lang's `runtime.rs`. The two
 //! that matter for a request:
 //!
-//! - **An unbound `{name}` stays verbatim.** That is why the emitter guards optional query
-//!   parameters with `when` instead of interpolating them unconditionally, and reproducing it here
-//!   keeps the guard meaningful.
-//! - **`null` renders as the empty string**, the `""`-is-absent idiom flux-lang documents on
-//!   `lit_text`. A parameter a caller passed `null` for is falsey, so a guarded filter is not sent;
-//!   rendering it as the literal text `null` would put `?page=null` on the wire in the one case the
-//!   guard exists to prevent.
+//! - **An unbound `{name}` stays verbatim.** Path interpolation retains that Flux behaviour.
+//! - **A null query field is omitted.** Strings, numbers and booleans are encoded with the same
+//!   RFC 3986 component encoder Flux 0.54 uses; arrays and objects are refused.
 //!
 //! # A `{placeholder}` in a *literal* is the connector's configuration (C-193)
 //!
@@ -251,6 +247,96 @@ fn redacted_url(url: &str) -> String {
         }
     }
     out
+}
+
+/// Apply Flux 0.54's structured-query wire contract to an evaluated query record — C-30.
+fn append_structured_query(url: &mut String, query: Value) -> Result<(), String> {
+    let Value::Object(fields) = query else {
+        return Err("is not a record".to_owned());
+    };
+
+    let (without_fragment, fragment) = match url.split_once('#') {
+        Some((head, tail)) => (head.to_owned(), Some(tail.to_owned())),
+        None => (url.clone(), None),
+    };
+    let existing_names: BTreeSet<String> = without_fragment
+        .split_once('?')
+        .map(|(_, query)| {
+            query
+                .split('&')
+                .filter(|pair| !pair.is_empty())
+                .map(|pair| pair.split_once('=').map_or(pair, |(name, _)| name))
+                .map(query_decode)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut appended = Vec::new();
+    for (name, value) in fields {
+        let text = match value {
+            Value::Null => continue,
+            Value::String(value) => value,
+            Value::Number(value) => value.to_string(),
+            Value::Bool(value) => value.to_string(),
+            Value::Array(_) => return Err(format!("field {name:?} is an array")),
+            Value::Object(_) => return Err(format!("field {name:?} is an object")),
+        };
+        if existing_names.contains(&name) {
+            return Err(format!(
+                "field {name:?} duplicates a key already embedded in its URL"
+            ));
+        }
+        appended.push(format!(
+            "{}={}",
+            crate::auth::query_encode(&name),
+            crate::auth::query_encode(&text)
+        ));
+    }
+
+    if appended.is_empty() {
+        return Ok(());
+    }
+    *url = without_fragment;
+    url.push(if url.contains('?') { '&' } else { '?' });
+    url.push_str(&appended.join("&"));
+    if let Some(fragment) = fragment {
+        url.push('#');
+        url.push_str(&fragment);
+    }
+    Ok(())
+}
+
+/// Decode just enough of an existing URL key to enforce Flux's duplicate-key refusal.
+fn query_decode(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'+' => {
+                decoded.push(b' ');
+                index += 1;
+            }
+            b'%' if index + 2 < bytes.len() => {
+                let pair = &value[index + 1..index + 3];
+                match u8::from_str_radix(pair, 16) {
+                    Ok(byte) => {
+                        decoded.push(byte);
+                        index += 3;
+                    }
+                    Err(_) => {
+                        decoded.push(b'%');
+                        index += 1;
+                    }
+                }
+            }
+            byte => {
+                decoded.push(byte);
+                index += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
 }
 
 impl Request {
@@ -469,7 +555,7 @@ fn walk_literals_node(node: &Node, visit: &mut dyn FnMut(&str)) {
 /// |---|---|---|
 /// | [`Host`](Self::Host) | refuse unless the whole composed authority is a hostname | a value here moves the **origin**; see [`validate_authority`] |
 /// | [`Path`](Self::Path) | refuse | a `zone_id` with a `/` in it is an operator's mistake, and silently encoding it produces a 404 they cannot diagnose |
-/// | [`Query`](Self::Query) | refuse the structural characters, then percent-encode with [`crate::auth::query_encode`] | the encoder already exists and is the identity over unreserved characters; a second one would put two spellings on one URL |
+/// | [`Query`](Self::Query) | refuse structural characters, then pass the raw value to the structured query record | request assembly encodes every query key and value exactly once |
 /// | [`Header`](Self::Header) | refuse | a CR or LF appends a header of the value's choosing, and no encoding exists to make it safe |
 /// | [`Unplaced`](Self::Unplaced) | refuse unless **every** rule above accepts it, the host rule included | fail closed |
 ///
@@ -596,10 +682,9 @@ impl Slot {
     /// **Whether `value` can be substituted here without reshaping the request** — and the text to
     /// substitute if it can.
     ///
-    /// The return is the substituted text rather than `()` because exactly one position has an
-    /// encoder: a query value goes through [`crate::auth::query_encode`], which is the identity over
-    /// RFC 3986's unreserved set and therefore changes nothing for any value a vendor would call a
-    /// team or a zone. Every other position substitutes the value unchanged or refuses it.
+    /// The return is the substituted text. Query values stay raw here because the emitted
+    /// structured query record is the single encoding boundary; pre-encoding a pin here would turn
+    /// `%2F` into `%252F` when request assembly applies Flux's semantics.
     ///
     /// [`Host`](Self::Host) is not answered here. Its question is about the authority the *template*
     /// composes rather than about the value alone, so it is [`validate_authority`]'s, and this
@@ -634,7 +719,7 @@ impl Slot {
             }
             Self::Query => {
                 validate_query(value)?;
-                Ok(crate::auth::query_encode(value))
+                Ok(value.to_owned())
             }
             Self::Header => {
                 validate_header(value)?;
@@ -1103,11 +1188,11 @@ fn place_pins(
                     }
                 }
                 Node::Call { op, args } if op == HTTP_REQUEST => {
-                    place_header_pins(args, pins, slots)
+                    place_request_pins(args, pins, slots)
                 }
                 _ => {}
             },
-            Node::Call { op, args } if op == HTTP_REQUEST => place_header_pins(args, pins, slots),
+            Node::Call { op, args } if op == HTTP_REQUEST => place_request_pins(args, pins, slots),
             Node::When {
                 then, otherwise, ..
             } => {
@@ -1119,8 +1204,8 @@ fn place_pins(
     }
 }
 
-/// Any pin symbol used as a value in the `headers` record of an `http.request` call.
-fn place_header_pins(
+/// Any pin symbol used in a structured request field.
+fn place_request_pins(
     args: &[Node],
     pins: &BTreeMap<String, String>,
     slots: &mut BTreeMap<String, Slot>,
@@ -1128,16 +1213,15 @@ fn place_header_pins(
     let [Node::Obj { fields }] = args else {
         return;
     };
-    let Some(headers) = fields.get("headers") else {
-        return;
-    };
-    let Node::Obj { fields: headers } = headers.as_ref() else {
-        return;
-    };
-    for value in headers.values() {
-        if let Node::Var { name } = value.as_ref() {
-            if let Some(variable) = pins.get(&name.0) {
-                record(slots, variable, Slot::Header);
+    for (field, slot) in [("headers", Slot::Header), ("query", Slot::Query)] {
+        let Some(Node::Obj { fields: values }) = fields.get(field).map(Box::as_ref) else {
+            continue;
+        };
+        for value in values.values() {
+            if let Node::Var { name } = value.as_ref() {
+                if let Some(variable) = pins.get(&name.0) {
+                    record(slots, variable, slot);
+                }
             }
         }
     }
@@ -1401,7 +1485,7 @@ impl Build<'_> {
         Ok(None)
     }
 
-    /// Read `{ method, url, headers, body }` off the `http.request` call the body ends in.
+    /// Read `{ method, url, query, headers, body }` off the `http.request` call the body ends in.
     fn request_of(&self, op: &str, args: &[Node], env: &Env) -> Result<Request, Error> {
         if op != HTTP_REQUEST {
             return Err(self.unbuildable(format!(
@@ -1422,6 +1506,7 @@ impl Build<'_> {
             headers: BTreeMap::new(),
             body: None,
         };
+        let mut query = None;
         for (name, value) in fields {
             match name.as_str() {
                 "url" => request.url = text(&self.eval(value, env)?),
@@ -1439,6 +1524,7 @@ impl Build<'_> {
                             .insert(header.clone(), text(&self.eval(value, env)?));
                     }
                 }
+                "query" => query = Some(self.eval(value, env)?),
                 other => {
                     return Err(self.unbuildable(format!(
                         "its request names `{other}`, which this pack does not carry"
@@ -1449,6 +1535,10 @@ impl Build<'_> {
 
         if request.url.is_empty() {
             return Err(self.unbuildable("its request has no URL".to_string()));
+        }
+        if let Some(query) = query {
+            append_structured_query(&mut request.url, query)
+                .map_err(|message| self.unbuildable(format!("its structured query {message}")))?;
         }
         Ok(request)
     }
@@ -1920,13 +2010,14 @@ mod tests {
             assert!(Slot::Path.validate(bad).is_err(), "{bad:?} was accepted");
         }
 
-        // A query value refuses query *structure* and percent-encodes the rest. An ordinary team id
-        // is unreserved throughout, so it travels unchanged — the shipped behaviour is untouched.
+        // A query value refuses query *structure* and remains raw until the structured request is
+        // assembled. An ordinary team id therefore travels unchanged and a reserved scalar is
+        // encoded exactly once at that later boundary.
         assert_eq!(
             Slot::Query.validate("team_abc123").as_deref(),
             Ok("team_abc123")
         );
-        assert_eq!(Slot::Query.validate("a/b:c").as_deref(), Ok("a%2Fb%3Ac"));
+        assert_eq!(Slot::Query.validate("a/b:c").as_deref(), Ok("a/b:c"));
         for bad in ["team_a&projectId=evil", "a=b", "a?b", "a#b", "a b", "a\nb"] {
             assert!(Slot::Query.validate(bad).is_err(), "{bad:?} was accepted");
         }
@@ -1987,8 +2078,8 @@ mod tests {
     /// `connector-spec`'s `Position::Query` refuses `%` (`crates/connector-spec/src/config.rs:303`,
     /// charset `&=?#+%`); [`validate_query`] does not (charset `&=?#+`). The loader's reason is that
     /// nothing percent-encodes a query value where *it* runs, which is true of a declared `example`
-    /// and false here — [`crate::auth::query_encode`] maps `%` to `%25`, so the escape cannot
-    /// survive to be re-read by the vendor.
+    /// and false for the completed request — structured query assembly maps `%` to `%25`, so the
+    /// escape cannot survive to be re-read by the vendor.
     ///
     /// The asymmetry is fail-safe: the loader is stricter, so a provider author cannot ship an
     /// `example` a tenant would then be unable to supply. A drift the other way is the one that
@@ -1998,8 +2089,8 @@ mod tests {
         for value in ["a%2Fb", "a%b", "100%", "50%off"] {
             assert_eq!(
                 Slot::Query.validate(value).as_deref(),
-                Ok(crate::auth::query_encode(value).as_str()),
-                "{value:?} should be admitted and encoded, not refused"
+                Ok(value),
+                "{value:?} should be admitted for encoding at request assembly, not refused"
             );
             let encoded = crate::auth::query_encode(value);
             assert!(
@@ -2421,4 +2512,30 @@ mod tests {
                 .contains("neither a templated URL nor a configuration pin"),
         );
     }
+}
+#[test]
+fn structured_query_preserves_false_and_zero_and_omits_only_null() {
+    let mut url = "https://example.com/items".to_owned();
+    append_structured_query(
+        &mut url,
+        serde_json::json!({"disabled": false, "offset": 0, "optional": null}),
+    )
+    .expect("JSON scalars have one declared encoding");
+    assert_eq!(url, "https://example.com/items?disabled=false&offset=0");
+}
+
+#[test]
+fn structured_query_refuses_collections_and_existing_keys() {
+    for query in [
+        serde_json::json!({"filter": ["a", "b"]}),
+        serde_json::json!({"filter": {"name": "a"}}),
+    ] {
+        let mut url = "https://example.com/items".to_owned();
+        assert!(append_structured_query(&mut url, query).is_err());
+    }
+
+    let mut url = "https://example.com/items?filter=fixed".to_owned();
+    let refusal = append_structured_query(&mut url, serde_json::json!({"filter": "other"}))
+        .expect_err("a structured field may not collide with URL text");
+    assert!(refusal.contains("duplicates"), "{refusal}");
 }

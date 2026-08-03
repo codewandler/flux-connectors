@@ -23,10 +23,7 @@ op clickup-space-folder-list(space_id: String, archived: Bool) -> Any
 
   base = "https://api.clickup.com/api/v2"
   url = fmt("{base}/space/{space_id}/folder")
-  sep = "?"
-  when archived
-    url = fmt("{url}{sep}archived={archived}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { archived }, url)
   return response
 
 op clickup-list-task-list(list_id: String, archived: Bool, page: Number, order_by: String, reverse: Bool, include_closed: Bool) -> Any
@@ -38,22 +35,7 @@ op clickup-list-task-list(list_id: String, archived: Bool, page: Number, order_b
 
   base = "https://api.clickup.com/api/v2"
   url = fmt("{base}/list/{list_id}/task")
-  sep = "?"
-  when archived
-    url = fmt("{url}{sep}archived={archived}")
-    sep = "&"
-  when page
-    url = fmt("{url}{sep}page={page}")
-    sep = "&"
-  when order_by
-    url = fmt("{url}{sep}order_by={order_by}")
-    sep = "&"
-  when reverse
-    url = fmt("{url}{sep}reverse={reverse}")
-    sep = "&"
-  when include_closed
-    url = fmt("{url}{sep}include_closed={include_closed}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { archived, include_closed, order_by, page, reverse }, url)
   return response
 
 op clickup-task-get(task_id: String, include_subtasks: Bool) -> Any
@@ -65,10 +47,7 @@ op clickup-task-get(task_id: String, include_subtasks: Bool) -> Any
 
   base = "https://api.clickup.com/api/v2"
   url = fmt("{base}/task/{task_id}")
-  sep = "?"
-  when include_subtasks
-    url = fmt("{url}{sep}include_subtasks={include_subtasks}")
-  response = http.request(method: "GET", url)
+  response = http.request(method: "GET", query: { include_subtasks }, url)
   return response
 
 op clickup-task-create(list_id: String, name: String, description: String, status: String, priority: Number, due_date: Number) -> Any
