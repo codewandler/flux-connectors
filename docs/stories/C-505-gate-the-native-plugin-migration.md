@@ -2,8 +2,7 @@
 id: C-505
 title: "Establish the native-plugin migration inventory and Exchange conformance ratchet"
 pillar: Bridge
-status: ready
-priority: 0
+status: in-progress
 design: docs/designs/all-integrations-are-connectors.md
 epic: all-integrations-connectors
 areas: [tests, catalog, migration]
@@ -35,6 +34,9 @@ connector must pass through Exchange before Flux deletes its legacy implementati
 
 ## Progress
 
+- 2026-08-03 — Implementation started from canonical connectors commit
+  `0a56255a335a0bb812580dbcaaec24d6168ba10a`; inventory, conformance-format and release-ratchet
+  investigations are running against the current sibling contracts.
 - 2026-08-03 — Scheduled as the active Milestone 1 connectors lane at roadmap commit
   `8a653d222b86fe420c551ca8fd366a602ad6c26a`; this preparation changes board state only, and
   Acceptance remains unimplemented.
