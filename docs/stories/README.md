@@ -32,9 +32,6 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 - [C-402 — Decide whether a whole-host template needs an operator allowlist](C-402-whole-host-template-allowlist.md) · Bridge · DECIDED 2026-08-01 — option (b): the connector declares an allowlist or suffix and the loader REFUSES a whole-host template that declares neither. Four connectors template the ENTIRE authority, so Slot::Host constrains the value only to being a hostname — 127.0.0.1 and 169.254.169.254 both compose. Not a defect; a thinner layer than the docs claimed
 - [C-477 — Align runtime API versions with vendored provider contracts](C-477-pin-runtime-api-version-contracts.md) · Connector · compatibility follow-up — GitHub can send its dated API version; Stripe needs an explicit account-version decision
 
-### All Integrations Connectors
-- [C-505 — Establish the native-plugin migration inventory and Exchange conformance ratchet](C-505-gate-the-native-plugin-migration.md) · Bridge · MILESTONE 1 lane 15 — freeze the complete native-adapter inventory and reusable legacy-versus-Exchange conformance format before the first migration wave
-
 ### Anthropic Managed Agents — the first vendor that declares both transports and its own event set
 _The `channel-bindings` and `inbound-events` epics built a model for the reverse call direction —_
 - [C-444 — Decide: may a connector create and run a Managed Agents session?](C-444-decide-managed-agents-charter.md) · Spec · DECISION, not a task — the fourth shape of C-123's question. Management plane is ordinary SaaS; the SESSION plane runs an agent loop and bills inference, and flux has flux-agent/flux-orchestrate of its own. Nothing in the epic's session half may start before this
@@ -483,6 +480,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-493 — Move the connector seam to Flux 0.54 for generated channels](C-493-move-flux-engine-line-to-054.md) · release-order bridge: Flux 0.54 publishes guarded WebSockets first, then connector-pack moves every engine pin together so flux-exchange links one runtime line
 - [C-494 — Make the connector host ports instance-aware and migratable](C-494-instance-aware-host-ports.md) · release-order bridge for flux-exchange X-14: enumerate addresses and atomically migrate the sole connection before a second instance is admitted
 - [C-496 — Align the connector charter with the runtime axis](C-496-align-the-connector-charter-with-the-runtime-axis.md) · Bridge · historical two-placement charter alignment; superseded by C-507 when flux-roadmap Decision 0001 made Exchange the sole official executor
+- [C-505 — Establish the native-plugin migration inventory and Exchange conformance ratchet](C-505-gate-the-native-plugin-migration.md) · Bridge · MILESTONE 1 lane 15 — freeze the complete native-adapter inventory and reusable legacy-versus-Exchange conformance format before the first migration wave
 - [C-507 — Adopt the Exchange-only execution path for official integrations](C-507-adopt-the-exchange-only-integration-path.md) · Bridge · Decision 0001 makes Exchange the sole executor for official external integrations; this supersedes local Flux execution and local-versus-hosted parity throughout C-495…C-505
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._

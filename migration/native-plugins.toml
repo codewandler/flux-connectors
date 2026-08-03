@@ -1,0 +1,201 @@
+# C-505: the retained Flux native-adapter inventory.
+#
+# Rows never disappear when the legacy crate does. The offline migration check derives live
+# presence from the supplied Flux checkout and admits an absent adapter only after both referenced
+# evidence files validate. There are deliberately no authored present/published/conformant flags.
+schema = 1
+waves = ["C-499", "C-500", "C-501", "C-502", "C-503"]
+
+[[adapters]]
+id = "confluence"
+flux_manifest = "plugins/confluence/Cargo.toml"
+flux_binary = "flux-plugin-confluence"
+legacy_contract = "plugins/confluence/src/main.rs"
+connector = "confluence"
+wave = "C-499"
+conformance = "migration/conformance/confluence.json"
+publication = "migration/publications/confluence.json"
+
+[[adapters]]
+id = "gitlab"
+flux_manifest = "plugins/gitlab/Cargo.toml"
+flux_binary = "flux-plugin-gitlab"
+legacy_contract = "plugins/gitlab/src/manifest.rs"
+connector = "gitlab"
+wave = "C-499"
+conformance = "migration/conformance/gitlab.json"
+publication = "migration/publications/gitlab.json"
+
+[[adapters]]
+id = "jira"
+flux_manifest = "plugins/jira/Cargo.toml"
+flux_binary = "flux-plugin-jira"
+legacy_contract = "plugins/jira/src/manifest.rs"
+connector = "jira"
+wave = "C-499"
+conformance = "migration/conformance/jira.json"
+publication = "migration/publications/jira.json"
+
+[[adapters]]
+id = "slack"
+flux_manifest = "plugins/slack/Cargo.toml"
+flux_binary = "flux-plugin-slack"
+legacy_contract = "plugins/slack/src/manifest.rs"
+connector = "slack"
+wave = "C-499"
+conformance = "migration/conformance/slack.json"
+publication = "migration/publications/slack.json"
+
+[[adapters]]
+id = "docker"
+flux_manifest = "plugins/docker/Cargo.toml"
+flux_binary = "flux-plugin-docker"
+legacy_contract = "plugins/docker/src/main.rs"
+connector = "docker"
+wave = "C-500"
+conformance = "migration/conformance/docker.json"
+publication = "migration/publications/docker.json"
+
+[[adapters]]
+id = "kubernetes"
+flux_manifest = "plugins/kubernetes/Cargo.toml"
+flux_binary = "flux-plugin-kubernetes"
+legacy_contract = "plugins/kubernetes/src/main.rs"
+connector = "kubernetes"
+wave = "C-500"
+conformance = "migration/conformance/kubernetes.json"
+publication = "migration/publications/kubernetes.json"
+
+[[adapters]]
+id = "alertmanager"
+flux_manifest = "plugins/alertmanager/Cargo.toml"
+flux_binary = "flux-plugin-alertmanager"
+legacy_contract = "plugins/alertmanager/src/main.rs"
+connector = "alertmanager"
+wave = "C-501"
+conformance = "migration/conformance/alertmanager.json"
+publication = "migration/publications/alertmanager.json"
+
+[[adapters]]
+id = "grafana"
+flux_manifest = "plugins/grafana/Cargo.toml"
+flux_binary = "flux-plugin-grafana"
+legacy_contract = "plugins/grafana/src/main.rs"
+connector = "grafana"
+wave = "C-501"
+conformance = "migration/conformance/grafana.json"
+publication = "migration/publications/grafana.json"
+
+[[adapters]]
+id = "loki"
+flux_manifest = "plugins/loki/Cargo.toml"
+flux_binary = "flux-plugin-loki"
+legacy_contract = "plugins/loki/src/main.rs"
+connector = "loki"
+wave = "C-501"
+conformance = "migration/conformance/loki.json"
+publication = "migration/publications/loki.json"
+
+[[adapters]]
+id = "opsgenie"
+flux_manifest = "plugins/opsgenie/Cargo.toml"
+flux_binary = "flux-plugin-opsgenie"
+legacy_contract = "plugins/opsgenie/src/main.rs"
+connector = "opsgenie"
+wave = "C-501"
+conformance = "migration/conformance/opsgenie.json"
+publication = "migration/publications/opsgenie.json"
+
+[[adapters]]
+id = "prometheus"
+flux_manifest = "plugins/prometheus/Cargo.toml"
+flux_binary = "flux-plugin-prometheus"
+legacy_contract = "plugins/prometheus/src/main.rs"
+connector = "prometheus"
+wave = "C-501"
+conformance = "migration/conformance/prometheus.json"
+publication = "migration/publications/prometheus.json"
+
+[[adapters]]
+id = "onepassword"
+flux_manifest = "plugins/onepassword/Cargo.toml"
+flux_binary = "flux-plugin-onepassword"
+legacy_contract = "plugins/onepassword/src/main.rs"
+connector = "onepassword"
+wave = "C-502"
+conformance = "migration/conformance/onepassword.json"
+publication = "migration/publications/onepassword.json"
+
+[[adapters]]
+id = "sql"
+flux_manifest = "plugins/sql/Cargo.toml"
+flux_binary = "flux-plugin-sql"
+legacy_contract = "plugins/sql/src/main.rs"
+connector = "sql"
+wave = "C-502"
+conformance = "migration/conformance/sql.json"
+publication = "migration/publications/sql.json"
+
+[[adapters]]
+id = "vault"
+flux_manifest = "plugins/vault/Cargo.toml"
+flux_binary = "flux-plugin-vault"
+legacy_contract = "plugins/vault/src/main.rs"
+connector = "vault"
+wave = "C-502"
+conformance = "migration/conformance/vault.json"
+publication = "migration/publications/vault.json"
+
+[[adapters]]
+id = "aws"
+flux_manifest = "plugins/aws/Cargo.toml"
+flux_binary = "flux-plugin-aws"
+legacy_contract = "plugins/aws/src/main.rs"
+connector = "aws"
+wave = "C-503"
+conformance = "migration/conformance/aws.json"
+publication = "migration/publications/aws.json"
+
+[[adapters]]
+id = "homer"
+flux_manifest = "plugins/homer/Cargo.toml"
+flux_binary = "flux-plugin-homer"
+legacy_contract = "plugins/homer/src/main.rs"
+connector = "homer"
+wave = "C-503"
+conformance = "migration/conformance/homer.json"
+publication = "migration/publications/homer.json"
+
+[[adapters]]
+id = "huggingface"
+flux_manifest = "plugins/huggingface/Cargo.toml"
+flux_binary = "flux-plugin-huggingface"
+legacy_contract = "plugins/huggingface/src/main.rs"
+connector = "huggingface"
+wave = "C-503"
+conformance = "migration/conformance/huggingface.json"
+publication = "migration/publications/huggingface.json"
+
+[[adapters]]
+id = "websearch"
+flux_manifest = "plugins/websearch/Cargo.toml"
+flux_binary = "flux-plugin-websearch"
+legacy_contract = "plugins/websearch/src/main.rs"
+connector = "websearch"
+wave = "C-503"
+conformance = "migration/conformance/websearch.json"
+publication = "migration/publications/websearch.json"
+
+[[support]]
+id = "host-kit"
+flux_manifest = "plugins/host-kit/Cargo.toml"
+package = "codewandler-flux-host-kit"
+targets = ["lib:host_kit"]
+role = "shared plugin-side protocol and host-capability SDK"
+
+[[support]]
+id = "pack-index"
+flux_manifest = "plugins/pack-index/Cargo.toml"
+package = "pack-index"
+targets = ["bin:pack-index"]
+role = "plugin-pack release index generator, not an installed integration"

@@ -83,6 +83,20 @@ Each has exactly one connector migration owner:
 | `onepassword`, `sql`, `vault` | C-502 data and secret migration |
 | `aws`, `homer`, `huggingface`, `websearch` | C-503 remaining-adapter migration |
 
+C-505 replaced this prose census with the retained source
+[`migration/native-plugins.toml`](../../migration/native-plugins.toml) and the offline executable
+check:
+
+```bash
+cargo run -p connector-cli -- migration-check --flux-root ../flux
+```
+
+The check reads the supplied Flux workspace and member manifests, classifies `host-kit` and
+`pack-index` separately, and fails on an unaccounted integration. Inventory rows survive legacy
+deletion, so a removed crate remains visible rather than disappearing from the population being
+checked. The reusable evidence and publication workflow is
+[`migration/README.md`](../../migration/README.md).
+
 A migration is complete only when the connector preserves the supported operation/event surface,
 declared effects and credential boundary; passes frozen legacy-plugin-versus-Exchange conformance;
 and the corresponding integration-specific Flux crate can be removed. A framed stdio protocol may

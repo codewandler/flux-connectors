@@ -1,0 +1,121 @@
+{
+  "format": "flux-connectors-conformance/v1",
+  "adapter": "fixture-http",
+  "connector": "fixture-http",
+  "surface": {
+    "operations": [
+      {
+        "legacy_id": "fixture.widget.get",
+        "replacement_id": "fixture-widget-get",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" }
+          },
+          "required": ["id"],
+          "additionalProperties": false
+        },
+        "output_schema": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" }
+          },
+          "required": ["id", "name"],
+          "additionalProperties": false
+        },
+        "errors": [
+          {
+            "code": "not_found",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": { "type": "string" }
+              },
+              "required": ["message"],
+              "additionalProperties": false
+            }
+          }
+        ],
+        "host_effects": ["network"],
+        "semantic_effects": ["read"],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "capability_subjects": [
+          {
+            "action": "read",
+            "resource": "vendor:fixture/widgets"
+          }
+        ]
+      }
+    ],
+    "events": [],
+    "lifecycle": {
+      "mode": "one_shot",
+      "cancellation": "not_applicable",
+      "stream": null,
+      "lease": null
+    }
+  },
+  "evidence": {
+    "legacy": {
+      "runner": "flux-plugin-fixture",
+      "source_commit": "1111111111111111111111111111111111111111",
+      "captured_at": "2026-08-03T00:00:00Z",
+      "raw_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "exchange": {
+      "runner": "flux-exchange-fixture",
+      "source_commit": "2222222222222222222222222222222222222222",
+      "captured_at": "2026-08-03T00:00:00Z",
+      "raw_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  },
+  "cases": [
+    {
+      "id": "widget-get",
+      "member": {
+        "kind": "operation",
+        "legacy_id": "fixture.widget.get",
+        "replacement_id": "fixture-widget-get"
+      },
+      "input": { "id": "w-1" },
+      "exchange_execution": {
+        "runtime": "http",
+        "topology": "single_tenant"
+      },
+      "legacy": {
+        "host_effects": ["network"],
+        "semantic_effects": ["read"],
+        "capability_subjects": [
+          {
+            "action": "read",
+            "resource": "vendor:fixture/widgets"
+          }
+        ],
+        "transcript": [
+          {
+            "kind": "returned",
+            "value": { "id": "w-1", "name": "Example" }
+          }
+        ]
+      },
+      "exchange": {
+        "host_effects": ["network"],
+        "semantic_effects": ["read"],
+        "capability_subjects": [
+          {
+            "action": "read",
+            "resource": "vendor:fixture/widgets"
+          }
+        ],
+        "transcript": [
+          {
+            "kind": "returned",
+            "value": { "id": "w-1", "name": "Example" }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -22,8 +22,9 @@
 //!
 //! # Invariants this crate holds
 //!
-//! - **Hermetic and offline.** `build` and `diff` read committed bytes and never contact a vendor;
-//!   [`net`] is the single door, and `tests/no_network.rs` proves a build never reaches it.
+//! - **Hermetic and offline.** `build`, `diff` and `migration-check` read committed bytes and never
+//!   contact a vendor; [`net`] is the single door, and `tests/no_network.rs` proves a build never
+//!   reaches it.
 //! - **Deterministic.** Equal inputs produce byte-identical artifacts, so a rebuild over unchanged
 //!   inputs writes nothing at all.
 //! - **All-or-nothing.** Every provider is compiled before any file is written.
@@ -36,6 +37,7 @@ pub mod core_catalog;
 pub mod diff;
 pub mod discovery;
 mod inbound;
+pub mod migration;
 pub mod net;
 pub mod pipeline;
 pub mod png;
@@ -58,6 +60,7 @@ pub fn run(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
         Command::Build => build(invocation, out),
         Command::Diff => show_diff(invocation, out),
         Command::Scaffold => scaffold(invocation, out),
+        Command::MigrationCheck => migration_check(invocation, out),
         Command::Check => not_yet_implemented("check", "C-14"),
         Command::Fetch => not_yet_implemented("fetch", "C-14"),
         Command::Install => not_yet_implemented("install", "C-15"),
@@ -70,6 +73,28 @@ pub fn run(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
             Ok(())
         }
     }
+}
+
+/// Check the retained native-plugin inventory against an explicitly supplied Flux checkout.
+///
+/// The command starts no process from that checkout. It reads `plugins/Cargo.toml` and each member
+/// manifest, then derives whether a missing integration has both conformance and publication
+/// evidence. This is the executable cross-repository release checklist C-505 establishes.
+fn migration_check(invocation: &Invocation, out: &mut impl Write) -> Result<()> {
+    let workspace = workspace_for(invocation)?;
+    let flux_root = invocation.flux_root.as_deref().context(
+        "`flux-connectors migration-check` needs `--flux-root <DIR>` naming a Flux checkout",
+    )?;
+    let report = migration::check(workspace.root(), flux_root)?;
+    writeln!(
+        out,
+        "native plugin migration check: {} inventoried; {} legacy present; {} retired with evidence; {} support crates",
+        report.inventoried,
+        report.legacy_present,
+        report.retired_with_evidence,
+        report.support_present
+    )?;
+    Ok(())
 }
 
 /// Compile every provider and write what changed.

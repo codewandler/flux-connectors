@@ -1,6 +1,6 @@
 //! The `flux-connectors` command surface.
 //!
-//! Hand-rolled rather than derived from a parser crate: the surface is six subcommands, five flags
+//! Hand-rolled rather than derived from a parser crate: the surface is seven subcommands, six flags
 //! and one positional, and adding a dependency would collide with the connector stories in flight.
 //! If the surface grows past this, swapping in a real parser is a contained change — [`parse`] is
 //! the only place that knows argv exists.
@@ -16,6 +16,8 @@ pub struct Invocation {
     pub command: Command,
     /// The repository root; `None` means the current directory.
     pub root: Option<PathBuf>,
+    /// `migration-check` only: the explicit Flux checkout whose native plugin workspace is checked.
+    pub flux_root: Option<PathBuf>,
     /// Restrict the run to one provider.
     pub provider: Option<String>,
     /// Restrict the run to one whole service of each provider it covers — a service name or a
@@ -41,6 +43,7 @@ impl Invocation {
         Self {
             command,
             root: None,
+            flux_root: None,
             provider: None,
             service: None,
             png: false,
@@ -65,6 +68,8 @@ pub enum Command {
     Install,
     /// Write the provider TOML that references a vendored document, to stdout — C-419.
     Scaffold,
+    /// Check the retained native-plugin inventory against an explicit Flux checkout — C-505.
+    MigrationCheck,
     /// Print usage.
     Help,
     /// Print the version.
@@ -80,6 +85,7 @@ impl Command {
             "fetch" => Command::Fetch,
             "install" => Command::Install,
             "scaffold" => Command::Scaffold,
+            "migration-check" => Command::MigrationCheck,
             "help" | "-h" | "--help" => Command::Help,
             "version" | "-V" | "--version" => Command::Version,
             other => bail!("unknown command `{other}`\n\n{USAGE}"),
@@ -99,6 +105,8 @@ COMMANDS:
     build      Compile providers/*.toml plus the vendored spec cache into connectors/
     diff       Show what `build` would change, without writing anything
     scaffold   Write the provider TOML that references a vendored document, to stdout
+    migration-check
+               Check native-plugin inventory and retirement evidence against a Flux checkout
     check      Verify artifacts against their inputs           (not yet implemented — story C-14)
     fetch      Refresh the vendored spec cache from upstream   (not yet implemented — story C-14)
     install    Install artifacts into ~/.flux                  (not yet implemented — story C-15)
@@ -122,6 +130,7 @@ OPTIONS:
                         (`com.amazonaws/s3:2006-03-01`). A provider with a single
                         API surface has one service, `default`, and needs no flag
     --root <DIR>        Repository root (default: the current directory)
+    --flux-root <DIR>   `migration-check` only: the Flux repository checkout to inspect
     --png               `build` only: also rasterize the README snippet to
                         assets/readme-snippet.png with the `flux` binary. Skipped
                         with a message when flux is not installed; the README's
@@ -129,9 +138,9 @@ OPTIONS:
     -h, --help          Print this message
     -V, --version       Print the version
 
-`build`, `diff`, `check` and `scaffold` are hermetic and offline: they read committed bytes. `fetch`
-is the only command that contacts a vendor. `scaffold` writes to stdout and never over a file in
-place — the author diffs and pastes, so a bad run costs nothing.";
+`build`, `diff`, `check`, `scaffold` and `migration-check` are hermetic and offline: they read
+committed bytes. `fetch` is the only command that contacts a vendor. `scaffold` writes to stdout and
+never over a file in place — the author diffs and pastes, so a bad run costs nothing.";
 
 /// Parse an argument list that does **not** include the program name.
 pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
@@ -143,6 +152,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
     let command = Command::parse(&first)?;
 
     let mut root = None;
+    let mut flux_root = None;
     let mut provider = None;
     let mut service = None;
     let mut png = false;
@@ -152,6 +162,9 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
         match split_flag(&arg) {
             Some(("--root", value)) => {
                 root = Some(PathBuf::from(value_of("--root", value, &mut args)?));
+            }
+            Some(("--flux-root", value)) if command == Command::MigrationCheck => {
+                flux_root = Some(PathBuf::from(value_of("--flux-root", value, &mut args)?));
             }
             Some(("--provider" | "-p", value)) => {
                 provider = Some(value_of("--provider", value, &mut args)?);
@@ -186,6 +199,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation> {
     Ok(Invocation {
         command,
         root,
+        flux_root,
         provider,
         service,
         png,
@@ -245,6 +259,7 @@ mod tests {
             ("fetch", Command::Fetch),
             ("install", Command::Install),
             ("scaffold", Command::Scaffold),
+            ("migration-check", Command::MigrationCheck),
         ] {
             assert_eq!(parse_args(&[token]).unwrap().command, expected);
         }
@@ -262,6 +277,13 @@ mod tests {
     fn root_is_captured() {
         let invocation = parse_args(&["diff", "--root", "/tmp/repo"]).unwrap();
         assert_eq!(invocation.root, Some(PathBuf::from("/tmp/repo")));
+    }
+
+    #[test]
+    fn migration_check_requires_its_own_explicit_flux_root_flag() {
+        let invocation = parse_args(&["migration-check", "--flux-root", "/src/flux"]).unwrap();
+        assert_eq!(invocation.flux_root, Some(PathBuf::from("/src/flux")));
+        assert!(parse_args(&["build", "--flux-root", "/src/flux"]).is_err());
     }
 
     #[test]
