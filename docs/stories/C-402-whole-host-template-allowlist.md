@@ -4,7 +4,7 @@ title: "Decide whether a whole-host template needs an operator allowlist"
 pillar: Bridge
 status: ready
 priority: 4
-note: "DECIDED 2026-08-01 — option (b): the connector declares an allowlist or suffix and the loader REFUSES a whole-host template that declares neither. Four connectors template the ENTIRE authority, so Slot::Host constrains the value only to being a hostname — 127.0.0.1 and 169.254.169.254 both compose. Not a defect; a thinner layer than the docs claimed"
+note: "DECIDED 2026-08-01, refined by C-508: the connector declares a closed host bound or an explicit operator-pinned self-managed-origin policy; the loader REFUSES a whole-host template declaring neither"
 ---
 
 # Decide whether a whole-host template needs an operator allowlist
@@ -39,39 +39,51 @@ Pinned by `connector-pack`'s `a_whole_host_template_is_constrained_only_to_being
          own credential, and a tenant choosing where its own secret goes is not an escalation.
          Defensible — but it must be *chosen*, and the asymmetry with the suffix-shaped connectors
          written down.
-      2. **The connector declares a host allowlist or suffix**, and the loader refuses a whole-host
-         template that declares neither. Strongest, and it costs a provider-TOML field.
+      2. **The connector declares a host allowlist/suffix or an operator-pinned self-managed-origin
+         policy**, and the loader refuses a whole-host template that declares neither. Strongest,
+         and it costs a provider-TOML field.
       3. **The host refuses a whole-host template unless the operator supplies an allowlist**, which
          puts the decision at deployment rather than in the catalogue.
 - [ ] If the decision is (1), the reasoning lands next to the guard, not only in a story.
 - [ ] If the decision is (2) or (3), a **failing-first test** shows a whole-host connector refusing a
-      value outside its allowlist, and the four affected connectors are migrated.
+      value outside its declared or operator-approved bound, and the four affected connectors are
+      migrated.
 - [ ] Either way, the multi-tenant case is addressed explicitly: whether tenant A supplying a host
       for its own connection can affect tenant B, and why not.
 
 ## The decision (2026-08-01)
 
-**Option (b): the connector declares an allowlist or suffix, and the loader refuses a whole-host
-template that declares neither.**
+**Option (b), refined for self-managed products: the connector declares its authority bound, and
+the loader refuses a whole-host template that declares none.** A vendor with a finite SaaS surface
+declares an allowlist or suffix. A connector for a self-managed product may instead declare that its
+HTTPS origin is an operator/deployment pin. That pin is configuration metadata and policy, not an
+operation argument: an ordinary Service Account or model invocation cannot choose or widen it.
 
 Derived from this repository's own principles rather than from taste:
 
 - *"A connector declares what it needs, and nothing grants itself access."* A connector that templates
   its entire authority is asking for an unbounded grant and currently says nothing about it. Making it
-  declare the bound is the same move the credential model already makes.
-- *"The vendor spec is the source of truth; drift is detected, not absorbed."* Which hosts a vendor
-  serves is a **vendor fact**, so it belongs in the provider definition where a machine can check it —
-  not in a deployment where it is re-decided, or forgotten, per operator.
+  declare either a vendor bound or an operator-pin requirement is the same move the credential model
+  already makes.
+- *"The vendor spec is the source of truth; drift is detected, not absorbed."* Which hosts a SaaS
+  vendor serves is a **vendor fact**, so its closed bound belongs in the provider definition. A
+  self-managed installation's origin is instead a deployment fact; the provider must declare that
+  policy explicitly so it cannot be mistaken for an unconstrained connection value.
 - *"Refuse; never repair."* A loader that accepts a whole-host template with no bound is absorbing the
   gap rather than detecting it.
 
 **Why not the others.** (a) is passive: it leaves the asymmetry between seven suffix-shaped connectors
 and four unbounded ones undocumented and unchecked, which is how the README came to claim a layer that
-was not there. (c) defers a catalogue fact to deploy time, which contradicts the compiler-first north
-star and makes the guarantee vary by deployment — precisely the property flux-exchange cannot build on
-when it promises callers "cannot name a host".
+was not there. (c) lets a host invent a restriction without the connector declaring that it needs one,
+so the guarantee varies silently by deployment — precisely the property Exchange cannot build on when
+it promises callers "cannot name a host". The self-managed refinement does not do that: the connector
+publishes the operator-pin requirement as part of its contract; only the installation-specific value
+comes from deployment policy.
 
 ## Progress
+- 2026-08-03: C-508 refined the decision for self-managed products. GitLab will be the reference
+  operator-pinned HTTPS-origin case; this story retains the fleet migration for the four existing
+  unconstrained whole-authority templates.
 - Decision recorded. Implementation not started.
 
 ## Notes
