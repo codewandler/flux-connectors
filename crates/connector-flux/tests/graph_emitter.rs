@@ -56,6 +56,7 @@ fn operation(
         description: format!("The {id} operation."),
         risk,
         idempotency,
+        semantic_effects: Vec::new(),
         repeatable_because: None,
         expose: true,
         auth: None,

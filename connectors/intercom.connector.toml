@@ -9,6 +9,13 @@ base_url = "https://{host}"
 module = "intercom.flux"
 operations = ["intercom-contact-get", "intercom-contact-create", "intercom-conversation-get", "intercom-conversation-reply", "intercom-contact-note-create"]
 
+[operation_semantic_effects]
+intercom-contact-create = []
+intercom-contact-get = []
+intercom-contact-note-create = []
+intercom-conversation-get = []
+intercom-conversation-reply = []
+
 [[auth]]
 name = "intercom.access_token"
 scheme = "bearer"

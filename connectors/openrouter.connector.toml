@@ -11,6 +11,12 @@ api_version = "v1"
 module = "openrouter.flux"
 operations = ["openrouter-models-list", "openrouter-model-endpoints-list", "openrouter-chat-completion", "openrouter-credits-get"]
 
+[operation_semantic_effects]
+openrouter-chat-completion = []
+openrouter-credits-get = []
+openrouter-model-endpoints-list = []
+openrouter-models-list = []
+
 [[auth]]
 name = "openrouter.api_key"
 scheme = "bearer"

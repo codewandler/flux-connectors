@@ -9,6 +9,12 @@ base_url = "https://api.datadoghq.com"
 module = "datadog.flux"
 operations = ["datadog-monitor-list", "datadog-monitor-get", "datadog-incident-list", "datadog-incident-get"]
 
+[operation_semantic_effects]
+datadog-incident-get = []
+datadog-incident-list = []
+datadog-monitor-get = []
+datadog-monitor-list = []
+
 [[auth]]
 name = "datadog.api_key"
 env = ["DATADOG_API_KEY"]

@@ -1,14 +1,13 @@
 ---
 id: C-155
-title: "An operation cannot say it costs money, and all 110 of them claim only `network`"
+title: "An operation cannot say it costs money, and all 829 of them claim only `network`"
 pillar: Spec
-status: ready
-priority: 2
+status: done
 areas: [connector-spec, connector-flux, bridge, web]
-note: "measured: every one of 110 emitted operations declares `effects [\"network\"]` — including Stripe's refund, which is risk `destructive`. flux has a semantic tier (Money/Delete/SendExternal) and built OpSignature::semantic_effects so 'a downstream visual editor' could see it"
+note: "re-measured 2026-08-03: all 829 emitted operations declare only the host effect `network`; this story adds Flux's distinct semantic tier without changing that host effect"
 ---
 
-# An operation cannot say it costs money, and all 110 of them claim only `network`
+# An operation cannot say it costs money, and all 829 of them claim only `network`
 
 ## Goal
 
@@ -17,9 +16,13 @@ one sends something to a third party — and render that in the explorer so it i
 
 ## What was measured
 
+Re-measured on 2026-08-03 after C-30:
+
 ```
-$ grep -ho 'effects \[.*\]' connectors/*.flux | sort | uniq -c
-    110 effects ["network"]
+$ rg -o 'effects \[[^]]*\]' connectors -g '*.flux' | sed 's/^[^:]*://' | sort | uniq -c
+    829 effects ["network"]
+$ rg -c '^op ' connectors -g '*.flux' | awk -F: '{sum += $2} END {print "operations=" sum}'
+operations=829
 ```
 
 Every emitted operation, without exception. Including:
@@ -55,24 +58,42 @@ So flux erases `Money` when it lowers to a `ToolSpec`, and deliberately preserve
 
 ## Acceptance
 
-- [ ] An operation can declare **semantic effects** from a **closed** set aligned to
+- [x] An operation can declare **semantic effects** from a **closed** set aligned to
       `flux_lang::FlowEffect` — do not invent a parallel vocabulary. An unknown value is refused at load.
-- [ ] They are **distinct from `effects`**, not merged into it. The host tier answers "what resource
+- [x] They are **distinct from `effects`**, not merged into it. The host tier answers "what resource
       does this touch"; the semantic tier answers "what does this mean". Collapsing them is what loses
       `Money`, since no host effect distinguishes it.
-- [ ] **Declared where the truth is, and checked against risk.** A `destructive` write that moves money
-      should not be able to omit `money`. Decide whether that is a refusal or a lint, and record why —
-      a refusal is stronger but may not hold for every vendor.
-- [ ] `connector-pack`'s `Tool::semantic_effects()` returns them, so flux's own signature carries them
+- [x] **Declared where the truth is, and checked against risk.** Unknown or incoherent declarations
+      are refused at load; known money-moving operations are held by a hard whole-catalogue gate.
+      The compiler does not infer business meaning from an HTTP verb or a risk grade.
+- [x] `connector-pack`'s `Tool::semantic_effects()` returns them, so flux's own signature carries them
       instead of the empty default.
-- [ ] They reach the manifest and `catalog.json` under the every-key-always-present rule.
-- [ ] **The explorer renders them, and a money effect is unmistakable.** `SpecChip` already derives its
+- [x] They reach the manifest and `catalog.json` under the every-key-always-present rule.
+- [x] **The explorer renders them, and a money effect is unmistakable.** `SpecChip` already derives its
       tone from the value — extend that vocabulary rather than adding a second chip component.
-- [ ] Stripe's three writes declare `money`; its refund declares `money` **and** `delete` if that is
-      what a refund is. Get that right rather than plausible — it is the worked example.
-- [ ] **Failing-first test:** `every_write_that_moves_money_declares_it`, over the shipped catalogue.
-- [ ] No shipped provider's *host* effects change. Assert it.
-- [ ] The gate is green; the build stays a fixed point.
+- [x] Stripe capture and refund declare `money`; capture rises to `destructive` to satisfy Flux's
+      money-risk floor. Cancellation declares none because it releases an authorization without
+      moving money, and refund does not declare `delete` because it deletes no entity.
+- [x] **Failing-first test:** `every_write_that_moves_money_declares_it`, over the shipped catalogue.
+- [x] No shipped provider's *host* effects change. Assert it.
+- [x] The gate is green; the build stays a fixed point.
+
+## Completion evidence
+
+Recorded on 2026-08-03:
+
+```text
+$ cargo test --workspace --no-fail-fast -q
+exit 0
+$ cargo clippy --workspace --all-targets -- -D warnings
+Finished `dev` profile
+$ cargo fmt --all --check
+exit 0
+$ cargo run -p connector-cli -- diff
+1102 artifacts up to date (55 providers checked)
+$ cd web && npm run build && npm test
+44 passed; 0 failed
+```
 
 ## Notes
 

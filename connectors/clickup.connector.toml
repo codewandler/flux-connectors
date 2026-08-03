@@ -11,6 +11,14 @@ api_version = "v2"
 module = "clickup.flux"
 operations = ["clickup-team-list", "clickup-space-folder-list", "clickup-list-task-list", "clickup-task-get", "clickup-task-create", "clickup-task-update"]
 
+[operation_semantic_effects]
+clickup-list-task-list = []
+clickup-space-folder-list = []
+clickup-task-create = []
+clickup-task-get = []
+clickup-task-update = []
+clickup-team-list = []
+
 [[auth]]
 name = "clickup.token"
 env = ["CLICKUP_TOKEN"]

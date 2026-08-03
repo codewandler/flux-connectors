@@ -11,6 +11,13 @@ api_version = "1"
 module = "algolia.flux"
 operations = ["algolia-index-list", "algolia-index-search", "algolia-object-get", "algolia-object-save", "algolia-object-delete"]
 
+[operation_semantic_effects]
+algolia-index-list = []
+algolia-index-search = []
+algolia-object-delete = []
+algolia-object-get = []
+algolia-object-save = []
+
 [[auth]]
 name = "algolia.api_key"
 env = ["ALGOLIA_API_KEY"]

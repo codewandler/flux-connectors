@@ -53,7 +53,7 @@ use serde::Serialize;
 use connector_spec::{
     AuthScheme, ChannelBinding, ConfigField, Connector, EventDecl, HttpMethod, Idempotency,
     JsonSchema, ManualSetup, Operation, OperationSpecSource, Param, Reply, Risk, Selector,
-    SocketConnectSpec, Subscription, VerificationScheme,
+    SemanticEffect, SocketConnectSpec, Subscription, VerificationScheme,
 };
 
 use crate::catalog::{self, OperationRendering};
@@ -473,6 +473,8 @@ struct OperationEntry {
     risk: Risk,
     /// Whether repeating it is safe (`idempotent`, `non_idempotent`, `conditional`).
     idempotency: Idempotency,
+    /// What execution means to Flux policy. Always present; empty means none declared.
+    semantic_effects: Vec<SemanticEffect>,
     /// **The condition under which repeating this write is safe** — `null` for every operation that
     /// does not declare `idempotency = "conditional"`, which is almost all of them.
     ///
@@ -815,6 +817,7 @@ fn operation_entry(
         description: operation.description.clone(),
         risk: operation.risk,
         idempotency: operation.idempotency,
+        semantic_effects: operation.semantic_effects.clone(),
         // The trimmed reading, not the raw field: an author's stray whitespace is not part of the
         // claim, and a reason too short to be one never reaches here because the loader refused the
         // provider file that stated it.
@@ -981,6 +984,7 @@ mod tests {
             description: "List things".to_string(),
             risk: Risk::Destructive,
             idempotency: Idempotency::NonIdempotent,
+            semantic_effects: Vec::new(),
             repeatable_because: None,
             expose: true,
             auth: None,

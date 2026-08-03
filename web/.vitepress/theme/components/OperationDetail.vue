@@ -38,6 +38,7 @@ import {
 import FluxSource from './FluxSource.vue'
 import IssueNotice from './IssueNotice.vue'
 import ParameterTable from './ParameterTable.vue'
+import SpecChip from './SpecChip.vue'
 import StatusBadge from './StatusBadge.vue'
 
 const props = defineProps<{ catalog: Catalog; id: string }>()
@@ -120,6 +121,18 @@ const declaration = computed(() => (operation.value ? signature(operation.value)
         {{ provider!.vendor }}
       </a>
     </p>
+
+    <div class="op__semantic-effects">
+      <strong>Semantic effects</strong>
+      <span class="op__semantic-effect-chips">
+        <SpecChip v-if="!operation.semantic_effects.length" value="none" />
+        <SpecChip
+          v-for="effect in operation.semantic_effects"
+          :key="effect"
+          :value="effect"
+        />
+      </span>
+    </div>
 
     <IssueNotice
       title="Known limitation for this operation"
@@ -223,6 +236,20 @@ const declaration = computed(() => (operation.value ? signature(operation.value)
 </template>
 
 <style scoped>
+.op__semantic-effects {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.op__semantic-effect-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .op__lede {
   font-size: 16px;
   color: var(--vp-c-text-2);

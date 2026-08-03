@@ -11,6 +11,13 @@ api_version = "v1"
 module = "notion.flux"
 operations = ["notion-user-me", "notion-page-get", "notion-database-query", "notion-search", "notion-page-create"]
 
+[operation_semantic_effects]
+notion-database-query = []
+notion-page-create = []
+notion-page-get = []
+notion-search = []
+notion-user-me = []
+
 [[auth]]
 name = "notion.token"
 scheme = "bearer"

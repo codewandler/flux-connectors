@@ -9,6 +9,17 @@ base_url = "https://api.github.com"
 module = "github.flux"
 operations = ["github-repo-get", "github-issue-get", "github-pull-get", "github-issue-create", "github-issue-comment-add", "github-issue-list", "github-pull-files-list", "github-workflow-run-list", "github-commit-list"]
 
+[operation_semantic_effects]
+github-commit-list = []
+github-issue-comment-add = []
+github-issue-create = []
+github-issue-get = []
+github-issue-list = []
+github-pull-files-list = []
+github-pull-get = []
+github-repo-get = []
+github-workflow-run-list = []
+
 [[auth]]
 name = "github.token"
 scheme = "bearer"

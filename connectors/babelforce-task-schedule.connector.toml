@@ -12,6 +12,12 @@ api_version = "v3"
 module = "babelforce-task-schedule.flux"
 operations = ["babelforce-get-task-schedules", "babelforce-submit-task-schedule", "babelforce-get-task-schedule", "babelforce-delete-schedule-task"]
 
+[operation_semantic_effects]
+babelforce-delete-schedule-task = []
+babelforce-get-task-schedule = []
+babelforce-get-task-schedules = []
+babelforce-submit-task-schedule = []
+
 [[auth]]
 name = "babelforce.access_token"
 scheme = "bearer"

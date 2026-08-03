@@ -1927,6 +1927,26 @@ test('a request shape a source did not publish is omitted rather than rendered a
   )
 })
 
+test('semantic effects are visible through the shared policy-tone chip', () => {
+  const detail = component('OperationDetail.vue')
+  assert.match(detail, /import SpecChip from '.\/SpecChip\.vue'/)
+  assert.match(detail, /operation\.semantic_effects/)
+  assert.match(detail, /Semantic effects/)
+
+  const chip = component('SpecChip.vue')
+  assert.match(chip, /ALARMING = \[[^\]]*'money'[^\]]*'delete'/)
+  assert.match(chip, /CAUTIONARY = \[[^\]]*'send_external'/)
+
+  const capture = page('operations', 'stripe-payment-intent-capture.html')
+  assert.match(
+    capture,
+    /class="chip chip--alarming"[^>]*>money</,
+    'a real charge is not rendered with the alarming policy tone'
+  )
+  const cancel = text(page('operations', 'stripe-payment-intent-cancel.html'))
+  assert.match(cancel, /Semantic effects\s*none/, 'an empty semantic set is hidden rather than stated')
+})
+
 test('the full catalogue renders exactly what it publishes and says nothing about a source', () => {
   // The additive half. `public/catalog.json` publishes every field, so nothing in this build takes
   // an unpublished branch — and the two sentences that were conflated still appear exactly as often

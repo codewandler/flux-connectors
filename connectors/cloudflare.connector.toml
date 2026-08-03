@@ -11,6 +11,13 @@ api_version = "v4"
 module = "cloudflare.flux"
 operations = ["cloudflare-zone-list", "cloudflare-dns-record-list", "cloudflare-dns-record-create", "cloudflare-dns-record-delete", "cloudflare-cache-purge"]
 
+[operation_semantic_effects]
+cloudflare-cache-purge = []
+cloudflare-dns-record-create = []
+cloudflare-dns-record-delete = []
+cloudflare-dns-record-list = []
+cloudflare-zone-list = []
+
 [[auth]]
 name = "cloudflare.api_token"
 scheme = "bearer"

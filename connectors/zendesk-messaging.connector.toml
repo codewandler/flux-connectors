@@ -12,6 +12,17 @@ api_version = "v2"
 module = "zendesk-messaging.flux"
 operations = ["zendesk-messaging-conversation-create", "zendesk-messaging-conversation-get", "zendesk-messaging-conversation-update", "zendesk-messaging-participant-list", "zendesk-messaging-message-create", "zendesk-messaging-message-list", "zendesk-messaging-user-create", "zendesk-messaging-user-get", "zendesk-messaging-user-update"]
 
+[operation_semantic_effects]
+zendesk-messaging-conversation-create = []
+zendesk-messaging-conversation-get = []
+zendesk-messaging-conversation-update = []
+zendesk-messaging-message-create = []
+zendesk-messaging-message-list = []
+zendesk-messaging-participant-list = []
+zendesk-messaging-user-create = []
+zendesk-messaging-user-get = []
+zendesk-messaging-user-update = []
+
 [[auth]]
 name = "zendesk.api_token"
 scheme = "basic"

@@ -11,6 +11,13 @@ api_version = "1.0"
 module = "asana.flux"
 operations = ["asana-task-get", "asana-task-create", "asana-task-update", "asana-task-story-add", "asana-project-get"]
 
+[operation_semantic_effects]
+asana-project-get = []
+asana-task-create = []
+asana-task-get = []
+asana-task-story-add = []
+asana-task-update = []
+
 [[auth]]
 name = "asana.access_token"
 scheme = "bearer"

@@ -74,6 +74,51 @@ fn the_catalog_is_not_empty() {
     );
 }
 
+/// Every tag crossing the dependency-free catalogue seam is still one Flux itself recognizes.
+#[test]
+fn every_semantic_effect_is_a_flux_flow_effect() {
+    for operation in all() {
+        for effect in operation.semantic_effects {
+            assert!(
+                flux_lang::ast::FlowEffect::from_tag(effect).is_some(),
+                "`{}` carries unknown semantic effect `{effect}`",
+                operation.id
+            );
+        }
+    }
+}
+
+/// Semantic effects travel beside the emitted host effect; they never replace or broaden it.
+#[test]
+fn every_shipped_operation_keeps_its_network_host_effect() {
+    for operation in all() {
+        assert!(
+            operation.flux.contains("  effects [\"network\"]\n"),
+            "`{}` no longer declares exactly the network host effect:\n{}",
+            operation.id,
+            operation.flux
+        );
+    }
+}
+
+/// The known money-moving Stripe writes are held at the shipped-catalogue boundary, not merely in
+/// provider TOML that a stale generated table could fail to carry.
+#[test]
+fn every_known_money_moving_write_declares_it() {
+    for id in [
+        "stripe-payment-intent-capture",
+        "stripe-charge-refund-create",
+    ] {
+        let operation = catalog::operation(OperationKey::id(id))
+            .unwrap_or_else(|| panic!("the shipped catalogue carries `{id}`"));
+        assert!(
+            operation.semantic_effects.contains(&"money"),
+            "`{id}` moves money but carries {:?}",
+            operation.semantic_effects
+        );
+    }
+}
+
 /// Channel routing metadata must be queryable without reparsing the declaration JSON.
 ///
 /// Slack's Socket Mode binding is the shipped positive case: `event_id` identifies one delivery

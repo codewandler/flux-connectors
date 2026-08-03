@@ -10,6 +10,10 @@ base_url = "https://api.contentful.com/spaces/{space_id}/environments/{environme
 module = "contentful-management.flux"
 operations = ["contentful-entry-create", "contentful-entry-publish"]
 
+[operation_semantic_effects]
+contentful-entry-create = []
+contentful-entry-publish = []
+
 [[auth]]
 name = "contentful.delivery_token"
 scheme = "bearer"

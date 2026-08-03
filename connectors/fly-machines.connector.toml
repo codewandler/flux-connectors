@@ -12,6 +12,17 @@ api_version = "v1"
 module = "fly-machines.flux"
 operations = ["fly-regions-list", "fly-machines-list", "fly-machine-get", "fly-machine-events-list", "fly-machine-create", "fly-machine-start", "fly-machine-stop", "fly-machine-restart", "fly-machine-delete"]
 
+[operation_semantic_effects]
+fly-machine-create = []
+fly-machine-delete = []
+fly-machine-events-list = []
+fly-machine-get = []
+fly-machine-restart = []
+fly-machine-start = []
+fly-machine-stop = []
+fly-machines-list = []
+fly-regions-list = []
+
 [[auth]]
 name = "fly.api_token"
 scheme = "bearer"

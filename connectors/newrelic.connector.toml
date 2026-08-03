@@ -11,6 +11,14 @@ api_version = "2"
 module = "newrelic.flux"
 operations = ["newrelic-application-list", "newrelic-application-get", "newrelic-alert-policy-list", "newrelic-alert-violation-list", "newrelic-deployment-list", "newrelic-deployment-create"]
 
+[operation_semantic_effects]
+newrelic-alert-policy-list = []
+newrelic-alert-violation-list = []
+newrelic-application-get = []
+newrelic-application-list = []
+newrelic-deployment-create = []
+newrelic-deployment-list = []
+
 [[auth]]
 name = "newrelic.api_key"
 env = ["NEW_RELIC_API_KEY"]

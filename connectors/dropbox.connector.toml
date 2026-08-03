@@ -11,6 +11,14 @@ api_version = "2"
 module = "dropbox.flux"
 operations = ["dropbox-user-me", "dropbox-folder-list", "dropbox-metadata-get", "dropbox-search", "dropbox-folder-create", "dropbox-temporary-link-get"]
 
+[operation_semantic_effects]
+dropbox-folder-create = []
+dropbox-folder-list = []
+dropbox-metadata-get = []
+dropbox-search = []
+dropbox-temporary-link-get = []
+dropbox-user-me = []
+
 [[auth]]
 name = "dropbox.access_token"
 scheme = "bearer"

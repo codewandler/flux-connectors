@@ -11,6 +11,14 @@ api_version = "v2"
 module = "confluence.flux"
 operations = ["confluence-space-list", "confluence-space-get", "confluence-space-pages", "confluence-page-get", "confluence-page-create", "confluence-comment-add"]
 
+[operation_semantic_effects]
+confluence-comment-add = []
+confluence-page-create = []
+confluence-page-get = []
+confluence-space-get = []
+confluence-space-list = []
+confluence-space-pages = []
+
 [[auth]]
 name = "confluence.api_token"
 scheme = "basic"

@@ -11,6 +11,15 @@ api_version = "v4"
 module = "gitlab.flux"
 operations = ["gitlab-user-get", "gitlab-issue-list", "gitlab-issue-get", "gitlab-issue-create", "gitlab-merge-request-list", "gitlab-pipeline-get", "gitlab-branch-list"]
 
+[operation_semantic_effects]
+gitlab-branch-list = []
+gitlab-issue-create = []
+gitlab-issue-get = []
+gitlab-issue-list = []
+gitlab-merge-request-list = []
+gitlab-pipeline-get = []
+gitlab-user-get = []
+
 [[auth]]
 name = "gitlab.token"
 scheme = "bearer"

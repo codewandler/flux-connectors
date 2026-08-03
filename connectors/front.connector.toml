@@ -9,6 +9,14 @@ base_url = "https://api2.frontapp.com"
 module = "front.flux"
 operations = ["front-verify", "front-conversation-list", "front-conversation-get", "front-conversation-message-list", "front-conversation-reply", "front-conversation-tag-add"]
 
+[operation_semantic_effects]
+front-conversation-get = []
+front-conversation-list = []
+front-conversation-message-list = []
+front-conversation-reply = []
+front-conversation-tag-add = []
+front-verify = []
+
 [[auth]]
 name = "front.api_token"
 scheme = "bearer"

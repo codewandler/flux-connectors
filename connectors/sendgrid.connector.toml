@@ -11,6 +11,12 @@ api_version = "v3"
 module = "sendgrid.flux"
 operations = ["sendgrid-template-list", "sendgrid-template-get", "sendgrid-suppression-bounce-list", "sendgrid-email-validate"]
 
+[operation_semantic_effects]
+sendgrid-email-validate = []
+sendgrid-suppression-bounce-list = []
+sendgrid-template-get = []
+sendgrid-template-list = []
+
 [[auth]]
 name = "sendgrid.api_key"
 scheme = "bearer"

@@ -12,6 +12,12 @@ api_version = "v1.0"
 module = "microsoft_graph-mail.flux"
 operations = ["microsoft_graph-mail-message-get", "microsoft_graph-mail-message-reply", "microsoft_graph-mail-folder-list", "microsoft_graph-mail-message-list"]
 
+[operation_semantic_effects]
+microsoft_graph-mail-folder-list = []
+microsoft_graph-mail-message-get = []
+microsoft_graph-mail-message-list = []
+microsoft_graph-mail-message-reply = []
+
 [[auth]]
 name = "microsoft_graph.access_token"
 scheme = "bearer"

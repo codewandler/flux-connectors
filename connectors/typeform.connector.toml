@@ -9,6 +9,13 @@ base_url = "https://api.typeform.com"
 module = "typeform.flux"
 operations = ["typeform-user-me", "typeform-form-list", "typeform-form-get", "typeform-response-list", "typeform-response-delete"]
 
+[operation_semantic_effects]
+typeform-form-get = []
+typeform-form-list = []
+typeform-response-delete = []
+typeform-response-list = []
+typeform-user-me = []
+
 [[auth]]
 name = "typeform.access_token"
 scheme = "bearer"

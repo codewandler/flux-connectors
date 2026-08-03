@@ -316,6 +316,10 @@ fn entry(connector: &Connector, operation: &Operation, host: &str) -> String {
         idempotency(operation.idempotency)
     ));
     out.push_str(&format!(
+        "        semantic_effects: {},\n",
+        semantic_effects(operation)
+    ));
+    out.push_str(&format!(
         "        credentials: {},\n",
         credentials(connector, operation)
     ));
@@ -830,6 +834,18 @@ fn idempotency(idempotency: Idempotency) -> &'static str {
     }
 }
 
+/// Semantic effects stay string data in the dependency-free catalogue, using the exact Flux tags
+/// the IR validated rather than a second enum consumers would have to translate.
+fn semantic_effects(operation: &Operation) -> String {
+    let values = operation
+        .semantic_effects
+        .iter()
+        .map(|effect| string(effect.tag()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("&[{values}]")
+}
+
 /// A Rust string literal for `value`.
 ///
 /// Escaping rather than a raw literal: a raw string would have to pick a hash count no content
@@ -872,6 +888,7 @@ mod tests {
             description: "Do a thing".to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
+            semantic_effects: Vec::new(),
             repeatable_because: None,
             expose: true,
             auth: None,

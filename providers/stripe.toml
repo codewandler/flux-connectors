@@ -416,8 +416,9 @@ message_pointer = "/error/message"
 code_pointer = "/error/code"
 
 # ---------------------------------------------------------------------------------------------
-# The three writes. **This is the part of the connector that moves money, and the metadata below is
-# the whole reason C-106 is a story rather than a template fill.**
+# The three writes. Two move money; cancellation releases an authorization without transferring
+# funds. The metadata below is the whole reason C-106 and C-155 are stories rather than template
+# fills.
 #
 # RISK is graded from what each call does to money and whether it can be taken back, never from the
 # HTTP verb:
@@ -427,10 +428,10 @@ code_pointer = "/error/code"
 #   returned, and Stripe publishes no un-refund. It is the only shipped operation outside a `DELETE`
 #   that earns the tier, and it is graded there so that flux's approval gate stops it in front of a
 #   human every time.
-# - `stripe-payment-intent-capture` is `high`. It turns an authorization into a real charge on a real
+# - `stripe-payment-intent-capture` is `destructive`. It turns an authorization into a real charge on a real
 #   card: the customer is billed, their statement changes, and undoing it means the refund above with
-#   the fee already spent. `medium` — "writes with limited blast radius" — would wave that past a
-#   reviewer, which is the failure this field exists to prevent.
+#   the fee already spent. Flux's semantic-effect coherence requires every `money` operation to use
+#   this tier, so policy and the approval preview cannot understate a real charge.
 # - `stripe-payment-intent-cancel` is `high`. It moves no money — the authorization is released and
 #   the hold on the customer's card drops off — but it is irreversible in the sense that matters: a
 #   canceled payment intent cannot be revived, and the customer has to pay again through a new one.
@@ -466,8 +467,9 @@ id = "stripe-payment-intent-capture"
 method = "POST"
 path = "/v1/payment_intents/{payment_intent}/capture"
 description = "Capture an authorized payment intent, charging the customer the **full** authorized amount. Only a payment intent in `requires_capture` can be captured; a partial capture needs an `amount` this connector cannot send. Stripe answers 402 with an `error.code` such as `card_declined` when the capture is refused, and that arrives as data rather than as a failure"
-risk = "high"
+risk = "destructive"
 idempotency = "conditional"
+semantic_effects = ["money"]
 repeatable_because = "the connector requires an `Idempotency-Key` header on every call, and Stripe replays a keyed POST from its own cache for 24 hours rather than re-executing it, so a retried capture captures once and returns the first result"
 
 [[operations.params.path]]
@@ -551,6 +553,7 @@ path = "/v1/charges/{charge}/refunds"
 description = "Refund a charge **in full** and irreversibly: the entire un-refunded amount goes back to the customer's original payment method, usually within five to ten business days. A partial refund needs an `amount` this connector cannot send. Stripe's fee on the original charge is not returned. There is no way to undo a refund — collecting the money again means charging the customer again"
 risk = "destructive"
 idempotency = "conditional"
+semantic_effects = ["money"]
 repeatable_because = "the connector requires an `Idempotency-Key` header on every call, and Stripe replays a keyed POST from its own cache for 24 hours rather than re-executing it, so a retried refund refunds once — without the key a retry would move money twice"
 
 [[operations.params.path]]

@@ -11,6 +11,20 @@ api_version = "v1"
 module = "stripe.flux"
 operations = ["stripe-balance-get", "stripe-customer-get", "stripe-charge-get", "stripe-payment-intent-get", "stripe-refund-get", "stripe-payment-intent-capture", "stripe-payment-intent-cancel", "stripe-charge-refund-create", "stripe-country-spec-list", "stripe-event-list", "stripe-exchange-rate-list", "stripe-billing-meter-list"]
 
+[operation_semantic_effects]
+stripe-balance-get = []
+stripe-billing-meter-list = []
+stripe-charge-get = []
+stripe-charge-refund-create = ["money"]
+stripe-country-spec-list = []
+stripe-customer-get = []
+stripe-event-list = []
+stripe-exchange-rate-list = []
+stripe-payment-intent-cancel = []
+stripe-payment-intent-capture = ["money"]
+stripe-payment-intent-get = []
+stripe-refund-get = []
+
 [[auth]]
 name = "stripe.secret_key"
 scheme = "bearer"

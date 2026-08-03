@@ -9,6 +9,14 @@ base_url = "https://api.pagerduty.com"
 module = "pagerduty.flux"
 operations = ["pagerduty-incident-list", "pagerduty-incident-get", "pagerduty-service-list", "pagerduty-oncall-list", "pagerduty-incident-acknowledge", "pagerduty-incident-resolve"]
 
+[operation_semantic_effects]
+pagerduty-incident-acknowledge = []
+pagerduty-incident-get = []
+pagerduty-incident-list = []
+pagerduty-incident-resolve = []
+pagerduty-oncall-list = []
+pagerduty-service-list = []
+
 [[auth]]
 name = "pagerduty.api_token"
 env = ["PAGERDUTY_API_TOKEN"]

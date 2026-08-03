@@ -11,6 +11,15 @@ api_version = "3.0"
 module = "mailchimp.flux"
 operations = ["mailchimp-ping", "mailchimp-audience-list", "mailchimp-audience-get", "mailchimp-audience-member-list", "mailchimp-audience-member-get", "mailchimp-audience-member-upsert", "mailchimp-campaign-list"]
 
+[operation_semantic_effects]
+mailchimp-audience-get = []
+mailchimp-audience-list = []
+mailchimp-audience-member-get = []
+mailchimp-audience-member-list = []
+mailchimp-audience-member-upsert = []
+mailchimp-campaign-list = []
+mailchimp-ping = []
+
 [[auth]]
 name = "mailchimp.api_key"
 scheme = "bearer"

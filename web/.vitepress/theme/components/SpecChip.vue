@@ -11,9 +11,9 @@ import { computed } from 'vue'
 const props = defineProps<{ value: string }>()
 
 /** Values that carry a warning, keyed by the vocabulary the tool contract actually uses. */
-const ALARMING = ['high', 'destructive', 'non_idempotent']
-const CAUTIONARY = ['medium', 'conditional']
-const REASSURING = ['low', 'none', 'idempotent']
+const ALARMING = ['high', 'destructive', 'non_idempotent', 'money', 'delete']
+const CAUTIONARY = ['medium', 'conditional', 'model', 'write_file', 'write_db', 'send_external']
+const REASSURING = ['low', 'none', 'idempotent', 'pure', 'read', 'human_visible']
 
 const tone = computed(() => {
   const value = props.value.toLowerCase()

@@ -11,6 +11,12 @@ api_version = "0"
 module = "sentry.flux"
 operations = ["sentry-issue-get", "sentry-issue-update", "sentry-project-get", "sentry-issue-event-latest"]
 
+[operation_semantic_effects]
+sentry-issue-event-latest = []
+sentry-issue-get = []
+sentry-issue-update = []
+sentry-project-get = []
+
 [[auth]]
 name = "sentry.auth_token"
 scheme = "bearer"

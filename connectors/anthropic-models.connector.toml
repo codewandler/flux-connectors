@@ -12,6 +12,10 @@ api_version = "v1"
 module = "anthropic-models.flux"
 operations = ["anthropic-models-list", "anthropic-model-get"]
 
+[operation_semantic_effects]
+anthropic-model-get = []
+anthropic-models-list = []
+
 [[auth]]
 name = "anthropic.api_key"
 env = ["ANTHROPIC_API_KEY"]

@@ -1,8 +1,8 @@
 //! C-470: Stripe's exact, read-only expansion from its pinned first-party OpenAPI document.
 //!
 //! This is provider-scoped: it loads Stripe by name and never walks the catalogue. The original
-//! eight operations and their emitted bytes are a closed premise; the four list reads are the only
-//! new exposure this story permits.
+//! eight operations and their emitted bytes are a closed premise except where a later story records
+//! an intentional metadata correction; the four list reads are the only new exposure C-470 permits.
 
 use std::path::{Path, PathBuf};
 
@@ -76,7 +76,8 @@ const ORIGINAL_FLUX: [(&str, &str); 8] = [
     ),
     (
         "stripe-payment-intent-capture",
-        "44a66f1474291b5d30a2eb654917f9b208533801e81016b3dd1b32da8358f295",
+        // C-155 raises capture to destructive because it now declares the `money` semantic effect.
+        "5b06259e1bb1f2e4b85c34009f5d3b4618308857e30870d92ec0479e7c3bef27",
     ),
     (
         "stripe-payment-intent-get",
@@ -147,7 +148,7 @@ fn exactly_four_frozen_operation_ids_join_the_eight_existing_operations() {
 }
 
 #[test]
-fn the_original_eight_per_operation_flux_files_are_byte_identical() {
+fn the_eight_inline_operations_remain_byte_pinned() {
     for (id, expected) in ORIGINAL_FLUX {
         let path = root().join(format!("crates/catalog/ops/stripe/{id}.flux"));
         let bytes = std::fs::read(&path)

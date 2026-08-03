@@ -492,6 +492,9 @@ fn manifest(connector: &Connector, service: &str) -> Result<String> {
         api_version: Option<&'a str>,
         module: String,
         operations: Vec<&'a str>,
+        /// Every operation's semantic effects, including an explicit empty list. Kept beside the
+        /// existing operation list so adding the policy axis does not reshape that public field.
+        operation_semantic_effects: BTreeMap<&'a str, Vec<&'static str>>,
         /// Credential declarations and placements, never values.
         #[serde(skip_serializing_if = "Vec::is_empty")]
         auth: Vec<&'a AuthMethod>,
@@ -537,6 +540,19 @@ fn manifest(connector: &Connector, service: &str) -> Result<String> {
         operations: connector
             .operations_of(service)
             .map(|operation| operation.id.as_str())
+            .collect(),
+        operation_semantic_effects: connector
+            .operations_of(service)
+            .map(|operation| {
+                (
+                    operation.id.as_str(),
+                    operation
+                        .semantic_effects
+                        .iter()
+                        .map(|effect| effect.tag())
+                        .collect(),
+                )
+            })
             .collect(),
         auth: connector.auth.iter().collect(),
         default_auth: &connector.default_auth,
@@ -1097,6 +1113,34 @@ idempotency = "idempotent"
         let first = emit(&load(&inputs(HAND_AUTHORED)).unwrap()).unwrap();
         let second = emit(&load(&inputs(HAND_AUTHORED)).unwrap()).unwrap();
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn the_manifest_publishes_every_operations_semantic_effects() {
+        let empty = emit(&load(&inputs(HAND_AUTHORED)).unwrap()).unwrap();
+        let empty_manifest: toml::Value =
+            toml::from_str(&default_unit(&empty).manifest).expect("the manifest is TOML");
+        assert_eq!(
+            empty_manifest["operation_semantic_effects"]["acme-ticket-show"]
+                .as_array()
+                .expect("an operation with no semantic effects still carries an array"),
+            &[]
+        );
+
+        let definition = HAND_AUTHORED.replace(
+            "idempotency = \"idempotent\"",
+            "idempotency = \"idempotent\"\nsemantic_effects = [\"read\"]",
+        );
+        let artifacts = emit(&load(&inputs(&definition)).unwrap()).unwrap();
+        let manifest: toml::Value =
+            toml::from_str(&default_unit(&artifacts).manifest).expect("the manifest is TOML");
+
+        assert_eq!(
+            manifest["operation_semantic_effects"]["acme-ticket-show"]
+                .as_array()
+                .expect("the operation carries a semantic-effect array"),
+            &[toml::Value::String("read".to_string())]
+        );
     }
 
     #[test]

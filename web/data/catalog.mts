@@ -126,6 +126,8 @@ export interface Operation {
   description: string
   risk: string
   idempotency: string
+  /** Flux policy meaning, separate from host-resource effects. Always present. */
+  semantic_effects: string[]
   /**
    * **Why repeating this write is safe** — `null` for every operation that does not declare
    * `idempotency: 'conditional'`, which is almost all of them (C-186).

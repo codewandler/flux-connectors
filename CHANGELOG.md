@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Connector operations can now publish policy-bearing semantic effects** (C-155). The closed Flux
+  vocabulary is validated independently of host-resource effects, reaches install manifests, the
+  embedded and public catalogues, `connector-pack`, and the explorer. Stripe capture and refund now
+  declare `money`; capture is graded `destructive`, while cancellation remains a high-risk operation
+  with no money or delete claim.
+
 ### Fixed
 
 - **Generated scalar query parameters are encoded structurally instead of interpolated into URLs**

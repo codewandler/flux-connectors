@@ -9,6 +9,13 @@ base_url = "https://api.vercel.com"
 module = "vercel.flux"
 operations = ["vercel-projects-list", "vercel-project-get", "vercel-deployments-list", "vercel-deployment-get", "vercel-deployment-cancel"]
 
+[operation_semantic_effects]
+vercel-deployment-cancel = []
+vercel-deployment-get = []
+vercel-deployments-list = []
+vercel-project-get = []
+vercel-projects-list = []
+
 [[auth]]
 name = "vercel.token"
 scheme = "bearer"

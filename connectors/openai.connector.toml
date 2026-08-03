@@ -11,6 +11,16 @@ api_version = "v1"
 module = "openai.flux"
 operations = ["openai-models-list", "openai-model-get", "openai-chat-completion", "openai-embeddings-create", "openai-response-get", "openai-response-input-item-list", "openai-file-list", "openai-batch-list"]
 
+[operation_semantic_effects]
+openai-batch-list = []
+openai-chat-completion = []
+openai-embeddings-create = []
+openai-file-list = []
+openai-model-get = []
+openai-models-list = []
+openai-response-get = []
+openai-response-input-item-list = []
+
 [[auth]]
 name = "openai.api_key"
 scheme = "bearer"

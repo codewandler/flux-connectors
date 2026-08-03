@@ -106,6 +106,7 @@ fn zendesk_comment_list() -> Connector {
             description: "List one Zendesk ticket's comments.".to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
+            semantic_effects: Vec::new(),
             repeatable_because: None,
             expose: true,
             auth: None,
@@ -157,6 +158,7 @@ fn zendesk_ticket_search() -> Connector {
             description: "Search Zendesk tickets with Zendesk search syntax.".to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
+            semantic_effects: Vec::new(),
             repeatable_because: None,
             expose: true,
             auth: None,
@@ -210,6 +212,7 @@ fn babelforce_call_list() -> Connector {
             description: "List and filter calls, in the reporting view.".to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
+            semantic_effects: Vec::new(),
             repeatable_because: None,
             expose: true,
             auth: None,
@@ -266,6 +269,7 @@ fn zendesk_test() -> Connector {
                 .to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
+            semantic_effects: Vec::new(),
             repeatable_because: None,
             expose: true,
             auth: None,
@@ -297,6 +301,7 @@ fn freshdesk_note_add() -> Connector {
                     .to_string(),
             risk: Risk::Medium,
             idempotency: Idempotency::NonIdempotent,
+            semantic_effects: Vec::new(),
             repeatable_because: None,
             expose: true,
             auth: None,
@@ -362,6 +367,7 @@ fn zendesk_ticket_show() -> Connector {
             description: "Show one ticket".to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
+            semantic_effects: Vec::new(),
             repeatable_because: None,
             expose: true,
             auth: None,
@@ -683,6 +689,7 @@ fn headered_operation() -> Connector {
             description: "Create a thing.".to_string(),
             risk: Risk::High,
             idempotency: Idempotency::NonIdempotent,
+            semantic_effects: Vec::new(),
             repeatable_because: None,
             expose: true,
             auth: None,
@@ -992,6 +999,7 @@ fn zendesk_comment_add() -> Connector {
             // its condition in the IR, so it moves into the field below — where a host can read it —
             // and this fixture tracks `providers/zendesk.toml`, which made the same move.
             idempotency: Idempotency::Conditional,
+            semantic_effects: Vec::new(),
             repeatable_because: Some(
                 "the caller supplies `updated_stamp` and Zendesk applies the write only if the \
                  ticket has not moved since, so a stale replay is rejected rather than duplicated"
@@ -1061,6 +1069,7 @@ fn babelforce_session_set() -> Connector {
             description: "Set session variables on a live call.".to_string(),
             risk: Risk::Medium,
             idempotency: Idempotency::Idempotent,
+            semantic_effects: Vec::new(),
             repeatable_because: None,
             expose: true,
             auth: None,

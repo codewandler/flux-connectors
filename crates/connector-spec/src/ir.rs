@@ -176,6 +176,69 @@ pub enum Idempotency {
     Conditional,
 }
 
+/// What executing an operation *means*, in Flux's semantic-effect vocabulary.
+///
+/// This is deliberately distinct from the host-resource effects emitted in the Flux declaration.
+/// Every connector operation reaches the network, but only some move money, delete irreversibly,
+/// or send something to a third party. The compiler crates do not depend on `flux-spec`, so this
+/// enum mirrors the non-deprecated `flux_spec::FlowEffect` wire tags and `connector-pack` checks the
+/// tags against Flux again at the runtime seam.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SemanticEffect {
+    /// Deterministic and side-effect free. Refused on connector operations, which make HTTP calls.
+    Pure,
+    /// Reads external state.
+    Read,
+    /// Invokes a model.
+    Model,
+    /// General network egress.
+    Network,
+    /// Writes a file.
+    WriteFile,
+    /// Writes persistent state.
+    WriteDb,
+    /// Sends something to a third party.
+    SendExternal,
+    /// Irreversibly deletes.
+    Delete,
+    /// Moves money.
+    Money,
+    /// Produces output a human will see.
+    HumanVisible,
+}
+
+impl SemanticEffect {
+    /// The stable Flux tag written to manifests and catalogues.
+    pub const fn tag(self) -> &'static str {
+        match self {
+            Self::Pure => "pure",
+            Self::Read => "read",
+            Self::Model => "model",
+            Self::Network => "network",
+            Self::WriteFile => "write_file",
+            Self::WriteDb => "write_db",
+            Self::SendExternal => "send_external",
+            Self::Delete => "delete",
+            Self::Money => "money",
+            Self::HumanVisible => "human_visible",
+        }
+    }
+
+    /// Whether Flux treats this as a consequence that outlives the call.
+    pub const fn is_consequential(self) -> bool {
+        matches!(
+            self,
+            Self::Model
+                | Self::WriteFile
+                | Self::WriteDb
+                | Self::SendExternal
+                | Self::Delete
+                | Self::Money
+        )
+    }
+}
+
 /// One request parameter, carrying its JSON Schema.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1069,6 +1132,10 @@ pub struct Operation {
     pub risk: Risk,
     /// Whether repeating it is safe. See [`Idempotency`].
     pub idempotency: Idempotency,
+    /// What executing this operation means to Flux policy, independently of the host resources it
+    /// touches. Empty means no semantic consequence has been declared.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub semantic_effects: Vec<SemanticEffect>,
     /// **The condition under which repeating this write is safe** — mandatory on a mutating method
     /// declaring [`Idempotency::Conditional`], and meaningless anywhere else.
     ///

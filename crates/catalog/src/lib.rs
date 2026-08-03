@@ -224,6 +224,9 @@ pub struct Operation {
     pub risk: Risk,
     /// Whether repeating it is safe.
     pub idempotency: Idempotency,
+    /// Flux semantic-effect tags (`money`, `delete`, `send_external`, …), distinct from the host
+    /// effects carried by [`Self::flux`]. Empty means no semantic consequence is declared.
+    pub semantic_effects: &'static [&'static str],
     /// The credentials the operation needs, as **alternatives of mechanisms**: the outer slice is
     /// an OR over ways to authenticate, and each inner slice is the set of credentials that must
     /// all be satisfied on the same request (AND).

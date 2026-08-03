@@ -11,6 +11,14 @@ api_version = "1"
 module = "trello.flux"
 operations = ["trello-board-list", "trello-board-get", "trello-board-lists", "trello-list-cards", "trello-card-create", "trello-card-archive"]
 
+[operation_semantic_effects]
+trello-board-get = []
+trello-board-list = []
+trello-board-lists = []
+trello-card-archive = []
+trello-card-create = []
+trello-list-cards = []
+
 [[auth]]
 name = "trello.key"
 env = ["TRELLO_API_KEY"]

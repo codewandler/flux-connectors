@@ -189,6 +189,22 @@ fn every_shipped_operation_carries_its_metadata_and_its_flux() {
                 "operation `{}` is missing its risk/idempotency",
                 declared.id
             );
+            let semantic_effects = entry["semantic_effects"].as_array().unwrap_or_else(|| {
+                panic!(
+                    "operation `{}` carries a `semantic_effects` array, `[]` when it has none",
+                    declared.id
+                )
+            });
+            let expected_effects: Vec<Value> = declared
+                .semantic_effects
+                .iter()
+                .map(|effect| Value::String(effect.tag().to_string()))
+                .collect();
+            assert_eq!(
+                semantic_effects, &expected_effects,
+                "operation `{}` publishes semantic effects different from its IR",
+                declared.id
+            );
 
             let flux = entry["flux"].as_str().unwrap_or_else(|| {
                 panic!(

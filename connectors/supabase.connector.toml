@@ -11,6 +11,11 @@ api_version = "v1"
 module = "supabase.flux"
 operations = ["supabase-schema-describe", "supabase-rows-list", "supabase-auth-settings"]
 
+[operation_semantic_effects]
+supabase-auth-settings = []
+supabase-rows-list = []
+supabase-schema-describe = []
+
 [[auth]]
 name = "supabase.anon_key"
 env = ["SUPABASE_ANON_KEY"]

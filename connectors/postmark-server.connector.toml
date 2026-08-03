@@ -10,6 +10,12 @@ base_url = "https://api.postmarkapp.com"
 module = "postmark-server.flux"
 operations = ["postmark-email-send", "postmark-deliverystats-get", "postmark-bounce-list", "postmark-bounce-get"]
 
+[operation_semantic_effects]
+postmark-bounce-get = []
+postmark-bounce-list = []
+postmark-deliverystats-get = []
+postmark-email-send = []
+
 [[auth]]
 name = "postmark.server_token"
 env = ["POSTMARK_SERVER_TOKEN"]

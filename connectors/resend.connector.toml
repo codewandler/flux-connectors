@@ -9,6 +9,12 @@ base_url = "https://api.resend.com"
 module = "resend.flux"
 operations = ["resend-email-send", "resend-email-get", "resend-domain-list", "resend-domain-get"]
 
+[operation_semantic_effects]
+resend-domain-get = []
+resend-domain-list = []
+resend-email-get = []
+resend-email-send = []
+
 [[auth]]
 name = "resend.api_key"
 scheme = "bearer"

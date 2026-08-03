@@ -9,6 +9,14 @@ base_url = "https://a.klaviyo.com/api"
 module = "klaviyo.flux"
 operations = ["klaviyo-account-list", "klaviyo-profile-list", "klaviyo-profile-get", "klaviyo-profile-create", "klaviyo-list-list", "klaviyo-event-create"]
 
+[operation_semantic_effects]
+klaviyo-account-list = []
+klaviyo-event-create = []
+klaviyo-list-list = []
+klaviyo-profile-create = []
+klaviyo-profile-get = []
+klaviyo-profile-list = []
+
 [[auth]]
 name = "klaviyo.api_key"
 env = ["KLAVIYO_API_KEY"]

@@ -12,6 +12,17 @@ api_version = "v1"
 module = "anthropic-admin.flux"
 operations = ["anthropic-organization-get", "anthropic-organization-members-list", "anthropic-organization-member-get", "anthropic-workspaces-list", "anthropic-workspace-get", "anthropic-workspace-members-list", "anthropic-workspace-member-get", "anthropic-api-keys-list", "anthropic-invites-list"]
 
+[operation_semantic_effects]
+anthropic-api-keys-list = []
+anthropic-invites-list = []
+anthropic-organization-get = []
+anthropic-organization-member-get = []
+anthropic-organization-members-list = []
+anthropic-workspace-get = []
+anthropic-workspace-member-get = []
+anthropic-workspace-members-list = []
+anthropic-workspaces-list = []
+
 [[auth]]
 name = "anthropic.api_key"
 env = ["ANTHROPIC_API_KEY"]

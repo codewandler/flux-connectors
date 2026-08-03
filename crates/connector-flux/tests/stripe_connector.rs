@@ -18,8 +18,8 @@
 //!   Stripe's key is optional to Stripe; it is mandatory here, because a retried capture without one
 //!   captures twice. [`every_stripe_write_requires_a_caller_supplied_idempotency_key`] asserts the
 //!   IR and the emitted header together.
-//! - **Risk grades money movement, not the HTTP verb.** A refund is `destructive` — the money has
-//!   left and Stripe offers no un-refund — while a capture and a cancel are `high`. Reads are `low`.
+//! - **Risk grades money movement, not the HTTP verb.** Capture and refund are `destructive`, as
+//!   Flux requires of a `money` effect; cancellation remains `high`, and reads are `low`.
 //!   [`stripe_grades_its_operations_by_what_they_do_to_money`] pins the whole table, because these
 //!   are the values flux's approval gate reads.
 //! - **There is no webhook binding, deliberately.** `Stripe-Signature` is a comma-separated
@@ -33,7 +33,7 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{AuthScheme, Connector, HttpMethod, Idempotency, Risk};
+use connector_spec::{AuthScheme, Connector, HttpMethod, Idempotency, Risk, SemanticEffect};
 
 #[path = "../../connector-spec/tests/support/shipped_provider.rs"]
 mod shipped_provider;
@@ -87,7 +87,7 @@ const OPERATIONS: &[(&str, Risk, Idempotency)] = &[
     ("stripe-refund-get", Risk::Low, Idempotency::Idempotent),
     (
         "stripe-payment-intent-capture",
-        Risk::High,
+        Risk::Destructive,
         Idempotency::Conditional,
     ),
     (
@@ -140,6 +140,45 @@ fn providers_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("providers")
+}
+
+/// Every shipped Stripe write whose documented consequence moves money declares that fact in the
+/// policy vocabulary. Cancellation is the negative control: it releases an authorization without
+/// transferring funds. A refund is irreversible but deletes no entity.
+#[test]
+fn every_write_that_moves_money_declares_it() {
+    let connector = load();
+    for id in [
+        "stripe-payment-intent-capture",
+        "stripe-charge-refund-create",
+    ] {
+        let operation = connector
+            .operation(id)
+            .unwrap_or_else(|| panic!("Stripe ships `{id}`"));
+        assert!(
+            operation.semantic_effects.contains(&SemanticEffect::Money),
+            "`{id}` moves money but declares {:?}",
+            operation.semantic_effects
+        );
+    }
+
+    let cancel = connector
+        .operation("stripe-payment-intent-cancel")
+        .expect("Stripe ships cancellation");
+    assert!(
+        cancel.semantic_effects.is_empty(),
+        "cancellation releases an authorization without moving money: {:?}",
+        cancel.semantic_effects
+    );
+
+    let refund = connector
+        .operation("stripe-charge-refund-create")
+        .expect("Stripe ships refunds");
+    assert!(
+        !refund.semantic_effects.contains(&SemanticEffect::Delete),
+        "a refund is irreversible but deletes no entity: {:?}",
+        refund.semantic_effects
+    );
 }
 
 /// The shipped definition, through the real loader — the same route `shipped_modules.rs` takes, so
@@ -396,9 +435,8 @@ fn every_stripe_write_requires_a_caller_supplied_idempotency_key() {
 /// - `stripe-charge-refund-create` is `destructive` — "deletes or otherwise irreversible". Money
 ///   leaves the account, the customer's bank is told, and Stripe publishes no un-refund. It is the
 ///   only shipped operation outside a delete that earns the tier.
-/// - `stripe-payment-intent-capture` is `high` and not `medium`. A capture takes an authorization
-///   and turns it into a real charge on a real card; `medium` — "writes with limited blast radius" —
-///   would wave it past a human.
+/// - `stripe-payment-intent-capture` is `destructive`. It takes an authorization and turns it into
+///   a real charge on a real card, and Flux's money-effect floor requires the tier that always gates.
 #[test]
 fn stripe_grades_its_operations_by_what_they_do_to_money() {
     let connector = load();

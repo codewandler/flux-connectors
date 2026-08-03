@@ -9,6 +9,13 @@ base_url = "https://{instance}.my.salesforce.com"
 module = "salesforce.flux"
 operations = ["salesforce-whoami", "salesforce-record-get", "salesforce-record-create", "salesforce-record-update", "salesforce-sobject-describe"]
 
+[operation_semantic_effects]
+salesforce-record-create = []
+salesforce-record-get = []
+salesforce-record-update = []
+salesforce-sobject-describe = []
+salesforce-whoami = []
+
 [[auth]]
 name = "salesforce.access_token"
 scheme = "bearer"

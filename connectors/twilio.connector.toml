@@ -11,6 +11,17 @@ api_version = "2010-04-01"
 module = "twilio.flux"
 operations = ["twilio-account-get", "twilio-message-list", "twilio-message-get", "twilio-call-list", "twilio-call-get", "twilio-recording-list", "twilio-recording-get", "twilio-usage-record-list", "twilio-conference-list"]
 
+[operation_semantic_effects]
+twilio-account-get = []
+twilio-call-get = []
+twilio-call-list = []
+twilio-conference-list = []
+twilio-message-get = []
+twilio-message-list = []
+twilio-recording-get = []
+twilio-recording-list = []
+twilio-usage-record-list = []
+
 [[auth]]
 name = "twilio.basic_auth"
 scheme = "basic"

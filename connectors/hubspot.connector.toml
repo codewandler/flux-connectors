@@ -11,6 +11,13 @@ api_version = "v3"
 module = "hubspot.flux"
 operations = ["hubspot-contact-get", "hubspot-contact-create", "hubspot-contact-update", "hubspot-company-get", "hubspot-deal-get"]
 
+[operation_semantic_effects]
+hubspot-company-get = []
+hubspot-contact-create = []
+hubspot-contact-get = []
+hubspot-contact-update = []
+hubspot-deal-get = []
+
 [[auth]]
 name = "hubspot.access_token"
 scheme = "bearer"

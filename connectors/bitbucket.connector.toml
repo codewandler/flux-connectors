@@ -11,6 +11,15 @@ api_version = "2.0"
 module = "bitbucket.flux"
 operations = ["bitbucket-repository-list", "bitbucket-repository-get", "bitbucket-pull-request-list", "bitbucket-pull-request-get", "bitbucket-pull-request-create", "bitbucket-pull-request-comment", "bitbucket-pull-request-approve"]
 
+[operation_semantic_effects]
+bitbucket-pull-request-approve = []
+bitbucket-pull-request-comment = []
+bitbucket-pull-request-create = []
+bitbucket-pull-request-get = []
+bitbucket-pull-request-list = []
+bitbucket-repository-get = []
+bitbucket-repository-list = []
+
 [[auth]]
 name = "bitbucket.access_token"
 scheme = "bearer"

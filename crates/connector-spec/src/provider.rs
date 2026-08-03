@@ -59,7 +59,8 @@ use crate::lock::sha256_hex;
 use crate::{
     response_location_exists, AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod,
     Idempotency, JsonSchema, Operation, OperationSpecSource, Param, ParamSet, Provenance, Quirks,
-    Risk, Role, Runtime, Service, Tag, DEFAULT_SERVICE, MIN_REPEATABILITY_CONDITION,
+    Risk, Role, Runtime, SemanticEffect, Service, Tag, DEFAULT_SERVICE,
+    MIN_REPEATABILITY_CONDITION,
 };
 
 /// The documented JSON Schema for `providers/<name>.toml`.
@@ -652,6 +653,10 @@ pub struct OperationPatch {
     /// Overrides idempotency. As with `risk`, specs do not publish it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idempotency: Option<Idempotency>,
+    /// Semantic consequences stated by the author who reviewed this operation. A vendor document
+    /// cannot infer business meaning, and selectors cannot state one value for a heterogeneous set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic_effects: Option<Vec<SemanticEffect>>,
     /// Overrides the operation's auth alternatives.
     ///
     /// The `Option` carries the same three-way meaning as [`Operation::auth`]: absent means "leave
@@ -1091,6 +1096,13 @@ fn load_inner(
             // [`load`] for why this is a refusal rather than the skeleton it used to be.
             None => problems.push(no_spec_cache(&loaded.specs)),
         }
+    }
+
+    // A semantic-effect list is a set. Canonicalising it before validation makes equivalent input
+    // hash and emit identically; duplicates remain adjacent so the validator can refuse them rather
+    // than silently absorbing an authoring error.
+    for operation in &mut loaded.connector.operations {
+        operation.semantic_effects.sort_unstable();
     }
 
     problems.extend(validate(&loaded, &provider_headers, &inline));
@@ -1856,6 +1868,9 @@ fn compose(
             .unwrap_or_else(|| spec.description.clone()),
         risk,
         idempotency,
+        semantic_effects: patch
+            .and_then(|patch| patch.semantic_effects.clone())
+            .unwrap_or_default(),
         // **Never stated in bulk.** A selector may declare `idempotency = "conditional"`, and each
         // matched write then still owes the condition C-186 requires — which arrives here as `None`
         // and is refused, by name, by `validate_repeatability_condition`. One sentence about 54
@@ -5173,6 +5188,7 @@ fn validate_operations(connector: &Connector, problems: &mut Vec<String>) {
         }
 
         validate_repeatability_condition(operation, problems);
+        validate_semantic_effects(operation, problems);
         // The two credential declarations are checked as a pair before either is checked alone:
         // when both are present the operation is incoherent at the root, and the rules downstream
         // of each would render two contradicting instructions for one fact. See
@@ -5190,6 +5206,62 @@ fn validate_operations(connector: &Connector, problems: &mut Vec<String>) {
                 problems,
             );
         }
+    }
+}
+
+/// Semantic effects are a closed, policy-bearing set and must agree with the metadata Flux gates.
+fn validate_semantic_effects(operation: &Operation, problems: &mut Vec<String>) {
+    let id = operation.id.as_str();
+
+    for pair in operation.semantic_effects.windows(2) {
+        if pair[0] == pair[1] {
+            problems.push(format!(
+                "operation {id:?} declares semantic effect {:?} more than once; semantic effects \
+                 are a set, so remove the duplicate rather than relying on a consumer to dedupe it",
+                pair[0].tag()
+            ));
+        }
+    }
+
+    if operation.semantic_effects.contains(&SemanticEffect::Pure) {
+        problems.push(format!(
+            "operation {id:?} declares semantic effect `pure`, but every connector operation makes \
+             an external HTTP call. `pure` means deterministic and side-effect free, so it cannot \
+             describe a connector operation"
+        ));
+    }
+
+    for effect in &operation.semantic_effects {
+        if matches!(effect, SemanticEffect::Money | SemanticEffect::Delete)
+            && operation.risk != Risk::Destructive
+        {
+            problems.push(format!(
+                "operation {id:?} declares semantic effect {:?} but risk {:?}; Flux requires \
+                 `money` and `delete` to be `destructive` so policy and the approval preview cannot \
+                 understate them",
+                effect.tag(),
+                risk_word(operation.risk)
+            ));
+        } else if effect.is_consequential() && operation.risk == Risk::Low {
+            problems.push(format!(
+                "operation {id:?} declares consequential semantic effect {:?} but risk `low`; Flux \
+                 does not permit a consequence that outlives the call to use its harmless tier",
+                effect.tag()
+            ));
+        }
+    }
+
+    if operation
+        .semantic_effects
+        .iter()
+        .any(|effect| effect.is_consequential())
+        && operation.idempotency == Idempotency::Idempotent
+    {
+        problems.push(format!(
+            "operation {id:?} declares a consequential semantic effect but `idempotency = \
+             \"idempotent\"`; that value licenses Flux to skip execution in favour of a cached \
+             result, so a consequence-bearing operation must be `conditional` or `non_idempotent`"
+        ));
     }
 }
 

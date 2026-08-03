@@ -11,6 +11,10 @@ api_version = "v2"
 module = "zoom.flux"
 operations = ["zoom-meeting-delete", "zoom-user-get"]
 
+[operation_semantic_effects]
+zoom-meeting-delete = []
+zoom-user-get = []
+
 [[auth]]
 name = "zoom.access_token"
 scheme = "bearer"

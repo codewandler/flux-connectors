@@ -12,6 +12,11 @@ api_version = "v3"
 module = "google-calendar.flux"
 operations = ["google-calendar-event-get", "google-calendar-event-insert", "google-calendar-calendar-get"]
 
+[operation_semantic_effects]
+google-calendar-calendar-get = []
+google-calendar-event-get = []
+google-calendar-event-insert = []
+
 [[auth]]
 name = "google.access_token"
 scheme = "bearer"

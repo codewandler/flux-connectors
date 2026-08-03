@@ -11,6 +11,13 @@ api_version = "v1"
 module = "okta.flux"
 operations = ["okta-user-list", "okta-user-get", "okta-group-list", "okta-user-group-list", "okta-user-deactivate"]
 
+[operation_semantic_effects]
+okta-group-list = []
+okta-user-deactivate = []
+okta-user-get = []
+okta-user-group-list = []
+okta-user-list = []
+
 [[auth]]
 name = "okta.api_token"
 env = ["OKTA_API_TOKEN"]

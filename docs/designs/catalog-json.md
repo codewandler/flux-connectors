@@ -239,6 +239,7 @@ changes with its value would force every consumer to write a discriminated union
 | `description` | string | The same text a model sees as the tool description. |
 | `risk` | string | `low` \| `medium` \| `high` \| `destructive` — flux's own vocabulary. |
 | `idempotency` | string | `idempotent` \| `non_idempotent` \| `conditional`. |
+| `semantic_effects` | array\<string\> | Flux policy meaning (`money`, `delete`, `send_external`, …), distinct from host-resource effects. Always present; empty means none declared. |
 | `method` | string | Uppercase HTTP method. |
 | `path` | string | Template, relative to the provider's `base_url`. |
 | `parameters` | array\<Parameter\> | See below. |
@@ -424,6 +425,7 @@ One operation, elided to the fields that matter:
   "service": "default",
   "risk": "low",
   "idempotency": "idempotent",
+  "semantic_effects": [],
   "method": "GET",
   "path": "/api/v2/search.json",
   "parameters": [

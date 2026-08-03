@@ -12,6 +12,15 @@ api_version = "v2"
 module = "zendesk-help-center.flux"
 operations = ["zendesk-help-center-category-list", "zendesk-help-center-section-list", "zendesk-help-center-article-list", "zendesk-help-center-article-get", "zendesk-help-center-translation-list", "zendesk-help-center-article-incremental-list", "zendesk-help-center-article-create"]
 
+[operation_semantic_effects]
+zendesk-help-center-article-create = []
+zendesk-help-center-article-get = []
+zendesk-help-center-article-incremental-list = []
+zendesk-help-center-article-list = []
+zendesk-help-center-category-list = []
+zendesk-help-center-section-list = []
+zendesk-help-center-translation-list = []
+
 [[auth]]
 name = "zendesk.api_token"
 scheme = "basic"

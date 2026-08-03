@@ -227,6 +227,7 @@ fn operation(method: HttpMethod, idempotency: Idempotency, condition: Option<&st
         description: "Empty the cache.".to_owned(),
         risk: Risk::High,
         idempotency,
+        semantic_effects: Vec::new(),
         repeatable_because: condition.map(str::to_owned),
         expose: true,
         auth: None,

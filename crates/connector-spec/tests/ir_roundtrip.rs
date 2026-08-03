@@ -68,6 +68,7 @@ fn op(id: &str, auth: Option<Vec<AuthRequirement>>) -> Operation {
         description: "List calls".into(),
         risk: Risk::Low,
         idempotency: Idempotency::Idempotent,
+        semantic_effects: Vec::new(),
         repeatable_because: None,
         expose: true,
         auth,

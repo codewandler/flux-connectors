@@ -1695,6 +1695,7 @@ mod tests {
             description: "Get a thing.".to_string(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
+            semantic_effects: Vec::new(),
             repeatable_because: None,
             expose: true,
             auth: None,

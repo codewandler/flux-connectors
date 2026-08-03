@@ -64,6 +64,7 @@ fn connector(reversed: bool) -> Connector {
             description: "List calls".into(),
             risk: Risk::Low,
             idempotency: Idempotency::Idempotent,
+            semantic_effects: Vec::new(),
             repeatable_because: None,
             expose: true,
             auth: None,

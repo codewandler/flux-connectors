@@ -514,6 +514,14 @@ impl Tool for Operation {
         self.spec.clone()
     }
 
+    fn semantic_effects(&self) -> Vec<String> {
+        self.entry
+            .semantic_effects
+            .iter()
+            .map(|effect| (*effect).to_owned())
+            .collect()
+    }
+
     /// **The mirrored network gate**, half one.
     ///
     /// [`Tool::execute`] below delegates by calling `http.request`'s own `execute` directly, which
@@ -631,6 +639,17 @@ mod tests {
         let second = serde_json::to_value(tool.spec()).expect("a spec serializes");
 
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn semantic_effects_are_projected_from_the_catalogue() {
+        let capture = projected("stripe-payment-intent-capture");
+        let refund = projected("stripe-charge-refund-create");
+        let cancel = projected("stripe-payment-intent-cancel");
+
+        assert_eq!(capture.semantic_effects(), vec!["money"]);
+        assert_eq!(refund.semantic_effects(), vec!["money"]);
+        assert!(cancel.semantic_effects().is_empty());
     }
 
     #[test]

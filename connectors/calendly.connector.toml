@@ -9,6 +9,13 @@ base_url = "https://api.calendly.com"
 module = "calendly.flux"
 operations = ["calendly-user-me", "calendly-event-type-list", "calendly-scheduled-event-list", "calendly-scheduled-event-get", "calendly-invitee-list"]
 
+[operation_semantic_effects]
+calendly-event-type-list = []
+calendly-invitee-list = []
+calendly-scheduled-event-get = []
+calendly-scheduled-event-list = []
+calendly-user-me = []
+
 [[auth]]
 name = "calendly.access_token"
 scheme = "bearer"

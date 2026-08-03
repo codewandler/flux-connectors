@@ -11,6 +11,13 @@ api_version = "v2"
 module = "launchdarkly.flux"
 operations = ["launchdarkly-project-list", "launchdarkly-environment-list", "launchdarkly-flag-list", "launchdarkly-flag-get", "launchdarkly-flag-toggle"]
 
+[operation_semantic_effects]
+launchdarkly-environment-list = []
+launchdarkly-flag-get = []
+launchdarkly-flag-list = []
+launchdarkly-flag-toggle = []
+launchdarkly-project-list = []
+
 [[auth]]
 name = "launchdarkly.api_token"
 env = ["LAUNCHDARKLY_API_TOKEN"]

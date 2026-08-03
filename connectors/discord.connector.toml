@@ -11,6 +11,14 @@ api_version = "v10"
 module = "discord.flux"
 operations = ["discord-current-user", "discord-guild-list", "discord-guild-get", "discord-guild-channels", "discord-channel-messages", "discord-message-create"]
 
+[operation_semantic_effects]
+discord-channel-messages = []
+discord-current-user = []
+discord-guild-channels = []
+discord-guild-get = []
+discord-guild-list = []
+discord-message-create = []
+
 [[auth]]
 name = "discord.bot_token"
 env = ["DISCORD_BOT_TOKEN"]

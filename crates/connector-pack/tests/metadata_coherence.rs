@@ -48,6 +48,14 @@ fn shipped() -> Vec<&'static Operation> {
     operations
 }
 
+fn semantic_effects(operation: &Operation) -> Vec<String> {
+    operation
+        .semantic_effects
+        .iter()
+        .map(|effect| (*effect).to_owned())
+        .collect()
+}
+
 /// Whether the operation is sent with `method`.
 ///
 /// Read off the emitted Flux rather than re-derived: `catalog::Operation` carries no method, and the
@@ -89,9 +97,8 @@ fn no_post_or_patch_violates_the_repeatability_floor() {
         }
         let spec = connector_pack::project(operation)
             .unwrap_or_else(|error| panic!("`{}` projects to a ToolSpec: {error}", operation.id));
-        // No semantic-effect tags: the pack advertises none, so the effect-set channel is the only
-        // one in play — which is the channel I3 reads for a write.
-        for violation in coherence::metadata_violations(&spec, &[]) {
+        let semantic_effects = semantic_effects(operation);
+        for violation in coherence::metadata_violations(&spec, &semantic_effects) {
             if violation.starts_with("I3") {
                 violations.push(format!("{}: {violation}", operation.id));
             }
@@ -122,7 +129,7 @@ fn the_known_rfc_idempotent_divergence_from_flux_has_not_grown() {
         .filter(|operation| mutates(operation) && !not_idempotent_by_method(operation))
         .filter(|operation| {
             connector_pack::project(operation).is_ok_and(|spec| {
-                coherence::metadata_violations(&spec, &[])
+                coherence::metadata_violations(&spec, &semantic_effects(operation))
                     .iter()
                     .any(|violation| violation.starts_with("I3"))
             })

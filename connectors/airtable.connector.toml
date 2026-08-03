@@ -11,6 +11,12 @@ api_version = "v0"
 module = "airtable.flux"
 operations = ["airtable-record-get", "airtable-record-create", "airtable-record-update", "airtable-record-delete"]
 
+[operation_semantic_effects]
+airtable-record-create = []
+airtable-record-delete = []
+airtable-record-get = []
+airtable-record-update = []
+
 [[auth]]
 name = "airtable.access_token"
 scheme = "bearer"

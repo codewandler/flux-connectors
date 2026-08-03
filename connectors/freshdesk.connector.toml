@@ -11,6 +11,17 @@ api_version = "v2"
 module = "freshdesk.flux"
 operations = ["freshdesk-test", "freshdesk-ticket-list", "freshdesk-ticket-get", "freshdesk-ticket-create", "freshdesk-ticket-update", "freshdesk-ticket-note-add", "freshdesk-contact-list", "freshdesk-contact-get", "freshdesk-contact-create"]
 
+[operation_semantic_effects]
+freshdesk-contact-create = []
+freshdesk-contact-get = []
+freshdesk-contact-list = []
+freshdesk-test = []
+freshdesk-ticket-create = []
+freshdesk-ticket-get = []
+freshdesk-ticket-list = []
+freshdesk-ticket-note-add = []
+freshdesk-ticket-update = []
+
 [[config]]
 name = "domain"
 label = "Freshdesk domain"

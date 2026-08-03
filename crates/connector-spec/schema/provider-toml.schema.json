@@ -888,6 +888,11 @@
       "description": "An HTTP method."
     },
 
+    "semanticEffect": {
+      "enum": ["pure", "read", "model", "network", "write_file", "write_db", "send_external", "delete", "money", "human_visible"],
+      "description": "A non-deprecated flux_spec::FlowEffect tag. Unknown values are refused; `pure` is part of the shared vocabulary but invalid on an HTTP connector operation."
+    },
+
     "operationPatch": {
       "type": "object",
       "title": "Operation selection and corrections",
@@ -923,6 +928,12 @@
         "idempotency": {
           "$ref": "#/$defs/idempotency",
           "description": "States whether repeating the operation is safe. Specs do not publish it either."
+        },
+        "semantic_effects": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/semanticEffect" },
+          "description": "What this operation means to Flux policy, stated by the author who reviewed it. Distinct from the host-resource effects and never inferred from a vendor document or selector."
         },
         "auth": {
           "type": "array",
@@ -1210,6 +1221,12 @@
         "idempotency": {
           "$ref": "#/$defs/idempotency",
           "description": "Whether repeating the call is safe. Mandatory: it decides whether a retry is sound."
+        },
+        "semantic_effects": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/semanticEffect" },
+          "description": "What executing this operation means to Flux policy. Distinct from the host-resource effects emitted in Flux; omitted means no semantic consequence is declared."
         },
         "repeatable_because": {
           "type": "string",

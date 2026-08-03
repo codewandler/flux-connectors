@@ -11,6 +11,14 @@ api_version = "v2"
 module = "miro.flux"
 operations = ["miro-board-list", "miro-board-item-list", "miro-board-item-get", "miro-sticky-note-create", "miro-sticky-note-update", "miro-sticky-note-delete"]
 
+[operation_semantic_effects]
+miro-board-item-get = []
+miro-board-item-list = []
+miro-board-list = []
+miro-sticky-note-create = []
+miro-sticky-note-delete = []
+miro-sticky-note-update = []
+
 [[auth]]
 name = "miro.access_token"
 scheme = "bearer"

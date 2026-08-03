@@ -11,6 +11,14 @@ api_version = "v2"
 module = "webflow.flux"
 operations = ["webflow-site-list", "webflow-collection-list", "webflow-collection-get", "webflow-collection-item-list", "webflow-collection-item-get", "webflow-site-publish"]
 
+[operation_semantic_effects]
+webflow-collection-get = []
+webflow-collection-item-get = []
+webflow-collection-item-list = []
+webflow-collection-list = []
+webflow-site-list = []
+webflow-site-publish = []
+
 [[auth]]
 name = "webflow.token"
 scheme = "bearer"

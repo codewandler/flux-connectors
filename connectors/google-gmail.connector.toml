@@ -12,6 +12,11 @@ api_version = "v1"
 module = "google-gmail.flux"
 operations = ["google-gmail-message-get", "google-gmail-message-send", "google-gmail-labels-list"]
 
+[operation_semantic_effects]
+google-gmail-labels-list = []
+google-gmail-message-get = []
+google-gmail-message-send = []
+
 [[auth]]
 name = "google.access_token"
 scheme = "bearer"
