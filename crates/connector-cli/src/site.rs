@@ -52,8 +52,9 @@ use serde::Serialize;
 
 use connector_spec::{
     AuthScheme, ChannelBinding, ConfigField, Connector, EventDecl, HttpMethod, Idempotency,
-    JsonSchema, ManualSetup, Operation, OperationSpecSource, Param, Reply, Risk, Selector,
-    SemanticEffect, SocketConnectSpec, Subscription, VerificationScheme,
+    JsonSchema, Level, ManualSetup, OAuth2Spec, OAuthGrant, OAuthRedirect, Operation,
+    OperationSpecSource, Param, Reply, Risk, Selector, SemanticEffect, SocketConnectSpec,
+    Subscription, VerificationScheme,
 };
 
 use crate::catalog::{self, OperationRendering};
@@ -66,7 +67,7 @@ use crate::status::{self, Status};
 /// Bumped only when an existing field changes meaning or disappears. **Adding a field does not bump
 /// it** — every consumer reads by name, so a new key is invisible to one that does not know it, and
 /// C-37's `oip` is the case this rule is written for.
-const SCHEMA_VERSION: u32 = 2;
+const SCHEMA_VERSION: u32 = 3;
 
 /// The whole catalogue: every provider, every operation, and what does not work.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -146,16 +147,16 @@ pub struct ProviderEntry {
     /// every credential is a name the host resolves.
     channels: Vec<ChannelEntry>,
     /// The complete configuration declaration. Stored values never appear in catalogue data.
-    config: Vec<ConfigField>,
+    config: Vec<ConfigEntry>,
+    /// The bounded read a settings page invokes to verify this connection, or `null` when the
+    /// connector declares none.
+    verify: Option<String>,
     /// **Every configuration field whose value comes from a closed set** (C-225). `[]` for the
     /// connectors that declare none, which is nearly all of them.
     ///
-    /// An **additive** key, so no `SCHEMA_VERSION` bump: nothing existing changes type or meaning.
-    /// And deliberately *not* the whole configuration surface — labels, help, `binds`, `format` and
-    /// the derived level are C-87's, and that story carries a breaking change to the `auth.oauth2`
-    /// flattening which this one must not drag in. What is published here is the part a closed set
-    /// is worthless without: a product that cannot see the choices renders a text box, and the
-    /// declaration has moved without the benefit.
+    /// Added without a `SCHEMA_VERSION` bump by C-225: nothing existing changed type or meaning.
+    /// C-87 later added the complete [`Self::config`] projection; this remains the indexed
+    /// compatibility view for consumers that address a closed set by `(service, kind, name)`.
     config_choices: Vec<ConfigChoicesEntry>,
 }
 
@@ -188,6 +189,19 @@ struct ConfigChoicesEntry {
 struct ChoiceEntry {
     value: String,
     label: String,
+}
+
+/// One complete configuration declaration plus the level derived from its binding.
+///
+/// Flattening the IR value keeps this backend byte-for-byte aligned with the manifest for every
+/// authored field. `level` is separate because it is deliberately not authored: publishing an
+/// operator-supplied client secret as connection-level input is precisely the disagreement the
+/// derived value exists to prevent.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct ConfigEntry {
+    #[serde(flatten)]
+    declaration: ConfigField,
+    level: Level,
 }
 
 /// One event a vendor sends, with the vendor's own spelling and its schema intact.
@@ -429,8 +443,25 @@ struct CredentialEntry {
     /// For `basic`: a literal appended to the resolved user value — Zendesk's `/token` marker,
     /// which is public API syntax and not a credential. `null` when there is none.
     user_suffix: Option<String>,
-    /// Whether the host runs OAuth2 token grants for this credential.
-    oauth2: bool,
+    /// The complete OAuth2 grant contract, or `null` for a pasted credential.
+    oauth2: Option<OAuth2Entry>,
+}
+
+/// One complete OAuth2 grant declaration.
+///
+/// This is explicit rather than serializing [`OAuth2Spec`] directly because that IR type elides its
+/// default-valued fields for compact provider TOML. `catalog.json` has the opposite contract: every
+/// key is present, so a hosted consumer can type the grant once and never infer an empty value from
+/// a missing key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct OAuth2Entry {
+    endpoint: String,
+    authorize_path: String,
+    token_path: String,
+    client_id: String,
+    scopes: Vec<String>,
+    grants: Vec<OAuthGrant>,
+    redirect: Option<OAuthRedirect>,
 }
 
 /// An [`AuthScheme`], flattened to a fixed three-key shape.
@@ -640,12 +671,31 @@ pub fn provider_entry(
             .iter()
             .map(|channel| channel_entry(connector, channel))
             .collect(),
-        config: connector.config.clone(),
+        config: connector
+            .config
+            .iter()
+            .map(config_entry)
+            .collect::<Result<Vec<_>>>()?,
+        verify: connector.verify.clone(),
         config_choices: connector
             .config
             .iter()
             .filter_map(config_choices_entry)
             .collect(),
+    })
+}
+
+fn config_entry(field: &ConfigField) -> Result<ConfigEntry> {
+    let level = field.level().ok_or_else(|| {
+        anyhow::anyhow!(
+            "configuration field {:?} has invalid binding {:?}",
+            field.name,
+            field.binds
+        )
+    })?;
+    Ok(ConfigEntry {
+        declaration: field.clone(),
+        level,
     })
 }
 
@@ -910,7 +960,7 @@ fn provider_auth(connector: &Connector) -> ProviderAuth {
                 env: method.env.clone(),
                 user_env: method.user_env.clone(),
                 user_suffix: method.user_suffix.clone(),
-                oauth2: method.oauth2.is_some(),
+                oauth2: method.oauth2.as_ref().map(oauth2_entry),
             })
             .collect(),
         default: connector
@@ -918,6 +968,18 @@ fn provider_auth(connector: &Connector) -> ProviderAuth {
             .iter()
             .map(|mechanism| mechanism.iter().cloned().collect())
             .collect(),
+    }
+}
+
+fn oauth2_entry(spec: &OAuth2Spec) -> OAuth2Entry {
+    OAuth2Entry {
+        endpoint: spec.endpoint.clone(),
+        authorize_path: spec.authorize_path.clone(),
+        token_path: spec.token_path.clone(),
+        client_id: spec.client_id.clone(),
+        scopes: spec.scopes.clone(),
+        grants: spec.grants.clone(),
+        redirect: spec.redirect.clone(),
     }
 }
 

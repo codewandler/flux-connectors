@@ -48,7 +48,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{parse_binding, template_variables, Binding, ConfigField, Position};
+use crate::config::{
+    parse_binding, template_variables, Approval, Binding, ConfigField, Format, Position,
+};
 use crate::graph::{Graph, GraphNode, NodeKind, PortRef};
 use crate::inbound::{
     parse_tolerance, signed_placeholders, validate_path, validate_symbol, ChannelBinding,
@@ -2516,6 +2518,52 @@ fn validate_config(connector: &Connector, problems: &mut Vec<String>) {
             problems,
         );
 
+        // A whole HTTPS origin is the explicit C-402 self-managed exception: the connector owns
+        // the path while deployment policy approves the scheme+authority. It is deliberately a
+        // generic configuration shape, not a GitLab branch in a consumer.
+        if field.format == Format::Origin {
+            if field.approval != Approval::Operator {
+                problems.push(format!(
+                    "configuration field {name:?} declares `format = \"origin\"` without \
+                     `approval = \"operator\"`. A caller-selected whole authority is an unbounded \
+                     egress grant; a non-default origin becomes active only after deployment policy \
+                     approves and pins it"
+                ));
+            }
+            match field.binding() {
+                Some(Binding::Endpoint { variable }) => {
+                    let base_url = connector.base_url_of(&field.service);
+                    let placeholder = format!("{{{variable}}}");
+                    if !base_url.starts_with(&placeholder)
+                        || base_url[placeholder.len()..]
+                            .chars()
+                            .next()
+                            .is_some_and(|next| next != '/')
+                    {
+                        problems.push(format!(
+                            "configuration field {name:?} declares an HTTPS origin but service {:?} \
+                             has base URL {base_url:?}. An origin must be the entire leading \
+                             endpoint placeholder (`{{{variable}}}`); the connector may append a \
+                             path after it, but input may not replace that path",
+                            field.service
+                        ));
+                    }
+                }
+                _ => problems.push(format!(
+                    "configuration field {name:?} declares `format = \"origin\"` but does not bind \
+                     an `endpoint.<variable>`. An origin is one resolved endpoint, not an operation \
+                     argument or request field"
+                )),
+            }
+        } else if field.approval == Approval::Operator {
+            problems.push(format!(
+                "configuration field {name:?} declares `approval = \"operator\"` but format `{}`. \
+                 Operator approval on this surface is the explicit whole-HTTPS-origin policy; use \
+                 `format = \"origin\"` so consumers and the runtime can enforce the same rule",
+                field.format.word()
+            ));
+        }
+
         // A field with no label or no help cannot be rendered into a form that anyone can answer.
         // Defaulting either to `name` would ship `zendesk.api_token` as user-facing copy.
         if field.label.trim().is_empty() {
@@ -2798,7 +2846,9 @@ fn validate_one_binding(
             // one: `acme.example@evil.example` is a legal header value and a legal path segment, and
             // substituted into an authority it sends the request — and the operator's own
             // credential — to a host nobody named. See `config::validate_host_value`.
-            validate_substituted_values(field, binding, "composes a host", problems);
+            if field.format != Format::Origin {
+                validate_substituted_values(field, binding, "composes a host", problems);
+            }
         }
         Binding::Request {
             position,

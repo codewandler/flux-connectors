@@ -2,8 +2,7 @@
 id: C-87
 title: Publish the configuration surface into the manifest and the catalogue
 pillar: Codegen
-status: ready
-priority: 0
+status: done
 design: docs/designs/connector-configuration.md
 epic: connector-config
 areas: [connector-cli, catalog, web]
@@ -17,32 +16,42 @@ Make the configuration surface reachable by a consumer. It is in the IR and in t
 reaches no artifact, so a product still cannot render a form without parsing provider TOML.
 
 ## Acceptance
-- [ ] `connectors/<id>.connector.toml` carries a `[[config]]` block per field — name, label, help,
+- [x] `connectors/<id>.connector.toml` carries a `[[config]]` block per field — name, label, help,
       example, format, required, secret, docs URL, `binds`, and the **derived** level — plus `verify`
       and each binding's `subscription` / `setup`.
-- [ ] `catalog.json` carries the same. Additive for those keys, so no `SCHEMA_VERSION` bump on their
+- [x] `catalog.json` carries the same. Additive for those keys, so no `SCHEMA_VERSION` bump on their
       account.
-- [ ] **The OAuth flattening is fixed, and it is breaking.** `crates/connector-cli/src/site.rs`
+- [x] **The OAuth flattening is fixed, and it is breaking.** `crates/connector-cli/src/site.rs`
       collapses the entire `OAuth2Spec` to `oauth2: bool`, discarding `scopes`, `grants`,
       `authorize_path`, `token_path`, `client_id` and `redirect` — so a hosted product cannot build an
       authorize URL from the catalogue at all. Publishing the spec changes an existing field's type,
       which the [catalog-json](../designs/catalog-json.md) contract says bumps `SCHEMA_VERSION` 2 → 3.
       Decide and record whether to bump or to add a second key; bumping is the honest option, since the
       boolean was lossy by accident rather than by design.
-- [ ] **No credential value reaches any artifact.**
+- [x] **No credential value reaches any artifact.**
       `crates/connector-cli/tests/site_catalog.rs::no_credential_value_reaches_the_document` runs with
       a sentinel for every config-bound env var too.
-- [ ] `--service <name>` selects that service's config fields along with its operations.
-- [ ] **Nothing reaches the `.flux` module.** A test asserts every shipped module is byte-identical
+- [x] `--service <name>` selects that service's config fields along with its operations.
+- [x] **Nothing reaches the `.flux` module.** A test asserts every shipped module is byte-identical
       across this story: configuration describes what a human supplies, and reaches no generated code.
-- [ ] The public site renders a provider's configuration surface — or the story records why not. This
+- [x] The public site renders a provider's configuration surface — or the story records why not. This
       is the first artifact that would let the site show more than `auth: bearer`.
+- [x] The dependency-free embedded catalogue exposes configuration approval as a closed typed field
+      and exposes each provider's declared `verify` operation without parsing declaration JSON or a
+      second artifact.
 
 ## Progress
+- 2026-08-04: Integration review closed. The embedded catalogue now carries closed typed approval
+  policy and `Provider::verify`; consumers resolve the verify operation generically from the same
+  provider value. The breaking consumer line is prepared as v0.19.0 with regenerated artifacts.
+- 2026-08-04: Reopened after integration review found the embedded consumer surface incomplete:
+  approval policy was enforced by scanning declaration JSON, and `verify` had no typed provider field.
+- 2026-08-04: Initial implementation. Manifests, the schema-v3 public catalogue, the embedded declaration JSON and
+  the public explorer now publish complete configuration and verification surfaces; generated Flux
+  remains unchanged by configuration projection.
 - 2026-08-03: Raised to Milestone 1 priority. Until the complete config and `verify` projection
   reaches consumer artifacts, neither the Exchange console nor the Flux CLI can honestly collect
   connector settings such as a Zendesk domain or C-508's self-managed GitLab origin.
-- Not started. The IR half landed 2026-07-30 with [C-86](C-86-connector-configuration-epic.md).
 
 ## Notes
 - `catalog.rs` and `site.rs` share the credential and host walks deliberately, so a site and a

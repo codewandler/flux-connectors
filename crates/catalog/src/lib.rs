@@ -469,6 +469,10 @@ pub struct Channel {
 }
 
 /// One complete configuration field, with no stored value.
+///
+/// Activation policy is carried as [`Approval`] rather than left inside [`Self::declaration_json`]:
+/// a host enforcing whether a configured value may become active must match a closed vocabulary,
+/// not search serialized source text for a token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfigField {
     pub name: &'static str,
@@ -479,12 +483,37 @@ pub struct ConfigField {
     pub format: &'static str,
     pub required: bool,
     pub default: Option<&'static str>,
+    /// Extra authorization required before the configured value becomes active.
+    pub approval: Approval,
     pub secret: bool,
     pub docs_url: Option<&'static str>,
     pub binds: &'static str,
     pub also_binds: &'static [&'static str],
     /// Canonical JSON for the complete form declaration, including choices.
     pub declaration_json: &'static str,
+}
+
+/// Extra authorization required before a supplied configuration value becomes active.
+///
+/// Mirrors `connector_spec::Approval`. Deliberately closed: a new activation policy must produce a
+/// compile error in every consumer that decides whether a value may influence a request.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Approval {
+    /// The ordinary configuration flow may activate the value.
+    #[default]
+    None,
+    /// A deployment operator must approve and pin a non-default value for this connection.
+    Operator,
+}
+
+impl Approval {
+    /// The stable token used by the connector declaration and public catalogue.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Operator => "operator",
+        }
+    }
 }
 
 /// **How a connector executes** — flux's runtime axis, as the catalogue publishes it (C-405).
@@ -581,6 +610,11 @@ pub struct Provider {
     pub operations: &'static [Operation],
     /// Complete configuration declarations, never values.
     pub config: &'static [ConfigField],
+    /// The bounded, low-risk operation a host invokes to verify this connector's configuration.
+    ///
+    /// The operation id is guaranteed by the loader to name one of [`Self::operations`]. `None`
+    /// means the connector declares no Test-connection read; it is not an invitation to guess one.
+    pub verify: Option<&'static str>,
     /// Inbound events in declaration order.
     pub events: &'static [Event],
     /// Channel bindings in declaration order.
@@ -590,10 +624,8 @@ pub struct Provider {
     /// Empty for most connectors. Present for the ones whose value is a *choice* rather than a
     /// string the operator knows: New Relic's two region hosts, Intercom's three.
     ///
-    /// This is deliberately **not** the whole configuration surface — labels, help text, `binds` and
-    /// the derived level are C-87's, and that story is a breaking change to `catalog.json`'s OAuth
-    /// key. What is here is the part a closed set is useless without: a form that cannot see the
-    /// choices renders a text box, which moves the declaration without moving the benefit.
+    /// The complete declaration is available through [`Self::config`] (C-87). This stays as the
+    /// indexed compatibility view for consumers that address the set by `(service, kind, name)`.
     pub config_choices: &'static [ConfigChoices],
 }
 
@@ -660,9 +692,9 @@ impl Provider {
     /// The closed set governing one configuration slot, addressed exactly as the runtime port
     /// addresses a stored value — `(service, kind, name)`.
     ///
-    /// `None` means the slot is open, **not** that the value is unconstrained by anything: a field
-    /// still has a `format`, which this surface does not publish (C-87). A caller uses this to
-    /// decide between a select and an input, and to refuse a value it was not offered.
+    /// `None` means the slot is open, **not** that the value is unconstrained by anything: the full
+    /// [`ConfigField`] still carries its format. A caller uses this indexed view to decide between a
+    /// select and an input, and to refuse a value it was not offered.
     pub fn choices_for(
         &self,
         service: &str,

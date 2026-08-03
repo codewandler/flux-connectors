@@ -350,7 +350,7 @@ function handMaintainedData(sources, values) {
 test('the site ships the generated catalogue at the path VitePress serves', () => {
   const document = catalog()
 
-  assert.equal(document.schema_version, 2)
+  assert.equal(document.schema_version, 3)
   assert.ok(document.providers.length > 0, 'the catalogue names no providers')
   assert.ok(operations(document).length > 0, 'the catalogue names no operations')
 
@@ -726,6 +726,80 @@ test('the explorer lists every provider and every operation without JavaScript',
       assert.ok(body.includes(operation.id), `the operation list omits \`${operation.id}\``)
     }
   }
+})
+
+test('provider cards render every declared configuration field without JavaScript', () => {
+  const document = catalog()
+  const html = page('explorer.html')
+  const body = text(html)
+  let rendered = 0
+
+  for (const provider of document.providers) {
+    assert.ok(Array.isArray(provider.config), `\`${provider.id}\` publishes no configuration array`)
+    for (const field of provider.config) {
+      rendered += 1
+      assert.match(
+        html,
+        new RegExp(
+          `data-config-of="${provider.id}"[^>]*data-config-field="${field.name}"|` +
+            `data-config-field="${field.name}"[^>]*data-config-of="${provider.id}"`
+        ),
+        `the card for \`${provider.id}\` does not render configuration field \`${field.name}\``
+      )
+      assert.ok(body.includes(field.label), `the form omits the label for \`${provider.id}.${field.name}\``)
+      assert.ok(body.includes(field.help), `the form omits the help for \`${provider.id}.${field.name}\``)
+    }
+  }
+
+  assert.ok(rendered > 0, 'no shipped connector declares configuration, so the rendering gate is vacuous')
+})
+
+test('provider cards render every published Test connection operation without JavaScript', () => {
+  const document = catalog()
+  const html = page('explorer.html')
+  let rendered = 0
+
+  for (const provider of document.providers) {
+    if (!provider.verify) continue
+    rendered += 1
+    assert.ok(
+      html.includes(`data-verify-of="${provider.id}"`),
+      `the card for \`${provider.id}\` does not render its Test connection operation \`${provider.verify}\``
+    )
+  }
+
+  assert.ok(rendered > 0, 'no shipped connector publishes `verify`, so the rendering gate is vacuous')
+})
+
+test('provider cards render Test connection even when the connector declares no configuration fields', () => {
+  const card = markup(component('ProviderCard.vue'))
+
+  assert.match(
+    card,
+    /<\/details>\s*<p\s+v-if="provider\.verify\s*&&\s*!provider\.config\.length"[\s\S]*?class="config-verify"[\s\S]*?>\s*Test connection with/,
+    'the Test connection row has no config-independent fallback; a connector with `verify` and an empty config array renders nothing'
+  )
+})
+
+test('operator-approved configuration is typed and rendered as an activation policy', () => {
+  const catalogue = readFileSync(path.join(webRoot, 'data', 'catalog.mts'), 'utf-8')
+  const card = component('ProviderCard.vue')
+
+  assert.match(
+    catalogue,
+    /approval\?: 'operator'/,
+    'the public catalogue type does not carry the operator approval policy'
+  )
+  assert.match(
+    card,
+    /field\.approval === 'operator'/,
+    'the provider card does not branch on the published approval policy'
+  )
+  assert.match(
+    markup(card),
+    /operator approval required/,
+    'the provider card does not explain that a proposed value is not active'
+  )
 })
 
 // ---------------------------------------------------------------------------------------------

@@ -23,7 +23,7 @@ across eight design docs, each true about its own surface and silent about the r
 proposing a new surface has nothing to compare it against, and someone consuming the catalogue has no
 way to know which declarations are load-bearing and which are inert.
 
-This document is that answer, and its most useful content is the negative half: **six surfaces reach
+This document is that answer, and its most useful content is the negative half: **four surfaces reach
 no artifact at all.** They load, they validate, they move `ir_sha256`, and nothing downstream can see
 them.
 
@@ -83,10 +83,10 @@ Artifacts, abbreviated: **F** = `connectors/<provider>[-<service>].flux` · **M*
 | **auth** | `[[auth]]`, `[[default_auth]]` | **R** + **J** only · applied at execute by `connector-pack` | `connector-pack`; the explorer | **not in F, not in M** — that is [C-10](../stories/C-10-auth-injection-and-manifest.md), still `ready` |
 | **events** | `[[events]]` | **M** minus `schema`/`when` · **J** with both | a host registering subscriptions | **complete**; the omission is deliberate, see below · absent from **R** |
 | **channels** | `[[channels]]` | **M** + **J** · **nothing into F, by design** | a host; the explorer | **declaration complete, no runtime.** The adapter is [C-118](../stories/C-118-connector-channel-adapter.md) |
-| **config** | `[[config]]` | **nothing** | **nothing** | **IR-only.** Validated, hashed, invisible — [C-87](../stories/C-87-configuration-codegen.md) |
+| **config** | `[[config]]` | **M** + **R** + **J** · **nothing into F, by design** | a host and operator UI; the explorer | **complete** (C-87) — M/J carry the authored declaration plus derived level; R carries the value-free declaration |
 | **graphs** | `[[graphs]]` | **nothing** | **nothing** | **lowering exists and is uncalled**; no provider declares one |
 | **roles** | `roles` on `[[services]]` | **nothing** | **nothing** | **IR-only.** One variant, one provider — [C-121](../stories/C-121-llm-catalogue-role.md) |
-| **verify** | `verify` (connector level) | **nothing** | **nothing** | **IR-only.** Declared by 20+ providers |
+| **verify** | `verify` (connector level) | **M** + **J** · **nothing into F, by design** | a host and operator UI; the explorer | **complete** (C-87) — the bounded read behind Test connection |
 | **quirks.pagination** | `[operations.quirks.pagination]` | **nothing** | **nothing** | **IR-only.** Declared by real providers |
 | **quirks.rate_limit** | `[operations.quirks.rate_limit]` | **nothing** | **nothing** | **IR-only**, and **declared by no provider at all** |
 | **quirks.error_envelope** | `[operations.quirks.error_envelope]` | **F** as *prose appended to the op's description* — nothing else | the model reading the tool contract | **prose only** |
@@ -121,11 +121,10 @@ Artifacts, abbreviated: **F** = `connectors/<provider>[-<service>].flux` · **M*
   `ManifestChannel` at `:454-486`; `crates/connector-cli/src/site.rs:141-162`, `:167-201`. Neither
   reaches the Rust catalogue: there is no `EVENTS` static anywhere under
   `crates/catalog/src/generated/`.
-- **config** — read nowhere outside the loader (`crates/connector-spec/src/provider.rs:372`, `:482+`)
-  and the IR helpers (`crates/connector-spec/src/ir.rs:1023`, `:1030`). Every occurrence in an
-  emitter crate is a `config: Vec::new()` test fixture. `connectors/freshdesk.connector.toml` is the
-  demonstration: `providers/freshdesk.toml` declares `[[config]]`, and the manifest is nine lines
-  with no trace of it.
+- **config** — projected by `crates/connector-cli/src/seam.rs` into each service manifest, by
+  `crates/connector-cli/src/catalog.rs` into the embedded catalogue, and by
+  `crates/connector-cli/src/site.rs` into `catalog.json`. The site renders the value-free form. Both
+  consumer artifacts add `level` from `ConfigField::level()` rather than accepting authored policy.
 - **roles** — declared at `crates/connector-spec/src/ir.rs:596-610`, checked at
   `crates/connector-spec/src/provider.rs:1806-1830`, union derived at `ir.rs:951`. `ServiceEntry`
   (`crates/connector-cli/src/site.rs:311-332`) has no `roles` field, and a key-walk of
@@ -133,10 +132,9 @@ Artifacts, abbreviated: **F** = `connectors/<provider>[-<service>].flux` · **M*
   `providers/anthropic.toml:195` declares `roles = ["llm_catalogue"]`, and
   `jq '.providers[]|select(.id=="anthropic").services' web/public/catalog.json` returns two service
   objects with seven keys apiece, none of them `roles`.
-- **verify** — loaded at `crates/connector-spec/src/provider.rs:373` and validated at `:663-689`
-  (must exist; must not be `high` or `destructive`). No emitter reads it.
-  `grep -c '^verify' providers/*.toml` finds it on 20+ providers; `grep verify connectors/*.connector.toml`
-  finds it on none.
+- **verify** — loaded and validated as a bounded read, then projected by `seam.rs` into only the
+  manifest for the service that owns the operation and by `site.rs` into `catalog.json`. A service
+  selection cannot retain a pointer to an operation it dropped.
 - **graphs** — see the section below.
 - **quirks** — the struct is `crates/connector-spec/src/ir.rs:415-425`. `pagination` has no reader
   outside the loader despite `providers/zendesk.toml:158`, `providers/twilio.toml:203` and
@@ -167,7 +165,7 @@ consumer that assumes the two agree.
 
 ## The deliberate omissions, which are not gaps
 
-Three cells above say "no" for a recorded reason, and conflating them with the six dead surfaces
+Three cells above say "no" for a recorded reason, and conflating them with the four dead surfaces
 would be the misread this document exists to prevent.
 
 - **`channels` and `events` emit nothing into `.flux`.** flux lifts `op` declarations only; `channel`
@@ -209,22 +207,19 @@ So the surface is not blocked on a missing capability. It is blocked on two line
 on nobody having wanted one. Those are very different problems, and the second is the one that should
 be answered first: a graph emitter wired into a build that emits zero graphs proves nothing.
 
-## Six surfaces reach no artifact
+## Four surfaces reach no artifact
 
-`config`, `roles`, `verify`, `graphs`, `quirks.pagination`, `quirks.rate_limit`.
+`roles`, `graphs`, `quirks.pagination`, `quirks.rate_limit`.
 
-The honest summary is that **more than a third of the declared surface area of a connector is
-currently unobservable to any consumer.** A provider author can spend real effort on a configuration
-surface — labels, help text, formats, examples, `binds` targets, all of which the loader checks
-rigorously — and produce exactly zero bytes of output.
+The honest summary is that **one quarter of the declared surface area of a connector is currently
+unobservable to any consumer.** Configuration and verification no longer belong to that set: their
+value-free declarations reach the manifest, catalogue and public renderer.
 
 Each has a different reason and a different fix, and they should not be batched:
 
 | surface | why it stops | what would move it |
 |---|---|---|
-| `config` | the emitters were never extended | [C-87](../stories/C-87-configuration-codegen.md) — `ready`, and it carries a breaking `SCHEMA_VERSION` decision |
 | `roles` | C-120 landed the declaration; the projection is a separate story | [C-121](../stories/C-121-llm-catalogue-role.md) — `ready` |
-| `verify` | no story owns it; it rides along with the config surface | C-87's acceptance names it |
 | `graphs` | the emitter is not wired, and there is no input to wire it to | a provider that wants one |
 | `quirks.pagination` | no consumer was ever designed | undecided — see below |
 | `quirks.rate_limit` | no consumer, **and no provider declares it** | probably deletion, not implementation |
@@ -241,13 +236,13 @@ and the cheapest correct action is to say so.
 includes **fifteen of the sixteen fields** — everything except `provenance`, which is excluded for
 the recorded reason that it describes where bytes came from rather than what was compiled from them.
 
-Read that against the table and the mismatch is stark: `config`, `verify`, `graphs`, `roles` (via
-`services`) and both dead quirks are all in the hash domain. Editing any of them moves `ir_sha256`,
+Read that against the table and the mismatch is stark: `graphs`, `roles` (via `services`) and both
+dead quirks are all in the hash domain. Editing any of them moves `ir_sha256`,
 churns `connectors.lock`, and changes **zero artifact bytes**.
 
 The hash domain's own doc comment makes the claim explicit — it is *"the connector's compiled
 meaning, not the module's bytes"* — and that claim is defensible for `events` and `channels`, which
-reach two artifacts. It is a **statement of intent** for the six that reach none: the hash says these
+reach two artifacts. It is a **statement of intent** for the four that reach none: the hash says these
 are compiled meaning, and nothing compiles them.
 
 That is the cleanest available measure of the gap this document reports, and it is why the
@@ -258,7 +253,7 @@ anyone to decide whether it is *output*.
 
 ## What this document does not decide
 
-- **Whether a dead surface should be emitted or deleted.** Six surfaces reach nothing; at least one
+- **Whether a dead surface should be emitted or deleted.** Four surfaces reach nothing; at least one
   (`quirks.rate_limit`) probably should not exist. Each is its own story.
 - **Whether the list should grow.** A new surface must join the per-service namespace
   (`member_names_of`), state which artifacts it reaches, and answer the `HashDomain` destructuring.

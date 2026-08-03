@@ -71,7 +71,7 @@ this document, `web/public/v1/**` and the README SVGs — and covers a future on
 
 ## Versioning
 
-`schema_version` is `2`.
+`schema_version` is `3`.
 
 It is bumped **only** when an existing field changes meaning or disappears. **Adding a field does not
 bump it**: every consumer reads by name, so a new key is invisible to one that does not know it.
@@ -82,6 +82,11 @@ That rule has already paid twice. [C-49](../stories/C-49-provider-services.md) a
 operation gains `oip` (`com.zendesk.api/support:v2#show`) the same way — **new fields on the existing
 objects**. Nothing reshapes. That is also why every entity here is a JSON *object* and
 never a tuple or a positional array.
+
+C-87 is the first bump under this rule: `auth.credentials[].oauth2` used to be a boolean and now
+carries the complete OAuth2 declaration. That is a change to an existing field's type, not an
+additive key, so version 3 is the honest boundary. The boolean was accidental loss rather than a
+compatibility surface worth preserving under a second name.
 
 ## The shape
 
@@ -109,6 +114,7 @@ never a tuple or a positional array.
 | `services` | array\<Service\> | The provider's API surfaces (C-49). **Always at least one**, so a consumer groups by service unconditionally rather than special-casing the providers that have not been split. |
 | `auth` | Auth | See below. |
 | `config` | array\<ConfigField\> | The complete connection form contract, with no collected values. `[]` when the connector declares none. |
+| `verify` | string \| null | The bounded read behind a settings page's Test connection action. |
 | `operation_count` | number | So a provider list renders without walking `operations`. |
 | `operations` | array\<Operation\> | In the order the provider declares them, which is the order `connectors/<id>.flux` carries them. |
 | `events` | array\<InboundEvent\> | Events the provider receives, in declaration order. `[]` when it declares none. |
@@ -118,10 +124,11 @@ never a tuple or a positional array.
 ### ConfigField
 
 The complete, value-free form declaration. Fields whose value equals connector-spec's default are
-omitted; `name`, `label`, `help` and `binds` are always present. Optional keys are `service`,
+omitted; `name`, `label`, `help`, `binds` and the **derived** `level` are always present. Optional keys are `service`,
 `example`, `format`, `choices`, `required`, `default`, `secret`, `docs_url` and `also_binds`.
 `choices` contains [Choice](#choice) objects. A host resolves and stores values; this public document
-never carries one.
+never carries one. `level` is `operator` for the OAuth app registration and `connection` for tenant
+inputs; it is derived from `binds`, never authored.
 
 ### ConfigChoices
 
@@ -223,7 +230,14 @@ to the provider's.
 | `env` | array\<string\> | Environment variable **names**, tried in order. Never a value. |
 | `user_env` | array\<string\> | For `basic`: variable names holding the username half. |
 | `user_suffix` | string \| null | For `basic`: a literal appended to the resolved user value — Zendesk's `/token` marker, which is public API syntax and not a credential. |
-| `oauth2` | boolean | Whether the host runs token grants for this credential. |
+| `oauth2` | OAuth2 \| null | The complete grant declaration, or `null` for a pasted credential. |
+
+### OAuth2
+
+Every key is present: `endpoint`, `authorize_path`, `token_path`, `client_id`, `scopes`, `grants`
+and `redirect`. `redirect` is either `null` or `{port, path}`. Publishing the complete declaration is
+what lets a hosted product build an authorize request; the version-2 boolean could say only that a
+grant existed and discarded everything needed to run it.
 
 `scheme` is flattened to a fixed two-key object rather than mirroring the IR's externally tagged
 encoding (`"bearer"` for one variant, `{"header": {"name": "…"}}` for another). A JSON shape that

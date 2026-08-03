@@ -14,6 +14,26 @@
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-08-04
+
+### Action needed
+
+- **Public catalogue JSON now uses schema 3.** The `auth.oauth2` value is the complete OAuth
+  declaration instead of a boolean, so consumers must read its scopes, grants and endpoint fields
+  from the new object shape. Rust code that constructs a configuration-field value directly must
+  also provide its closed approval policy.
+
+### New
+
+- **Connection forms can now be generated from the complete connector declaration.** Settings,
+  help, validation, defaults, credentials and the safe Test-connection operation are available to
+  browser and command-line onboarding without maintaining a second vendor-specific field list.
+
+- **GitLab connections can use an operator-approved self-managed HTTPS origin.** GitLab.com still
+  works without configuration. A custom installation remains inactive until an operator approves
+  the exact origin, while the connector retains control of the `/api/v4` path and refuses unsafe or
+  replaced proposals without exposing their values.
+
 ### Improved
 
 - **The integration roadmap now has one execution boundary.** Official integrations will run through

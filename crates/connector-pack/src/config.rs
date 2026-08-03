@@ -251,6 +251,73 @@ pub trait ConfigStore: Send + Sync {
             Some(_) => None,
         }
     }
+
+    /// Resolve a value and its operator-approval state as one immutable answer.
+    ///
+    /// Approval is connection-scoped state, so it travels through the instance-aware lookup and
+    /// is frozen alongside the value. The compatibility default deliberately marks every value as
+    /// proposed: stores written before operator-approved origins therefore fail closed, and a
+    /// store that supports approval must override this method rather than answering two calls that
+    /// could race or address different connection instances.
+    fn resolve_for_instance(
+        &self,
+        tenant: &str,
+        provider: &str,
+        instance: Option<&InstanceId>,
+        service: &str,
+        field: Field<'_>,
+    ) -> Option<ConfigValue> {
+        self.get_for_instance(tenant, provider, instance, service, field)
+            .map(ConfigValue::proposed)
+    }
+}
+
+/// One connection setting and the policy decision that may activate it.
+///
+/// The fields stay private so an implementation cannot accidentally construct an approved value
+/// without choosing the named constructor at the point where operator policy was evaluated.
+#[derive(Clone, PartialEq, Eq)]
+pub struct ConfigValue {
+    value: String,
+    operator_approved: bool,
+}
+
+/// A setting may be safe to store without being safe to copy into a log. Preserve the policy bit
+/// that helps diagnose refusal while keeping the customer-provided value out of debug output.
+impl std::fmt::Debug for ConfigValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConfigValue")
+            .field("operator_approved", &self.operator_approved)
+            .finish_non_exhaustive()
+    }
+}
+
+impl ConfigValue {
+    /// A value supplied by a connection owner but not activated by operator policy.
+    pub fn proposed(value: String) -> Self {
+        Self {
+            value,
+            operator_approved: false,
+        }
+    }
+
+    /// A value approved and pinned by deployment/operator policy for this connection.
+    pub fn operator_approved(value: String) -> Self {
+        Self {
+            value,
+            operator_approved: true,
+        }
+    }
+
+    /// The resolved value.
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+
+    /// Whether deployment/operator policy activated this exact resolution.
+    pub fn is_operator_approved(&self) -> bool {
+        self.operator_approved
+    }
 }
 
 /// **The configuration adapter a host binds when it constructs the pack.**
@@ -357,15 +424,15 @@ impl Configuration {
             .into_iter()
             .filter_map(|field| {
                 self.values
-                    .get_for_instance(
+                    .resolve_for_instance(
                         &self.tenant,
                         provider,
                         self.instance.as_ref(),
                         service,
                         field,
                     )
-                    .filter(|value| !value.trim().is_empty())
-                    .map(|value| (field.key(), value))
+                    .filter(|resolved| !resolved.value().trim().is_empty())
+                    .map(|resolved| (field.key(), resolved))
             })
             .collect();
         Snapshot {
@@ -416,7 +483,7 @@ impl Configuration {
                 .filter(|value| !value.trim().is_empty())
                 .or_else(|| declaration.default.map(str::to_owned));
             if let Some(value) = value {
-                values.insert(field.key(), value);
+                values.insert(field.key(), ConfigValue::proposed(value));
             }
         }
         Snapshot {
@@ -455,7 +522,7 @@ pub(crate) struct Snapshot {
     /// and a credential of one spelling stay two values. The service is **not** in this key and does
     /// not need to be: a snapshot is taken for exactly one service, so every value in it is already
     /// that service's.
-    values: BTreeMap<(&'static str, String), String>,
+    values: BTreeMap<(&'static str, String), ConfigValue>,
 }
 
 impl Snapshot {
@@ -490,7 +557,18 @@ impl Snapshot {
     /// subject no allow-list matches, so the call is refused by the gate rather than admitted
     /// against a subject nobody can audit.
     pub(crate) fn lookup(&self, field: Field<'_>) -> Option<String> {
-        self.values.get(&field.key()).cloned()
+        self.resolved(field)
+            .map(|resolved| resolved.value().to_owned())
+    }
+
+    pub(crate) fn resolved(&self, field: Field<'_>) -> Option<&ConfigValue> {
+        self.values.get(&field.key())
+    }
+
+    pub(crate) fn insert_default(&mut self, field: Field<'_>, value: &str) {
+        self.values
+            .entry(field.key())
+            .or_insert_with(|| ConfigValue::proposed(value.to_owned()));
     }
 }
 
@@ -498,12 +576,20 @@ impl Snapshot {
 ///
 /// The counterpart of [`MemoryStore`](connector_secrets::MemoryStore) on the credential side, and
 /// the shape a host binding a snapshot wants: build it once, hand it over, never touch it again.
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct MemoryConfig {
     /// Keyed by `(tenant, provider, service, kind, name)` — the whole address, so one instance can
     /// serve every tenant a host knows about rather than one per tenant, and every service of a
     /// connector rather than one per connector (C-197).
-    values: BTreeMap<(String, String, String, &'static str, String), String>,
+    values: BTreeMap<(String, String, String, &'static str, String), ConfigValue>,
+}
+
+/// Keep both configuration values and their customer-owned addresses out of debug output, matching
+/// [`Configuration`]'s policy for its erased store.
+impl std::fmt::Debug for MemoryConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MemoryConfig").finish_non_exhaustive()
+    }
 }
 
 impl MemoryConfig {
@@ -530,7 +616,59 @@ impl MemoryConfig {
         variable: &str,
         value: &str,
     ) -> Self {
-        self.with(tenant, provider, service, Field::Endpoint(variable), value)
+        self.with(
+            tenant,
+            provider,
+            service,
+            Field::Endpoint(variable),
+            value,
+            false,
+        )
+    }
+
+    /// Bind an endpoint value approved and pinned by deployment/operator policy.
+    #[must_use]
+    pub fn with_approved_endpoint(
+        self,
+        tenant: &str,
+        provider: &str,
+        service: &str,
+        variable: &str,
+        value: &str,
+    ) -> Self {
+        self.with(
+            tenant,
+            provider,
+            service,
+            Field::Endpoint(variable),
+            value,
+            true,
+        )
+    }
+
+    /// Retain an endpoint proposal while revoking its deployment/operator approval.
+    ///
+    /// This produces the same inert state as a newly proposed value. Naming the transition keeps
+    /// hosts and tests from modelling revocation as deletion: the proposal may remain visible to an
+    /// operator UI while connector execution, permission subjects and evidence all refuse to use
+    /// it.
+    #[must_use]
+    pub fn with_revoked_endpoint(
+        self,
+        tenant: &str,
+        provider: &str,
+        service: &str,
+        variable: &str,
+        value: &str,
+    ) -> Self {
+        self.with(
+            tenant,
+            provider,
+            service,
+            Field::Endpoint(variable),
+            value,
+            false,
+        )
     }
 
     /// Bind the non-secret user half of `provider`'s `credential`, for `tenant`, under `service`.
@@ -556,6 +694,7 @@ impl MemoryConfig {
             service,
             Field::Username(credential),
             value,
+            false,
         )
     }
 
@@ -576,6 +715,7 @@ impl MemoryConfig {
             service,
             Field::ChannelQuery { channel, parameter },
             value,
+            false,
         )
     }
 
@@ -586,6 +726,7 @@ impl MemoryConfig {
         service: &str,
         field: Field<'_>,
         value: &str,
+        approved: bool,
     ) -> Self {
         self.values.insert(
             (
@@ -595,7 +736,11 @@ impl MemoryConfig {
                 field.kind(),
                 field.name().to_owned(),
             ),
-            value.to_owned(),
+            if approved {
+                ConfigValue::operator_approved(value.to_owned())
+            } else {
+                ConfigValue::proposed(value.to_owned())
+            },
         );
         self
     }
@@ -611,6 +756,28 @@ impl ConfigStore for MemoryConfig {
                 field.kind(),
                 field.name().to_owned(),
             ))
+            .map(|resolved| resolved.value().to_owned())
+    }
+
+    fn resolve_for_instance(
+        &self,
+        tenant: &str,
+        provider: &str,
+        instance: Option<&InstanceId>,
+        service: &str,
+        field: Field<'_>,
+    ) -> Option<ConfigValue> {
+        if instance.is_some() {
+            return None;
+        }
+        self.values
+            .get(&(
+                tenant.to_owned(),
+                provider.to_owned(),
+                service.to_owned(),
+                field.kind(),
+                field.name().to_owned(),
+            ))
             .cloned()
     }
 }
@@ -618,6 +785,41 @@ impl ConfigStore for MemoryConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn debug_never_exposes_configuration_values() {
+        const SENTINEL: &str = "https://configured-origin.debug-leak.invalid";
+
+        let proposed = ConfigValue::proposed(SENTINEL.to_owned());
+        let approved = ConfigValue::operator_approved(SENTINEL.to_owned());
+        let store = MemoryConfig::new().with_approved_endpoint(
+            "tenant-debug-sentinel",
+            "gitlab",
+            "default",
+            "origin",
+            SENTINEL,
+        );
+
+        for (surface, rendered) in [
+            ("proposed ConfigValue", format!("{proposed:?}")),
+            ("approved ConfigValue", format!("{approved:?}")),
+            ("MemoryConfig", format!("{store:?}")),
+        ] {
+            assert!(
+                !rendered.contains(SENTINEL),
+                "{surface} debug output exposed the configured-origin sentinel: {rendered}"
+            );
+        }
+        assert_eq!(
+            format!("{proposed:?}"),
+            "ConfigValue { operator_approved: false, .. }"
+        );
+        assert_eq!(
+            format!("{approved:?}"),
+            "ConfigValue { operator_approved: true, .. }"
+        );
+        assert_eq!(format!("{store:?}"), "MemoryConfig { .. }");
+    }
 
     #[test]
     fn a_named_instance_uses_the_instance_aware_config_port() {

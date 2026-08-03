@@ -138,6 +138,47 @@ fn channel_delivery_id_is_part_of_the_embedded_projection() {
     );
 }
 
+/// Configuration activation policy is declaration data, not text a consumer has to recover from
+/// [`catalog::ConfigField::declaration_json`]. GitLab's origin is the shipped positive case; its
+/// token is the ordinary-policy control beside it.
+#[test]
+fn config_approval_is_a_closed_typed_field() {
+    let gitlab = catalog::provider(ProviderKey::id("gitlab")).expect("GitLab is shipped");
+
+    let origin = gitlab
+        .config
+        .iter()
+        .find(|field| field.name == "origin")
+        .expect("GitLab declares its configurable origin");
+    assert_eq!(origin.approval, catalog::Approval::Operator);
+    assert_eq!(origin.approval.as_str(), "operator");
+
+    let token = gitlab
+        .config
+        .iter()
+        .find(|field| field.name == "token")
+        .expect("GitLab declares its token");
+    assert_eq!(token.approval, catalog::Approval::None);
+    assert_eq!(token.approval.as_str(), "none");
+}
+
+/// A consumer discovers the bounded Test-connection read from the embedded provider value. It
+/// neither hard-codes GitLab's operation id nor parses the complete declaration JSON.
+#[test]
+fn verify_is_part_of_the_embedded_provider_projection() {
+    let gitlab = catalog::provider(ProviderKey::id("gitlab")).expect("GitLab is shipped");
+    let verify = gitlab.verify.expect("GitLab declares a verify operation");
+    let operation = gitlab
+        .operation(OperationKey::id(verify))
+        .expect("the declared verify operation is embedded under the same provider");
+
+    assert_eq!(operation.id, "gitlab-user-get");
+    assert_eq!(operation.risk, catalog::Risk::Low);
+
+    let asana = catalog::provider(ProviderKey::id("asana")).expect("Asana is shipped");
+    assert_eq!(asana.verify, None, "absence remains explicit and typed");
+}
+
 /// The provider ids the repository ships, from `providers/*.toml`.
 ///
 /// The one filesystem read this crate's tests perform, shared by the two tests that check the

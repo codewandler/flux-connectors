@@ -87,6 +87,10 @@ pub fn render(connector: &Connector, renderings: &[OperationRendering]) -> Resul
     out.push_str("    auth: AUTH,\n");
     out.push_str("    operations: OPERATIONS,\n");
     out.push_str("    config: CONFIG,\n");
+    out.push_str(&format!(
+        "    verify: {},\n",
+        option_string(connector.verify.as_deref())
+    ));
     out.push_str("    events: EVENTS,\n");
     out.push_str("    channels: CHANNELS,\n");
     out.push_str("    config_choices: CONFIG_CHOICES,\n");
@@ -498,6 +502,10 @@ fn render_config(connector: &Connector) -> Result<String> {
             "        default: {},\n",
             option_string(field.default.as_deref())
         ));
+        out.push_str(&format!(
+            "        approval: {},\n",
+            approval(field.approval)
+        ));
         out.push_str(&format!("        secret: {},\n", field.secret));
         out.push_str(&format!(
             "        docs_url: {},\n",
@@ -825,6 +833,18 @@ fn runtime(runtime: connector_spec::Runtime) -> &'static str {
     }
 }
 
+/// `connector_spec::Approval` as the catalogue's closed mirror.
+///
+/// Exhaustive on purpose: adding a policy to the declaration cannot silently become ordinary
+/// activation in a consumer that only sees the embedded catalogue.
+fn approval(approval: connector_spec::Approval) -> &'static str {
+    use connector_spec::Approval;
+    match approval {
+        Approval::None => "crate::Approval::None",
+        Approval::Operator => "crate::Approval::Operator",
+    }
+}
+
 /// `connector_spec::Idempotency` as the catalog's mirror. Exhaustive for the same reason.
 fn idempotency(idempotency: Idempotency) -> &'static str {
     match idempotency {
@@ -876,7 +896,8 @@ fn string(value: &str) -> String {
 mod tests {
     use super::*;
     use connector_spec::{
-        AuthMethod, AuthRequirement, HttpMethod, ParamSet, Quirks, DEFAULT_SERVICE,
+        Approval, AuthMethod, AuthRequirement, ConfigField, Format, HttpMethod, ParamSet, Quirks,
+        DEFAULT_SERVICE,
     };
 
     fn operation(id: &str) -> Operation {
@@ -944,6 +965,49 @@ mod tests {
         let first = render(&connector(), &renderings()).unwrap();
         let second = render(&connector(), &renderings()).unwrap();
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn config_approval_is_emitted_as_a_closed_catalogue_variant() {
+        let mut connector = connector();
+        connector.config.push(ConfigField {
+            name: "tenant".to_string(),
+            service: DEFAULT_SERVICE.to_string(),
+            label: "Acme tenant".to_string(),
+            help: "The approved Acme tenant origin.".to_string(),
+            example: Some("acme".to_string()),
+            format: Format::Text,
+            choices: Vec::new(),
+            required: true,
+            default: None,
+            approval: Approval::Operator,
+            secret: false,
+            docs_url: None,
+            binds: "endpoint.tenant".to_string(),
+            also_binds: Vec::new(),
+        });
+
+        let rendered = render(&connector, &renderings()).unwrap();
+        assert!(
+            rendered.contains("approval: crate::Approval::Operator,"),
+            "{rendered}"
+        );
+    }
+
+    #[test]
+    fn provider_verify_is_emitted_as_typed_catalogue_data() {
+        let mut connector = connector();
+        connector.verify = Some("acme-thing-list".to_string());
+
+        let rendered = render(&connector, &renderings()).unwrap();
+        assert!(
+            rendered.contains("verify: Some(\"acme-thing-list\"),"),
+            "{rendered}"
+        );
+
+        connector.verify = None;
+        let rendered = render(&connector, &renderings()).unwrap();
+        assert!(rendered.contains("verify: None,"), "{rendered}");
     }
 
     /// **The generated artifact carries the scheme word and a credential *reference*, and nothing

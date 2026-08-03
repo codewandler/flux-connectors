@@ -182,7 +182,24 @@ export interface Credential {
   env: string[]
   user_env: string[]
   user_suffix: string | null
-  oauth2: boolean
+  /** The grant contract a host executes, or `null` for a pasted credential. */
+  oauth2: OAuth2 | null
+}
+
+export interface OAuthRedirect {
+  port: number
+  path: string
+}
+
+/** The complete OAuth2 declaration; no authorize URL needs to be reconstructed from a boolean. */
+export interface OAuth2 {
+  endpoint: string
+  authorize_path: string
+  token_path: string
+  client_id: string
+  scopes: string[]
+  grants: string[]
+  redirect: OAuthRedirect | null
 }
 
 /** One permitted value for a configuration field whose input is closed (C-225, C-453). */
@@ -217,9 +234,13 @@ export interface ConfigField {
   default?: string
   /** Omitted when false. */
   secret?: boolean
+  /** Omitted when no elevated activation policy applies. */
+  approval?: 'operator'
   docs_url?: string
   binds: string
   also_binds?: string[]
+  /** Derived from `binds`, never selected by the provider author. */
+  level: 'operator' | 'connection'
 }
 
 export interface Auth {
@@ -375,6 +396,8 @@ export interface Provider {
   auth: Published<Auth>
   /** Everything a host needs to render the connector's configuration form. */
   config: ConfigField[]
+  /** The bounded read behind a settings page's Test connection action. */
+  verify: string | null
   /** Configuration fields that a settings page must render as a choice, not free text. */
   config_choices: ConfigChoices[]
   operation_count: number

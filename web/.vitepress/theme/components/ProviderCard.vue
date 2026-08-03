@@ -132,6 +132,53 @@ const headline = computed(() => {
       </ul>
     </div>
 
+    <details v-if="provider.config.length" class="card__config">
+      <summary>
+        Configuration
+        <span>{{ provider.config.length }} field{{ provider.config.length === 1 ? '' : 's' }}</span>
+      </summary>
+      <ul class="config-fields">
+        <li
+          v-for="field in provider.config"
+          :key="field.name"
+          class="config-field"
+          :data-config-of="provider.id"
+          :data-config-field="field.name"
+        >
+          <div class="config-field__head">
+            <strong>{{ field.label }}</strong>
+            <span class="config-field__chip">{{ field.level }}</span>
+            <span v-if="field.secret" class="config-field__chip">secret</span>
+            <span v-if="field.approval === 'operator'" class="config-field__chip">
+              operator approval required
+            </span>
+            <span v-if="field.required === false" class="config-field__chip">optional</span>
+          </div>
+          <p>{{ field.help }}</p>
+          <p class="config-field__meta">
+            <span>Input: {{ field.format ?? 'text' }}</span>
+            <span v-if="field.example">Example: <code>{{ field.example }}</code></span>
+          </p>
+          <ul v-if="field.choices?.length" class="config-field__choices">
+            <li v-for="choice in field.choices" :key="choice.value">
+              {{ choice.label }} · <code>{{ choice.value }}</code>
+            </li>
+          </ul>
+          <a v-if="field.docs_url" :href="field.docs_url">Vendor setup documentation</a>
+        </li>
+      </ul>
+      <p v-if="provider.verify" class="config-verify" :data-verify-of="provider.id">
+        Test connection with <code>{{ provider.verify }}</code>
+      </p>
+    </details>
+    <p
+      v-if="provider.verify && !provider.config.length"
+      class="config-verify"
+      :data-verify-of="provider.id"
+    >
+      Test connection with <code>{{ provider.verify }}</code>
+    </p>
+
     <!-- Only for a connector that describes one: a heading over an empty list would tell a visitor
          that sixteen connectors have an inbound surface they have not filled in, when in fact they
          declare none. -->
@@ -296,6 +343,83 @@ const headline = computed(() => {
 
 .service__gid {
   font-size: 12px;
+}
+
+.card__config {
+  margin: 12px 0 0;
+  border-top: 1px solid var(--vp-c-divider);
+  padding-top: 10px;
+  font-size: 13px;
+}
+
+.card__config summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.card__config summary span {
+  margin-left: 6px;
+  color: var(--vp-c-text-3);
+  font-weight: 400;
+}
+
+.config-fields {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.config-field {
+  margin: 0;
+  border-left: 2px solid var(--vp-c-divider);
+  padding-left: 10px;
+}
+
+.config-field__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+}
+
+.config-field__chip {
+  border-radius: 10px;
+  padding: 0 7px;
+  background-color: var(--vp-c-default-soft);
+  color: var(--vp-c-text-2);
+  font-size: 10px;
+  line-height: 17px;
+}
+
+.config-field p {
+  margin: 3px 0 0;
+  color: var(--vp-c-text-2);
+  line-height: 1.45;
+}
+
+.config-field__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 11px;
+}
+
+.config-field__choices {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  color: var(--vp-c-text-2);
+}
+
+.config-field a {
+  display: inline-block;
+  margin-top: 4px;
+}
+
+.config-verify {
+  margin: 10px 0 0;
+  color: var(--vp-c-text-2);
 }
 
 .card__warn {

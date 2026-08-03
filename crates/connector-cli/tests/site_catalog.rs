@@ -353,6 +353,14 @@ fn no_credential_value_reaches_the_document() {
     let parsed: Value = serde_json::from_str(&document)
         .unwrap_or_else(|error| panic!("{CATALOG_JSON} is not valid JSON: {error}"));
     let provider = &parsed["providers"][0];
+    let config = provider["config"]
+        .as_array()
+        .expect("the fixture publishes its configuration form");
+    assert_eq!(config.len(), 2, "both credential inputs reach the form");
+    assert!(
+        config.iter().all(|field| field["level"] == "connection"),
+        "credential-bound fields publish their derived connection level: {config:?}"
+    );
     let secret = &provider["channels"][0]["verification"]["hmac"]["secret"];
     assert_eq!(
         secret,
@@ -400,6 +408,22 @@ name = "acme.signing_secret"
 scheme = "signing"
 env = ["{signing_env}"]
 description = "The fixture webhook signing secret."
+
+[[config]]
+name = "access_token"
+label = "Access token"
+help = "The token Acme issued for this connection."
+format = "token"
+secret = true
+binds = "credential.acme.token"
+
+[[config]]
+name = "signing_secret"
+label = "Webhook signing secret"
+help = "The secret Acme uses to sign webhook deliveries."
+format = "token"
+secret = true
+binds = "credential.acme.signing_secret"
 
 [[operations]]
 id = "acme-thing-get"
@@ -472,6 +496,194 @@ steps = ["Open the Acme dashboard.", "Paste the callback URL."]
 "#
     )
 }
+
+/// **The complete configuration and OAuth declarations reach both consumer artifacts** — C-87.
+///
+/// This fixture is deliberately OAuth-backed because no shipped provider declares `[auth.oauth2]`
+/// yet. A shipped-only assertion would therefore pass while the catalogue continued collapsing the
+/// complete grant contract to the boolean `true`, which is the lossy shape this story removes.
+#[test]
+fn configuration_verify_and_oauth_reach_the_consumer_artifacts() {
+    let fixture = Fixture::new("c87-configuration-artifacts");
+    fixture.write_provider("acme", OAUTH_CONFIGURATION);
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_flux-connectors"))
+        .args(["build", "--root"])
+        .arg(fixture.root())
+        .output()
+        .expect("the flux-connectors binary runs");
+    assert!(
+        output.status.success(),
+        "build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let document: Value = serde_json::from_str(&fixture.read(CATALOG_JSON))
+        .expect("the published document is valid JSON");
+    assert_eq!(
+        document["schema_version"], 3,
+        "changing `auth.credentials[].oauth2` from a boolean to the grant spec is a schema break"
+    );
+
+    let provider = &document["providers"][0];
+    assert_eq!(provider["verify"], "acme-ping");
+    let config = provider["config"]
+        .as_array()
+        .expect("the provider carries its form declaration");
+    assert_eq!(config.len(), 2);
+    assert_eq!(config[0]["level"], "operator");
+    assert_eq!(config[1]["level"], "operator");
+
+    let oauth = &provider["auth"]["credentials"][0]["oauth2"];
+    assert!(
+        oauth.is_object(),
+        "OAuth was flattened instead of published: {oauth}"
+    );
+    assert_eq!(oauth["endpoint"], "acme");
+    assert_eq!(oauth["authorize_path"], "/oauth/authorize");
+    assert_eq!(oauth["token_path"], "/oauth/token");
+    assert_eq!(oauth["client_id"], "");
+    assert_eq!(oauth["scopes"], serde_json::json!(["things:read"]));
+    assert_eq!(
+        oauth["grants"],
+        serde_json::json!(["authorization_code", "refresh_token"])
+    );
+    assert_eq!(oauth["redirect"]["port"], 8765);
+    assert_eq!(oauth["redirect"]["path"], "/oauth/callback");
+
+    let manifest: toml::Value = toml::from_str(&fixture.read("connectors/acme.connector.toml"))
+        .expect("the generated manifest is valid TOML");
+    assert_eq!(manifest["verify"].as_str(), Some("acme-ping"));
+    let manifest_config = manifest["config"]
+        .as_array()
+        .expect("the manifest carries its form declaration");
+    assert_eq!(manifest_config.len(), 2);
+    assert!(manifest_config
+        .iter()
+        .all(|field| field["level"].as_str() == Some("operator")));
+}
+
+/// Configuration describes setup and verification; it never changes the executable module.
+#[test]
+fn configuration_and_verify_reach_no_flux_module() {
+    let configured = Fixture::new("c87-configured-module");
+    configured.write_provider("acme", MODULE_WITH_CONFIGURATION);
+    let plain = Fixture::new("c87-plain-module");
+    plain.write_provider(
+        "acme",
+        &MODULE_WITH_CONFIGURATION
+            .replace("verify = \"acme-ping\"\n", "")
+            .replace(CONFIG_BLOCK, ""),
+    );
+
+    for fixture in [&configured, &plain] {
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_flux-connectors"))
+            .args(["build", "--root"])
+            .arg(fixture.root())
+            .output()
+            .expect("the flux-connectors binary runs");
+        assert!(
+            output.status.success(),
+            "build failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    assert_eq!(
+        configured.read("connectors/acme.flux"),
+        plain.read("connectors/acme.flux"),
+        "configuration or verify changed executable Flux"
+    );
+}
+
+const OAUTH_CONFIGURATION: &str = r#"id = "acme"
+vendor = "Acme"
+authority = "com.acme.api"
+api_version = "v1"
+base_url = "https://api.acme.example"
+description = "A fixture OAuth connector."
+verify = "acme-ping"
+default_auth = [{ credentials = ["acme.oauth"] }]
+
+[[auth]]
+name = "acme.oauth"
+scheme = "bearer"
+env = ["ACME_ACCESS_TOKEN"]
+description = "The access token acquired through OAuth."
+
+[auth.oauth2]
+endpoint = "acme"
+authorize_path = "/oauth/authorize"
+token_path = "/oauth/token"
+client_id = ""
+scopes = ["things:read"]
+grants = ["authorization_code", "refresh_token"]
+redirect = { port = 8765, path = "/oauth/callback" }
+
+[[config]]
+name = "client_id"
+label = "Client ID"
+help = "The public id of the Acme app registration."
+binds = "oauth.client_id"
+
+[[config]]
+name = "client_secret"
+label = "Client secret"
+help = "The secret from the Acme app registration."
+format = "token"
+secret = true
+binds = "oauth.client_secret"
+
+[[operations]]
+id = "acme-ping"
+method = "GET"
+path = "/ping"
+description = "Verify the Acme connection."
+risk = "low"
+idempotency = "idempotent"
+"#;
+
+const CONFIG_BLOCK: &str = r#"
+[[config]]
+name = "token"
+label = "Access token"
+help = "The token Acme issued for this connection."
+format = "token"
+secret = true
+binds = "credential.acme.token"
+"#;
+
+const MODULE_WITH_CONFIGURATION: &str = r#"id = "acme"
+vendor = "Acme"
+authority = "com.acme.api"
+api_version = "v1"
+base_url = "https://api.acme.example"
+description = "A fixture connector."
+verify = "acme-ping"
+default_auth = [{ credentials = ["acme.token"] }]
+
+[[auth]]
+name = "acme.token"
+scheme = "bearer"
+env = ["ACME_TOKEN"]
+description = "The fixture credential."
+
+[[config]]
+name = "token"
+label = "Access token"
+help = "The token Acme issued for this connection."
+format = "token"
+secret = true
+binds = "credential.acme.token"
+
+[[operations]]
+id = "acme-ping"
+method = "GET"
+path = "/ping"
+description = "Verify the Acme connection."
+risk = "low"
+idempotency = "idempotent"
+"#;
 
 /// The document a full build **would** write, recomputed from `providers/*.toml`.
 ///
@@ -851,7 +1063,8 @@ fn every_declared_closed_set_reaches_the_published_document() {
     );
     assert_eq!(
         document["schema_version"],
-        Value::from(2),
-        "adding a key does not bump the schema version — see docs/designs/catalog-json.md"
+        Value::from(3),
+        "the closed-set key remained additive; C-87 later bumped the version because the existing \
+         `auth.oauth2` field changed type — see docs/designs/catalog-json.md"
     );
 }

@@ -202,6 +202,31 @@ pub enum Level {
     Connection,
 }
 
+/// Extra authorization required before a supplied configuration value becomes active.
+///
+/// This is independent of [`Level`]: a self-managed origin is still one value per connection, but
+/// activating a value other than the connector's reviewed default requires deployment/operator
+/// policy. The declaration carries policy only; it never carries an approved installation value.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Approval {
+    /// The ordinary configuration flow may activate the value.
+    #[default]
+    None,
+    /// A deployment operator must approve and pin a non-default value for this connection.
+    Operator,
+}
+
+impl Approval {
+    /// The stable token published to manifests and catalogues.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Operator => "operator",
+        }
+    }
+}
+
 /// The shape of a configuration value, and therefore how a form validates it.
 ///
 /// Closed on purpose: a renderer switches on this to pick an input type, a validator and an error
@@ -220,6 +245,9 @@ pub enum Format {
     Hostname,
     /// An absolute `https://` URL.
     Url,
+    /// An absolute HTTPS origin: scheme, authority and optional explicit port, with no userinfo,
+    /// path, query or fragment. The connector appends every API path itself.
+    Origin,
     /// An email address. Zendesk and Jira both put one in the Basic username position.
     Email,
     /// An opaque credential string. No shape beyond "no whitespace" — a vendor's token format is the
@@ -236,6 +264,7 @@ impl Format {
             Self::Subdomain => "subdomain",
             Self::Hostname => "hostname",
             Self::Url => "url",
+            Self::Origin => "origin",
             Self::Email => "email",
             Self::Token => "token",
         }
@@ -282,6 +311,7 @@ impl Format {
                 }
                 Ok(())
             }
+            Self::Origin => validate_https_origin(value),
             Self::Email => {
                 let mut halves = value.split('@');
                 let (Some(local), Some(domain), None) =
@@ -296,6 +326,81 @@ impl Format {
             }
         }
     }
+}
+
+/// Validate the deliberately small HTTPS-origin grammar used by operator-pinned endpoints.
+///
+/// A URL parser would accept paths, userinfo, queries and fragments and make each a second policy
+/// question. This type accepts none of them: the value ends after an authority and the connector
+/// owns every byte after it.
+pub fn validate_https_origin(value: &str) -> Result<(), String> {
+    let authority = value.strip_prefix("https://").ok_or_else(|| {
+        "an origin must begin with `https://`; plain HTTP would carry credentials in cleartext"
+            .to_owned()
+    })?;
+    if authority.is_empty() {
+        return Err("an origin must name a host".to_owned());
+    }
+    if let Some(bad) = authority
+        .chars()
+        .find(|c| matches!(c, '/' | '?' | '#' | '@'))
+    {
+        return Err(format!(
+            "an origin ends after its authority and may not contain {bad:?}; userinfo, paths, \
+             queries and fragments are connector-owned or forbidden"
+        ));
+    }
+    if authority.chars().any(char::is_whitespace) {
+        return Err("an origin authority may not contain whitespace".to_owned());
+    }
+
+    let (host, port) = if authority.starts_with('[') {
+        let close = authority
+            .find(']')
+            .ok_or_else(|| "an IPv6 origin must close its `[` host with `]`".to_owned())?;
+        let host = &authority[1..close];
+        host.parse::<std::net::Ipv6Addr>()
+            .map_err(|_| "the bracketed origin host is not an IPv6 address".to_owned())?;
+        let tail = &authority[close + 1..];
+        let port = if tail.is_empty() {
+            None
+        } else {
+            Some(tail.strip_prefix(':').ok_or_else(|| {
+                "only an optional `:<port>` may follow an IPv6 origin host".to_owned()
+            })?)
+        };
+        (host, port)
+    } else {
+        match authority.rsplit_once(':') {
+            Some((host, port)) if !host.contains(':') => (host, Some(port)),
+            Some(_) => return Err("an IPv6 origin host must be enclosed in `[` and `]`".to_owned()),
+            None => (authority, None),
+        }
+    };
+
+    if host.is_empty() {
+        return Err("an origin must name a host".to_owned());
+    }
+    if host.parse::<std::net::IpAddr>().is_err() {
+        for label in host.split('.') {
+            if label.is_empty()
+                || label.starts_with('-')
+                || label.ends_with('-')
+                || !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+            {
+                return Err("the origin host is not a DNS name or IP address".to_owned());
+            }
+        }
+    }
+    if let Some(port) = port {
+        let port: u16 = port
+            .parse()
+            .map_err(|_| "an origin port must be a decimal number from 1 to 65535".to_owned())?;
+        if port == 0 {
+            return Err("an origin port must be a decimal number from 1 to 65535".to_owned());
+        }
+    }
+    Ok(())
 }
 
 /// One DNS label: lowercase alphanumerics and inner hyphens.
@@ -797,6 +902,10 @@ pub struct ConfigField {
     /// sent on the wire and is therefore validated exactly like a supplied value.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default: Option<String>,
+    /// Additional policy required to activate a supplied value. `operator` means a non-default
+    /// value is inert until the host records an operator approval for this connection.
+    #[serde(default, skip_serializing_if = "is_no_approval")]
+    pub approval: Approval,
     /// Whether the value is a secret — masked on input, never logged, never echoed back.
     ///
     /// **Must agree with [`binds`](Self::binds)**; see [`Binding::is_secret`] for why that is a rule
@@ -1003,6 +1112,10 @@ fn is_text(format: &Format) -> bool {
     *format == Format::Text
 }
 
+fn is_no_approval(approval: &Approval) -> bool {
+    *approval == Approval::None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1207,6 +1320,7 @@ mod tests {
             choices: Vec::new(),
             required: true,
             default: None,
+            approval: Approval::None,
             secret: false,
             docs_url: None,
             binds: "endpoint.app_id".to_owned(),
@@ -1262,6 +1376,7 @@ mod tests {
             choices: Vec::new(),
             required: true,
             default: None,
+            approval: Approval::None,
             secret: false,
             docs_url: None,
             binds: "username.twilio.basic_auth".to_owned(),

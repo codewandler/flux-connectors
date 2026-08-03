@@ -1,6 +1,6 @@
 {
-  "schema_version": 2,
-  "generator": "flux-connectors 0.18.0",
+  "schema_version": 3,
+  "generator": "flux-connectors 0.19.0",
   "providers": [
     {
       "id": "airtable",
@@ -44,7 +44,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -533,6 +533,7 @@
       "events": [],
       "channels": [],
       "config": [],
+      "verify": null,
       "config_choices": []
     },
     {
@@ -577,7 +578,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -1214,7 +1215,8 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://dashboard.algolia.com/account/api-keys/",
-          "binds": "credential.algolia.api_key"
+          "binds": "credential.algolia.api_key",
+          "level": "connection"
         },
         {
           "name": "app_id",
@@ -1225,9 +1227,11 @@
           "binds": "endpoint.app_id",
           "also_binds": [
             "header.X-Algolia-Application-Id"
-          ]
+          ],
+          "level": "connection"
         }
       ],
+      "verify": "algolia-index-list",
       "config_choices": []
     },
     {
@@ -1283,7 +1287,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           },
           {
             "name": "anthropic.admin_key",
@@ -1298,7 +1302,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -2377,7 +2381,8 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://docs.anthropic.com/en/api/getting-started",
-          "binds": "credential.anthropic.api_key"
+          "binds": "credential.anthropic.api_key",
+          "level": "connection"
         },
         {
           "name": "admin_key",
@@ -2387,9 +2392,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://docs.anthropic.com/en/docs/manage-claude/admin-api-keys",
-          "binds": "credential.anthropic.admin_key"
+          "binds": "credential.anthropic.admin_key",
+          "level": "connection"
         }
       ],
+      "verify": "anthropic-models-list",
       "config_choices": []
     },
     {
@@ -2434,7 +2441,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -2865,6 +2872,7 @@
       "events": [],
       "channels": [],
       "config": [],
+      "verify": null,
       "config_choices": []
     },
     {
@@ -2911,7 +2919,7 @@
               "ASTERISK_ARI_USERNAME"
             ],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -23580,14 +23588,16 @@
           "label": "Asterisk host",
           "help": "The hostname of the TLS-enabled Asterisk HTTP service without a scheme, port, or `/ari`",
           "example": "pbx.example.com",
-          "binds": "endpoint.host"
+          "binds": "endpoint.host",
+          "level": "connection"
         },
         {
           "name": "username",
           "label": "ARI username",
           "help": "The username configured for ARI in Asterisk's `ari.conf`",
           "example": "flux",
-          "binds": "username.asterisk.password"
+          "binds": "username.asterisk.password",
+          "level": "connection"
         },
         {
           "name": "password",
@@ -23595,14 +23605,16 @@
           "help": "The password configured beside the ARI username in Asterisk's `ari.conf`",
           "format": "token",
           "secret": true,
-          "binds": "credential.asterisk.password"
+          "binds": "credential.asterisk.password",
+          "level": "connection"
         },
         {
           "name": "app",
           "label": "Stasis application",
           "help": "The ARI Stasis application whose events this connection receives",
           "example": "flux",
-          "binds": "channel.ari-events.query.app"
+          "binds": "channel.ari-events.query.app",
+          "level": "connection"
         },
         {
           "name": "subscribe_all",
@@ -23611,9 +23623,11 @@
           "example": "false",
           "required": false,
           "default": "false",
-          "binds": "channel.ari-events.query.subscribeAll"
+          "binds": "channel.ari-events.query.subscribeAll",
+          "level": "connection"
         }
       ],
+      "verify": "asterisk-ari-asterisk-ping",
       "config_choices": []
     },
     {
@@ -23691,7 +23705,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -152871,6 +152885,7 @@
       "events": [],
       "channels": [],
       "config": [],
+      "verify": "babelforce-agent-list",
       "config_choices": []
     },
     {
@@ -152915,7 +152930,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -154005,7 +154020,8 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://support.atlassian.com/bitbucket-cloud/docs/using-access-tokens/",
-          "binds": "credential.bitbucket.access_token"
+          "binds": "credential.bitbucket.access_token",
+          "level": "connection"
         },
         {
           "name": "workspace",
@@ -154013,9 +154029,11 @@
           "help": "The workspace this connection manages, as its slug — the single path segment right after bitbucket.org/ in any of its URLs. In https://bitbucket.org/acme-engineering/widget-service the workspace is acme-engineering, not acme-engineering/widget-service and not the full URL. Find it under Workspace settings -> Overview. One connection manages one workspace",
           "example": "acme-engineering",
           "docs_url": "https://support.atlassian.com/bitbucket-cloud/docs/what-is-a-workspace/",
-          "binds": "path.workspace"
+          "binds": "path.workspace",
+          "level": "connection"
         }
       ],
+      "verify": "bitbucket-repository-list",
       "config_choices": []
     },
     {
@@ -154060,7 +154078,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -154614,9 +154632,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developer.box.com/guides/authentication/",
-          "binds": "credential.box.access_token"
+          "binds": "credential.box.access_token",
+          "level": "connection"
         }
       ],
+      "verify": "box-user-me",
       "config_choices": []
     },
     {
@@ -154661,7 +154681,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -155380,9 +155400,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developer.calendly.com/getting-started",
-          "binds": "credential.calendly.access_token"
+          "binds": "credential.calendly.access_token",
+          "level": "connection"
         }
       ],
+      "verify": "calendly-user-me",
       "config_choices": []
     },
     {
@@ -155427,7 +155449,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -156358,9 +156380,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developer.clickup.com/docs/authentication",
-          "binds": "credential.clickup.token"
+          "binds": "credential.clickup.token",
+          "level": "connection"
         }
       ],
+      "verify": "clickup-team-list",
       "config_choices": []
     },
     {
@@ -156405,7 +156429,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -157061,7 +157085,8 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developers.cloudflare.com/fundamentals/api/get-started/create-token/",
-          "binds": "credential.cloudflare.api_token"
+          "binds": "credential.cloudflare.api_token",
+          "level": "connection"
         },
         {
           "name": "zone_id",
@@ -157069,9 +157094,11 @@
           "help": "The zone (domain) this connection manages, as 32 lowercase hex characters. Find it on the zone's Overview page in the Cloudflare dashboard, bottom right under \"Zone ID\", or by running the connector's \"List zones\" operation. One connection manages one zone",
           "example": "023e105f4ecef8ad9ca31a8372d0c353",
           "docs_url": "https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/",
-          "binds": "path.zone_id"
+          "binds": "path.zone_id",
+          "level": "connection"
         }
       ],
+      "verify": "cloudflare-zone-list",
       "config_choices": []
     },
     {
@@ -157118,7 +157145,7 @@
               "CONFLUENCE_USER"
             ],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -158084,7 +158111,8 @@
           "example": "acme",
           "format": "subdomain",
           "docs_url": "https://support.atlassian.com/confluence-cloud/docs/what-is-confluence-cloud/",
-          "binds": "endpoint.site"
+          "binds": "endpoint.site",
+          "level": "connection"
         },
         {
           "name": "email",
@@ -158092,7 +158120,8 @@
           "help": "The email of the account that minted the API token. It travels as the username half of the request",
           "example": "you@acme.com",
           "format": "email",
-          "binds": "username.confluence.api_token"
+          "binds": "username.confluence.api_token",
+          "level": "connection"
         },
         {
           "name": "api_token",
@@ -158101,9 +158130,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://id.atlassian.com/manage-profile/security/api-tokens",
-          "binds": "credential.confluence.api_token"
+          "binds": "credential.confluence.api_token",
+          "level": "connection"
         }
       ],
+      "verify": "confluence-space-list",
       "config_choices": []
     },
     {
@@ -158160,7 +158191,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           },
           {
             "name": "contentful.management_token",
@@ -158175,7 +158206,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -158738,7 +158769,8 @@
           "help": "Found on the space's Settings > General settings page in the Contentful web app. Identifies which space the delivery token reads from",
           "example": "a1b2c3d4e5f6",
           "docs_url": "https://www.contentful.com/developers/docs/references/authentication/",
-          "binds": "endpoint.space_id"
+          "binds": "endpoint.space_id",
+          "level": "connection"
         },
         {
           "name": "delivery_environment_id",
@@ -158747,7 +158779,8 @@
           "help": "The environment within the space to read from — commonly `master` unless this space uses staged environments",
           "example": "master",
           "docs_url": "https://www.contentful.com/developers/docs/concepts/multiple-environments/",
-          "binds": "endpoint.environment_id"
+          "binds": "endpoint.environment_id",
+          "level": "connection"
         },
         {
           "name": "delivery_token",
@@ -158757,7 +158790,8 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://www.contentful.com/developers/docs/references/authentication/",
-          "binds": "credential.contentful.delivery_token"
+          "binds": "credential.contentful.delivery_token",
+          "level": "connection"
         },
         {
           "name": "management_space_id",
@@ -158766,7 +158800,8 @@
           "help": "Found on the space's Settings > General settings page in the Contentful web app. Identifies which space the management token writes to",
           "example": "a1b2c3d4e5f6",
           "docs_url": "https://www.contentful.com/developers/docs/references/content-management-api/",
-          "binds": "endpoint.space_id"
+          "binds": "endpoint.space_id",
+          "level": "connection"
         },
         {
           "name": "management_environment_id",
@@ -158775,7 +158810,8 @@
           "help": "The environment within the space to write to — commonly `master` unless this space uses staged environments",
           "example": "master",
           "docs_url": "https://www.contentful.com/developers/docs/concepts/multiple-environments/",
-          "binds": "endpoint.environment_id"
+          "binds": "endpoint.environment_id",
+          "level": "connection"
         },
         {
           "name": "management_token",
@@ -158785,9 +158821,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://www.contentful.com/developers/docs/references/content-management-api/",
-          "binds": "credential.contentful.management_token"
+          "binds": "credential.contentful.management_token",
+          "level": "connection"
         }
       ],
+      "verify": "contentful-entries-list",
       "config_choices": []
     },
     {
@@ -158832,7 +158870,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           },
           {
             "name": "datadog.application_key",
@@ -158847,7 +158885,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -159207,7 +159245,8 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://docs.datadoghq.com/account_management/api-app-keys/",
-          "binds": "credential.datadog.api_key"
+          "binds": "credential.datadog.api_key",
+          "level": "connection"
         },
         {
           "name": "application_key",
@@ -159216,9 +159255,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://docs.datadoghq.com/account_management/api-app-keys/",
-          "binds": "credential.datadog.application_key"
+          "binds": "credential.datadog.application_key",
+          "level": "connection"
         }
       ],
+      "verify": "datadog-monitor-list",
       "config_choices": []
     },
     {
@@ -159263,7 +159304,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -160147,9 +160188,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://discord.com/developers/docs/reference#authentication",
-          "binds": "credential.discord.bot_token"
+          "binds": "credential.discord.bot_token",
+          "level": "connection"
         }
       ],
+      "verify": "discord-current-user",
       "config_choices": []
     },
     {
@@ -160194,7 +160237,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -160952,14 +160995,16 @@
           "help": "The host portion of this account's own API server, without the https:// prefix — read it from the base_uri field of the accounts[] entry in DocuSign's OAuth UserInfo response (https://account-d.docusign.com/oauth/userinfo in the developer sandbox, https://account.docusign.com/oauth/userinfo in production) for the account you are connecting. If that field reads https://demo.docusign.net, enter demo.docusign.net",
           "example": "demo.docusign.net",
           "format": "hostname",
-          "binds": "endpoint.account_host"
+          "binds": "endpoint.account_host",
+          "level": "connection"
         },
         {
           "name": "account_id",
           "label": "DocuSign account id",
           "help": "This account's id (a GUID), from the same accounts[] entry of DocuSign's OAuth UserInfo response that account_host came from",
           "example": "00000000-0000-0000-0000-000000000000",
-          "binds": "endpoint.account_id"
+          "binds": "endpoint.account_id",
+          "level": "connection"
         },
         {
           "name": "access_token",
@@ -160967,9 +161012,11 @@
           "help": "An OAuth2 access token for this account — minted by DocuSign's own login flow or an integration key's JWT/authorization-code grant, and pasted here already-minted. It is short-lived; a call that starts failing with 401 usually means this needs refreshing",
           "format": "token",
           "secret": true,
-          "binds": "credential.docusign.access_token"
+          "binds": "credential.docusign.access_token",
+          "level": "connection"
         }
       ],
+      "verify": "docusign-verify",
       "config_choices": []
     },
     {
@@ -161014,7 +161061,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -161528,9 +161575,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developers.dropbox.com/oauth-guide",
-          "binds": "credential.dropbox.access_token"
+          "binds": "credential.dropbox.access_token",
+          "level": "connection"
         }
       ],
+      "verify": "dropbox-user-me",
       "config_choices": []
     },
     {
@@ -161575,7 +161624,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -162181,9 +162230,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://www.figma.com/developers/api",
-          "binds": "credential.figma.token"
+          "binds": "credential.figma.token",
+          "level": "connection"
         }
       ],
+      "verify": "figma-user-me",
       "config_choices": []
     },
     {
@@ -162228,7 +162279,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -162992,6 +163043,7 @@
       "events": [],
       "channels": [],
       "config": [],
+      "verify": "fly-regions-list",
       "config_choices": []
     },
     {
@@ -165104,9 +165156,11 @@
           "example": "acme.freshdesk.com",
           "format": "hostname",
           "docs_url": "https://support.freshdesk.com/en/support/solutions/articles/50000004820",
-          "binds": "endpoint.domain"
+          "binds": "endpoint.domain",
+          "level": "connection"
         }
       ],
+      "verify": "freshdesk-test",
       "config_choices": []
     },
     {
@@ -165151,7 +165205,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -165806,9 +165860,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://dev.frontapp.com/docs/authentication",
-          "binds": "credential.front.api_token"
+          "binds": "credential.front.api_token",
+          "level": "connection"
         }
       ],
+      "verify": "front-verify",
       "config_choices": []
     },
     {
@@ -165853,7 +165909,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -172334,6 +172390,7 @@
       "events": [],
       "channels": [],
       "config": [],
+      "verify": null,
       "config_choices": []
     },
     {
@@ -172342,18 +172399,18 @@
       "vendor": "GitLab",
       "description": "GitLab: read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only",
       "runtime": "http",
-      "base_url": "https://gitlab.com/api/v4",
+      "base_url": "{origin}/api/v4",
       "api_version": "v4",
       "hosts": [
-        "gitlab.com"
+        "{origin}"
       ],
       "services": [
         {
           "name": "default",
           "description": "",
-          "base_url": "https://gitlab.com/api/v4",
+          "base_url": "{origin}/api/v4",
           "hosts": [
-            "gitlab.com"
+            "{origin}"
           ],
           "api_version": "v4",
           "gid": "com.gitlab.api:v4",
@@ -172378,7 +172435,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -172446,9 +172503,9 @@
             ]
           ],
           "hosts": [
-            "gitlab.com"
+            "{origin}"
           ],
-          "flux": "op gitlab-user-get -> Any\n  description \"Get the currently authenticated user. Takes no parameters; used as the verify read to prove a token resolves\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://gitlab.com/api/v4\"\n  url = fmt(\"{base}/user\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op gitlab-user-get -> Any\n  description \"Get the currently authenticated user. Takes no parameters; used as the verify read to prove a token resolves\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"{origin}/api/v4\"\n  url = fmt(\"{base}/user\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -172647,9 +172704,9 @@
             ]
           ],
           "hosts": [
-            "gitlab.com"
+            "{origin}"
           ],
-          "flux": "op gitlab-issue-list(project_id: Number, state: String, page: Number, per_page: Number) -> Any\n  description \"List issues in a project, optionally filtered by state, newest activity first\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://gitlab.com/api/v4\"\n  url = fmt(\"{base}/projects/{project_id}/issues\")\n  response = http.request(method: \"GET\", query: { page, per_page, state }, url)\n  return response\n",
+          "flux": "op gitlab-issue-list(project_id: Number, state: String, page: Number, per_page: Number) -> Any\n  description \"List issues in a project, optionally filtered by state, newest activity first\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"{origin}/api/v4\"\n  url = fmt(\"{base}/projects/{project_id}/issues\")\n  response = http.request(method: \"GET\", query: { page, per_page, state }, url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -172807,9 +172864,9 @@
             ]
           ],
           "hosts": [
-            "gitlab.com"
+            "{origin}"
           ],
-          "flux": "op gitlab-issue-get(project_id: Number, issue_iid: Number) -> Any\n  description \"Get one issue by its project-scoped number (iid), not its global id\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://gitlab.com/api/v4\"\n  url = fmt(\"{base}/projects/{project_id}/issues/{issue_iid}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op gitlab-issue-get(project_id: Number, issue_iid: Number) -> Any\n  description \"Get one issue by its project-scoped number (iid), not its global id\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"{origin}/api/v4\"\n  url = fmt(\"{base}/projects/{project_id}/issues/{issue_iid}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -172962,9 +173019,9 @@
             ]
           ],
           "hosts": [
-            "gitlab.com"
+            "{origin}"
           ],
-          "flux": "op gitlab-issue-create(project_id: Number, title: String, description: String, labels: String) -> Any\n  description \"Open a new issue on a project. Visible immediately to everyone with access to the project (the whole world, if the project is public) and notifies its watchers\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://gitlab.com/api/v4\"\n  url = fmt(\"{base}/projects/{project_id}/issues\")\n  content_type = \"application/json\"\n  payload = { description, labels, title }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
+          "flux": "op gitlab-issue-create(project_id: Number, title: String, description: String, labels: String) -> Any\n  description \"Open a new issue on a project. Visible immediately to everyone with access to the project (the whole world, if the project is public) and notifies its watchers\"\n  risk \"high\"\n  idempotency \"non_idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"{origin}/api/v4\"\n  url = fmt(\"{base}/projects/{project_id}/issues\")\n  content_type = \"application/json\"\n  payload = { description, labels, title }\n  response = http.request(body: payload, headers: { \"content-type\": content_type }, method: \"POST\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -173162,9 +173219,9 @@
             ]
           ],
           "hosts": [
-            "gitlab.com"
+            "{origin}"
           ],
-          "flux": "op gitlab-merge-request-list(project_id: Number, state: String, page: Number, per_page: Number) -> Any\n  description \"List merge requests in a project, optionally filtered by state, newest activity first\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://gitlab.com/api/v4\"\n  url = fmt(\"{base}/projects/{project_id}/merge_requests\")\n  response = http.request(method: \"GET\", query: { page, per_page, state }, url)\n  return response\n",
+          "flux": "op gitlab-merge-request-list(project_id: Number, state: String, page: Number, per_page: Number) -> Any\n  description \"List merge requests in a project, optionally filtered by state, newest activity first\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"{origin}/api/v4\"\n  url = fmt(\"{base}/projects/{project_id}/merge_requests\")\n  response = http.request(method: \"GET\", query: { page, per_page, state }, url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -173314,9 +173371,9 @@
             ]
           ],
           "hosts": [
-            "gitlab.com"
+            "{origin}"
           ],
-          "flux": "op gitlab-pipeline-get(project_id: Number, pipeline_id: Number) -> Any\n  description \"Get one CI/CD pipeline's status and timing by its id\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://gitlab.com/api/v4\"\n  url = fmt(\"{base}/projects/{project_id}/pipelines/{pipeline_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "flux": "op gitlab-pipeline-get(project_id: Number, pipeline_id: Number) -> Any\n  description \"Get one CI/CD pipeline's status and timing by its id\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"{origin}/api/v4\"\n  url = fmt(\"{base}/projects/{project_id}/pipelines/{pipeline_id}\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -173451,9 +173508,9 @@
             ]
           ],
           "hosts": [
-            "gitlab.com"
+            "{origin}"
           ],
-          "flux": "op gitlab-branch-list(project_id: Number, page: Number, per_page: Number) -> Any\n  description \"List a project's repository branches\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"https://gitlab.com/api/v4\"\n  url = fmt(\"{base}/projects/{project_id}/repository/branches\")\n  response = http.request(method: \"GET\", query: { page, per_page }, url)\n  return response\n",
+          "flux": "op gitlab-branch-list(project_id: Number, page: Number, per_page: Number) -> Any\n  description \"List a project's repository branches\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"network\"]\n  expose true\n\n  base = \"{origin}/api/v4\"\n  url = fmt(\"{base}/projects/{project_id}/repository/branches\")\n  response = http.request(method: \"GET\", query: { page, per_page }, url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -173472,15 +173529,30 @@
       "channels": [],
       "config": [
         {
+          "name": "origin",
+          "label": "GitLab origin",
+          "help": "The HTTPS origin only, without `/api/v4` or another path. Leave the default for GitLab.com; a self-managed origin requires deployment/operator approval before it becomes active",
+          "example": "https://gitlab.company.example",
+          "format": "origin",
+          "required": false,
+          "default": "https://gitlab.com",
+          "approval": "operator",
+          "docs_url": "https://docs.gitlab.com/administration/",
+          "binds": "endpoint.origin",
+          "level": "connection"
+        },
+        {
           "name": "token",
           "label": "GitLab personal access token",
-          "help": "Create one at User Settings -> Access Tokens (gitlab.com/-/user_settings/personal_access_tokens). Grant the read_api scope for every read below, or api if you also want gitlab-issue-create to work. This connector only reaches gitlab.com; a self-managed GitLab instance is not supported yet",
+          "help": "Create one in the selected GitLab installation's User Settings -> Access Tokens. Grant read_api for every read below, or api if you also want gitlab-issue-create to work",
           "format": "token",
           "secret": true,
           "docs_url": "https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html",
-          "binds": "credential.gitlab.token"
+          "binds": "credential.gitlab.token",
+          "level": "connection"
         }
       ],
+      "verify": "gitlab-user-get",
       "config_choices": []
     },
     {
@@ -173548,7 +173620,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -174501,6 +174573,7 @@
       "events": [],
       "channels": [],
       "config": [],
+      "verify": null,
       "config_choices": []
     },
     {
@@ -174545,7 +174618,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -175094,6 +175167,7 @@
       "events": [],
       "channels": [],
       "config": [],
+      "verify": null,
       "config_choices": []
     },
     {
@@ -175138,7 +175212,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -176032,9 +176106,11 @@
             }
           ],
           "docs_url": "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/",
-          "binds": "endpoint.host"
+          "binds": "endpoint.host",
+          "level": "connection"
         }
       ],
+      "verify": null,
       "config_choices": [
         {
           "service": "default",
@@ -176103,7 +176179,7 @@
               "JIRA_USER"
             ],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -176835,7 +176911,8 @@
           "example": "acme",
           "format": "subdomain",
           "docs_url": "https://support.atlassian.com/jira-software-cloud/docs/what-is-a-jira-site/",
-          "binds": "endpoint.site"
+          "binds": "endpoint.site",
+          "level": "connection"
         },
         {
           "name": "email",
@@ -176843,7 +176920,8 @@
           "help": "The email of the account that minted the API token. It travels as the username half of the request",
           "example": "you@acme.com",
           "format": "email",
-          "binds": "username.jira.api_token"
+          "binds": "username.jira.api_token",
+          "level": "connection"
         },
         {
           "name": "api_token",
@@ -176852,9 +176930,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://id.atlassian.com/manage-profile/security/api-tokens",
-          "binds": "credential.jira.api_token"
+          "binds": "credential.jira.api_token",
+          "level": "connection"
         }
       ],
+      "verify": null,
       "config_choices": []
     },
     {
@@ -176899,7 +176979,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -177870,9 +177950,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developers.klaviyo.com/en/docs/retrieve_api_credentials",
-          "binds": "credential.klaviyo.api_key"
+          "binds": "credential.klaviyo.api_key",
+          "level": "connection"
         }
       ],
+      "verify": "klaviyo-account-list",
       "config_choices": []
     },
     {
@@ -177917,7 +177999,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -178669,9 +178751,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://docs.launchdarkly.com/home/account/api",
-          "binds": "credential.launchdarkly.api_token"
+          "binds": "credential.launchdarkly.api_token",
+          "level": "connection"
         }
       ],
+      "verify": "launchdarkly-project-list",
       "config_choices": []
     },
     {
@@ -178716,7 +178800,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -179807,7 +179891,8 @@
           "example": "us14",
           "format": "subdomain",
           "docs_url": "https://mailchimp.com/developer/marketing/docs/fundamentals/",
-          "binds": "endpoint.dc"
+          "binds": "endpoint.dc",
+          "level": "connection"
         },
         {
           "name": "api_key",
@@ -179816,9 +179901,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://mailchimp.com/developer/marketing/guides/quick-start/",
-          "binds": "credential.mailchimp.api_key"
+          "binds": "credential.mailchimp.api_key",
+          "level": "connection"
         }
       ],
+      "verify": "mailchimp-ping",
       "config_choices": []
     },
     {
@@ -179885,7 +179972,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -189463,9 +189550,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://learn.microsoft.com/en-us/graph/auth/auth-concepts",
-          "binds": "credential.microsoft_graph.access_token"
+          "binds": "credential.microsoft_graph.access_token",
+          "level": "connection"
         }
       ],
+      "verify": "microsoft_graph-calendar-calendar-get",
       "config_choices": []
     },
     {
@@ -189510,7 +189599,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -190561,9 +190650,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developers.miro.com/docs/getting-started-with-oauth",
-          "binds": "credential.miro.access_token"
+          "binds": "credential.miro.access_token",
+          "level": "connection"
         }
       ],
+      "verify": "miro-board-list",
       "config_choices": []
     },
     {
@@ -190608,7 +190699,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -191358,7 +191449,8 @@
             }
           ],
           "docs_url": "https://docs.newrelic.com/docs/apis/rest-api-v2/get-started/introduction-new-relic-rest-api-v2/",
-          "binds": "endpoint.host"
+          "binds": "endpoint.host",
+          "level": "connection"
         },
         {
           "name": "api_key",
@@ -191367,9 +191459,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://docs.newrelic.com/docs/apis/intro-apis/new-relic-api-keys/",
-          "binds": "credential.newrelic.api_key"
+          "binds": "credential.newrelic.api_key",
+          "level": "connection"
         }
       ],
+      "verify": "newrelic-application-list",
       "config_choices": [
         {
           "service": "default",
@@ -191432,7 +191526,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -191926,9 +192020,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developers.notion.com/docs/authorization",
-          "binds": "credential.notion.token"
+          "binds": "credential.notion.token",
+          "level": "connection"
         }
       ],
+      "verify": "notion-user-me",
       "config_choices": []
     },
     {
@@ -191973,7 +192069,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -192606,7 +192702,8 @@
           "example": "acme.okta.com",
           "format": "hostname",
           "docs_url": "https://developer.okta.com/docs/api/#url-namespace",
-          "binds": "endpoint.domain"
+          "binds": "endpoint.domain",
+          "level": "connection"
         },
         {
           "name": "api_token",
@@ -192615,9 +192712,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developer.okta.com/docs/guides/create-an-api-token/",
-          "binds": "credential.okta.api_token"
+          "binds": "credential.okta.api_token",
+          "level": "connection"
         }
       ],
+      "verify": "okta-user-list",
       "config_choices": []
     },
     {
@@ -192662,7 +192761,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -222266,6 +222365,7 @@
       "events": [],
       "channels": [],
       "config": [],
+      "verify": null,
       "config_choices": []
     },
     {
@@ -222310,7 +222410,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -222691,6 +222791,7 @@
       "events": [],
       "channels": [],
       "config": [],
+      "verify": null,
       "config_choices": []
     },
     {
@@ -222735,7 +222836,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -223816,9 +223917,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developer.pagerduty.com/docs/authentication",
-          "binds": "credential.pagerduty.api_token"
+          "binds": "credential.pagerduty.api_token",
+          "level": "connection"
         }
       ],
+      "verify": "pagerduty-service-list",
       "config_choices": []
     },
     {
@@ -223863,7 +223966,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -224442,9 +224545,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://postmarkapp.com/support/article/1008-what-are-the-account-server-api-tokens",
-          "binds": "credential.postmark.server_token"
+          "binds": "credential.postmark.server_token",
+          "level": "connection"
         }
       ],
+      "verify": "postmark-deliverystats-get",
       "config_choices": []
     },
     {
@@ -224489,7 +224594,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -225062,6 +225167,7 @@
       "events": [],
       "channels": [],
       "config": [],
+      "verify": "resend-domain-list",
       "config_choices": []
     },
     {
@@ -225106,7 +225212,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -225684,7 +225790,8 @@
           "help": "The subdomain of your org's My Domain URL — if you log in at acme.my.salesforce.com, this is acme. Find it under Setup → Company Settings → My Domain, or read it off the instance_url your org's login flow returns",
           "example": "acme",
           "format": "subdomain",
-          "binds": "endpoint.instance"
+          "binds": "endpoint.instance",
+          "level": "connection"
         },
         {
           "name": "access_token",
@@ -225692,9 +225799,11 @@
           "help": "An OAuth2 access token for this org — minted by Salesforce's own login flow, or by a Connected App's client-credentials or JWT-bearer flow, and pasted here already-minted. It is short-lived; a call that starts failing with 401 usually means this needs refreshing",
           "format": "token",
           "secret": true,
-          "binds": "credential.salesforce.access_token"
+          "binds": "credential.salesforce.access_token",
+          "level": "connection"
         }
       ],
+      "verify": "salesforce-whoami",
       "config_choices": []
     },
     {
@@ -225739,7 +225848,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -226202,9 +226311,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://www.twilio.com/docs/sendgrid/ui/account-and-settings/api-keys",
-          "binds": "credential.sendgrid.api_key"
+          "binds": "credential.sendgrid.api_key",
+          "level": "connection"
         }
       ],
+      "verify": "sendgrid-template-list",
       "config_choices": []
     },
     {
@@ -226249,7 +226360,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -227019,6 +227130,7 @@
       "events": [],
       "channels": [],
       "config": [],
+      "verify": null,
       "config_choices": []
     },
     {
@@ -227063,7 +227175,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -227821,7 +227933,8 @@
           "example": "acme",
           "format": "subdomain",
           "docs_url": "https://help.shopify.com/en/manual/domains",
-          "binds": "endpoint.shop"
+          "binds": "endpoint.shop",
+          "level": "connection"
         },
         {
           "name": "access_token",
@@ -227830,9 +227943,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://help.shopify.com/en/manual/apps/app-types/custom-apps",
-          "binds": "credential.shopify.access_token"
+          "binds": "credential.shopify.access_token",
+          "level": "connection"
         }
       ],
+      "verify": null,
       "config_choices": []
     },
     {
@@ -227878,7 +227993,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           },
           {
             "name": "slack.signing_secret",
@@ -227893,7 +228008,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -228568,6 +228683,7 @@
         }
       ],
       "config": [],
+      "verify": null,
       "config_choices": []
     },
     {
@@ -228612,7 +228728,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -229383,7 +229499,8 @@
           "name": "page_id",
           "label": "Status page id",
           "help": "The id of the status page this connection administers. Statuspage shows it in the address bar of the page's own management screen (manage.statuspage.io/pages/<page id>) and on the API keys screen. One connection administers one page: an account with several status pages needs one installation per page",
-          "binds": "endpoint.page_id"
+          "binds": "endpoint.page_id",
+          "level": "connection"
         },
         {
           "name": "api_key",
@@ -229392,9 +229509,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developer.statuspage.io/",
-          "binds": "credential.statuspage.api_key"
+          "binds": "credential.statuspage.api_key",
+          "level": "connection"
         }
       ],
+      "verify": "statuspage-component-list",
       "config_choices": []
     },
     {
@@ -229440,7 +229559,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           },
           {
             "name": "stripe.webhook_signing_secret",
@@ -229455,7 +229574,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -231331,9 +231450,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://docs.stripe.com/keys",
-          "binds": "credential.stripe.secret_key"
+          "binds": "credential.stripe.secret_key",
+          "level": "connection"
         }
       ],
+      "verify": "stripe-balance-get",
       "config_choices": []
     },
     {
@@ -231378,7 +231499,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -231675,7 +231796,8 @@
           "example": "abcdefghijklmnopqrst",
           "format": "subdomain",
           "docs_url": "https://supabase.com/docs/guides/api",
-          "binds": "endpoint.project_ref"
+          "binds": "endpoint.project_ref",
+          "level": "connection"
         },
         {
           "name": "anon_key",
@@ -231684,9 +231806,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://supabase.com/docs/guides/api/api-keys",
-          "binds": "credential.supabase.anon_key"
+          "binds": "credential.supabase.anon_key",
+          "level": "connection"
         }
       ],
+      "verify": "supabase-schema-describe",
       "config_choices": []
     },
     {
@@ -231731,7 +231855,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           },
           {
             "name": "trello.token",
@@ -231746,7 +231870,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -232547,7 +232671,8 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/",
-          "binds": "credential.trello.key"
+          "binds": "credential.trello.key",
+          "level": "connection"
         },
         {
           "name": "api_token",
@@ -232556,9 +232681,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/",
-          "binds": "credential.trello.token"
+          "binds": "credential.trello.token",
+          "level": "connection"
         }
       ],
+      "verify": "trello-board-list",
       "config_choices": []
     },
     {
@@ -232606,7 +232733,7 @@
               "TWILIO_ACCOUNT_SID"
             ],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           },
           {
             "name": "twilio.webhook_signing_secret",
@@ -232621,7 +232748,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -234695,7 +234822,8 @@
           "binds": "username.twilio.basic_auth",
           "also_binds": [
             "path.AccountSid"
-          ]
+          ],
+          "level": "connection"
         },
         {
           "name": "auth_token",
@@ -234704,9 +234832,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://www.twilio.com/docs/iam/api/account",
-          "binds": "credential.twilio.basic_auth"
+          "binds": "credential.twilio.basic_auth",
+          "level": "connection"
         }
       ],
+      "verify": "twilio-account-get",
       "config_choices": []
     },
     {
@@ -234751,7 +234881,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -235518,9 +235648,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://www.typeform.com/developers/get-started/personal-access-token/",
-          "binds": "credential.typeform.access_token"
+          "binds": "credential.typeform.access_token",
+          "level": "connection"
         }
       ],
+      "verify": "typeform-user-me",
       "config_choices": []
     },
     {
@@ -235565,7 +235697,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -236066,7 +236198,8 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://vercel.com/docs/rest-api#creating-an-access-token",
-          "binds": "credential.vercel.token"
+          "binds": "credential.vercel.token",
+          "level": "connection"
         },
         {
           "name": "team_id",
@@ -236074,9 +236207,11 @@
           "help": "The team this connection acts on behalf of. Find it under Team Settings -> General -> Team ID, or in the URL of your team's dashboard. Every call this connector makes is scoped to it; a personal (non-team) account is not supported",
           "example": "team_1a2b3c4d5e6f7g8h9i0j",
           "docs_url": "https://vercel.com/docs/rest-api/reference/welcome#authentication",
-          "binds": "query.teamId"
+          "binds": "query.teamId",
+          "level": "connection"
         }
       ],
+      "verify": "vercel-projects-list",
       "config_choices": []
     },
     {
@@ -236121,7 +236256,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -236748,9 +236883,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developers.webflow.com/data/reference/authentication",
-          "binds": "credential.webflow.token"
+          "binds": "credential.webflow.token",
+          "level": "connection"
         }
       ],
+      "verify": "webflow-site-list",
       "config_choices": []
     },
     {
@@ -236819,7 +236956,7 @@
               "ZENDESK_USER"
             ],
             "user_suffix": "/token",
-            "oauth2": false
+            "oauth2": null
           },
           {
             "name": "zendesk.messaging_key",
@@ -236836,7 +236973,7 @@
               "ZENDESK_MESSAGING_KEY_ID"
             ],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -264183,7 +264320,8 @@
           "example": "acme",
           "format": "subdomain",
           "docs_url": "https://support.zendesk.com/hc/en-us/articles/4409381383578",
-          "binds": "endpoint.subdomain"
+          "binds": "endpoint.subdomain",
+          "level": "connection"
         },
         {
           "name": "email",
@@ -264191,7 +264329,8 @@
           "help": "The email of the Zendesk agent whose API token you are using. Zendesk sends it as the username half of the request, with its own `/token` marker appended — you do not type that part",
           "example": "agent@acme.com",
           "format": "email",
-          "binds": "username.zendesk.api_token"
+          "binds": "username.zendesk.api_token",
+          "level": "connection"
         },
         {
           "name": "api_token",
@@ -264200,7 +264339,8 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://support.zendesk.com/hc/en-us/articles/4408889192858",
-          "binds": "credential.zendesk.api_token"
+          "binds": "credential.zendesk.api_token",
+          "level": "connection"
         },
         {
           "name": "help_center_subdomain",
@@ -264210,7 +264350,8 @@
           "example": "acme",
           "format": "subdomain",
           "docs_url": "https://support.zendesk.com/hc/en-us/articles/4409381383578",
-          "binds": "endpoint.subdomain"
+          "binds": "endpoint.subdomain",
+          "level": "connection"
         },
         {
           "name": "help_center_email",
@@ -264219,7 +264360,8 @@
           "help": "The Zendesk agent email used by the shared Support and Help Center API token; Zendesk appends `/token` on the wire",
           "example": "agent@acme.com",
           "format": "email",
-          "binds": "username.zendesk.api_token"
+          "binds": "username.zendesk.api_token",
+          "level": "connection"
         },
         {
           "name": "help_center_api_token",
@@ -264229,7 +264371,8 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://support.zendesk.com/hc/en-us/articles/4408889192858",
-          "binds": "credential.zendesk.api_token"
+          "binds": "credential.zendesk.api_token",
+          "level": "connection"
         },
         {
           "name": "messaging_subdomain",
@@ -264239,7 +264382,8 @@
           "example": "acme",
           "format": "subdomain",
           "docs_url": "https://support.zendesk.com/hc/en-us/articles/4409381383578",
-          "binds": "endpoint.subdomain"
+          "binds": "endpoint.subdomain",
+          "level": "connection"
         },
         {
           "name": "messaging_app_id",
@@ -264248,7 +264392,8 @@
           "help": "The Sunshine Conversations app id this connection manages, as one path-safe identifier",
           "example": "app_123",
           "docs_url": "https://developer.zendesk.com/api-reference/apps/apps-api/apps/",
-          "binds": "path.appId"
+          "binds": "path.appId",
+          "level": "connection"
         },
         {
           "name": "messaging_key_id",
@@ -264256,7 +264401,8 @@
           "label": "Messaging key id",
           "help": "The id half of an app-scoped Sunshine Conversations API key",
           "example": "key_123",
-          "binds": "username.zendesk.messaging_key"
+          "binds": "username.zendesk.messaging_key",
+          "level": "connection"
         },
         {
           "name": "messaging_key_secret",
@@ -264266,9 +264412,11 @@
           "format": "token",
           "secret": true,
           "docs_url": "https://developer.zendesk.com/documentation/conversations/getting-started/using-the-api/",
-          "binds": "credential.zendesk.messaging_key"
+          "binds": "credential.zendesk.messaging_key",
+          "level": "connection"
         }
       ],
+      "verify": "zendesk-test",
       "config_choices": []
     },
     {
@@ -264313,7 +264461,7 @@
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": false
+            "oauth2": null
           }
         ],
         "default": [
@@ -264564,6 +264712,7 @@
       "events": [],
       "channels": [],
       "config": [],
+      "verify": null,
       "config_choices": []
     }
   ],
