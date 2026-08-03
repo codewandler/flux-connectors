@@ -9,7 +9,7 @@ op gitlab-user-get -> Any
   effects ["network"]
   expose true
 
-  base = "https://gitlab.com/api/v4"
+  base = "{origin}/api/v4"
   url = fmt("{base}/user")
   response = http.request(method: "GET", url)
   return response
@@ -21,7 +21,7 @@ op gitlab-issue-list(project_id: Number, state: String, page: Number, per_page: 
   effects ["network"]
   expose true
 
-  base = "https://gitlab.com/api/v4"
+  base = "{origin}/api/v4"
   url = fmt("{base}/projects/{project_id}/issues")
   response = http.request(method: "GET", query: { page, per_page, state }, url)
   return response
@@ -33,7 +33,7 @@ op gitlab-issue-get(project_id: Number, issue_iid: Number) -> Any
   effects ["network"]
   expose true
 
-  base = "https://gitlab.com/api/v4"
+  base = "{origin}/api/v4"
   url = fmt("{base}/projects/{project_id}/issues/{issue_iid}")
   response = http.request(method: "GET", url)
   return response
@@ -45,7 +45,7 @@ op gitlab-issue-create(project_id: Number, title: String, description: String, l
   effects ["network"]
   expose true
 
-  base = "https://gitlab.com/api/v4"
+  base = "{origin}/api/v4"
   url = fmt("{base}/projects/{project_id}/issues")
   content_type = "application/json"
   payload = { description, labels, title }
@@ -59,7 +59,7 @@ op gitlab-merge-request-list(project_id: Number, state: String, page: Number, pe
   effects ["network"]
   expose true
 
-  base = "https://gitlab.com/api/v4"
+  base = "{origin}/api/v4"
   url = fmt("{base}/projects/{project_id}/merge_requests")
   response = http.request(method: "GET", query: { page, per_page, state }, url)
   return response
@@ -71,7 +71,7 @@ op gitlab-pipeline-get(project_id: Number, pipeline_id: Number) -> Any
   effects ["network"]
   expose true
 
-  base = "https://gitlab.com/api/v4"
+  base = "{origin}/api/v4"
   url = fmt("{base}/projects/{project_id}/pipelines/{pipeline_id}")
   response = http.request(method: "GET", url)
   return response
@@ -83,7 +83,7 @@ op gitlab-branch-list(project_id: Number, page: Number, per_page: Number) -> Any
   effects ["network"]
   expose true
 
-  base = "https://gitlab.com/api/v4"
+  base = "{origin}/api/v4"
   url = fmt("{base}/projects/{project_id}/repository/branches")
   response = http.request(method: "GET", query: { page, per_page }, url)
   return response

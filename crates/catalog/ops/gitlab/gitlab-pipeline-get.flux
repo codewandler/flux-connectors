@@ -5,7 +5,7 @@ op gitlab-pipeline-get(project_id: Number, pipeline_id: Number) -> Any
   effects ["network"]
   expose true
 
-  base = "https://gitlab.com/api/v4"
+  base = "{origin}/api/v4"
   url = fmt("{base}/projects/{project_id}/pipelines/{pipeline_id}")
   response = http.request(method: "GET", url)
   return response

@@ -52,11 +52,9 @@
 # same reason the project id is.
 #
 # ---------------------------------------------------------------------------------------------
-# `gitlab.com` ONLY. A self-managed GitLab instance lives at an operator-chosen host, and nothing
-# here can express "the same connector against a different endpoint" — the same limitation
-# `providers/sentry.toml` records for a self-hosted Sentry, and C-68's subject
-# (`docs/stories/C-68-endpoint-binding.md`). Recorded here rather than invented around: a `{host}`
-# template with no binding would trade a loud "this is SaaS only" for a silently unbound URL.
+# The origin is one generic, value-free configuration declaration. `gitlab.com` stays the default;
+# a self-managed HTTPS origin becomes active only when deployment policy approves and pins it for
+# this connection. The connector still owns `/api/v4`: no supplied value can replace that path.
 # ---------------------------------------------------------------------------------------------
 
 id = "gitlab"
@@ -81,10 +79,9 @@ authority = "com.gitlab.api"
 # carries no version, so a token survives the vendor's next one.
 api_version = "v4"
 
-# One host, gitlab.com's own SaaS. `http_hosts` derives from this single value
-# (`crates/connector-cli/src/catalog.rs`, `host_of`) and is therefore exactly `gitlab.com`, never
-# widened.
-base_url = "https://gitlab.com/api/v4"
+# One resolved endpoint. The origin value contains no path; this declaration appends exactly the
+# vendor's REST prefix after policy has selected either the reviewed default or an approved pin.
+base_url = "{origin}/api/v4"
 
 description = "GitLab: read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only"
 
@@ -361,9 +358,21 @@ items = { type = "object", required = ["name", "commit"], properties = { name = 
 # ---------------------------------------------------------------------------------------------
 
 [[config]]
+name = "origin"
+label = "GitLab origin"
+help = "The HTTPS origin only, without `/api/v4` or another path. Leave the default for GitLab.com; a self-managed origin requires deployment/operator approval before it becomes active"
+example = "https://gitlab.company.example"
+format = "origin"
+required = false
+default = "https://gitlab.com"
+approval = "operator"
+docs_url = "https://docs.gitlab.com/administration/"
+binds = "endpoint.origin"
+
+[[config]]
 name = "token"
 label = "GitLab personal access token"
-help = "Create one at User Settings -> Access Tokens (gitlab.com/-/user_settings/personal_access_tokens). Grant the read_api scope for every read below, or api if you also want gitlab-issue-create to work. This connector only reaches gitlab.com; a self-managed GitLab instance is not supported yet"
+help = "Create one in the selected GitLab installation's User Settings -> Access Tokens. Grant read_api for every read below, or api if you also want gitlab-issue-create to work"
 format = "token"
 secret = true
 docs_url = "https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"

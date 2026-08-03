@@ -234,6 +234,8 @@ export interface ConfigField {
   default?: string
   /** Omitted when false. */
   secret?: boolean
+  /** Omitted when no elevated activation policy applies. */
+  approval?: 'operator'
   docs_url?: string
   binds: string
   also_binds?: string[]

@@ -334,6 +334,18 @@ fn no_templated_connector_reaches_the_wire_with_a_placeholder() {
         let probe = Operation::project(entry, http(), credentials(), empty.clone())
             .unwrap_or_else(|error| panic!("`{}`: {error}", entry.id));
         for variable in probe.endpoint_variables() {
+            let binding = format!("endpoint.{variable}");
+            let is_origin = catalog::provider(catalog::ProviderKey::id(entry.provider))
+                .is_some_and(|provider| {
+                    provider.config.iter().any(|field| {
+                        field.service == entry.service
+                            && field.binds == binding
+                            && field.format == "origin"
+                    })
+                });
+            if is_origin {
+                continue;
+            }
             values =
                 values.with_endpoint(TENANT, entry.provider, entry.service, variable, "a-value");
         }

@@ -420,6 +420,13 @@ fn with_declared_value(
             credential,
             value,
         ),
+        None if value.starts_with("https://") => values.with_approved_endpoint(
+            TENANT,
+            &module.connector,
+            &module.service,
+            variable,
+            value,
+        ),
         None => values.with_endpoint(TENANT, &module.connector, &module.service, variable, value),
     }
 }
@@ -446,7 +453,11 @@ fn alternative_configuration() -> Configuration {
     let mut values = MemoryConfig::new();
     for module in modules() {
         for (variable, value) in declared_for(&module) {
-            values = with_declared_value(values, &module, &variable, &format!("x{value}"));
+            let moved = value.strip_prefix("https://").map_or_else(
+                || format!("x{value}"),
+                |authority| format!("https://x-{authority}"),
+            );
+            values = with_declared_value(values, &module, &variable, &moved);
         }
     }
     Configuration::new(Arc::new(values), TENANT).expect("a valid tenant id")

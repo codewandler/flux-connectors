@@ -5,7 +5,7 @@ op gitlab-branch-list(project_id: Number, page: Number, per_page: Number) -> Any
   effects ["network"]
   expose true
 
-  base = "https://gitlab.com/api/v4"
+  base = "{origin}/api/v4"
   url = fmt("{base}/projects/{project_id}/repository/branches")
   response = http.request(method: "GET", query: { page, per_page }, url)
   return response

@@ -11,7 +11,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     description: "GitLab: read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only",
     authority: Some("com.gitlab.api"),
     runtime: crate::Runtime::Http,
-    base_url: "https://gitlab.com/api/v4",
+    base_url: "{origin}/api/v4",
     auth: AUTH,
     operations: OPERATIONS,
     config: CONFIG,
@@ -33,10 +33,25 @@ static AUTH: &[crate::Credential] = &[
 #[rustfmt::skip]
 static CONFIG: &[crate::ConfigField] = &[
     crate::ConfigField {
+        name: "origin",
+        service: "default",
+        label: "GitLab origin",
+        help: "The HTTPS origin only, without `/api/v4` or another path. Leave the default for GitLab.com; a self-managed origin requires deployment/operator approval before it becomes active",
+        example: Some("https://gitlab.company.example"),
+        format: "origin",
+        required: false,
+        default: Some("https://gitlab.com"),
+        secret: false,
+        docs_url: Some("https://docs.gitlab.com/administration/"),
+        binds: "endpoint.origin",
+        also_binds: &[],
+        declaration_json: "{\"name\":\"origin\",\"label\":\"GitLab origin\",\"help\":\"The HTTPS origin only, without `/api/v4` or another path. Leave the default for GitLab.com; a self-managed origin requires deployment/operator approval before it becomes active\",\"example\":\"https://gitlab.company.example\",\"format\":\"origin\",\"required\":false,\"default\":\"https://gitlab.com\",\"approval\":\"operator\",\"docs_url\":\"https://docs.gitlab.com/administration/\",\"binds\":\"endpoint.origin\"}",
+    },
+    crate::ConfigField {
         name: "token",
         service: "default",
         label: "GitLab personal access token",
-        help: "Create one at User Settings -> Access Tokens (gitlab.com/-/user_settings/personal_access_tokens). Grant the read_api scope for every read below, or api if you also want gitlab-issue-create to work. This connector only reaches gitlab.com; a self-managed GitLab instance is not supported yet",
+        help: "Create one in the selected GitLab installation's User Settings -> Access Tokens. Grant read_api for every read below, or api if you also want gitlab-issue-create to work",
         example: None,
         format: "token",
         required: true,
@@ -45,7 +60,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"),
         binds: "credential.gitlab.token",
         also_binds: &[],
-        declaration_json: "{\"name\":\"token\",\"label\":\"GitLab personal access token\",\"help\":\"Create one at User Settings -> Access Tokens (gitlab.com/-/user_settings/personal_access_tokens). Grant the read_api scope for every read below, or api if you also want gitlab-issue-create to work. This connector only reaches gitlab.com; a self-managed GitLab instance is not supported yet\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html\",\"binds\":\"credential.gitlab.token\"}",
+        declaration_json: "{\"name\":\"token\",\"label\":\"GitLab personal access token\",\"help\":\"Create one in the selected GitLab installation's User Settings -> Access Tokens. Grant read_api for every read below, or api if you also want gitlab-issue-create to work\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html\",\"binds\":\"credential.gitlab.token\"}",
     },
 ];
 
@@ -73,7 +88,7 @@ static OPERATIONS: &[crate::Operation] = &[
         semantic_effects: &[],
         credentials: &[&["gitlab.token"]],
         credential_requirement: crate::CredentialRequirement::Declared,
-        hosts: &["gitlab.com"],
+        hosts: &["{origin}"],
         flux: include_str!("../../ops/gitlab/gitlab-user-get.flux"),
     },
     crate::Operation {
@@ -86,7 +101,7 @@ static OPERATIONS: &[crate::Operation] = &[
         semantic_effects: &[],
         credentials: &[&["gitlab.token"]],
         credential_requirement: crate::CredentialRequirement::Declared,
-        hosts: &["gitlab.com"],
+        hosts: &["{origin}"],
         flux: include_str!("../../ops/gitlab/gitlab-issue-list.flux"),
     },
     crate::Operation {
@@ -99,7 +114,7 @@ static OPERATIONS: &[crate::Operation] = &[
         semantic_effects: &[],
         credentials: &[&["gitlab.token"]],
         credential_requirement: crate::CredentialRequirement::Declared,
-        hosts: &["gitlab.com"],
+        hosts: &["{origin}"],
         flux: include_str!("../../ops/gitlab/gitlab-issue-get.flux"),
     },
     crate::Operation {
@@ -112,7 +127,7 @@ static OPERATIONS: &[crate::Operation] = &[
         semantic_effects: &[],
         credentials: &[&["gitlab.token"]],
         credential_requirement: crate::CredentialRequirement::Declared,
-        hosts: &["gitlab.com"],
+        hosts: &["{origin}"],
         flux: include_str!("../../ops/gitlab/gitlab-issue-create.flux"),
     },
     crate::Operation {
@@ -125,7 +140,7 @@ static OPERATIONS: &[crate::Operation] = &[
         semantic_effects: &[],
         credentials: &[&["gitlab.token"]],
         credential_requirement: crate::CredentialRequirement::Declared,
-        hosts: &["gitlab.com"],
+        hosts: &["{origin}"],
         flux: include_str!("../../ops/gitlab/gitlab-merge-request-list.flux"),
     },
     crate::Operation {
@@ -138,7 +153,7 @@ static OPERATIONS: &[crate::Operation] = &[
         semantic_effects: &[],
         credentials: &[&["gitlab.token"]],
         credential_requirement: crate::CredentialRequirement::Declared,
-        hosts: &["gitlab.com"],
+        hosts: &["{origin}"],
         flux: include_str!("../../ops/gitlab/gitlab-pipeline-get.flux"),
     },
     crate::Operation {
@@ -151,7 +166,7 @@ static OPERATIONS: &[crate::Operation] = &[
         semantic_effects: &[],
         credentials: &[&["gitlab.token"]],
         credential_requirement: crate::CredentialRequirement::Declared,
-        hosts: &["gitlab.com"],
+        hosts: &["{origin}"],
         flux: include_str!("../../ops/gitlab/gitlab-branch-list.flux"),
     },
 ];

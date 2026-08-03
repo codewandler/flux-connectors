@@ -56,8 +56,20 @@ const TENANT: &str = "t-network-gate";
 /// subject carries the configured value* — not which value. `a-subdomain.zendesk.com` is as good a
 /// resolvable host for that as `acme.zendesk.com`, and it makes the assertion messages say which
 /// variable was involved.
-fn value_for(variable: &str) -> String {
-    format!("a-{variable}")
+fn value_for(entry: &catalog::Operation, variable: &str) -> String {
+    let binding = format!("endpoint.{variable}");
+    let format = catalog::provider(catalog::ProviderKey::id(entry.provider))
+        .and_then(|provider| {
+            provider
+                .config
+                .iter()
+                .find(|field| field.service == entry.service && field.binds == binding)
+        })
+        .map(|field| field.format);
+    match format {
+        Some("origin") => "https://self-managed.example:8443".to_owned(),
+        _ => format!("a-{variable}"),
+    }
 }
 
 /// A bound configuration port carrying a value for **every** endpoint variable the shipped
@@ -85,13 +97,18 @@ fn build_configuration() -> Configuration {
             // Under the entry's own service (C-197): the same variable name in two services of one
             // connector is two values, so binding it once for the connector would leave every
             // operation of the second service unconfigured and gated against a templated host.
-            values = values.with_endpoint(
-                TENANT,
-                entry.provider,
-                entry.service,
-                variable,
-                &value_for(variable),
-            );
+            let value = value_for(entry, variable);
+            values = if value.starts_with("https://") {
+                values.with_approved_endpoint(
+                    TENANT,
+                    entry.provider,
+                    entry.service,
+                    variable,
+                    &value,
+                )
+            } else {
+                values.with_endpoint(TENANT, entry.provider, entry.service, variable, &value)
+            };
         }
     }
     Configuration::new(Arc::new(values), TENANT).expect("a valid tenant id")
@@ -114,7 +131,7 @@ fn probe(entry: &'static catalog::Operation) -> Operation {
 fn resolved_host(entry: &'static catalog::Operation, host: &str) -> String {
     let mut out = host.to_owned();
     for variable in probe(entry).endpoint_variables() {
-        out = out.replace(&format!("{{{variable}}}"), &value_for(variable));
+        out = out.replace(&format!("{{{variable}}}"), &value_for(entry, variable));
     }
     out
 }

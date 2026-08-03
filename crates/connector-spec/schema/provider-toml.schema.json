@@ -454,6 +454,10 @@
           "type": "boolean",
           "description": "Whether the value is masked on input, never logged, never echoed back. MUST agree with `binds` — a credential binding is secret, an endpoint or username binding is not. flux partitions secret from non-secret by type and enforces it host-side, so a disagreeing flag would be a second, contradicting source of truth."
         },
+        "approval": {
+          "enum": ["none", "operator"],
+          "description": "Additional policy required before a supplied value becomes active. `operator` is the explicit self-managed-origin contract: the value is still connection-level, but a non-default origin is inert until deployment/operator policy approves and pins it for that connection."
+        },
         "docs_url": {
           "type": "string",
           "description": "Where a user goes to obtain the value — the vendor's own page, never ours."
@@ -496,6 +500,7 @@
         { "const": "subdomain", "description": "One DNS label — `acme` in `acme.zendesk.com`. The most common tenant value there is." },
         { "const": "hostname", "description": "A full host — `acme.freshdesk.com`. Freshdesk asks for the whole thing where Zendesk asks for the label." },
         { "const": "url", "description": "An absolute `https://` URL." },
+        { "const": "origin", "description": "An absolute HTTPS origin with an optional explicit port and no userinfo, path, query or fragment. The connector owns every API path appended to it." },
         { "const": "email", "description": "An email address. Zendesk and Jira both put one in the Basic username position." },
         { "const": "token", "description": "An opaque credential string. No shape beyond `no whitespace` — a vendor's token format is the vendor's business, and guessing at it would reject valid tokens the day the vendor changed them." }
       ]

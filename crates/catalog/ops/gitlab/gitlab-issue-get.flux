@@ -5,7 +5,7 @@ op gitlab-issue-get(project_id: Number, issue_iid: Number) -> Any
   effects ["network"]
   expose true
 
-  base = "https://gitlab.com/api/v4"
+  base = "{origin}/api/v4"
   url = fmt("{base}/projects/{project_id}/issues/{issue_iid}")
   response = http.request(method: "GET", url)
   return response

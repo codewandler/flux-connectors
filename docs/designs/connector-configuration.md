@@ -208,6 +208,37 @@ help, `format`, `binds`, the derived level, `verify`, subscription and setup —
 C-87's manifest and catalogue projections. C-87 also replaces the lossy `auth.oauth2` boolean with
 the complete OAuth declaration and therefore moves `catalog.json` to schema version 3.
 
+### Operator-approved origins are a connection field with an activation policy (C-508)
+
+A self-managed product cannot declare a closed host set without pretending to know every
+installation. It instead declares one complete HTTPS origin and the connector keeps ownership of
+the API path:
+
+```toml
+[[config]]
+name     = "origin"
+format   = "origin"
+default  = "https://gitlab.com"
+approval = "operator"
+binds    = "endpoint.origin"
+```
+
+`format = "origin"` accepts only an HTTPS scheme plus authority and optional effective port. It
+accepts no userinfo, path, query or fragment, so a supplied value cannot replace the connector's
+`/api/v4`. `approval = "operator"` is deliberately separate from `level`: the field is still
+collected per connection, but a non-default proposal is inert until deployment/operator policy
+approves and pins that exact connection resolution.
+
+The configuration port returns the value and its approval as one instance-aware answer. Projection
+freezes that answer once, then request composition and permission subjects read the same snapshot.
+A pre-existing store that knows only values therefore treats every custom origin as unapproved;
+there is no compatibility path that silently activates tenant-controlled authority.
+
+The policy is declaration data, not a GitLab-only host feature. Manifest, embedded declaration JSON
+and public catalogue carry `format`, `default`, `approval`, `binds` and derived `level`; renderers can
+show the activation requirement without parsing provider TOML. Configured values never enter those
+artifacts or a model-visible operation schema.
+
 ## Invariants — all refusals
 
 1. **A connector asks for everything it needs.** Every `{var}` in every service base URL is bound by

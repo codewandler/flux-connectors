@@ -781,6 +781,27 @@ test('provider cards render Test connection even when the connector declares no 
   )
 })
 
+test('operator-approved configuration is typed and rendered as an activation policy', () => {
+  const catalogue = readFileSync(path.join(webRoot, 'data', 'catalog.mts'), 'utf-8')
+  const card = component('ProviderCard.vue')
+
+  assert.match(
+    catalogue,
+    /approval\?: 'operator'/,
+    'the public catalogue type does not carry the operator approval policy'
+  )
+  assert.match(
+    card,
+    /field\.approval === 'operator'/,
+    'the provider card does not branch on the published approval policy'
+  )
+  assert.match(
+    markup(card),
+    /operator approval required/,
+    'the provider card does not explain that a proposed value is not active'
+  )
+})
+
 // ---------------------------------------------------------------------------------------------
 // C-83 — the inbound surface.
 //

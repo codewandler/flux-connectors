@@ -405,10 +405,23 @@ fn unconfigurable(literal: &str) -> Option<&str> {
     if !carries_placeholder(literal) {
         return None;
     }
-    if sole_placeholder(literal).is_some() || literal.contains("://") {
+    if sole_placeholder(literal).is_some()
+        || literal.contains("://")
+        || origin_template(literal).is_some()
+    {
         return None;
     }
     Some(literal)
+}
+
+/// `{origin}` followed only by a connector-declared path. The value's `https://` scheme is supplied
+/// by the approved origin, so this is the one URL template that intentionally contains no `://`
+/// in the emitted literal.
+fn origin_template(literal: &str) -> Option<&str> {
+    let rest = literal.strip_prefix('{')?;
+    let close = rest.find('}')?;
+    let variable = &rest[..close];
+    (!variable.is_empty() && rest[close + 1..].starts_with('/')).then_some(variable)
 }
 
 /// Whether `literal` carries a `{…}` this module would read as a placeholder at all.
@@ -612,6 +625,8 @@ fn walk_literals_node(node: &Node, visit: &mut dyn FnMut(&str)) {
 /// divergence rather than paper over it: one rule cannot both know about an encoder and not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Slot {
+    /// A complete operator-approved HTTPS origin. The connector appends its reviewed API path.
+    Origin,
     /// The authority of a templated base URL — the `{subdomain}` of
     /// `https://{subdomain}.zendesk.com`. The severe one, and the one that predates C-187.
     Host,
@@ -658,6 +673,7 @@ impl Slot {
     /// The word a refusal calls this position by.
     pub(crate) fn word(self) -> &'static str {
         match self {
+            Self::Origin => "HTTPS origin",
             Self::Host => "host",
             Self::Path => "path segment",
             Self::Query => "query parameter",
@@ -674,6 +690,7 @@ impl Slot {
     /// cannot introduce a delimiter into a template that had none either.
     pub(crate) fn substitutable(self, value: &str) -> bool {
         match self {
+            Self::Origin => validate_origin(value).is_ok(),
             Self::Host => validate_authority(value).is_ok(),
             other => other.validate(value).is_ok(),
         }
@@ -712,6 +729,10 @@ impl Slot {
             ));
         }
         match self {
+            Self::Origin => {
+                validate_origin(value)?;
+                Ok(value.to_owned())
+            }
             Self::Host => Ok(value.to_owned()),
             Self::Path => {
                 validate_path(value)?;
@@ -744,6 +765,67 @@ impl Slot {
             }
         }
     }
+}
+
+/// Runtime validation for an origin value. Kept in the published pack because it may not depend on
+/// the compiler crate. The diagnostic deliberately never quotes the configured value.
+pub(crate) fn validate_origin(value: &str) -> Result<(), String> {
+    let authority = value
+        .strip_prefix("https://")
+        .ok_or_else(|| "the configured origin is not an absolute HTTPS origin".to_owned())?;
+    if authority.is_empty()
+        || authority.chars().any(char::is_whitespace)
+        || authority
+            .chars()
+            .any(|c| matches!(c, '/' | '?' | '#' | '@' | '{' | '}'))
+    {
+        return Err(
+            "the configured origin must contain only an HTTPS scheme and authority, with no \
+             credentials, path, query or fragment"
+                .to_owned(),
+        );
+    }
+    let (host, port) = if authority.starts_with('[') {
+        let close = authority
+            .find(']')
+            .ok_or_else(|| "the configured origin has an invalid IPv6 authority".to_owned())?;
+        authority[1..close]
+            .parse::<std::net::Ipv6Addr>()
+            .map_err(|_| "the configured origin has an invalid IPv6 authority".to_owned())?;
+        let tail = &authority[close + 1..];
+        let port = if tail.is_empty() {
+            None
+        } else {
+            Some(
+                tail.strip_prefix(':')
+                    .ok_or_else(|| "the configured origin has an invalid authority".to_owned())?,
+            )
+        };
+        (&authority[1..close], port)
+    } else {
+        match authority.rsplit_once(':') {
+            Some((host, port)) if !host.contains(':') => (host, Some(port)),
+            Some(_) => return Err("the configured origin has an invalid authority".to_owned()),
+            None => (authority, None),
+        }
+    };
+    if host.is_empty()
+        || (host.parse::<std::net::IpAddr>().is_err()
+            && host.split('.').any(|label| {
+                label.is_empty()
+                    || label.starts_with('-')
+                    || label.ends_with('-')
+                    || !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+            }))
+    {
+        return Err("the configured origin has an invalid host".to_owned());
+    }
+    if let Some(port) = port {
+        if port.parse::<u16>().ok().filter(|port| *port != 0).is_none() {
+            return Err("the configured origin has an invalid port".to_owned());
+        }
+    }
+    Ok(())
 }
 
 /// A value that stays inside one path segment.
@@ -946,6 +1028,11 @@ pub(crate) fn endpoint_slots(declaration: &CompositeOpDecl) -> BTreeMap<String, 
 
     collect_binds(body, &mut pins, &mut literals, &mut slots);
     place_pins(body, &pins, &literals, &mut slots);
+    walk_literals(body, &mut |literal| {
+        if let Some(variable) = origin_template(literal) {
+            record(&mut slots, variable, Slot::Origin);
+        }
+    });
     slots
 }
 

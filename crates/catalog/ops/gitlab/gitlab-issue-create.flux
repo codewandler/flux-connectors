@@ -5,7 +5,7 @@ op gitlab-issue-create(project_id: Number, title: String, description: String, l
   effects ["network"]
   expose true
 
-  base = "https://gitlab.com/api/v4"
+  base = "{origin}/api/v4"
   url = fmt("{base}/projects/{project_id}/issues")
   content_type = "application/json"
   payload = { description, labels, title }

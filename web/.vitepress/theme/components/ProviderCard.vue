@@ -149,6 +149,9 @@ const headline = computed(() => {
             <strong>{{ field.label }}</strong>
             <span class="config-field__chip">{{ field.level }}</span>
             <span v-if="field.secret" class="config-field__chip">secret</span>
+            <span v-if="field.approval === 'operator'" class="config-field__chip">
+              operator approval required
+            </span>
             <span v-if="field.required === false" class="config-field__chip">optional</span>
           </div>
           <p>{{ field.help }}</p>

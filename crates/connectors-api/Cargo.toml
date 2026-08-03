@@ -88,3 +88,12 @@ axum = { workspace = true, features = ["http1", "json", "tokio"] }
 # `jsonwebtoken` is **not** a dev-dependency — nothing in the tests names it — because the crate's
 # own `Jwks` type takes the JSON a JWKS endpoint actually serves, which is the shape a test has.
 aws-lc-rs.workspace = true
+
+# C-508's self-managed GitLab fixture terminates TLS on loopback. These are test-only and already
+# present in the resolved host graph through reqwest/axum; connector-pack remains transport-free.
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
+tokio-rustls = "0.26"
+rcgen = { version = "0.14", default-features = false, features = ["aws_lc_rs"] }

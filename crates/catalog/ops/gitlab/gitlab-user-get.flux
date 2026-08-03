@@ -5,7 +5,7 @@ op gitlab-user-get -> Any
   effects ["network"]
   expose true
 
-  base = "https://gitlab.com/api/v4"
+  base = "{origin}/api/v4"
   url = fmt("{base}/user")
   response = http.request(method: "GET", url)
   return response

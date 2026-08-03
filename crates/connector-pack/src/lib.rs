@@ -197,7 +197,7 @@ mod spec;
 mod tool;
 
 pub use channel::{channel_plan, PreparedChannelPlan, SensitiveText};
-pub use config::{ConfigStore, Configuration, Field, MemoryConfig};
+pub use config::{ConfigStore, ConfigValue, Configuration, Field, MemoryConfig};
 pub use credentials::{Credentials, DEFAULT_SERVICE};
 pub use dry_run::{CredentialReference, DryRun, DryRunTransport, Transport};
 pub use name::{dotted_name, NameError};
@@ -595,6 +595,34 @@ pub enum Error {
         tenant: String,
         /// The missing field, as `binds` spells it.
         field: String,
+    },
+
+    /// A connection-level value whose declaration requires deployment/operator approval has not
+    /// been approved. The value itself is intentionally absent from this diagnostic.
+    #[error(
+        "`{operation}` cannot activate configuration field `{field}` of service `{service}` of \
+         connector `{provider}` until deployment/operator policy approves and pins it; the request \
+         was not sent"
+    )]
+    UnapprovedConfig {
+        operation: Box<str>,
+        provider: Box<str>,
+        service: Box<str>,
+        field: Box<str>,
+    },
+
+    /// A configured origin did not satisfy the declared HTTPS-origin grammar. The value is never
+    /// quoted into the refusal, logs or evidence.
+    #[error(
+        "`{operation}` cannot activate origin field `{field}` of service `{service}` of connector \
+         `{provider}`: {reason}; the request was not sent"
+    )]
+    UnsafeOrigin {
+        operation: Box<str>,
+        provider: Box<str>,
+        service: Box<str>,
+        field: Box<str>,
+        reason: Box<str>,
     },
 
     /// **A configuration value that would reshape the request it is substituted into** (C-214).
@@ -1030,6 +1058,17 @@ pub(crate) mod tests {
                     let declaration = spec::declaration_of(operation.id, operation.flux)
                         .unwrap_or_else(|error| panic!("`{}`: {error}", operation.id));
                     for variable in request::endpoint_variables(&declaration) {
+                        let binding = format!("endpoint.{variable}");
+                        if provider.config.iter().any(|field| {
+                            field.service == operation.service
+                                && field.binds == binding
+                                && field.format == "origin"
+                        }) {
+                            // Origin declarations carry their reviewed default. Leaving this slot
+                            // absent exercises that zero-configuration path and avoids inventing a
+                            // custom origin without an operator approval.
+                            continue;
+                        }
                         values = values.with_endpoint(
                             TEST_TENANT,
                             provider.id,
