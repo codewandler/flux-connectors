@@ -2,8 +2,7 @@
 id: C-508
 title: "A GitLab connection supports an operator-approved self-managed HTTPS origin"
 pillar: Connector
-status: in-progress
-priority: 0
+status: done
 design: docs/designs/connector-configuration.md
 epic: connector-config
 areas: [providers, connector-spec, connector-pack, catalog, tests]
@@ -24,39 +23,40 @@ connection input.
 
 ## Acceptance
 
-- [ ] `gitlab.com` remains the zero-configuration default and produces the current
+- [x] `gitlab.com` remains the zero-configuration default and produces the current
       `https://gitlab.com/api/v4` request URLs and permission subjects byte-for-byte.
-- [ ] GitLab declares its self-managed origin as non-secret configuration with complete form
+- [x] GitLab declares its self-managed origin as non-secret configuration with complete form
       metadata. The manifest and public catalogue publish the same field, its level, validation,
       default and operator-approval policy so Exchange's console and the Flux onboarding CLI can
       render one contract without parsing provider TOML. This consumes C-87's config and `verify`
       projection rather than adding a GitLab-only surface.
-- [ ] A custom value is an absolute HTTPS origin only. The loader/runtime refuses `http`, userinfo,
+- [x] A custom value is an absolute HTTPS origin only. The loader/runtime refuses `http`, userinfo,
       query, fragment, credentials or a path outside the explicitly accepted origin grammar;
       it also refuses attempts to smuggle or replace `/api/v4` through an origin value. The
       connector, not input, appends exactly `/api/v4`.
-- [ ] A custom origin becomes usable only after deployment/operator policy approves and pins it for
+- [x] A custom origin becomes usable only after deployment/operator policy approves and pins it for
       the connection. An ordinary signed-in connection owner may propose the value if the host flow
       permits that, but cannot activate or silently widen it; a Service Account, operation input and
       model-visible tool contract have no field that can set or override it.
-- [ ] Request composition and capability/permission subjects derive from one resolved endpoint and
+- [x] Request composition and capability/permission subjects derive from one resolved endpoint and
       carry the exact same scheme, authority and effective port. A test fails if authorization is
       checked against `gitlab.com` while transport reaches the custom origin, or vice versa.
-- [ ] A live fixture serves GitLab-shaped responses at a custom HTTPS origin and proves both
+- [x] A live fixture serves GitLab-shaped responses at a custom HTTPS origin and proves both
       `verify` and one ordinary operation use that origin plus `/api/v4`; the default SaaS fixture
       remains green.
-- [ ] The generated connector manifest, embedded catalogue, public catalogue and form declaration
+- [x] The generated connector manifest, embedded catalogue, public catalogue and form declaration
       are regenerated and agree on the default, custom-origin shape and approval requirement.
-- [ ] No configured origin value, connection label, credential value or authorization header is
+- [x] No configured origin value, connection label, credential value or authorization header is
       copied into emitted Flux, model-visible descriptions, logs, refusal details, conformance
       evidence or generated public artifacts. Credential references remain addresses, never values.
-- [ ] C-402's fail-closed whole-authority rule is enforced for this connector: a self-managed origin
+- [x] C-402's fail-closed whole-authority rule is enforced for this connector: a self-managed origin
       is the explicit operator-pinned case, not an unbounded tenant-controlled host template.
 
 ## Progress
 
-- Not started. Filed 2026-08-03 from the Milestone 1 first-run flow; the current provider explicitly
-  supports `gitlab.com` only.
+- 2026-08-04: Done. GitLab.com remains the zero-configuration default; an operator-approved
+  connection may instead pin a strict HTTPS origin, with one resolved endpoint shared by request
+  composition and permission subjects and exercised against a live TLS fixture.
 
 ## Notes
 
