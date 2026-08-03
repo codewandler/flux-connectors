@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-08-03
+
 ### Action needed
 
 - **Upgrade a host's Flux engine to 0.54 when adopting this release.** The connector pack and its

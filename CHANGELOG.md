@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-08-03
+
 ### Changed — breaking for `connector-pack` consumers
 
 - **The connector runtime seam moves from Flux 0.52 to Flux 0.54** (C-493). Hosts must move their
