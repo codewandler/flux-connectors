@@ -322,50 +322,60 @@ impl Operation {
         self.endpoint_variables
             .iter()
             .map(|variable| {
-                let field = Field::from_placeholder(variable);
-                let resolved =
-                    self.settings
-                        .resolved(field)
-                        .ok_or_else(|| Error::MissingConfig {
-                            operation: self.entry.id.to_owned(),
-                            provider: self.provider.id.to_owned(),
-                            service: self.entry.service.to_owned(),
-                            tenant: self.settings.tenant().to_owned(),
-                            field: format!("endpoint.{variable}"),
-                        })?;
-                if let Some(declaration) =
-                    endpoint_declaration(self.provider, self.entry.service, variable)
-                {
-                    if declaration.format == "origin" {
-                        request::validate_origin(resolved.value()).map_err(|reason| {
-                            Error::UnsafeOrigin {
-                                operation: self.entry.id.into(),
-                                provider: self.provider.id.into(),
-                                service: self.entry.service.into(),
-                                field: declaration.name.into(),
-                                reason: reason.into(),
-                            }
-                        })?;
-                    }
-                    let requires_operator = declaration
-                        .declaration_json
-                        .contains("\"approval\":\"operator\"");
-                    if requires_operator
-                        && declaration.default != Some(resolved.value())
-                        && !resolved.is_operator_approved()
-                    {
-                        return Err(Error::UnapprovedConfig {
-                            operation: self.entry.id.into(),
-                            provider: self.provider.id.into(),
-                            service: self.entry.service.into(),
-                            field: declaration.name.into(),
-                        });
-                    }
-                }
-                let value = resolved.value().to_owned();
-                Ok((variable.clone(), value))
+                self.endpoint(variable)
+                    .map(|value| (variable.clone(), value))
             })
             .collect()
+    }
+
+    /// Resolve and validate one endpoint value through the same path used by both request
+    /// construction and the permission fallback.
+    ///
+    /// The fallback cannot report this method's error, but it must still honour it. In particular,
+    /// an operator-gated proposal is inert data: it is neither a request destination nor a subject
+    /// that may enter an approval prompt, intent or evidence record.
+    fn endpoint(&self, variable: &str) -> Result<String, Error> {
+        let field = Field::from_placeholder(variable);
+        let resolved = self
+            .settings
+            .resolved(field)
+            .ok_or_else(|| Error::MissingConfig {
+                operation: self.entry.id.to_owned(),
+                provider: self.provider.id.to_owned(),
+                service: self.entry.service.to_owned(),
+                tenant: self.settings.tenant().to_owned(),
+                field: format!("endpoint.{variable}"),
+            })?;
+        if let Some(declaration) = endpoint_declaration(self.provider, self.entry.service, variable)
+        {
+            if declaration.format == "origin" {
+                request::validate_origin(resolved.value()).map_err(|reason| {
+                    Error::UnsafeOrigin {
+                        operation: self.entry.id.into(),
+                        provider: self.provider.id.into(),
+                        service: self.entry.service.into(),
+                        field: declaration.name.into(),
+                        reason: reason.into(),
+                    }
+                })?;
+            }
+            match declaration.approval {
+                catalog::Approval::None => {}
+                catalog::Approval::Operator
+                    if declaration.default != Some(resolved.value())
+                        && !resolved.is_operator_approved() =>
+                {
+                    return Err(Error::UnapprovedConfig {
+                        operation: self.entry.id.into(),
+                        provider: self.provider.id.into(),
+                        service: self.entry.service.into(),
+                        field: declaration.name.into(),
+                    });
+                }
+                catalog::Approval::Operator => {}
+            }
+        }
+        Ok(resolved.value().to_owned())
     }
 
     /// The catalogue entry behind this tool.
@@ -514,9 +524,10 @@ impl Operation {
 
     /// A declared host with whatever configuration values the snapshot carries filled in.
     ///
-    /// Best-effort by necessity — see [`Operation::subjects`] — and it reads through
-    /// [`Snapshot::lookup`] rather than [`Operation::endpoints`] precisely because it must not be
-    /// able to fail.
+    /// Best-effort by necessity — see [`Operation::subjects`] — but every candidate still passes
+    /// through [`Operation::endpoint`]. The error is discarded because the trait cannot carry it;
+    /// the refused value is discarded with it, so no proposal or unsafe value reaches policy or
+    /// evidence through this path.
     ///
     /// **A value the guard refuses is not substituted here either** (C-214), and that is the half
     /// that keeps the gate and the wire from diverging. This path runs exactly when
@@ -533,8 +544,8 @@ impl Operation {
                 .copied()
                 .unwrap_or(request::Slot::Unplaced);
             if let Some(value) = self
-                .settings
-                .lookup(Field::from_placeholder(variable))
+                .endpoint(variable)
+                .ok()
                 .filter(|value| slot.substitutable(value))
             {
                 out = out.replace(&format!("{{{variable}}}"), &value);

@@ -628,6 +628,31 @@ impl MemoryConfig {
         )
     }
 
+    /// Retain an endpoint proposal while revoking its deployment/operator approval.
+    ///
+    /// This produces the same inert state as a newly proposed value. Naming the transition keeps
+    /// hosts and tests from modelling revocation as deletion: the proposal may remain visible to an
+    /// operator UI while connector execution, permission subjects and evidence all refuse to use
+    /// it.
+    #[must_use]
+    pub fn with_revoked_endpoint(
+        self,
+        tenant: &str,
+        provider: &str,
+        service: &str,
+        variable: &str,
+        value: &str,
+    ) -> Self {
+        self.with(
+            tenant,
+            provider,
+            service,
+            Field::Endpoint(variable),
+            value,
+            false,
+        )
+    }
+
     /// Bind the non-secret user half of `provider`'s `credential`, for `tenant`, under `service`.
     ///
     /// A credential is declared at *connector* level, so its address elides the service — but the
