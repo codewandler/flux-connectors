@@ -6,7 +6,7 @@ use catalog::{ChannelTransport, Placement, ProviderKey};
 
 use crate::auth::{query_encode, Assembled};
 use crate::config::{Field, Snapshot};
-use crate::request::Slot;
+use crate::request::{validate_templated_authority, Slot};
 use crate::{Configuration, Credentials, Error};
 
 /// Text that may contain credential material and therefore never reveals itself through `Debug`.
@@ -41,6 +41,8 @@ pub struct PreparedChannelPlan {
     /// Exact vendor discriminator values mapped to the closed local event names.
     pub wire_events: BTreeMap<&'static str, &'static str>,
     pub discriminator: Option<catalog::Selector>,
+    /// Stable vendor delivery identity used for deduplication, when declared.
+    pub delivery_id: Option<catalog::Selector>,
     pub payload: &'static [catalog::Pair],
     pub payload_root: bool,
 }
@@ -188,6 +190,7 @@ pub async fn channel_plan(
         events: channel.events,
         wire_events,
         discriminator: channel.discriminator,
+        delivery_id: channel.delivery_id,
         payload: channel.payload,
         payload_root: channel.payload_root,
     })
@@ -200,6 +203,7 @@ fn substitute_endpoint(
 ) -> Result<String, Error> {
     let mut output = String::with_capacity(template.len());
     let mut remainder = template;
+    let mut first_variable = None;
     while let Some(open) = remainder.find('{') {
         output.push_str(&remainder[..open]);
         let after = &remainder[open + 1..];
@@ -209,14 +213,16 @@ fn substitute_endpoint(
             url: template.to_owned(),
         })?;
         let variable = &after[..close];
+        first_variable.get_or_insert(variable.to_owned());
         let raw = settings.require(operation, Field::Endpoint(variable))?;
         let value = Slot::Unplaced
             .validate(&raw)
-            .map_err(|reason| Error::UnsafeConfig {
+            .map_err(|_| Error::UnsafeConfig {
                 operation: operation.to_owned(),
                 variable: variable.to_owned(),
                 position: Slot::Host.word(),
-                reason,
+                reason: "the configured value would reshape the channel authority declared by the connector"
+                    .to_owned(),
             })?;
         output.push_str(&value);
         remainder = &after[close + 1..];
@@ -229,7 +235,35 @@ fn substitute_endpoint(
             url: output,
         });
     }
+    if let Some(variable) = first_variable {
+        let Some(template_authority) = url_authority(template) else {
+            return Err(Error::Unbuildable {
+                operation: operation.to_owned(),
+                message: "the channel service base URL has no authority".to_owned(),
+            });
+        };
+        let Some(composed_authority) = url_authority(&output) else {
+            return Err(Error::Unbuildable {
+                operation: operation.to_owned(),
+                message: "the composed channel URL has no authority".to_owned(),
+            });
+        };
+        validate_templated_authority(template_authority, composed_authority).map_err(|_| {
+            Error::UnsafeConfig {
+                operation: operation.to_owned(),
+                variable,
+                position: Slot::Host.word(),
+                reason: "the configured value would reshape the channel authority declared by the connector"
+                    .to_owned(),
+            }
+        })?;
+    }
     Ok(output)
+}
+
+fn url_authority(url: &str) -> Option<&str> {
+    url.split_once("://")
+        .map(|(_, rest)| &rest[..rest.find(['/', '?', '#']).unwrap_or(rest.len())])
 }
 
 fn apply_auth(

@@ -792,7 +792,7 @@ fn validate_authority(authority: &str) -> Result<(), String> {
 /// the emitter-authored `:8088`, though no configured byte introduced it. This split retains the
 /// safety property: only one decimal port written literally in the connector is admitted, while
 /// every substituted host value remains subject to [`validate_authority`].
-fn validate_templated_authority(template: &str, composed: &str) -> Result<(), String> {
+pub(crate) fn validate_templated_authority(template: &str, composed: &str) -> Result<(), String> {
     let Some((_template_host, template_port)) = template.rsplit_once(':') else {
         return validate_authority(composed);
     };

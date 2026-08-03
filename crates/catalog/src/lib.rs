@@ -457,6 +457,8 @@ pub struct Channel {
     pub events: &'static [&'static str],
     pub connect: Option<SocketConnect>,
     pub discriminator: Option<Selector>,
+    /// Stable vendor delivery identity used for deduplication, when declared.
+    pub delivery_id: Option<Selector>,
     pub payload: &'static [Pair],
     pub payload_root: bool,
     /// Canonical JSON for the complete binding declaration, including verification and reply.

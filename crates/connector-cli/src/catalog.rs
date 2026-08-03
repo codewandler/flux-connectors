@@ -624,6 +624,10 @@ fn render_channels(connector: &Connector) -> Result<String> {
             || "None".to_owned(),
             |selector| format!("Some({})", render_selector(selector)),
         );
+        let delivery_id = channel.delivery_id.as_ref().map_or_else(
+            || "None".to_owned(),
+            |selector| format!("Some({})", render_selector(selector)),
+        );
         let declaration = serde_json::to_string(channel)?;
         out.push_str("    crate::Channel {\n");
         out.push_str(&format!("        name: {},\n", string(&channel.name)));
@@ -640,6 +644,7 @@ fn render_channels(connector: &Connector) -> Result<String> {
         out.push_str(&format!("        events: &[{}],\n", events.join(", ")));
         out.push_str(&format!("        connect: {connect},\n"));
         out.push_str(&format!("        discriminator: {discriminator},\n"));
+        out.push_str(&format!("        delivery_id: {delivery_id},\n"));
         out.push_str(&format!("        payload: &[{payload}],\n"));
         out.push_str(&format!(
             "        payload_root: {},\n",

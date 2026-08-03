@@ -7,6 +7,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed — breaking for `connector-catalog` consumers
+
+- **Generated channel bindings now expose their complete routing contract** (C-489–C-491).
+  `catalog::Channel` gains `delivery_id`; downstream struct literals must add the optional selector.
+  The catalogue also publishes socket connection paths, query/header templates, auth alternatives,
+  subprotocols, event wire identities and raw-payload mode, so a host no longer reparses declaration
+  JSON to run a generic RFC 6455 binding. `connector_pack::channel_plan` resolves those declarations
+  through tenant-bound configuration and credential ports into a redacted, zero-I/O handshake plan.
+  Configured bytes cannot move the connector-declared authority, and refusals name the field without
+  echoing its runtime value.
+
+### Added
+
+- **Asterisk ARI now includes its generated event WebSocket** (C-492). `ari-events` composes the
+  declared `/events` upgrade with Basic authentication, required `app`, default-false
+  `subscribeAll`, and all 45 official `Event` subtypes. PascalCase wire discriminators map exactly
+  once to stable lowercase-kebab local names, with full resolved schemas and the untouched event as
+  the routed payload. The source census remains explicit: 108 REST operations plus one socket
+  channel.
+
 ## [0.16.0] — 2026-08-02
 
 ### Changed — breaking for `connector-pack` consumers

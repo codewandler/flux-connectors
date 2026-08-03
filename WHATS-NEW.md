@@ -14,6 +14,19 @@
 
 ## [Unreleased]
 
+### New
+
+- **Asterisk ARI can now deliver live events over its WebSocket.** Configure the same HTTPS
+  endpoint and Basic credentials used by the REST connector, choose an ARI application, and receive
+  any of Asterisk's 45 documented event types with its complete original payload. The existing 108
+  REST operations remain available beside it.
+
+- **Generated connectors can describe ordinary WebSocket event channels end to end.** A host can
+  prepare the exact connection URL, authentication, headers and subprotocols from tenant settings,
+  then route vendor event names and delivery identifiers without reading provider source files.
+  Connection plans stay offline until the host's guarded WebSocket runtime executes them, and
+  diagnostics do not print credential-bearing values.
+
 ## [0.16.0] — 2026-08-02
 
 ### Action needed

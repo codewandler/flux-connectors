@@ -70,6 +70,7 @@ async fn asterisk_composes_exact_query_defaults_and_basic_auth_without_transport
         Some(&"channel-created")
     );
     assert_eq!(plan.discriminator.expect("ARI discriminator").name, "type");
+    assert_eq!(plan.delivery_id, None);
     assert!(plan.payload_root);
     assert!(plan.payload.is_empty());
 
@@ -111,6 +112,46 @@ async fn missing_channel_configuration_refuses_before_a_plan_exists() {
         error.to_string().contains("channel.ari-events.query.app"),
         "{error}"
     );
+}
+
+#[tokio::test]
+async fn endpoint_authority_drift_refuses_without_echoing_runtime_values() {
+    const HOSTILE_HOST: &str = "SENTINEL-UNSAFE-HOST@elsewhere.invalid";
+
+    let (credentials, _) = ports().await;
+    let configuration = Configuration::new(
+        Arc::new(
+            MemoryConfig::new()
+                .with_endpoint(TENANT, "asterisk", DEFAULT_SERVICE, "host", HOSTILE_HOST)
+                .with_username(
+                    TENANT,
+                    "asterisk",
+                    DEFAULT_SERVICE,
+                    "asterisk.password",
+                    "flux",
+                )
+                .with_channel_query(
+                    TENANT,
+                    "asterisk",
+                    DEFAULT_SERVICE,
+                    "ari-events",
+                    "app",
+                    "voice-app",
+                ),
+        ),
+        TENANT,
+    )
+    .expect("configuration port");
+    let error = channel_plan("asterisk", "ari-events", credentials, configuration)
+        .await
+        .expect_err("configured bytes cannot move the declared authority");
+    let message = error.to_string();
+
+    assert!(message.contains("asterisk#ari-events"), "{message}");
+    assert!(message.contains("host"), "{message}");
+    assert!(!message.contains(HOSTILE_HOST), "{message}");
+    assert!(!message.contains(PASSWORD), "{message}");
+    assert!(!message.contains("voice-app"), "{message}");
 }
 
 #[tokio::test]

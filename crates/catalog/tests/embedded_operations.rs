@@ -74,6 +74,25 @@ fn the_catalog_is_not_empty() {
     );
 }
 
+/// Channel routing metadata must be queryable without reparsing the declaration JSON.
+///
+/// Slack's Socket Mode binding is the shipped positive case: `event_id` identifies one delivery
+/// across retries, so dropping it from the embedded projection would make a generic host unable to
+/// apply the declaration's dedupe contract.
+#[test]
+fn channel_delivery_id_is_part_of_the_embedded_projection() {
+    let slack = catalog::provider(ProviderKey::id("slack")).expect("Slack is shipped");
+    let socket = slack.channel("socket").expect("Socket Mode is shipped");
+
+    assert_eq!(
+        socket.delivery_id,
+        Some(catalog::Selector {
+            source: "body",
+            name: "event_id",
+        })
+    );
+}
+
 /// The provider ids the repository ships, from `providers/*.toml`.
 ///
 /// The one filesystem read this crate's tests perform, shared by the two tests that check the
