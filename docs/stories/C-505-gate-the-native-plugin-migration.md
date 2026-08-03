@@ -2,11 +2,12 @@
 id: C-505
 title: "Establish the native-plugin migration inventory and Exchange conformance ratchet"
 pillar: Bridge
-status: backlog
+status: ready
+priority: 0
 design: docs/designs/all-integrations-are-connectors.md
 epic: all-integrations-connectors
 areas: [tests, catalog, migration]
-note: "an atomic prerequisite maps all 18 adapters and establishes frozen legacy-plugin-versus-Exchange fixtures before the first wave; each wave ratchets its own evidence"
+note: "MILESTONE 1 lane 15 — freeze the complete native-adapter inventory and reusable legacy-versus-Exchange conformance format before the first migration wave"
 ---
 
 # Establish the native-plugin migration inventory and Exchange conformance ratchet
@@ -34,7 +35,9 @@ connector must pass through Exchange before Flux deletes its legacy implementati
 
 ## Progress
 
-- (not started)
+- 2026-08-03 — Scheduled as the active Milestone 1 connectors lane at roadmap commit
+  `8a653d222b86fe420c551ca8fd366a602ad6c26a`; this preparation changes board state only, and
+  Acceptance remains unimplemented.
 
 ## Notes
 

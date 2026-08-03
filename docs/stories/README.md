@@ -32,6 +32,9 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 - [C-402 — Decide whether a whole-host template needs an operator allowlist](C-402-whole-host-template-allowlist.md) · Bridge · DECIDED 2026-08-01 — option (b): the connector declares an allowlist or suffix and the loader REFUSES a whole-host template that declares neither. Four connectors template the ENTIRE authority, so Slot::Host constrains the value only to being a hostname — 127.0.0.1 and 169.254.169.254 both compose. Not a defect; a thinner layer than the docs claimed
 - [C-477 — Align runtime API versions with vendored provider contracts](C-477-pin-runtime-api-version-contracts.md) · Connector · compatibility follow-up — GitHub can send its dated API version; Stripe needs an explicit account-version decision
 
+### All Integrations Connectors
+- [C-505 — Establish the native-plugin migration inventory and Exchange conformance ratchet](C-505-gate-the-native-plugin-migration.md) · Bridge · MILESTONE 1 lane 15 — freeze the complete native-adapter inventory and reusable legacy-versus-Exchange conformance format before the first migration wave
+
 ### Anthropic Managed Agents — the first vendor that declares both transports and its own event set
 _The `channel-bindings` and `inbound-events` epics built a model for the reverse call direction —_
 - [C-444 — Decide: may a connector create and run a Managed Agents session?](C-444-decide-managed-agents-charter.md) · Spec · DECISION, not a task — the fourth shape of C-123's question. Management plane is ordinary SaaS; the SESSION plane runs an agent loop and bills inference, and flux has flux-agent/flux-orchestrate of its own. Nothing in the epic's session half may start before this
@@ -193,7 +196,6 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-502 — Migrate SQL, Vault and 1Password into connectors](C-502-migrate-data-and-secret-plugins.md) · Connector · database handles and secret-store operations need lifecycle and credential-result boundaries, not an exemption from the connector model
 - [C-503 — Migrate AWS, Homer, Hugging Face and web search adapters](C-503-migrate-the-remaining-native-adapters.md) · Connector · close the residual inventory: SigV4/CLI-backed AWS, Homer HTTP/JWT, Hugging Face and provider-selecting web search
 - [C-504 — Project every connector runtime through the zero-IO pack](C-504-project-runtime-plans-through-connector-pack.md) · Bridge · connector-pack currently resolves an HTTP Tool; make it produce one declared zero-IO runtime plan consumed and dispatched only by Exchange
-- [C-505 — Establish the native-plugin migration inventory and Exchange conformance ratchet](C-505-gate-the-native-plugin-migration.md) · Bridge · an atomic prerequisite maps all 18 adapters and establishes frozen legacy-plugin-versus-Exchange fixtures before the first wave; each wave ratchets its own evidence
 
 ### channel bindings — generalize a flux `channel` over a connector
 _[inbound-events.md](inbound-events.md) models an **event** — the vendor calls us — and stops there._
