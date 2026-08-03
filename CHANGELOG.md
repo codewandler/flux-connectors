@@ -7,12 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-08-04
+
 ### Added
 
 - **GitLab connections can target an operator-approved self-managed HTTPS origin** (C-508).
   GitLab.com remains the zero-configuration default; custom origins accept only an HTTPS authority,
-  leave `/api/v4` connector-owned, remain inert until operator approval, and drive transport and
-  permission subjects from the same connection snapshot.
+  leave `/api/v4` connector-owned, remain inert until operator approval, and drive transport,
+  permission subjects, intents and evidence from the same connection snapshot. Proposed,
+  replaced, revoked and instance-scoped values fail closed without disclosing the proposal.
 - **C-505** — Establish the native-plugin migration inventory and Exchange conformance ratchet: a
   retained inventory, closed captured-observation format, derived comparator and offline
   cross-repository release check now prevent a Flux adapter from disappearing before its published
@@ -21,9 +24,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed — breaking for public catalogue consumers
 
 - **Connector configuration and verification are now public consumer contracts** (C-87).
-  Generated manifests, the embedded declaration catalogue and the explorer carry complete config,
-  setup, subscription and `verify` metadata. Public `catalog.json` moves from schema 2 to schema 3:
-  `auth.oauth2` is now the complete OAuth declaration instead of a lossy boolean.
+  Generated manifests, the embedded catalogue and the explorer carry complete config, setup,
+  subscription and `verify` metadata. Embedded `ConfigField` approval is a closed typed policy and
+  `Provider::verify` identifies the bounded Test-connection read without parsing declaration JSON.
+  Public `catalog.json` moves from schema 2 to schema 3: `auth.oauth2` is now the complete OAuth
+  declaration instead of a lossy boolean.
 
 ### Changed
 
