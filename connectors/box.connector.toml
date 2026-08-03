@@ -10,6 +10,7 @@ base_url = "https://api.box.com"
 api_version = "2.0"
 module = "box.flux"
 operations = ["box-user-me", "box-folder-get", "box-folder-items-list", "box-file-get", "box-folder-create", "box-file-copy"]
+verify = "box-user-me"
 
 [operation_semantic_effects]
 box-file-copy = []
@@ -36,3 +37,4 @@ format = "token"
 secret = true
 docs_url = "https://developer.box.com/guides/authentication/"
 binds = "credential.box.access_token"
+level = "connection"

@@ -8,6 +8,7 @@ runtime = "http"
 base_url = "https://api.resend.com"
 module = "resend.flux"
 operations = ["resend-email-send", "resend-email-get", "resend-domain-list", "resend-domain-get"]
+verify = "resend-domain-list"
 
 [operation_semantic_effects]
 resend-domain-get = []

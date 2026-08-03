@@ -11,6 +11,7 @@ base_url = "https://graph.microsoft.com"
 api_version = "v1.0"
 module = "microsoft_graph-calendar.flux"
 operations = ["microsoft_graph-calendar-event-get", "microsoft_graph-calendar-event-create", "microsoft_graph-calendar-calendar-get", "microsoft_graph-calendar-category-list", "microsoft_graph-calendar-time-zone-list", "microsoft_graph-calendar-language-list"]
+verify = "microsoft_graph-calendar-calendar-get"
 
 [operation_semantic_effects]
 microsoft_graph-calendar-calendar-get = []

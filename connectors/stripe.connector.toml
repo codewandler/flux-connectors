@@ -10,6 +10,7 @@ base_url = "https://api.stripe.com"
 api_version = "v1"
 module = "stripe.flux"
 operations = ["stripe-balance-get", "stripe-customer-get", "stripe-charge-get", "stripe-payment-intent-get", "stripe-refund-get", "stripe-payment-intent-capture", "stripe-payment-intent-cancel", "stripe-charge-refund-create", "stripe-country-spec-list", "stripe-event-list", "stripe-exchange-rate-list", "stripe-billing-meter-list"]
+verify = "stripe-balance-get"
 
 [operation_semantic_effects]
 stripe-balance-get = []
@@ -48,6 +49,7 @@ format = "token"
 secret = true
 docs_url = "https://docs.stripe.com/keys"
 binds = "credential.stripe.secret_key"
+level = "connection"
 
 [[events]]
 name = "payment_intent.succeeded"

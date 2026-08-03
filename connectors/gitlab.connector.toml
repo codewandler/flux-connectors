@@ -10,6 +10,7 @@ base_url = "https://gitlab.com/api/v4"
 api_version = "v4"
 module = "gitlab.flux"
 operations = ["gitlab-user-get", "gitlab-issue-list", "gitlab-issue-get", "gitlab-issue-create", "gitlab-merge-request-list", "gitlab-pipeline-get", "gitlab-branch-list"]
+verify = "gitlab-user-get"
 
 [operation_semantic_effects]
 gitlab-branch-list = []
@@ -37,3 +38,4 @@ format = "token"
 secret = true
 docs_url = "https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"
 binds = "credential.gitlab.token"
+level = "connection"

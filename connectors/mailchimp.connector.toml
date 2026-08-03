@@ -10,6 +10,7 @@ base_url = "https://{dc}.api.mailchimp.com/3.0"
 api_version = "3.0"
 module = "mailchimp.flux"
 operations = ["mailchimp-ping", "mailchimp-audience-list", "mailchimp-audience-get", "mailchimp-audience-member-list", "mailchimp-audience-member-get", "mailchimp-audience-member-upsert", "mailchimp-campaign-list"]
+verify = "mailchimp-ping"
 
 [operation_semantic_effects]
 mailchimp-audience-get = []
@@ -37,6 +38,7 @@ example = "us14"
 format = "subdomain"
 docs_url = "https://mailchimp.com/developer/marketing/docs/fundamentals/"
 binds = "endpoint.dc"
+level = "connection"
 
 [[config]]
 name = "api_key"
@@ -46,3 +48,4 @@ format = "token"
 secret = true
 docs_url = "https://mailchimp.com/developer/marketing/guides/quick-start/"
 binds = "credential.mailchimp.api_key"
+level = "connection"

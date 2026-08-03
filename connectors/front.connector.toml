@@ -8,6 +8,7 @@ runtime = "http"
 base_url = "https://api2.frontapp.com"
 module = "front.flux"
 operations = ["front-verify", "front-conversation-list", "front-conversation-get", "front-conversation-message-list", "front-conversation-reply", "front-conversation-tag-add"]
+verify = "front-verify"
 
 [operation_semantic_effects]
 front-conversation-get = []
@@ -34,3 +35,4 @@ format = "token"
 secret = true
 docs_url = "https://dev.frontapp.com/docs/authentication"
 binds = "credential.front.api_token"
+level = "connection"

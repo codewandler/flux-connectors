@@ -350,7 +350,7 @@ function handMaintainedData(sources, values) {
 test('the site ships the generated catalogue at the path VitePress serves', () => {
   const document = catalog()
 
-  assert.equal(document.schema_version, 2)
+  assert.equal(document.schema_version, 3)
   assert.ok(document.providers.length > 0, 'the catalogue names no providers')
   assert.ok(operations(document).length > 0, 'the catalogue names no operations')
 
@@ -726,6 +726,32 @@ test('the explorer lists every provider and every operation without JavaScript',
       assert.ok(body.includes(operation.id), `the operation list omits \`${operation.id}\``)
     }
   }
+})
+
+test('provider cards render every declared configuration field without JavaScript', () => {
+  const document = catalog()
+  const html = page('explorer.html')
+  const body = text(html)
+  let rendered = 0
+
+  for (const provider of document.providers) {
+    assert.ok(Array.isArray(provider.config), `\`${provider.id}\` publishes no configuration array`)
+    for (const field of provider.config) {
+      rendered += 1
+      assert.match(
+        html,
+        new RegExp(
+          `data-config-of="${provider.id}"[^>]*data-config-field="${field.name}"|` +
+            `data-config-field="${field.name}"[^>]*data-config-of="${provider.id}"`
+        ),
+        `the card for \`${provider.id}\` does not render configuration field \`${field.name}\``
+      )
+      assert.ok(body.includes(field.label), `the form omits the label for \`${provider.id}.${field.name}\``)
+      assert.ok(body.includes(field.help), `the form omits the help for \`${provider.id}.${field.name}\``)
+    }
+  }
+
+  assert.ok(rendered > 0, 'no shipped connector declares configuration, so the rendering gate is vacuous')
 })
 
 // ---------------------------------------------------------------------------------------------

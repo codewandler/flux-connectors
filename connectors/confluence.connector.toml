@@ -10,6 +10,7 @@ base_url = "https://{site}.atlassian.net/wiki"
 api_version = "v2"
 module = "confluence.flux"
 operations = ["confluence-space-list", "confluence-space-get", "confluence-space-pages", "confluence-page-get", "confluence-page-create", "confluence-comment-add"]
+verify = "confluence-space-list"
 
 [operation_semantic_effects]
 confluence-comment-add = []
@@ -37,6 +38,7 @@ example = "acme"
 format = "subdomain"
 docs_url = "https://support.atlassian.com/confluence-cloud/docs/what-is-confluence-cloud/"
 binds = "endpoint.site"
+level = "connection"
 
 [[config]]
 name = "email"
@@ -45,6 +47,7 @@ help = "The email of the account that minted the API token. It travels as the us
 example = "you@acme.com"
 format = "email"
 binds = "username.confluence.api_token"
+level = "connection"
 
 [[config]]
 name = "api_token"
@@ -54,3 +57,4 @@ format = "token"
 secret = true
 docs_url = "https://id.atlassian.com/manage-profile/security/api-tokens"
 binds = "credential.confluence.api_token"
+level = "connection"

@@ -10,6 +10,7 @@ base_url = "https://{project_ref}.supabase.co"
 api_version = "v1"
 module = "supabase.flux"
 operations = ["supabase-schema-describe", "supabase-rows-list", "supabase-auth-settings"]
+verify = "supabase-schema-describe"
 
 [operation_semantic_effects]
 supabase-auth-settings = []
@@ -35,6 +36,7 @@ example = "abcdefghijklmnopqrst"
 format = "subdomain"
 docs_url = "https://supabase.com/docs/guides/api"
 binds = "endpoint.project_ref"
+level = "connection"
 
 [[config]]
 name = "anon_key"
@@ -44,3 +46,4 @@ format = "token"
 secret = true
 docs_url = "https://supabase.com/docs/guides/api/api-keys"
 binds = "credential.supabase.anon_key"
+level = "connection"

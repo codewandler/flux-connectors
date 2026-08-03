@@ -8,6 +8,7 @@ runtime = "http"
 base_url = "https://api.vercel.com"
 module = "vercel.flux"
 operations = ["vercel-projects-list", "vercel-project-get", "vercel-deployments-list", "vercel-deployment-get", "vercel-deployment-cancel"]
+verify = "vercel-projects-list"
 
 [operation_semantic_effects]
 vercel-deployment-cancel = []
@@ -33,6 +34,7 @@ format = "token"
 secret = true
 docs_url = "https://vercel.com/docs/rest-api#creating-an-access-token"
 binds = "credential.vercel.token"
+level = "connection"
 
 [[config]]
 name = "team_id"
@@ -41,3 +43,4 @@ help = "The team this connection acts on behalf of. Find it under Team Settings 
 example = "team_1a2b3c4d5e6f7g8h9i0j"
 docs_url = "https://vercel.com/docs/rest-api/reference/welcome#authentication"
 binds = "query.teamId"
+level = "connection"

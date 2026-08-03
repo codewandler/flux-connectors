@@ -8,6 +8,7 @@ runtime = "http"
 base_url = "https://{instance}.my.salesforce.com"
 module = "salesforce.flux"
 operations = ["salesforce-whoami", "salesforce-record-get", "salesforce-record-create", "salesforce-record-update", "salesforce-sobject-describe"]
+verify = "salesforce-whoami"
 
 [operation_semantic_effects]
 salesforce-record-create = []
@@ -32,6 +33,7 @@ help = "The subdomain of your org's My Domain URL — if you log in at acme.my.s
 example = "acme"
 format = "subdomain"
 binds = "endpoint.instance"
+level = "connection"
 
 [[config]]
 name = "access_token"
@@ -40,3 +42,4 @@ help = "An OAuth2 access token for this org — minted by Salesforce's own login
 format = "token"
 secret = true
 binds = "credential.salesforce.access_token"
+level = "connection"

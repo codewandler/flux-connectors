@@ -37,6 +37,7 @@ example = "acme"
 format = "subdomain"
 docs_url = "https://support.atlassian.com/jira-software-cloud/docs/what-is-a-jira-site/"
 binds = "endpoint.site"
+level = "connection"
 
 [[config]]
 name = "email"
@@ -45,6 +46,7 @@ help = "The email of the account that minted the API token. It travels as the us
 example = "you@acme.com"
 format = "email"
 binds = "username.jira.api_token"
+level = "connection"
 
 [[config]]
 name = "api_token"
@@ -54,3 +56,4 @@ format = "token"
 secret = true
 docs_url = "https://id.atlassian.com/manage-profile/security/api-tokens"
 binds = "credential.jira.api_token"
+level = "connection"

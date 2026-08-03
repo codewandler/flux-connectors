@@ -10,6 +10,7 @@ base_url = "https://api.twilio.com/2010-04-01"
 api_version = "2010-04-01"
 module = "twilio.flux"
 operations = ["twilio-account-get", "twilio-message-list", "twilio-message-get", "twilio-call-list", "twilio-call-get", "twilio-recording-list", "twilio-recording-get", "twilio-usage-record-list", "twilio-conference-list"]
+verify = "twilio-account-get"
 
 [operation_semantic_effects]
 twilio-account-get = []
@@ -47,6 +48,7 @@ format = "token"
 docs_url = "https://www.twilio.com/docs/iam/api/account"
 binds = "username.twilio.basic_auth"
 also_binds = ["path.AccountSid"]
+level = "connection"
 
 [[config]]
 name = "auth_token"
@@ -56,6 +58,7 @@ format = "token"
 secret = true
 docs_url = "https://www.twilio.com/docs/iam/api/account"
 binds = "credential.twilio.basic_auth"
+level = "connection"
 
 [[events]]
 name = "message.status_callback"

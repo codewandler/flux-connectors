@@ -1,6 +1,6 @@
 # Design: the connector configuration surface
 
-**Status:** accepted (IR + loader landed) · **Pillar:** Spec (+ Codegen, Bridge) ·
+**Status:** accepted (IR, loader and consumer artifacts landed) · **Pillar:** Spec (+ Codegen, Bridge) ·
 **Epic:** `connector-config` · **Stories:** C-86 … C-89 ·
 **Supersedes:** [C-68](../stories/C-68-endpoint-binding.md)'s binding half ·
 **Amends:** [C-22](../stories/C-22-auth-conformance-matrix.md), [C-62](../stories/C-62-codegen-subscription-ops.md), [C-67](../stories/C-67-required-scopes.md)
@@ -204,8 +204,9 @@ turn a catalogue update into an outage on connections that were never wrong.
 `catalog.json` as `config_choices`, and in `catalog::Provider::config_choices`. That is *not* C-87
 landing early: it is the set alone, addressed by `(service, kind, name)`, because a closed set a
 renderer cannot see is a text box with extra steps. The rest of the surface — labels for every field,
-help, `format`, `binds`, the derived level, `verify`, subscription and setup — is still C-87's, and
-so is the breaking `auth.oauth2` flattening.
+help, `format`, `binds`, the derived level, `verify`, subscription and setup — now travels through
+C-87's manifest and catalogue projections. C-87 also replaces the lossy `auth.oauth2` boolean with
+the complete OAuth declaration and therefore moves `catalog.json` to schema version 3.
 
 ## Invariants — all refusals
 
@@ -329,9 +330,11 @@ The key is now **`(tenant, provider, service, kind, name)`**, and the service co
 - **The hosted redirect has no home.** `OAuthRedirect { port, path }` is loopback-only. A hosted
   callback is `https://app.example.com/oauth/callback`, supplied by the host — the connector should
   declare only that a redirect is required and any vendor constraint on it. C-89.
-- **Codegen.** Config, `verify`, subscription and setup are in the IR and in the hash domain and reach
-  no artifact yet. C-87 — which must also settle a **breaking** change: `site.rs` flattens the whole
-  `OAuth2Spec` to `oauth2: bool`, so a hosted product cannot build an authorize URL at all.
+- **Codegen is no longer an open question.** Config and `verify` reach the manifest and
+  `catalog.json`; subscription and setup travel with their channel binding; the derived level is
+  published rather than authored. The complete `OAuth2Spec` replaces the old boolean in schema
+  version 3, so a hosted product receives the paths, scopes, grants and redirect declaration it
+  needs to start a grant.
 - **Scopes.** A consent screen needs per-scope display text; C-67 designs bare strings. Its "union per
   service" is already the right primitive.
 - **i18n.** Every string is English and inline, as everywhere else here.

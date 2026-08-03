@@ -10,6 +10,7 @@ base_url = "https://api.webflow.com/v2"
 api_version = "v2"
 module = "webflow.flux"
 operations = ["webflow-site-list", "webflow-collection-list", "webflow-collection-get", "webflow-collection-item-list", "webflow-collection-item-get", "webflow-site-publish"]
+verify = "webflow-site-list"
 
 [operation_semantic_effects]
 webflow-collection-get = []
@@ -36,3 +37,4 @@ format = "token"
 secret = true
 docs_url = "https://developers.webflow.com/data/reference/authentication"
 binds = "credential.webflow.token"
+level = "connection"

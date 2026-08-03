@@ -33,6 +33,7 @@ example = "api.intercom.io"
 format = "hostname"
 docs_url = "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/"
 binds = "endpoint.host"
+level = "connection"
 
 [[config.choices]]
 value = "api.intercom.io"

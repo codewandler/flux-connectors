@@ -590,10 +590,8 @@ pub struct Provider {
     /// Empty for most connectors. Present for the ones whose value is a *choice* rather than a
     /// string the operator knows: New Relic's two region hosts, Intercom's three.
     ///
-    /// This is deliberately **not** the whole configuration surface — labels, help text, `binds` and
-    /// the derived level are C-87's, and that story is a breaking change to `catalog.json`'s OAuth
-    /// key. What is here is the part a closed set is useless without: a form that cannot see the
-    /// choices renders a text box, which moves the declaration without moving the benefit.
+    /// The complete declaration is available through [`Self::config`] (C-87). This stays as the
+    /// indexed compatibility view for consumers that address the set by `(service, kind, name)`.
     pub config_choices: &'static [ConfigChoices],
 }
 
@@ -660,9 +658,9 @@ impl Provider {
     /// The closed set governing one configuration slot, addressed exactly as the runtime port
     /// addresses a stored value — `(service, kind, name)`.
     ///
-    /// `None` means the slot is open, **not** that the value is unconstrained by anything: a field
-    /// still has a `format`, which this surface does not publish (C-87). A caller uses this to
-    /// decide between a select and an input, and to refuse a value it was not offered.
+    /// `None` means the slot is open, **not** that the value is unconstrained by anything: the full
+    /// [`ConfigField`] still carries its format. A caller uses this indexed view to decide between a
+    /// select and an input, and to refuse a value it was not offered.
     pub fn choices_for(
         &self,
         service: &str,

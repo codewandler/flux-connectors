@@ -835,25 +835,22 @@ These failures are recorded decisions. Do not “fix” one without reading its 
      [docs/designs/connectors-api.md](docs/designs/connectors-api.md), and
      [docs/designs/connectors-app.md](docs/designs/connectors-app.md) for the parts still current.
 
-- **Six declarable surfaces reach no artifact at all.** This is the largest real gap in the repository.
-  The IR models each one and the loader validates it, and then neither `connectors/*.connector.toml`
-  — whose emitted fields are exactly `generator`, `connector`, `service`, `gid`, `vendor`,
-  `description`, `runtime`, `base_url`, `api_version`, `module`, `operations`, `events`, `channels`
-  — nor `web/public/catalog.json` carries it:
+- **Four declarable surfaces reach no artifact at all.** The IR models each one and the loader
+  validates it, and then neither `connectors/*.connector.toml` nor
+  `web/public/catalog.json` carries it. C-87 removed `config` and `verify` from this list: manifests
+  and the public catalogue now carry the value-free form, its derived level and the bounded Test
+  connection read, while configuration still reaches no `.flux` module by design.
 
   | surface | declared today | where it stops |
   |---|---|---|
-  | `[[config]]` | 45 fields across 28 providers | IR and loader only |
-  | `verify` | 28 providers | IR and loader only |
   | `[[services]] roles` | 1 role (`anthropic` / `models`) | IR and loader only |
   | `quirks.pagination` | 6 operations across 3 providers | IR and loader only |
   | `[[graphs]]` | none — the lowering exists (`crates/connector-flux/src/graph.rs`) and nothing declares one | no consumer *and* no producer |
   | `quirks.rate_limit` | none — `providers/hubspot.toml` records a deliberate non-declaration | no consumer *and* no producer |
 
-  The first four are the sharp ones, because the declarations already exist: a host reading a manifest
-  cannot render a settings page, cannot find the "Test connection" operation, cannot ask what a service
-  claims to do, and cannot page a list — for connectors that state all four in their provider TOML.
-  Do not close this by widening the manifest ad hoc; the surface-to-artifact mapping is decided in
+  The first two are sharp because declarations already exist: a host reading an artifact still
+  cannot ask what a service claims to do or page a list for connectors that state those facts in
+  provider TOML. Do not close this by widening the manifest ad hoc; the surface-to-artifact mapping is decided in
   [docs/designs/connector-surfaces.md](docs/designs/connector-surfaces.md).
 - **Freshdesk declares no credential.** Its API key occupies the Basic username position, which the
   current model treats as non-secret config. Emitting it would bypass secret gating and redaction;

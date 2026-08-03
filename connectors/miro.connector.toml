@@ -10,6 +10,7 @@ base_url = "https://api.miro.com/v2"
 api_version = "v2"
 module = "miro.flux"
 operations = ["miro-board-list", "miro-board-item-list", "miro-board-item-get", "miro-sticky-note-create", "miro-sticky-note-update", "miro-sticky-note-delete"]
+verify = "miro-board-list"
 
 [operation_semantic_effects]
 miro-board-item-get = []
@@ -36,3 +37,4 @@ format = "token"
 secret = true
 docs_url = "https://developers.miro.com/docs/getting-started-with-oauth"
 binds = "credential.miro.access_token"
+level = "connection"

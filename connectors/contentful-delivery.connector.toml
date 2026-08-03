@@ -9,6 +9,7 @@ runtime = "http"
 base_url = "https://cdn.contentful.com/spaces/{space_id}/environments/{environment_id}"
 module = "contentful-delivery.flux"
 operations = ["contentful-entry-get", "contentful-entries-list", "contentful-asset-get"]
+verify = "contentful-entries-list"
 
 [operation_semantic_effects]
 contentful-asset-get = []
@@ -38,6 +39,7 @@ help = "Found on the space's Settings > General settings page in the Contentful 
 example = "a1b2c3d4e5f6"
 docs_url = "https://www.contentful.com/developers/docs/references/authentication/"
 binds = "endpoint.space_id"
+level = "connection"
 
 [[config]]
 name = "delivery_environment_id"
@@ -47,6 +49,7 @@ help = "The environment within the space to read from — commonly `master` unle
 example = "master"
 docs_url = "https://www.contentful.com/developers/docs/concepts/multiple-environments/"
 binds = "endpoint.environment_id"
+level = "connection"
 
 [[config]]
 name = "delivery_token"
@@ -57,3 +60,4 @@ format = "token"
 secret = true
 docs_url = "https://www.contentful.com/developers/docs/references/authentication/"
 binds = "credential.contentful.delivery_token"
+level = "connection"

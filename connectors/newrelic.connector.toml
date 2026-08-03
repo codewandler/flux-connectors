@@ -10,6 +10,7 @@ base_url = "https://{host}/v2"
 api_version = "2"
 module = "newrelic.flux"
 operations = ["newrelic-application-list", "newrelic-application-get", "newrelic-alert-policy-list", "newrelic-alert-violation-list", "newrelic-deployment-list", "newrelic-deployment-create"]
+verify = "newrelic-application-list"
 
 [operation_semantic_effects]
 newrelic-alert-policy-list = []
@@ -38,6 +39,7 @@ example = "api.newrelic.com"
 format = "hostname"
 docs_url = "https://docs.newrelic.com/docs/apis/rest-api-v2/get-started/introduction-new-relic-rest-api-v2/"
 binds = "endpoint.host"
+level = "connection"
 
 [[config.choices]]
 value = "api.newrelic.com"
@@ -55,6 +57,7 @@ format = "token"
 secret = true
 docs_url = "https://docs.newrelic.com/docs/apis/intro-apis/new-relic-api-keys/"
 binds = "credential.newrelic.api_key"
+level = "connection"
 
 [[config_choices]]
 field = "host"

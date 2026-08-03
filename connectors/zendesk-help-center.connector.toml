@@ -48,6 +48,7 @@ example = "acme"
 format = "subdomain"
 docs_url = "https://support.zendesk.com/hc/en-us/articles/4409381383578"
 binds = "endpoint.subdomain"
+level = "connection"
 
 [[config]]
 name = "help_center_email"
@@ -57,6 +58,7 @@ help = "The Zendesk agent email used by the shared Support and Help Center API t
 example = "agent@acme.com"
 format = "email"
 binds = "username.zendesk.api_token"
+level = "connection"
 
 [[config]]
 name = "help_center_api_token"
@@ -67,3 +69,4 @@ format = "token"
 secret = true
 docs_url = "https://support.zendesk.com/hc/en-us/articles/4408889192858"
 binds = "credential.zendesk.api_token"
+level = "connection"

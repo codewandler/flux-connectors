@@ -10,6 +10,7 @@ base_url = "https://api.sendgrid.com"
 api_version = "v3"
 module = "sendgrid.flux"
 operations = ["sendgrid-template-list", "sendgrid-template-get", "sendgrid-suppression-bounce-list", "sendgrid-email-validate"]
+verify = "sendgrid-template-list"
 
 [operation_semantic_effects]
 sendgrid-email-validate = []
@@ -34,3 +35,4 @@ format = "token"
 secret = true
 docs_url = "https://www.twilio.com/docs/sendgrid/ui/account-and-settings/api-keys"
 binds = "credential.sendgrid.api_key"
+level = "connection"

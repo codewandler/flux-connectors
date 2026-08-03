@@ -11,6 +11,7 @@ base_url = "https://api.machines.dev/v1"
 api_version = "v1"
 module = "fly-machines.flux"
 operations = ["fly-regions-list", "fly-machines-list", "fly-machine-get", "fly-machine-events-list", "fly-machine-create", "fly-machine-start", "fly-machine-stop", "fly-machine-restart", "fly-machine-delete"]
+verify = "fly-regions-list"
 
 [operation_semantic_effects]
 fly-machine-create = []

@@ -11,6 +11,7 @@ base_url = "https://api.anthropic.com"
 api_version = "v1"
 module = "anthropic-models.flux"
 operations = ["anthropic-models-list", "anthropic-model-get"]
+verify = "anthropic-models-list"
 
 [operation_semantic_effects]
 anthropic-model-get = []
@@ -44,3 +45,4 @@ format = "token"
 secret = true
 docs_url = "https://docs.anthropic.com/en/api/getting-started"
 binds = "credential.anthropic.api_key"
+level = "connection"

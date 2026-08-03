@@ -8,6 +8,7 @@ runtime = "http"
 base_url = "https://a.klaviyo.com/api"
 module = "klaviyo.flux"
 operations = ["klaviyo-account-list", "klaviyo-profile-list", "klaviyo-profile-get", "klaviyo-profile-create", "klaviyo-list-list", "klaviyo-event-create"]
+verify = "klaviyo-account-list"
 
 [operation_semantic_effects]
 klaviyo-account-list = []
@@ -37,3 +38,4 @@ format = "token"
 secret = true
 docs_url = "https://developers.klaviyo.com/en/docs/retrieve_api_credentials"
 binds = "credential.klaviyo.api_key"
+level = "connection"

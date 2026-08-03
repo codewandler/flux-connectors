@@ -10,6 +10,7 @@ base_url = "https://api.figma.com"
 api_version = "v1"
 module = "figma.flux"
 operations = ["figma-user-me", "figma-file-get", "figma-file-nodes-get", "figma-image-render-get", "figma-project-files-list", "figma-file-comments-list"]
+verify = "figma-user-me"
 
 [operation_semantic_effects]
 figma-file-comments-list = []
@@ -38,3 +39,4 @@ format = "token"
 secret = true
 docs_url = "https://www.figma.com/developers/api"
 binds = "credential.figma.token"
+level = "connection"

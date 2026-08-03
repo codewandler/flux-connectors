@@ -10,6 +10,7 @@ base_url = "https://api.bitbucket.org/2.0"
 api_version = "2.0"
 module = "bitbucket.flux"
 operations = ["bitbucket-repository-list", "bitbucket-repository-get", "bitbucket-pull-request-list", "bitbucket-pull-request-get", "bitbucket-pull-request-create", "bitbucket-pull-request-comment", "bitbucket-pull-request-approve"]
+verify = "bitbucket-repository-list"
 
 [operation_semantic_effects]
 bitbucket-pull-request-approve = []
@@ -37,6 +38,7 @@ format = "token"
 secret = true
 docs_url = "https://support.atlassian.com/bitbucket-cloud/docs/using-access-tokens/"
 binds = "credential.bitbucket.access_token"
+level = "connection"
 
 [[config]]
 name = "workspace"
@@ -45,3 +47,4 @@ help = "The workspace this connection manages, as its slug — the single path s
 example = "acme-engineering"
 docs_url = "https://support.atlassian.com/bitbucket-cloud/docs/what-is-a-workspace/"
 binds = "path.workspace"
+level = "connection"

@@ -36,3 +36,4 @@ format = "token"
 secret = true
 docs_url = "https://learn.microsoft.com/en-us/graph/auth/auth-concepts"
 binds = "credential.microsoft_graph.access_token"
+level = "connection"

@@ -8,6 +8,7 @@ runtime = "http"
 base_url = "https://api.datadoghq.com"
 module = "datadog.flux"
 operations = ["datadog-monitor-list", "datadog-monitor-get", "datadog-incident-list", "datadog-incident-get"]
+verify = "datadog-monitor-list"
 
 [operation_semantic_effects]
 datadog-incident-get = []
@@ -42,6 +43,7 @@ format = "token"
 secret = true
 docs_url = "https://docs.datadoghq.com/account_management/api-app-keys/"
 binds = "credential.datadog.api_key"
+level = "connection"
 
 [[config]]
 name = "application_key"
@@ -51,3 +53,4 @@ format = "token"
 secret = true
 docs_url = "https://docs.datadoghq.com/account_management/api-app-keys/"
 binds = "credential.datadog.application_key"
+level = "connection"

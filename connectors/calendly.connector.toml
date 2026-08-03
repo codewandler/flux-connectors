@@ -8,6 +8,7 @@ runtime = "http"
 base_url = "https://api.calendly.com"
 module = "calendly.flux"
 operations = ["calendly-user-me", "calendly-event-type-list", "calendly-scheduled-event-list", "calendly-scheduled-event-get", "calendly-invitee-list"]
+verify = "calendly-user-me"
 
 [operation_semantic_effects]
 calendly-event-type-list = []
@@ -33,3 +34,4 @@ format = "token"
 secret = true
 docs_url = "https://developer.calendly.com/getting-started"
 binds = "credential.calendly.access_token"
+level = "connection"

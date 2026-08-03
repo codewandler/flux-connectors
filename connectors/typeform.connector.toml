@@ -8,6 +8,7 @@ runtime = "http"
 base_url = "https://api.typeform.com"
 module = "typeform.flux"
 operations = ["typeform-user-me", "typeform-form-list", "typeform-form-get", "typeform-response-list", "typeform-response-delete"]
+verify = "typeform-user-me"
 
 [operation_semantic_effects]
 typeform-form-get = []
@@ -33,3 +34,4 @@ format = "token"
 secret = true
 docs_url = "https://www.typeform.com/developers/get-started/personal-access-token/"
 binds = "credential.typeform.access_token"
+level = "connection"

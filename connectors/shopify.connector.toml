@@ -37,6 +37,7 @@ example = "acme"
 format = "subdomain"
 docs_url = "https://help.shopify.com/en/manual/domains"
 binds = "endpoint.shop"
+level = "connection"
 
 [[config]]
 name = "access_token"
@@ -46,3 +47,4 @@ format = "token"
 secret = true
 docs_url = "https://help.shopify.com/en/manual/apps/app-types/custom-apps"
 binds = "credential.shopify.access_token"
+level = "connection"

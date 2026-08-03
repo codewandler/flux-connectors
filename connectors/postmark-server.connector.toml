@@ -9,6 +9,7 @@ runtime = "http"
 base_url = "https://api.postmarkapp.com"
 module = "postmark-server.flux"
 operations = ["postmark-email-send", "postmark-deliverystats-get", "postmark-bounce-list", "postmark-bounce-get"]
+verify = "postmark-deliverystats-get"
 
 [operation_semantic_effects]
 postmark-bounce-get = []
@@ -36,3 +37,4 @@ format = "token"
 secret = true
 docs_url = "https://postmarkapp.com/support/article/1008-what-are-the-account-server-api-tokens"
 binds = "credential.postmark.server_token"
+level = "connection"

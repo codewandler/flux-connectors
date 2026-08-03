@@ -10,6 +10,7 @@ base_url = "https://{subdomain}.zendesk.com"
 api_version = "v2"
 module = "zendesk.flux"
 operations = ["zendesk-ticket-audit-list", "zendesk-incremental-ticket-list", "zendesk-incremental-user-list", "zendesk-incremental-organization-list", "zendesk-incremental-ticket-event-list", "zendesk-custom-object-list", "zendesk-ticket-recent-list", "zendesk-view-ticket-list", "zendesk-user-show", "zendesk-organization-show", "zendesk-group-list", "zendesk-ticket-field-list", "zendesk-ticket-form-list", "zendesk-custom-status-list", "zendesk-test", "zendesk-ticket-search", "zendesk-ticket-show", "zendesk-ticket-comment-list", "zendesk-ticket-update"]
+verify = "zendesk-test"
 
 [operation_semantic_effects]
 zendesk-custom-object-list = []
@@ -58,6 +59,7 @@ example = "acme"
 format = "subdomain"
 docs_url = "https://support.zendesk.com/hc/en-us/articles/4409381383578"
 binds = "endpoint.subdomain"
+level = "connection"
 
 [[config]]
 name = "email"
@@ -66,6 +68,7 @@ help = "The email of the Zendesk agent whose API token you are using. Zendesk se
 example = "agent@acme.com"
 format = "email"
 binds = "username.zendesk.api_token"
+level = "connection"
 
 [[config]]
 name = "api_token"
@@ -75,3 +78,4 @@ format = "token"
 secret = true
 docs_url = "https://support.zendesk.com/hc/en-us/articles/4408889192858"
 binds = "credential.zendesk.api_token"
+level = "connection"

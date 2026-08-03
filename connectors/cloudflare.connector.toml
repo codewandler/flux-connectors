@@ -10,6 +10,7 @@ base_url = "https://api.cloudflare.com/client/v4"
 api_version = "v4"
 module = "cloudflare.flux"
 operations = ["cloudflare-zone-list", "cloudflare-dns-record-list", "cloudflare-dns-record-create", "cloudflare-dns-record-delete", "cloudflare-cache-purge"]
+verify = "cloudflare-zone-list"
 
 [operation_semantic_effects]
 cloudflare-cache-purge = []
@@ -35,6 +36,7 @@ format = "token"
 secret = true
 docs_url = "https://developers.cloudflare.com/fundamentals/api/get-started/create-token/"
 binds = "credential.cloudflare.api_token"
+level = "connection"
 
 [[config]]
 name = "zone_id"
@@ -43,3 +45,4 @@ help = """The zone (domain) this connection manages, as 32 lowercase hex charact
 example = "023e105f4ecef8ad9ca31a8372d0c353"
 docs_url = "https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/"
 binds = "path.zone_id"
+level = "connection"

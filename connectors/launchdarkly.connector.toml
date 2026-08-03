@@ -10,6 +10,7 @@ base_url = "https://app.launchdarkly.com/api/v2"
 api_version = "v2"
 module = "launchdarkly.flux"
 operations = ["launchdarkly-project-list", "launchdarkly-environment-list", "launchdarkly-flag-list", "launchdarkly-flag-get", "launchdarkly-flag-toggle"]
+verify = "launchdarkly-project-list"
 
 [operation_semantic_effects]
 launchdarkly-environment-list = []
@@ -37,3 +38,4 @@ format = "token"
 secret = true
 docs_url = "https://docs.launchdarkly.com/home/account/api"
 binds = "credential.launchdarkly.api_token"
+level = "connection"
