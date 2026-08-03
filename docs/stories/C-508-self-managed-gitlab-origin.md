@@ -60,6 +60,10 @@ connection input.
 
 ## Progress
 
+- 2026-08-04: Independent pre-PR review found that derived `Debug` output on `ConfigValue` and
+  `MemoryConfig` exposed a configured origin. A failing-first sentinel now pins both public debug
+  surfaces to hand-written output that retains only the approval decision and conceals store
+  addresses and values.
 - 2026-08-04: Integration review closed. Approval is matched as a closed type; proposals,
   replacements, revocations and named instances fail closed without entering subjects, intents or
   executor evidence. Loader/runtime grammar parity, three-sentinel non-leak evidence and GitLab's

@@ -276,10 +276,20 @@ pub trait ConfigStore: Send + Sync {
 ///
 /// The fields stay private so an implementation cannot accidentally construct an approved value
 /// without choosing the named constructor at the point where operator policy was evaluated.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct ConfigValue {
     value: String,
     operator_approved: bool,
+}
+
+/// A setting may be safe to store without being safe to copy into a log. Preserve the policy bit
+/// that helps diagnose refusal while keeping the customer-provided value out of debug output.
+impl std::fmt::Debug for ConfigValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConfigValue")
+            .field("operator_approved", &self.operator_approved)
+            .finish_non_exhaustive()
+    }
 }
 
 impl ConfigValue {
@@ -566,12 +576,20 @@ impl Snapshot {
 ///
 /// The counterpart of [`MemoryStore`](connector_secrets::MemoryStore) on the credential side, and
 /// the shape a host binding a snapshot wants: build it once, hand it over, never touch it again.
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct MemoryConfig {
     /// Keyed by `(tenant, provider, service, kind, name)` — the whole address, so one instance can
     /// serve every tenant a host knows about rather than one per tenant, and every service of a
     /// connector rather than one per connector (C-197).
     values: BTreeMap<(String, String, String, &'static str, String), ConfigValue>,
+}
+
+/// Keep both configuration values and their customer-owned addresses out of debug output, matching
+/// [`Configuration`]'s policy for its erased store.
+impl std::fmt::Debug for MemoryConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MemoryConfig").finish_non_exhaustive()
+    }
 }
 
 impl MemoryConfig {
@@ -767,6 +785,41 @@ impl ConfigStore for MemoryConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn debug_never_exposes_configuration_values() {
+        const SENTINEL: &str = "https://configured-origin.debug-leak.invalid";
+
+        let proposed = ConfigValue::proposed(SENTINEL.to_owned());
+        let approved = ConfigValue::operator_approved(SENTINEL.to_owned());
+        let store = MemoryConfig::new().with_approved_endpoint(
+            "tenant-debug-sentinel",
+            "gitlab",
+            "default",
+            "origin",
+            SENTINEL,
+        );
+
+        for (surface, rendered) in [
+            ("proposed ConfigValue", format!("{proposed:?}")),
+            ("approved ConfigValue", format!("{approved:?}")),
+            ("MemoryConfig", format!("{store:?}")),
+        ] {
+            assert!(
+                !rendered.contains(SENTINEL),
+                "{surface} debug output exposed the configured-origin sentinel: {rendered}"
+            );
+        }
+        assert_eq!(
+            format!("{proposed:?}"),
+            "ConfigValue { operator_approved: false, .. }"
+        );
+        assert_eq!(
+            format!("{approved:?}"),
+            "ConfigValue { operator_approved: true, .. }"
+        );
+        assert_eq!(format!("{store:?}"), "MemoryConfig { .. }");
+    }
 
     #[test]
     fn a_named_instance_uses_the_instance_aware_config_port() {
