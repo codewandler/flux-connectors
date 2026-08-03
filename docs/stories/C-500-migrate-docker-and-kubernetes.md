@@ -13,8 +13,8 @@ note: "preserve Unix-socket, kubeconfig/in-cluster, watch/log/exec and port-forw
 
 ## Goal
 
-Replace the Docker and Kubernetes native plugins with connector bundles whose rich local adapters can
-also be hosted by Exchange inside an explicit tenant isolation boundary.
+Replace the Docker and Kubernetes native plugins with connector bundles executed by Exchange in
+single-tenant mode or inside an explicit per-tenant isolation boundary.
 
 ## Acceptance
 
@@ -23,8 +23,8 @@ also be hosted by Exchange inside an explicit tenant isolation boundary.
 - [ ] Endpoint and credential references remain host-resolved; kubeconfig, client keys and daemon
       authority never become ordinary operation arguments.
 - [ ] Logs, watches, exec and port-forward have bounded stream/cancellation/lease contracts.
-- [ ] Local execution uses Flux's guarded substrate; hosted execution is refused in a shared process
-      and succeeds only in Exchange's single-tenant or per-tenant isolated placement.
+- [ ] Exchange refuses locally executing runtime plans in a shared process and admits them only in
+      its single-tenant mode or through a per-tenant isolated worker; Flux has no local fallback.
 - [ ] Conformance and migration documentation unblock removal of both Flux plugin crates.
 
 ## Progress
@@ -33,4 +33,5 @@ also be hosted by Exchange inside an explicit tenant isolation boundary.
 
 ## Notes
 
-- Reuses Flux C-394/C-397/C-399/C-435 rather than creating connector-owned IO primitives.
+- This is migration wave 2 after C-499. Exchange may reuse published generic runtime libraries, but
+  official execution does not move into the Flux CLI or its release pipeline.

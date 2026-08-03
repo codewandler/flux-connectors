@@ -22,7 +22,7 @@ the stronger rule that secret values never become ordinary model-visible operati
       credentials, scoped acquire/use/release and bounded cancellation; C-47's `db.open` decision is
       resolved rather than bypassed.
 - [ ] Vault and 1Password declare secret-store capability contracts and return handles/references,
-      never plaintext secret values, across local and Exchange placements.
+      never plaintext secret values, across the Exchange boundary.
 - [ ] The design distinguishes a connector used *as a secret-store backend* from an ordinary
       operation that would disclose a secret and proves both remain fail closed.
 - [ ] Runtime artifacts and connector declarations pass parity against the three native plugins.
@@ -32,3 +32,8 @@ the stronger rule that secret values never become ordinary model-visible operati
 ## Progress
 
 - (not started)
+
+## Notes
+
+- This is migration wave 4 after C-501. Flux keeps only its core credential/datasource abstractions;
+  it does not execute these external integrations or receive their vendor credentials.

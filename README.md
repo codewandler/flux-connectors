@@ -37,10 +37,11 @@ Generated HTTP connectors to services such as Zendesk, Salesforce, and OpenAI ar
 today. The destination is broader: every official integration, including Docker, Kubernetes, SQL,
 Prometheus, and other protocol-rich systems, is declared and distributed as a connector. A connector
 may select a guarded socket, process, container, database, remote, or plugin runtime instead of HTTP;
-Flux can run it locally and Exchange can run the same address under hosted authority. That migration
-is tracked by [C-495](docs/stories/C-495-all-integrations-are-connectors-epic.md); the current native
-Flux plugins remain compatibility paths until their connector replacements pass parity and cutover
-gates.
+Exchange executes it under tenant-derived authority and Flux reaches it through its embedded
+Exchange client. That migration is tracked by
+[C-495](docs/stories/C-495-all-integrations-are-connectors-epic.md); the current native Flux plugins
+remain compatibility paths only until their replacements pass frozen Exchange conformance and
+incremental cutover gates.
 
 ## What the compiler produces
 

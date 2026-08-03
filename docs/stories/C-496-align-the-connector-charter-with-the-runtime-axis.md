@@ -6,7 +6,7 @@ status: done
 design: docs/designs/all-integrations-are-connectors.md
 epic: all-integrations-connectors
 areas: [docs]
-note: "remove the superseded rule that Docker/Kubernetes/SQL/observability stay Flux plugins; make the vision, contributor contract, README, roadmap and sibling plans agree"
+note: "historical two-placement charter alignment; superseded by C-507 when flux-roadmap Decision 0001 made Exchange the sole official executor"
 ---
 
 # Align the connector charter with the runtime axis
@@ -37,3 +37,6 @@ connectors, and rich protocols use declared runtime artifacts locally or through
 
 - This is documentation and backlog alignment, not runtime behavior; no failing-first behavioral
   test applies.
+- **Superseded after completion:** C-507 adopts flux-roadmap Decision 0001. The `done` status here
+  records the earlier decision honestly; it does not authorize local Flux execution or
+  local-versus-Exchange parity in the current program.

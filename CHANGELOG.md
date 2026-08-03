@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Official integrations now have one execution boundary in the cross-repository plan** (C-507).
+  flux-connectors owns declarations, zero-IO runtime plans and vendor-specific artifacts; Exchange
+  executes them and holds vendor authority; Flux embeds only the Exchange client. The C-495…C-505
+  backlog no longer requires local Flux execution or local-versus-hosted parity, and C-505 now lands
+  the inventory and legacy-plugin-versus-Exchange conformance ratchet before the first ordered wave.
+  This corrects the v0.18.0 direction without claiming a new runtime has shipped.
+
 ## [0.18.0] — 2026-08-03
 
 ### Added

@@ -1,21 +1,21 @@
 ---
 id: C-505
-title: "Gate the complete native-plugin migration and locality parity"
+title: "Establish the native-plugin migration inventory and Exchange conformance ratchet"
 pillar: Bridge
 status: backlog
 design: docs/designs/all-integrations-are-connectors.md
 epic: all-integrations-connectors
 areas: [tests, catalog, migration]
-note: "one ratcheted inventory maps all 18 integration crates to connectors and requires frozen behavioral parity locally and through Exchange before a Flux crate disappears"
+note: "an atomic prerequisite maps all 18 adapters and establishes frozen legacy-plugin-versus-Exchange fixtures before the first wave; each wave ratchets its own evidence"
 ---
 
-# Gate the complete native-plugin migration and locality parity
+# Establish the native-plugin migration inventory and Exchange conformance ratchet
 
 ## Goal
 
-Make “all integrations are connectors” a checked migration rather than a roadmap sentence: every
-official native adapter is accounted for, parity evidence is retained, and local/hosted behavior
-cannot drift silently.
+Before the first adapter wave begins, make “all integrations are connectors” a checked migration:
+account for every official native adapter and establish the reusable frozen-fixture format that each
+connector must pass through Exchange before Flux deletes its legacy implementation.
 
 ## Acceptance
 
@@ -23,13 +23,20 @@ cannot drift silently.
       every integration crate maps to exactly one connector and migration wave.
 - [ ] A shared conformance format freezes operation/event schemas, effects, capability subjects,
       results, errors, cancellation and stream/lease behavior without copying implementation details.
-- [ ] Each migrated connector runs the applicable suite locally and through Exchange; an unsupported
-      locality is an explicit refusal with a reason, not a skipped test.
+- [ ] The harness compares the legacy Flux plugin with Exchange execution and distinguishes an
+      unsupported runtime or topology as an explicit refusal rather than a skipped test.
 - [ ] Removing a Flux integration crate before its connector is published and conformant fails the
       cross-repository release checklist.
-- [ ] The epic closes only when the official integration adapter count under `flux/plugins` is zero;
-      generic protocol/support crates are reported separately.
+- [ ] The initial ratchet lands before C-499; C-499…C-503 add their own adapters and retained evidence
+      in fixed wave order without waiting for one global cutover.
+- [ ] Completion of this story means the inventory, format and ratchet exist—not that all adapters
+      have migrated. C-495 closes only when the official integration adapter count reaches zero.
 
 ## Progress
 
 - (not started)
+
+## Notes
+
+- C-507 split this atomic foundation from the long-running epic closure, removing the semantic cycle
+  where the migration evidence depended on a journey that itself required the evidence corpus.

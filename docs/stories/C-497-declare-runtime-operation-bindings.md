@@ -6,7 +6,7 @@ status: backlog
 design: docs/designs/all-integrations-are-connectors.md
 epic: all-integrations-connectors
 areas: [connector-spec, connector-flux, catalog]
-note: "runtime currently names only a kind; a rich operation still has no declared adapter operation, stream/lifecycle shape or host-neutral result contract"
+note: "runtime currently names only a kind; a rich operation still has no declared adapter operation or Exchange-consumable stream/lifecycle/result contract"
 ---
 
 # Declare how connector operations bind to non-HTTP runtimes
@@ -23,7 +23,7 @@ container or plugin adapter without masquerading as an HTTP request or introduci
 - [ ] The runtime and binding are connector declarations and cannot be supplied or overridden by a
       caller.
 - [ ] A non-HTTP fixture round-trips provider source → IR → manifest/catalogue → embedded Rust
-      catalogue with no host interpreting provider TOML.
+      catalogue with no Exchange component interpreting provider TOML.
 - [ ] Invalid combinations fail at load—for example a leased operation with no close/cancel
       contract, or an HTTP-only request shape bound to `plugin`.
 - [ ] Existing HTTP connector bytes remain stable unless an intentional versioned schema change is
@@ -37,3 +37,5 @@ container or plugin adapter without masquerading as an HTTP request or introduci
 
 - C-405 delivered the runtime kind but deliberately changed no provider and no generated Flux.
 - C-47 is the SQL lifecycle input; C-489…C-492 are the socket-channel input.
+- Exchange is the only official runtime consumer; Flux receives the projected operation through its
+  embedded Exchange client and cannot select or execute this binding locally (C-507).
