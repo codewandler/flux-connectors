@@ -754,6 +754,33 @@ test('provider cards render every declared configuration field without JavaScrip
   assert.ok(rendered > 0, 'no shipped connector declares configuration, so the rendering gate is vacuous')
 })
 
+test('provider cards render every published Test connection operation without JavaScript', () => {
+  const document = catalog()
+  const html = page('explorer.html')
+  let rendered = 0
+
+  for (const provider of document.providers) {
+    if (!provider.verify) continue
+    rendered += 1
+    assert.ok(
+      html.includes(`data-verify-of="${provider.id}"`),
+      `the card for \`${provider.id}\` does not render its Test connection operation \`${provider.verify}\``
+    )
+  }
+
+  assert.ok(rendered > 0, 'no shipped connector publishes `verify`, so the rendering gate is vacuous')
+})
+
+test('provider cards render Test connection even when the connector declares no configuration fields', () => {
+  const card = markup(component('ProviderCard.vue'))
+
+  assert.match(
+    card,
+    /<\/details>\s*<p\s+v-if="provider\.verify\s*&&\s*!provider\.config\.length"[\s\S]*?class="config-verify"[\s\S]*?>\s*Test connection with/,
+    'the Test connection row has no config-independent fallback; a connector with `verify` and an empty config array renders nothing'
+  )
+})
+
 // ---------------------------------------------------------------------------------------------
 // C-83 — the inbound surface.
 //

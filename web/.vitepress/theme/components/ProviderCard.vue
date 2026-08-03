@@ -164,10 +164,17 @@ const headline = computed(() => {
           <a v-if="field.docs_url" :href="field.docs_url">Vendor setup documentation</a>
         </li>
       </ul>
-      <p v-if="provider.verify" class="config-verify">
+      <p v-if="provider.verify" class="config-verify" :data-verify-of="provider.id">
         Test connection with <code>{{ provider.verify }}</code>
       </p>
     </details>
+    <p
+      v-if="provider.verify && !provider.config.length"
+      class="config-verify"
+      :data-verify-of="provider.id"
+    >
+      Test connection with <code>{{ provider.verify }}</code>
+    </p>
 
     <!-- Only for a connector that describes one: a heading over an empty list would tell a visitor
          that sixteen connectors have an inbound surface they have not filled in, when in fact they
