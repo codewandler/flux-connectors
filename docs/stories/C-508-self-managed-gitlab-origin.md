@@ -2,7 +2,7 @@
 id: C-508
 title: "A GitLab connection supports an operator-approved self-managed HTTPS origin"
 pillar: Connector
-status: done
+status: in-progress
 design: docs/designs/connector-configuration.md
 epic: connector-config
 areas: [providers, connector-spec, connector-pack, catalog, tests]
@@ -51,9 +51,17 @@ connection input.
       evidence or generated public artifacts. Credential references remain addresses, never values.
 - [x] C-402's fail-closed whole-authority rule is enforced for this connector: a self-managed origin
       is the explicit operator-pinned case, not an unbounded tenant-controlled host template.
+- [ ] Approval enforcement reads the embedded closed typed policy. An unapproved proposal is refused
+      and absent from permission subjects, intents and evidence; exact approval, replacement, revoke,
+      named instances and the no-proposal case are covered.
+- [ ] Loader and runtime share parity cases for the accepted origin grammar, and tests prove configured
+      origins, connection labels and authorization values do not leak. GitLab's declared `gitlab.com`
+      default is reported as zero-configuration rather than `unbound-base-url-template`.
 
 ## Progress
 
+- 2026-08-04: Reopened after integration review found proposal fallback and declaration-string policy
+  checks at the runtime boundary, missing grammar/non-leak evidence, and a false public status issue.
 - 2026-08-04: Done. GitLab.com remains the zero-configuration default; an operator-approved
   connection may instead pin a strict HTTPS origin, with one resolved endpoint shared by request
   composition and permission subjects and exercised against a live TLS fixture.
