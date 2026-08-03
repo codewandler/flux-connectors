@@ -14,6 +14,14 @@
 
 ## [Unreleased]
 
+### Improved
+
+- **The integration roadmap now has one execution boundary.** Official integrations will run through
+  Exchange, while Flux contains the built-in client that reaches them. Connector definitions and
+  runtime artifacts stay here, vendor credentials stay in Exchange, and migration evidence is
+  required before each existing adapter is removed. This corrects the plan; it does not change which
+  integrations run today.
+
 ## [0.18.0] — 2026-08-03
 
 ### Improved

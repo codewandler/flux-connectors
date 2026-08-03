@@ -149,18 +149,20 @@ proves the seams end to end, and keep the fleet growing in parallel waves.
 An **epic** is a themed group of stories with a shared design doc. Stories join an epic via the
 `epic: <slug>` frontmatter field, where `<slug>` matches a design doc at `docs/designs/<slug>.md`.
 
-### All integrations are connectors — one declaration and address, whichever runtime executes it
+### All integrations are connectors — one declaration, executed through Exchange
 
 Generated HTTP is the first connector runtime, not the repository boundary. Docker, Kubernetes,
 SQL, Prometheus, Vault, Slack's socket mode, and every other official integration move here as
 connector declarations. A connector selects a declared runtime binding; Flux supplies generic
-guarded mechanisms for local execution, and Exchange may execute the same address behind tenant
-authority. A plugin remains one possible runtime mechanism, not a second integration catalogue.
+tool projection and approval, and Exchange executes the connector behind tenant-derived authority.
+A framed stdio adapter may remain one connector-owned runtime mechanism behind Exchange, not a Flux
+plugin or a second integration catalogue.
 
 [C-495](stories/C-495-all-integrations-are-connectors-epic.md) tracks the program. C-497 and C-498
-define runtime bindings and attested artifacts; C-504 projects the resulting runtime plan through
-the pack; C-499–C-503 migrate the measured native adapter families; and C-505 requires parity before
-the Flux-native crates can be retired. The active C-155 semantic-effects branch, the pending C-494
+define runtime bindings and attested artifacts; C-504 projects the resulting Exchange runtime plan
+through the pack; C-505 first establishes the inventory and conformance ratchet; and C-499–C-503
+migrate the measured native adapter families in fixed order. C-507 records adoption of the
+cross-repository authority. The active C-155 semantic-effects branch and C-494
 instance-aware host-port worktree, Flux's pending remote-approval and generated-channel worktrees,
 and Exchange's delivered X-107 Service Account work are prerequisites that this program consumes rather
 than duplicates. See [the accepted design](designs/all-integrations-are-connectors.md).

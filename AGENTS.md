@@ -4,6 +4,12 @@ This file is for coding agents and automation. Read it before changing the repos
 how work is selected, which subsystem owns each concern, what must remain fail-closed, and what
 evidence “done” requires. For a human introduction, use [README.md](README.md).
 
+Accepted cross-repository architecture decisions in `../flux-roadmap` take precedence over a
+conflicting sibling-repository narrative. When one conflicts with this file, create or amend the
+local story and reconcile the text before implementation; the roadmap does not override this
+repository's implementation acceptance, safety invariants or validation contract. C-507 records the
+current adoption of Decision 0001.
+
 <!-- BEGIN track:agents -->
 ## Start here — mandatory workflow for every task
 
@@ -124,9 +130,10 @@ The connector boundary comes first for any proposed integration:
   generated HTTP or a richer protocol such as a socket, process, container, database driver, or
   guarded plugin. Docker, Kubernetes, SQL, Prometheus, Loki, Vault, and Asterisk AMI are therefore
   migration targets, not permanent Flux-native exceptions.
-- **Vendor-specific runtime code belongs with the connector.** Flux owns generic guarded runtime
-  mechanisms and may retain the plugin protocol as one runtime kind; Exchange owns remote authority,
-  tenancy, and placement. Neither repository should regain a second vendor catalogue.
+- **Vendor-specific runtime code belongs with the connector; official execution belongs to
+  Exchange.** Flux embeds the Exchange client and owns the agent loop, projection and approval, but
+  it has no local official connector runtime or vendor/plugin fallback. A framed stdio protocol may
+  remain behind Exchange as one connector-owned artifact kind, never as a Flux release artifact.
 - **The migration is planned, not yet delivered.** Generated HTTP connectors are the only complete
   outbound path today. Do not move an adapter ad hoc: use the runtime binding, artifact, pack, and
   cutover contracts in [C-495](docs/stories/C-495-all-integrations-are-connectors-epic.md) and
@@ -142,11 +149,12 @@ The connector boundary comes first for any proposed integration:
 | `connector-catalog` | Static provider/operation metadata and embedded Flux | Execute operations, touch the network/filesystem, or gain runtime dependencies |
 | `connector-pack` | Projecting catalogue operations onto flux `ToolSpec`s, assembling auth onto a request, giving that request this software's `User-Agent` (C-223 — the host constructs no request, and a client-level header would be invisible to the dry run; see [docs/designs/host-identity.md](docs/designs/host-identity.md)), and handing the registry declarations | Open a socket, hold an HTTP client, resolve a host, or construct a runtime — egress is a constructor argument (`Egress`), and `permission_subjects`/`intents` must never be defaulted away |
 | `connector-secrets` | Resolving a `CredentialRef` **address** to a **value**: the `SecretStore` port, `MemoryStore`, the `0600` `FileStore` (C-207, unix-only — a file mode is its whole security argument), and the optional Vault KV v2 client | Be reachable from `connector-cli` — it opens sockets, and that edge would end the offline guarantee; also: no expiry, refresh, rotation or revocation |
-| `connectors-api` | **The host** (C-200): binding the pack's ports, holding the transport and the per-tenant credential store, serving the catalogue, and running operations | Construct a request of its own — every route ends in `connector-pack` (`pack` for the model-facing registry, `resolve` for a caller naming one operation — C-413); ship a transport of its own; be depended on by anything (it is a **leaf**, and `dependency_fence.rs` holds both directions); be published (`publish = false`) |
+| `connectors-api` | **The reference/development host** (C-200): proving the delivered HTTP seams without becoming the official execution placement | Construct a request of its own — every route ends in `connector-pack` (`pack` for the model-facing registry, `resolve` for a caller naming one operation — C-413); compete with Exchange as the supported integration boundary; be depended on by anything (it is a **leaf**, and `dependency_fence.rs` holds both directions); be published (`publish = false`) |
 
 The first four are the **compiler**. `connector-pack` and `connector-secrets` are **host libraries**,
-built and tested here and excluded from the compile path. `connectors-api` is the **host** itself and
-is the one crate here that opens a socket. `crates/connector-cli/tests/dependency_fence.rs` asserts
+built and tested here and excluded from the compile path. `connectors-api` is the **reference host**
+and the one crate here that opens a socket; it proves seams but is not the supported official
+integration boundary. `crates/connector-cli/tests/dependency_fence.rs` asserts
 that fence over the resolved `Cargo.lock`, optional dependencies included, so adding the edge behind
 a feature flag trips it too — and it now sorts every workspace member into one of those three
 buckets, so a new crate that is none of them fails rather than passing unexamined. Among the
@@ -594,8 +602,8 @@ two rules that keep the directions apart are enforced at the loader: a verificat
 
 A connector declares **what a human must supply** before it can run — see
 [docs/designs/connector-configuration.md](docs/designs/connector-configuration.md). The boundary is:
-**this repository declares; flux resolves; a UI renders.** Nothing here holds a value, a URL, or a
-callback address.
+**this repository declares; Exchange resolves; an operator UI renders.** Nothing here holds a value,
+a URL, or a callback address.
 
 - **Configuration has two levels, and `Level` is derived, never authored.** *Operator* level is set
   once per vendor by whoever runs the product (the OAuth app registration); *connection* level is set
@@ -1107,7 +1115,7 @@ That is CI's, and the contract below says why.
 - flux-connectors depends on `codewandler-flux-lang` (library `flux_lang`) from crates.io, pinned in
   `[workspace.dependencies]`. Do not replace it with a git or `../flux` path dependency; those do not
   resolve in a fresh clone and couple the build to an unpublished tree.
-- The **compiler** crates — `connector-spec`, `connector-flux`, `connector-cli` — depend on no part of the flux runtime, and `connector-catalog` stays dependency-free. `connector-pack` alone links `flux-runtime`/`flux-spec` among them, because a declaration handed to a host must be spelled in the host's own `ToolSpec`/`Tool` vocabulary. **The compiler still constructs no runtime: it compiles; flux executes.** What changed on 2026-07-31 is that the repository also ships a host — `connectors-api` (C-200) — which does construct a runtime, links `flux-web`'s `http.request`, and is fenced away from the compiler in both directions by `crates/connector-cli/tests/dependency_fence.rs`. The offline guarantee is a property of the compile path, not of the workspace.
+- The **compiler** crates — `connector-spec`, `connector-flux`, `connector-cli` — depend on no part of the flux runtime, and `connector-catalog` stays dependency-free. `connector-pack` alone links `flux-runtime`/`flux-spec` among them, because a declaration handed to a host must be spelled in the host's own `ToolSpec`/`Tool` vocabulary. **The compiler constructs no runtime: it compiles; Exchange executes official integrations.** The repository also ships the `connectors-api` reference/development host (C-200), which constructs the delivered HTTP runtime and is fenced away from the compiler in both directions by `crates/connector-cli/tests/dependency_fence.rs`; C-507 explicitly prevents that harness becoming a parallel supported placement. The offline guarantee is a property of the compile path, not of the workspace.
 - **flux's `$auth` support for `http.request` is no longer the critical path**, and had been listed
   here as though it were. C-114/C-115/C-116 assemble auth in Rust inside `connector-pack`, so the
   whole-value `{"$secret"}` marker never has to grow a prefix or an encoder.

@@ -24,10 +24,14 @@ definitions and, only where generation is insufficient, connector-owned runtime 
       declared runtime adapter rather than vendor code in Flux.
 - [ ] Loki tail/follow and equivalent long-running reads have bounded stream and cancellation
       semantics suitable for the Exchange connector WebSocket.
-- [ ] Local and hosted conformance covers at least one read, one mutation where supported, one
-      datasource projection and one long-running operation.
+- [ ] C-505's legacy-plugin-versus-Exchange conformance covers at least one read, one mutation where
+      supported, one datasource projection and one long-running operation.
 - [ ] Flux receives a verified five-crate retirement list with replacement addresses.
 
 ## Progress
 
 - (not started)
+
+## Notes
+
+- This is migration wave 3 after C-500.

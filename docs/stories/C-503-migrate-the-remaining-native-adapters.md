@@ -25,9 +25,13 @@ needs rather than from the legacy crate shape.
       surface, with any residual code isolated in connector runtime artifacts.
 - [ ] Web search declares provider selection and result normalization without making Flux know a
       vendor or returning to a built-in vendor switch.
-- [ ] Each of the four passes frozen plugin parity and local/hosted conformance where supported.
+- [ ] Each of the four passes C-505's frozen legacy-plugin-versus-Exchange conformance.
 - [ ] Replacement addresses and intentional incompatibilities are published before Flux retirement.
 
 ## Progress
 
 - (not started)
+
+## Notes
+
+- This is migration wave 5 after C-502 and closes the measured adapter inventory.

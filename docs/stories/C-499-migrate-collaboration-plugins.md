@@ -13,9 +13,9 @@ note: "four catalogue providers already exist, but operation parity, Slack Socke
 
 ## Goal
 
-Make the Confluence, GitLab, Jira and Slack connectors complete replacements for their native Flux
-plugins, including Slack's long-lived Socket Mode, then hand Flux a parity proof suitable for deleting
-the four integration crates.
+Make the Confluence, GitLab, Jira and Slack connectors complete Exchange-executed replacements for
+their native Flux plugins, including Slack's long-lived Socket Mode, then retain the proof Flux needs
+to delete the four integration crates.
 
 ## Acceptance
 
@@ -26,11 +26,16 @@ the four integration crates.
       Rust request construction.
 - [ ] Slack Socket Mode uses the declared socket/runtime binding and the generic connector channel;
       no Slack-specific channel arm remains necessary (coordinates with C-489…C-492 and Flux D-220).
-- [ ] Local Flux and Exchange conformance runs produce equivalent observable results and errors for
-      the supported surface.
+- [ ] C-505's frozen legacy-plugin-versus-Exchange fixtures produce equivalent observable results,
+      declared errors and lifecycle behavior for the supported surface.
 - [ ] Published migration notes identify replacement operation addresses before Flux removes the
       native crates.
 
 ## Progress
 
 - (not started)
+
+## Notes
+
+- This is migration wave 1. It begins only after C-505 establishes the shared inventory and
+  conformance ratchet; later waves consume the evidence added here.

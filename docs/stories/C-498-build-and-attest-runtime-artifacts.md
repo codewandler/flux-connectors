@@ -6,15 +6,15 @@ status: backlog
 design: docs/designs/all-integrations-are-connectors.md
 epic: all-integrations-connectors
 areas: [runtime, release, supply-chain]
-note: "a plugin/process/container connector needs an immutable binary or image identity, supported-platform contract and verified install path before either Flux or Exchange can run it"
+note: "a plugin/process/container connector needs an immutable binary or image identity and verified Exchange install path outside the Flux release pipeline"
 ---
 
 # Build and attest connector runtime artifacts
 
 ## Goal
 
-Give hand-written rich-protocol adapters a reproducible, signed connector artifact and installation
-contract so vendor-specific Rust can leave Flux without weakening local or hosted supply-chain
+Give hand-written rich-protocol adapters a reproducible, signed connector artifact and Exchange
+installation contract so vendor-specific Rust can leave Flux without weakening supply-chain
 verification.
 
 ## Acceptance
@@ -23,10 +23,12 @@ verification.
       digests; tags, mutable paths and ambient `PATH` lookup are refused.
 - [ ] Runtime adapter crates/images are built from this repository without entering the offline
       compiler dependency graph.
-- [ ] Flux and Exchange verify the same signed metadata and digest before first execution and after
-      update; an unverifiable artifact never runs.
+- [ ] The connector release path attests the artifact and Exchange verifies the same signed metadata
+      and digest before first execution and after update; an unverifiable artifact never runs.
 - [ ] The build/release path covers binaries and images without hand-run publication, and records
       provenance sufficient to trace a loaded artifact to reviewed source.
+- [ ] No runtime artifact, index, signature or upload job enters the Flux release pipeline; Flux
+      receives no artifact path and cannot execute one locally.
 - [ ] A fixture proves tampering, platform mismatch and runtime-protocol mismatch each fail closed.
 
 ## Progress

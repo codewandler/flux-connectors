@@ -11,9 +11,10 @@ HTTP API it compiles a vendor description into Flux-Lang. For a protocol-rich in
 also bind operations to an attested runtime artifact. A provider is described once in
 `providers/<name>.toml` — usually little more than a pointer at the vendor's OpenAPI document plus a
 handful of patches — and the build emits a `<name>.flux` module of typed `op` declarations plus a
-`<name>.connector.toml` manifest carrying what an `op` cannot say. [flux](../../flux) loads the module
-and executes it locally, or binds the same connector address to Exchange for hosted execution. A
-host reads the manifest for everything around the operations.
+`<name>.connector.toml` manifest carrying what an `op` cannot say. Exchange loads and executes that
+compiled contract; [flux](../../flux) reaches it through its embedded Exchange client and never
+receives the vendor credential or runtime artifact. A host reads the manifest for everything around
+the operations.
 
 A connector describes **both call directions**. Outbound is the operations flux invokes. Inbound is the
 events the vendor sends *us* — a ticket updated, a call ended, a payment settled — declared in the same
@@ -21,9 +22,9 @@ provider TOML, with the signature scheme that authenticates them compiled rather
 the subscription that registers them emitted as an ordinary op. An integration that only knows how to
 make calls is an API client; the reverse direction is the half real automations are built on. See
 [designs/inbound-events.md](designs/inbound-events.md). Note what this does *not* change: inbound is
-still **compiled, not hosted** — no endpoint, no relay, no delivery daemon. The host the amended
-non-goal below now permits does not change this: it runs *operations*, and terminates no vendor
-webhook.
+still **compiled, not hosted here** — no endpoint, no relay, no delivery daemon. Exchange owns the
+channel termination and retained delivery; the reference host in this repository runs operations
+only and does not change that boundary.
 
 The defining idea is **one abstraction level up from a plugin**. Integrating Zendesk into flux today
 means writing a stdio plugin — a large hand-written artifact for roughly seven operations.
@@ -66,8 +67,9 @@ reaches which artifact, is [designs/connector-surfaces.md](designs/connector-sur
   Connector resources to invent here.
 
 The ownership test is simple: if it is true of the vendor regardless of who runs it, it belongs in
-flux-connectors. If it requires a tenant, installed binding, held credential or retained delivery,
-the host owns it. If it changes how an effect executes, Flux owns it.
+flux-connectors. If it requires a tenant, installed binding, held credential, retained delivery or
+runtime execution, Exchange owns it. Flux owns the agent loop, model-facing projection and approval,
+and reaches official integrations only through its embedded Exchange client.
 
 ## North star
 
@@ -90,9 +92,9 @@ reads directly is wrong, however convenient it looks.
    a human reads in a PR — not build-script magic and not a network call at runtime. Builds are
    hermetic, offline, and reproducible from a vendored spec cache.
 
-4. **Secrets are references the host resolves.** A credential never appears in a provider TOML, in a
-   generated `.flux` file, or in a lockfile. The generated call carries an auth *reference*; flux
-   resolves it, applies the scheme, and registers the value with the redactor.
+4. **Secrets are references Exchange resolves.** A credential never appears in a provider TOML, in a
+   generated `.flux` file, in a lockfile or in Flux. The generated call carries an auth *reference*;
+   Exchange resolves it, applies the scheme, and registers the value with its redactor.
 
 5. **A connector declares what it needs, and nothing grants itself access.** A connector is a
    manifest plus a Flux module, and the manifest names the hosts it reaches, the credentials it
@@ -109,26 +111,26 @@ reads directly is wrong, however convenient it looks.
 
 - **Owning generic execution mechanisms.** This repository owns connector declarations and any
   vendor-specific runtime artifacts they require. It does not own a generic Kubernetes, database,
-  socket, process, container, or plugin execution engine. Those guarded mechanisms belong to Flux;
-  Exchange composes them behind tenant authority. The plugin protocol remains useful as one runtime
-  kind, but a plugin is no longer a separate class of official integration. See
+  socket, process, container, or plugin execution engine. Exchange composes generic mechanisms behind
+  tenant authority. A framed stdio protocol may remain as one connector-owned runtime artifact kind,
+  but it is not a Flux plugin or release artifact. See
   [the accepted migration design](designs/all-integrations-are-connectors.md).
-- **Making Exchange mandatory.** flux executes connectors in anger. This repo ships a **host** —
-  `crates/connectors-api` — that binds the pack's ports and runs its operations: a credential store
-  per tenant, an operation actually executing against a vendor, and eventually the sign-in and
-  OAuth2 connect flows that make it usable by someone who is not its author. It is a way to *use*
-  what this repo compiles. Flux must retain a local connector runtime, while the same connector
-  address can be bound to Exchange when authority or placement is remote.
+- **Creating a second official execution placement.** Exchange is mandatory for official external
+  integrations. Flux remains useful without it for the language, agent loop and core tools, but has
+  no local connector, vendor-adapter or plugin fallback. This repo's `crates/connectors-api` binary
+  remains a reference/development host for the existing HTTP seam; it is not a parallel supported
+  product boundary.
 
-  **This non-goal was amended on 2026-07-31, by the owner.** It previously read *"A runtime for
-  production traffic"* and narrowed the host to a `crates/connectors-app` that was *"loopback-bound,
+  **Historical context:** this non-goal was amended on 2026-07-31, by the owner. It previously read
+  *"A runtime for production traffic"* and narrowed the host to a `crates/connectors-app` that was *"loopback-bound,
   never published, and never a production request path"* — the **yes-narrowed** resolution of
   [C-34](stories/C-34-proxy-charter-decision.md). The owner directed the wider shape: a
   deployed, multi-tenant service an operator signs into, connects providers to, and calls operations
   from. [C-200](stories/C-200-connectors-api-epic.md) is the epic;
   [C-201](stories/C-201-charter-multi-tenant-host.md) is this amendment.
 
-  The narrowing is **superseded, not deleted.** [designs/connectors-app.md](designs/connectors-app.md)
+  C-507 and flux-roadmap Decision 0001 supersede that production-host destination while retaining the
+  harness and its safety evidence. [designs/connectors-app.md](designs/connectors-app.md)
   keeps the reasoning it rested on — the `Egress` analysis, the slice-1 sequence, and why a host that
   builds its own requests is the failure mode — and
   [designs/connectors-api.md](designs/connectors-api.md) records what replaces it and answers
