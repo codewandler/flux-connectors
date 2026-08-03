@@ -2,7 +2,7 @@
 id: C-87
 title: Publish the configuration surface into the manifest and the catalogue
 pillar: Codegen
-status: in-progress
+status: done
 design: docs/designs/connector-configuration.md
 epic: connector-config
 areas: [connector-cli, catalog, web]
@@ -36,14 +36,17 @@ reaches no artifact, so a product still cannot render a form without parsing pro
       across this story: configuration describes what a human supplies, and reaches no generated code.
 - [x] The public site renders a provider's configuration surface — or the story records why not. This
       is the first artifact that would let the site show more than `auth: bearer`.
-- [ ] The dependency-free embedded catalogue exposes configuration approval as a closed typed field
+- [x] The dependency-free embedded catalogue exposes configuration approval as a closed typed field
       and exposes each provider's declared `verify` operation without parsing declaration JSON or a
       second artifact.
 
 ## Progress
+- 2026-08-04: Integration review closed. The embedded catalogue now carries closed typed approval
+  policy and `Provider::verify`; consumers resolve the verify operation generically from the same
+  provider value. The breaking consumer line is prepared as v0.19.0 with regenerated artifacts.
 - 2026-08-04: Reopened after integration review found the embedded consumer surface incomplete:
   approval policy was enforced by scanning declaration JSON, and `verify` had no typed provider field.
-- 2026-08-04: Done. Manifests, the schema-v3 public catalogue, the embedded declaration JSON and
+- 2026-08-04: Initial implementation. Manifests, the schema-v3 public catalogue, the embedded declaration JSON and
   the public explorer now publish complete configuration and verification surfaces; generated Flux
   remains unchanged by configuration projection.
 - 2026-08-03: Raised to Milestone 1 priority. Until the complete config and `verify` projection
