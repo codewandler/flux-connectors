@@ -1,0 +1,129 @@
+{
+  "format": "flux-connectors-conformance/v1",
+  "adapter": "fixture-stream",
+  "connector": "fixture-stream",
+  "surface": {
+    "operations": [
+      {
+        "legacy_id": "fixture.logs.follow",
+        "replacement_id": "fixture-logs-follow",
+        "input_schema": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        },
+        "output_schema": null,
+        "errors": [],
+        "host_effects": ["network", "stream"],
+        "semantic_effects": ["read"],
+        "risk": "low",
+        "idempotency": "idempotent",
+        "capability_subjects": [
+          {
+            "action": "read",
+            "resource": "vendor:fixture/logs"
+          }
+        ]
+      }
+    ],
+    "events": [],
+    "lifecycle": {
+      "mode": "stream",
+      "cancellation": "bounded",
+      "stream": {
+        "item_schema": {
+          "type": "object",
+          "properties": {
+            "line": { "type": "string" }
+          },
+          "required": ["line"],
+          "additionalProperties": false
+        },
+        "terminal_schema": {
+          "type": "object",
+          "properties": {
+            "reason": { "type": "string" }
+          },
+          "required": ["reason"],
+          "additionalProperties": false
+        }
+      },
+      "lease": null
+    }
+  },
+  "evidence": {
+    "legacy": {
+      "runner": "flux-plugin-fixture",
+      "source_commit": "3333333333333333333333333333333333333333",
+      "captured_at": "2026-08-03T00:00:00Z",
+      "raw_sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "exchange": {
+      "runner": "flux-exchange-fixture",
+      "source_commit": "4444444444444444444444444444444444444444",
+      "captured_at": "2026-08-03T00:00:00Z",
+      "raw_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  },
+  "cases": [
+    {
+      "id": "logs-follow",
+      "member": {
+        "kind": "operation",
+        "legacy_id": "fixture.logs.follow",
+        "replacement_id": "fixture-logs-follow"
+      },
+      "input": {},
+      "exchange_execution": {
+        "runtime": "socket",
+        "topology": "shared_without_isolation"
+      },
+      "legacy": {
+        "host_effects": ["network", "stream"],
+        "semantic_effects": ["read"],
+        "capability_subjects": [
+          {
+            "action": "read",
+            "resource": "vendor:fixture/logs"
+          }
+        ],
+        "transcript": [
+          {
+            "kind": "stream_item",
+            "sequence": 0,
+            "value": { "line": "ready" }
+          },
+          {
+            "kind": "cancelled",
+            "code": "caller_cancelled"
+          },
+          {
+            "kind": "terminal",
+            "status": "cancelled",
+            "value": { "reason": "caller_cancelled" }
+          }
+        ]
+      },
+      "exchange": {
+        "host_effects": ["network", "stream"],
+        "semantic_effects": ["read"],
+        "capability_subjects": [
+          {
+            "action": "read",
+            "resource": "vendor:fixture/logs"
+          }
+        ],
+        "transcript": [
+          {
+            "kind": "refused",
+            "class": "runtime",
+            "code": "runtime_refused",
+            "status": 409,
+            "sent": "no",
+            "retryable": false
+          }
+        ]
+      }
+    }
+  ]
+}

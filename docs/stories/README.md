@@ -24,7 +24,6 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 
 ## Now (in progress)
 - [C-495 — All official integrations become connectors (epic)](C-495-all-integrations-are-connectors-epic.md) · Bridge · EPIC — every official integration is connector-owned and Exchange-executed; migrate all 18 Flux adapters without a local Flux runtime or fallback
-- [C-505 — Establish the native-plugin migration inventory and Exchange conformance ratchet](C-505-gate-the-native-plugin-migration.md) · Bridge · MILESTONE 1 lane 15 — freeze the complete native-adapter inventory and reusable legacy-versus-Exchange conformance format before the first migration wave
 
 ## Next (ready — take the top one unless the user named a story)
 - [C-227 — C-55 gave the pipeline constant headers and constant body fields and stopped — a vendor-constant query parameter cannot be declared, and it costs Confluence every content read](C-227-a-vendor-constant-query-parameter-cannot-be-declared.md) · Spec · found by the C-219 implementor 2026-07-31. This is NOT the C-30 percent-encoding gap: a constant needs no encoding machinery, which is why it is the smaller change and the one that actually unblocks confluence's content reads
@@ -481,6 +480,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-493 — Move the connector seam to Flux 0.54 for generated channels](C-493-move-flux-engine-line-to-054.md) · release-order bridge: Flux 0.54 publishes guarded WebSockets first, then connector-pack moves every engine pin together so flux-exchange links one runtime line
 - [C-494 — Make the connector host ports instance-aware and migratable](C-494-instance-aware-host-ports.md) · release-order bridge for flux-exchange X-14: enumerate addresses and atomically migrate the sole connection before a second instance is admitted
 - [C-496 — Align the connector charter with the runtime axis](C-496-align-the-connector-charter-with-the-runtime-axis.md) · Bridge · historical two-placement charter alignment; superseded by C-507 when flux-roadmap Decision 0001 made Exchange the sole official executor
+- [C-505 — Establish the native-plugin migration inventory and Exchange conformance ratchet](C-505-gate-the-native-plugin-migration.md) · Bridge · MILESTONE 1 lane 15 — freeze the complete native-adapter inventory and reusable legacy-versus-Exchange conformance format before the first migration wave
 - [C-507 — Adopt the Exchange-only execution path for official integrations](C-507-adopt-the-exchange-only-integration-path.md) · Bridge · Decision 0001 makes Exchange the sole executor for official external integrations; this supersedes local Flux execution and local-versus-hosted parity throughout C-495…C-505
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._

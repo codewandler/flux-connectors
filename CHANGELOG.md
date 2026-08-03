@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **C-505** — Establish the native-plugin migration inventory and Exchange conformance ratchet: a
+  retained inventory, closed captured-observation format, derived comparator and offline
+  cross-repository release check now prevent a Flux adapter from disappearing before its published
+  connector replacement is proven conformant through Exchange.
+
 ### Changed
 
 - **Official integrations now have one execution boundary in the cross-repository plan** (C-507).
