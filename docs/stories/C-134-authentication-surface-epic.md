@@ -58,9 +58,7 @@ a password that exist in the session before the call. This keeps the minted toke
 make a resource-owner password grant safe to hand a model. That is the argument for the operator
 level and for preferring `client_credentials` and `authorization_code`.
 
-**A2A and MCP are not in this epic.** Both were asked for alongside it; neither is a connector.
-`vision.md` reserves protocol-rich technology adapters for flux plugins, flux already ships
-`crates/flux-a2a` with a client, a server and a channel adapter, and MCP is a JSON-RPC protocol flux
-already treats as an integration-plugin concern. A generic MCP connector would also be a catalogue of
-a catalogue, since MCP servers already expose tools. If either should exist, it is a flux story;
-nothing here waits on it.
+**A2A and MCP are not in this epic.** C-495 now admits protocol connectors, but flux already ships
+`crates/flux-a2a`, and MCP already exposes a tool catalogue. C-46 and the runtime-binding program must
+decide how to reuse those surfaces without a second stale catalogue; this authentication epic does
+not wait on that work.

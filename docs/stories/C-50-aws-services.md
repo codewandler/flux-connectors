@@ -52,10 +52,9 @@ cannot work.
       based) · virtual-hosted bucket-in-hostname templating (`{bucket}.s3.{region}.amazonaws.com`) ·
       the required payload-hash header. The likely answer is a small control-plane subset and a
       recorded refusal for the object data path.
-- [ ] **The charter boundary is checked in writing.** AWS services are HTTP + auth + quirks and are
-      paid SaaS, so they sit inside `AGENTS.md`'s boundary; the contrast with the technology adapters
-      that stay hand-written flux plugins is stated, because "S3 is storage" is the obvious objection
-      and it deserves an answer rather than a silence.
+- [x] **The charter boundary is settled by C-495.** AWS and S3 belong as connectors; protocol and
+      signing gaps select generated HTTP or a connector-owned runtime artifact rather than sending
+      vendor code back to Flux. The technical SigV4/XML/streaming questions below remain open.
 
 ## Progress
 - Not started. Filed alongside C-49 on 2026-07-30, split out from it because the service level is a

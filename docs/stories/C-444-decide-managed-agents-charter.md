@@ -42,7 +42,8 @@ question arriving in three shapes; **this is a fourth**, and it should be answer
   The argument that killed connector-served inference — *"a strictly worse second implementation of
   something that already works"* — has the same shape here.
 - **It is protocol-rich and stateful.** A session holds a container and a long-lived SSE stream.
-  `AGENTS.md:124-130` puts stateful, protocol-rich systems in `../flux/plugins`, not here.
+  C-495 says that still makes it a connector, but it requires the rich runtime and stream contracts;
+  it is not evidence that one request/response operation can implement the session safely.
 - **Cost.** A session bills inference and container time. A connector operation that spends money at
   an unbounded rate is a different risk class from a CRUD write, and `Risk` has no vocabulary for it.
 
@@ -51,10 +52,10 @@ question arriving in three shapes; **this is a fourth**, and it should be answer
 - **It is a paid SaaS HTTP API** from a vendor already in the catalogue, which is the charter's
   stated test.
 - **The management plane is useless alone** to a flow that wants to *use* an agent.
-- **`ecosystem.md` reframes the boundary.** `../flux/docs/designs/ecosystem.md` (owner-directed
-  2026-08-01) replaces "connectors are paid SaaS services" with *"a connector describes an external
-  capability reached over a declared protocol"*, and makes `plugin` one runtime a connector may
-  declare. Under that framing the plugin/connector split is not the dichotomy this decision assumes.
+- **The repository boundary is settled.** C-495/C-496 adopt `../flux/docs/designs/ecosystem.md`'s
+  runtime axis: a connector describes an external capability and `plugin` is one runtime it may
+  declare. This decision is only about duplicating an agent/inference plane, not where a rich
+  integration belongs.
 - **The channel binding already models the hard part.** Session creation is one request/one response;
   the stream is a `[[channels]]` declaration flux executes. Neither needs a runtime here.
 

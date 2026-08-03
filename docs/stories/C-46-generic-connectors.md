@@ -6,7 +6,7 @@ status: backlog
 design: docs/designs/connector-pipeline.md
 epic: connectors-v1
 areas: [connector-spec, providers]
-note: extends the charter — a provider need not be a vendor · **not** mysql, see Notes
+note: charter resolved by C-495 — a connector may describe a protocol or technology; mysql still waits on the runtime binding designed by C-47/C-497
 ---
 
 # Generic connectors — http, a2a, mcp and friends
@@ -28,23 +28,20 @@ a second copy here would create two authorities for one primitive.
 - [ ] `providers/mcp.toml` — **HTTP/SSE transport only** (see Notes). Tool list and tool call.
 - [ ] Each still passes the C-11 parse-and-analyze gate and emits through `flux_lang`, exactly like a
       vendor connector. A generic connector is not a special case in the pipeline.
-- [ ] `AGENTS.md`'s charter boundary is **updated or explicitly reaffirmed** — see the boundary
-      question below. This story must not quietly redefine what belongs here.
+- [x] `AGENTS.md`'s charter boundary admits protocol and technology connectors — C-495/C-496 record
+      the owner-directed answer. This story does not need to decide it again.
 
 ## Progress
 - (not started)
 
 ## Notes
 
-### The charter question, which this story cannot dodge
+### The charter question is resolved
 
-`AGENTS.md` currently says: *"Connectors are paid SaaS services"* and *"technology adapters stay in
-flux as plugins"*. A generic `http` or `mcp` connector is neither a paid SaaS service nor a
-technology adapter — it is a **protocol** connector, a third category the boundary does not name.
-
-That is a reasonable extension rather than a contradiction: the pipeline's actual requirement is
-*"describable as auth + operations + quirks over HTTP"*, and a protocol satisfies it as well as a
-vendor does. But it must be written down, or the boundary stops deciding anything.
+C-495/C-496 make protocol richness a runtime choice rather than a repository boundary. Generic A2A
+and MCP connectors, databases, and vendor connectors all belong here when they are official
+integrations. Their technical runtime gaps remain and this story must not disguise them as charter
+questions.
 
 ### Which of the proposed four actually fit
 
@@ -66,9 +63,8 @@ both need answering before a `mysql` provider is written:
 
 1. **Technical** — does `db.open` exist? (C-47.) flux already has the pieces: a `sql` plugin
    declaring an `sql.endpoint` and a `dsn` credential, and a `sqlite_query` builtin.
-2. **Charter** — *should* a database live here at all, given `AGENTS.md` puts technology adapters in
-   flux and flux already ships the `sql` plugin? That question is this story's, and it is unaffected
-   by C-47.
+2. **Migration** — the existing Flux `sql` plugin remains until the connector runtime passes C-505's
+   parity and cutover gate. C-495 has already answered where the official declaration ends up.
 
 ### What this needs first
 

@@ -33,9 +33,14 @@ authentication scheme, endpoints, parameters, and response shapes. flux-connecto
 information compiler input. The small provider definition records the curated surface and its
 quirks; the compiler produces the Flux that actually runs.
 
-This project is for generated HTTP connectors to services such as Zendesk, Salesforce, or OpenAI.
-Stateful or protocol-rich technology adapters—Docker, Kubernetes, SQL, Prometheus, and similar—stay
-as hand-written plugins in flux.
+Generated HTTP connectors to services such as Zendesk, Salesforce, and OpenAI are the complete path
+today. The destination is broader: every official integration, including Docker, Kubernetes, SQL,
+Prometheus, and other protocol-rich systems, is declared and distributed as a connector. A connector
+may select a guarded socket, process, container, database, remote, or plugin runtime instead of HTTP;
+Flux can run it locally and Exchange can run the same address under hosted authority. That migration
+is tracked by [C-495](docs/stories/C-495-all-integrations-are-connectors-epic.md); the current native
+Flux plugins remain compatibility paths until their connector replacements pass parity and cutover
+gates.
 
 ## What the compiler produces
 

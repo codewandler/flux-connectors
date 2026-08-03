@@ -4,6 +4,13 @@
 is `backlog` and never started; read §The prerequisite first** · **Pillar:** Spec (+ Bridge) ·
 **Extends:** [provider-roles.md](provider-roles.md)
 
+> **Ownership update (2026-08-03):** [all-integrations-are-connectors.md](all-integrations-are-connectors.md)
+> supersedes this document's old repository-placement conclusion. A generated connector and a
+> richer-runtime connector can still satisfy the same contract, and Flux still owns resolution, but
+> Vault and the other official technology integrations are migration targets in this repository.
+> The substitution design below remains proposed; statements that they permanently remain native
+> Flux plugins are historical reasoning, not current direction.
+
 > Measurements below were taken on **2026-07-31** against the shipped catalogue —
 > **41 providers, 232 operations, 48 services** — by reimplementing `fills_slot`
 > (`crates/connector-spec/src/ir.rs:556`) over `web/public/catalog.json` and cross-checking with an
@@ -50,16 +57,14 @@ flux-connectors only **declares conformance**; the registry and the resolution l
 That split is not a compromise, it is the only version that works — and it is worth stating in the
 strongest terms because of what it implies about the charter.
 
-`AGENTS.md:49-50` and `docs/vision.md:69-71` both put Vault firmly on the flux-plugin side:
+The charter at the time put Vault firmly on the flux-plugin side:
 
 > **Hand-written technology adapters belong in `../flux/plugins`:** Docker, Kubernetes, SQL,
 > Prometheus, Loki, **Vault**, Asterisk, and other stateful or protocol-rich systems.
 
-**That stays true, and nothing here changes it.** Vault satisfies the `secret_store` contract **as a
-plugin**. No `providers/vault.toml` is proposed, implied, or made easier by this design. If a reader
-comes away thinking Vault-the-connector is now in scope, this document has failed — the whole point
-of putting the registry in flux is that a contract can be satisfied by an artifact this repository
-does not and should not produce.
+That placement is now superseded. Vault may still use a guarded plugin runtime, but its declaration
+and vendor-specific artifact belong to a connector. This design does not perform that migration; it
+only keeps the important independent point that the contract registry and binding live in Flux.
 
 The division of labour follows:
 

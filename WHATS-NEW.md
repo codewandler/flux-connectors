@@ -14,6 +14,12 @@
 
 ## [Unreleased]
 
+### Improved
+
+- **The roadmap now has one home for every integration.** Rich systems such as Docker, Kubernetes,
+  SQL, and Prometheus will move to connectors that can run locally or through Exchange. This release
+  changes the plan, not the integrations available today.
+
 ## [0.17.0] — 2026-08-03
 
 ### Action needed

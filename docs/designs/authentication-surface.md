@@ -171,21 +171,18 @@ only by a fixture. This epic gives it its first real consumer, and C-88 is where
 
 ## On the A2A and MCP connectors
 
-Both were asked for in the same breath, and neither belongs here — for the reason `vision.md` already
-states:
-
-> **Technology adapters.** Connectors are **paid SaaS services**. The flux plugins that wrap
-> *technologies* … are stateful and protocol-rich, and they stay core to flux as plugins.
+C-495 supersedes the old repository-boundary argument: a protocol integration can be a connector,
+and stdio or streaming selects a runtime rather than another repository. That does not automatically
+make a duplicate implementation useful:
 
 - **A2A**: flux already ships `crates/flux-a2a` — `client.rs`, `server.rs`, `types.rs` — plus a
   `flux-channels` adapter. It is implemented, not missing. A connector would be a second, worse copy.
-- **MCP**: a JSON-RPC protocol with its own transports, discovery and session lifetime, which flux
-  already treats as an integration-plugin concern (`docs/designs/integration-plugins.md`,
-  `agent-fleet-runtime.md` in flux). A *generic* MCP connector is a protocol adapter by definition —
-  and MCP servers already expose tools, so a connector describing one would be a catalogue of a
-  catalogue.
+- **MCP**: a JSON-RPC protocol with its own transports, discovery and session lifetime. A generic
+  MCP connector may be the uniform runtime binding C-46 proposes, but it must project an existing
+  tool catalogue without compiling a second, stale catalogue.
 
-If either should exist, it is a **flux** story. Nothing here is blocked on that decision.
+Neither belongs in this authentication epic. C-46 and the C-495 runtime program own the decision and
+mechanism; nothing here is blocked on them.
 
 ## Out of scope
 

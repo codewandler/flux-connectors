@@ -6,12 +6,14 @@ star and the principles below.
 
 ## What flux-connectors is
 
-flux-connectors compiles **vendor API descriptions into Flux-Lang**. A provider is described once in
+flux-connectors is the source and distribution boundary for **every official integration**. For an
+HTTP API it compiles a vendor description into Flux-Lang. For a protocol-rich integration it will
+also bind operations to an attested runtime artifact. A provider is described once in
 `providers/<name>.toml` — usually little more than a pointer at the vendor's OpenAPI document plus a
 handful of patches — and the build emits a `<name>.flux` module of typed `op` declarations plus a
 `<name>.connector.toml` manifest carrying what an `op` cannot say. [flux](../../flux) loads the module
-from `~/.flux/flows` and every `op` becomes a first-class operation, exposed to the model as an LLM
-tool; a host reads the manifest for everything around them.
+and executes it locally, or binds the same connector address to Exchange for hosted execution. A
+host reads the manifest for everything around the operations.
 
 A connector describes **both call directions**. Outbound is the operations flux invokes. Inbound is the
 events the vendor sends *us* — a ticket updated, a call ended, a payment settled — declared in the same
@@ -82,22 +84,18 @@ reads directly is wrong, however convenient it looks.
 
 ## Non-goals
 
-- **Technology adapters.** Connectors are **paid SaaS services**. The flux plugins that wrap
-  *technologies* — docker, kubernetes, sql, prometheus, loki, vault, asterisk — are stateful and
-  protocol-rich, and they stay core to flux as plugins. Real Rust earns its keep there.
-
-  What spans both repositories is the **contract**, not the code. A capability contract — "resolve a
-  secret", "store a credential" — can be satisfied by a hand-written flux plugin (Vault) *and* by a
-  generated connector (1Password), and a host that depends on the contract should not have to know
-  which one it holds. That is a shared vocabulary, and it moves nothing across the line: Vault stays a
-  flux plugin, and no technology adapter becomes generatable here because a contract happens to name
-  it. See [designs/connector-contracts.md](designs/connector-contracts.md).
-- **Being flux's execution path.** flux executes connectors in anger. This repo ships a **host** —
+- **Owning generic execution mechanisms.** This repository owns connector declarations and any
+  vendor-specific runtime artifacts they require. It does not own a generic Kubernetes, database,
+  socket, process, container, or plugin execution engine. Those guarded mechanisms belong to Flux;
+  Exchange composes them behind tenant authority. The plugin protocol remains useful as one runtime
+  kind, but a plugin is no longer a separate class of official integration. See
+  [the accepted migration design](designs/all-integrations-are-connectors.md).
+- **Making Exchange mandatory.** flux executes connectors in anger. This repo ships a **host** —
   `crates/connectors-api` — that binds the pack's ports and runs its operations: a credential store
   per tenant, an operation actually executing against a vendor, and eventually the sign-in and
   OAuth2 connect flows that make it usable by someone who is not its author. It is a way to *use*
-  what this repo compiles. It is not where flux's own connector traffic goes, and a proposal that
-  makes flux call this service instead of loading a `.flux` module is inverting the project.
+  what this repo compiles. Flux must retain a local connector runtime, while the same connector
+  address can be bound to Exchange when authority or placement is remote.
 
   **This non-goal was amended on 2026-07-31, by the owner.** It previously read *"A runtime for
   production traffic"* and narrowed the host to a `crates/connectors-app` that was *"loopback-bound,

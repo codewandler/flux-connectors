@@ -5,7 +5,7 @@ pillar: Spec
 status: blocked
 priority: 5
 areas: [providers]
-note: "BLOCKED — C-403 made response extraction mechanically possible, but C-127 still must publish the truthful output contract; acceptable use and the paid-SaaS charter question remain. C-206 settled unauthenticated operations: declare auth = [] per operation"
+note: "BLOCKED — C-403 made response extraction mechanically possible, but C-127 still must publish the truthful output contract and acceptable use remains unresolved. C-495 resolves repository ownership; C-497/C-498 are required before the XMPP half can migrate"
 ---
 
 # The brave connector — Brave Talk's room-token HTTP surface
@@ -17,16 +17,12 @@ JWT and allocate a conference focus. Nothing else.
 
 ## Scope, stated as an exclusion first
 
-**The XMPP MUC stream is not in this story and should not be in this repository.** `vision.md`:
-
-> **Technology adapters.** Connectors are **paid SaaS services**. The flux plugins that wrap
-> *technologies* — docker, kubernetes, sql, prometheus, loki, vault, asterisk — are stateful and
-> protocol-rich, and they stay core to flux as plugins.
-
-A long-lived bidirectional XML stream is exactly that class, sitting beside `asterisk` in the list.
-flux already owns it: **`D-205`** (generic prosody/ejabberd MUC over WebSocket) and **`D-206`**
-(JaaS/Brave Talk token acquisition and refresh), under `docs/designs/meeting-rooms.md`, with
-**feasibility proven live on 2026-07-30** against a real room. Do not re-file or duplicate that work.
+**The XMPP MUC stream is not in this story.** It is protocol-rich and therefore waits on the runtime
+binding and artifact work in C-497/C-498. Flux already has useful implementation work in **D-205**
+(generic prosody/ejabberd MUC over WebSocket) and **D-206** (JaaS/Brave Talk token acquisition and
+refresh), under `docs/designs/meeting-rooms.md`, with feasibility proven live on 2026-07-30. C-495
+changes its eventual ownership: migrate that vendor-specific result into a connector rather than
+re-file or duplicate it.
 
 What *is* connector-shaped is three plain request/response calls:
 
@@ -98,8 +94,8 @@ to build.**
   The third — "the auth model assumes a credential" — is closed by C-206: write `auth = []` on each
   unauthenticated operation.
 
-- **The alternative is still the better connector**: an own 8x8 JaaS tenant is a paid SaaS product
-  with a real credential, squarely in charter, and free of all three problems.
+- **The alternative is still the better connector**: an own 8x8 JaaS tenant has a real credential
+  and is free of all three problems.
 
 ## Progress
 

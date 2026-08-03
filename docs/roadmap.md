@@ -6,11 +6,11 @@ document is the hand-written narrative around it.
 
 ## Status
 
-_As of 2026-08-01:_ the compiler is built, the catalogue is real, and **131 of 237 stories are
-closed** across eight releases up to **v0.8.0**. `cargo run -p connector-cli -- diff` reports
-`557 artifacts up to date (53 providers checked)` — 60 services, 299 curated operations, 8 events and
-2 channel bindings. Twenty epics carry the work, not the single **connectors-v1** this section once
-named; ten of them have a narrative below and the rest live on the board.
+_As of 2026-08-03:_ the compiler, catalogue, Tool pack, generated WebSocket plan, and reference host
+are built through **v0.17.0**. The checked-in catalogue has 55 provider definitions (measured with
+`find providers -maxdepth 1 -name '*.toml' | wc -l` on this date). Exact story status lives on the
+generated [board](stories/README.md); exact artifact and operation counts live in the checked README
+contract and move with each catalogue build.
 
 Working end to end: provider TOML → IR → a Flux module, a capability manifest, one rendering per
 operation, an embedded Rust catalogue and the published `catalog.json` behind the explorer — hermetic,
@@ -148,6 +148,22 @@ proves the seams end to end, and keep the fleet growing in parallel waves.
 
 An **epic** is a themed group of stories with a shared design doc. Stories join an epic via the
 `epic: <slug>` frontmatter field, where `<slug>` matches a design doc at `docs/designs/<slug>.md`.
+
+### All integrations are connectors — one declaration and address, whichever runtime executes it
+
+Generated HTTP is the first connector runtime, not the repository boundary. Docker, Kubernetes,
+SQL, Prometheus, Vault, Slack's socket mode, and every other official integration move here as
+connector declarations. A connector selects a declared runtime binding; Flux supplies generic
+guarded mechanisms for local execution, and Exchange may execute the same address behind tenant
+authority. A plugin remains one possible runtime mechanism, not a second integration catalogue.
+
+[C-495](stories/C-495-all-integrations-are-connectors-epic.md) tracks the program. C-497 and C-498
+define runtime bindings and attested artifacts; C-504 projects the resulting runtime plan through
+the pack; C-499–C-503 migrate the measured native adapter families; and C-505 requires parity before
+the Flux-native crates can be retired. The active C-155 semantic-effects branch, the pending C-494
+instance-aware host-port worktree, Flux's pending remote-approval and generated-channel worktrees,
+and Exchange's delivered X-107 Service Account work are prerequisites that this program consumes rather
+than duplicates. See [the accepted design](designs/all-integrations-are-connectors.md).
 
 ### Zendesk suite — grow from Support without moving the addresses already published
 

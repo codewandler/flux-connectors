@@ -78,7 +78,7 @@ emits a `scope` whose `acquire` is `db.open`.
 
 ### Boundary check
 
-A database connector still sits on the "technology, not SaaS" side of the charter that `AGENTS.md`
-draws, and flux already ships the `sql` plugin. So this story does **not** by itself argue that
-databases belong here — it removes the *technical* impossibility, and leaves the *charter* question
-to C-46. Both need answering before a `mysql` provider is written.
+C-495 resolves the old charter question: databases are connectors, and the existing Flux `sql`
+plugin is a compatibility implementation until migration parity is proven. This story remains the
+database-specific design input to C-497 and C-502; it removes the technical impossibility without
+creating a second request path or moving generic database-driver machinery into the compiler.

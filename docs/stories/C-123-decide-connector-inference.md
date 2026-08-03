@@ -77,7 +77,6 @@ half-built toward, and it produces a written answer rather than code.
   already lists `"ollama"` and `"ollama-anthropic"`, so `ollama/llama3` resolves today. What is missing
   there is only *discovery* of locally installed models.
 
-- **C-157 adds a second charter axis this decision should cover.** Ollama is a **local process**, so it
-  meets `vision.md`'s *"Connectors are paid SaaS services"* head-on — the first time a connector would
-  describe something on the user's own machine. Deciding only the inference half would leave that open,
-  and the two will keep arriving together. Answer both here.
+- **C-495 resolves C-157's repository axis.** Ollama discovery may be a connector even though it is a
+  local process. This story now decides only the independent inference-plane question: whether a
+  connector should duplicate Flux's native provider and agent loop.

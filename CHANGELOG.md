@@ -15,6 +15,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   declare `money`; capture is graded `destructive`, while cancellation remains a high-risk operation
   with no money or delete claim.
 
+- **The documented integration boundary now covers every official integration** (C-495, C-496).
+  Docker, Kubernetes, SQL, observability systems, secret stores, and other rich protocols are
+  connector migration targets; Flux owns generic guarded runtimes and Exchange may host the same
+  connector address. The existing native plugins remain until explicit parity and cutover gates pass.
+
 ### Fixed
 
 - **Generated scalar query parameters are encoded structurally instead of interpolated into URLs**

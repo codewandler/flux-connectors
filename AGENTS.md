@@ -118,17 +118,19 @@ Sixteen fields of `Connector` (`crates/connector-spec/src/ir.rs`) carry it, shar
 per service. The full surface table is
 [docs/designs/connector-surfaces.md](docs/designs/connector-surfaces.md).
 
-The charter boundary comes first for any proposed provider:
+The connector boundary comes first for any proposed integration:
 
-- **Generated connectors belong here:** spec-described HTTP APIs such as Zendesk, Freshdesk,
-  Salesforce, Intercom, OpenAI, Anthropic, OpenRouter, and Asterisk ARI. The deployment being
-  self-hosted does not move an ordinary REST surface across the repository boundary.
-- **Hand-written technology adapters belong in `../flux/plugins`:** Docker, Kubernetes, SQL,
-  Prometheus, Loki, Vault, and other stateful or protocol-rich systems. Asterisk AMI would be such
-  an adapter; Asterisk ARI is not.
-
-If the target is a technology rather than a service, stop and place the work in flux unless an
-accepted design explicitly changes this charter.
+- **Every official integration belongs here as a connector declaration**, whether its runtime is
+  generated HTTP or a richer protocol such as a socket, process, container, database driver, or
+  guarded plugin. Docker, Kubernetes, SQL, Prometheus, Loki, Vault, and Asterisk AMI are therefore
+  migration targets, not permanent Flux-native exceptions.
+- **Vendor-specific runtime code belongs with the connector.** Flux owns generic guarded runtime
+  mechanisms and may retain the plugin protocol as one runtime kind; Exchange owns remote authority,
+  tenancy, and placement. Neither repository should regain a second vendor catalogue.
+- **The migration is planned, not yet delivered.** Generated HTTP connectors are the only complete
+  outbound path today. Do not move an adapter ad hoc: use the runtime binding, artifact, pack, and
+  cutover contracts in [C-495](docs/stories/C-495-all-integrations-are-connectors-epic.md) and
+  [the accepted design](docs/designs/all-integrations-are-connectors.md).
 
 ## Ownership boundaries
 
@@ -149,7 +151,9 @@ that fence over the resolved `Cargo.lock`, optional dependencies included, so ad
 a feature flag trips it too — and it now sorts every workspace member into one of those three
 buckets, so a new crate that is none of them fails rather than passing unexamined. Among the
 compiler and host libraries, `connector-pack` is the one that links flux's runtime types, and it
-constructs none of it — see [Relationship to flux](#relationship-to-flux).
+constructs none of it — see [Relationship to flux](#relationship-to-flux). The future runtime
+artifact work under C-495 must preserve this compiler/host fence: a connector can own a
+vendor-specific executable without making compilation execute or depend on that executable.
 
 `connector-pack`'s own "must never hold an HTTP client" is asserted separately, in
 `crates/connector-cli/tests/pack_links_no_http_client.rs` (C-199), and **it deliberately reads a

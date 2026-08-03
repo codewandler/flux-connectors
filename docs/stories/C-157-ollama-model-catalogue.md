@@ -42,24 +42,12 @@ pool, flux serves it.** `openai-models-list` is already the worked example of li
 flux's static tables; ollama is the same shape, for the one provider whose model set is different on
 every machine.
 
-## The charter question, which must be answered before this ships
+## The repository question is answered; the inference question is not
 
-`vision.md`: *"Connectors are **paid SaaS services**."* **Ollama is a local process.** That is not a
-detail — it is the second non-goal this request touches, and the first time a connector would describe
-something running on the user's own machine.
-
-Arguments both ways, stated fairly:
-
-- **For:** `GET /api/tags` over HTTP is request/response, not the protocol-rich stateful integration the
-  technology-adapter non-goal is about (docker, kubernetes, asterisk). No credential, no vendor account.
-- **Against:** "paid SaaS" is the charter sentence, and a localhost endpoint is the clearest possible
-  counterexample. Admitting one invites every local HTTP service, and this repo has already declined
-  XMPP and MCP on adjacent grounds.
-
-**Decide it explicitly, in [C-123](C-123-decide-connector-inference.md)'s design, before writing
-`providers/ollama.toml`.** This is the *third* request in this direction — the LLM pool (C-119), the
-inference question (C-123), and now this — so the answer is worth writing down once rather than
-re-litigating.
+C-495/C-496 explicitly admit local processes and protocol-rich systems as connectors, so Ollama
+discovery belongs here. C-123 still decides the independent question of whether connector execution
+should duplicate Flux's native inference provider; this story continues to say no inference and does
+not need that decision before shipping discovery.
 
 ## Acceptance, conditional on that decision going in favour
 
@@ -88,6 +76,5 @@ re-litigating.
 - The genuinely valuable end state is the one C-121 sketches: a `(provider, model)` pool that is **live**
   rather than tabled. Ollama is the strongest case for it, because its model set is not merely stale in
   a static table — it is *unknowable* from one, differing per machine.
-- If the charter decision goes against, this story closes `done` with that recorded, and the discovery
-  gap becomes a **flux** story: teaching `flux-providers`' ollama module to enumerate `/api/tags`. That
-  is a smaller change than a connector and lands in the crate that already owns the provider.
+- C-495 makes this connector the eventual discovery home. Flux's existing Ollama provider remains
+  the inference implementation unless C-123 separately decides otherwise.
