@@ -102,6 +102,38 @@ const PROBE_THING_GET: &str = r#"op probe-thing-get(thing_id: Number) -> Any
   return response
 "#;
 
+/// A vendor-owned body string that merely resembles the origin base emitted for C-508.
+///
+/// Origin recognition must be tied to the emitter's `base` binding. Treating this payload as an
+/// endpoint template would reopen C-110: tenant configuration would be substituted into a
+/// vendor-owned document literal.
+const ORIGIN_SHAPED_VENDOR_LITERAL: &str = r#"op probe-document-send -> Any
+  description "Send a vendor document"
+  risk "low"
+  idempotency "idempotent"
+  effects ["network"]
+  expose true
+
+  base = "https://api.probe.example"
+  url = fmt("{base}/documents")
+  document = "{origin}/vendor-owned-syntax"
+  response = http.request(body: document, method: "POST", url)
+  return response
+"#;
+
+#[test]
+fn an_origin_shaped_vendor_literal_is_not_endpoint_configuration() {
+    let error = Rehearsal::of(
+        "probe-document-send",
+        "probe",
+        "default",
+        ORIGIN_SHAPED_VENDOR_LITERAL,
+    )
+    .expect_err("vendor syntax must not be read as endpoint configuration");
+    assert!(matches!(error, Error::Unbuildable { .. }), "{error}");
+    assert!(error.to_string().contains("vendor-owned-syntax"), "{error}");
+}
+
 /// A path pin whose stored value is the Basic credential's non-secret username half (C-475).
 const USERNAME_PIN_GET: &str = r#"op twilio-recording-get(Sid: String) -> Any
   description "Fetch one recording"

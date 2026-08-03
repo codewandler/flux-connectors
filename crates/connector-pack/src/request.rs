@@ -50,7 +50,7 @@
 //!
 //! flux interpolates `fmt` and never a `lit`, so a brace inside a bound string literal names
 //! something flux itself would never fill — which is exactly what a templated `base_url` is. The
-//! string literals this module reads braces out of are of **exactly two kinds**, and both are
+//! string literals this module reads braces out of are of **exactly three kinds**, and all are
 //! configuration:
 //!
 //! - a **templated base URL** — a literal carrying `://` — such as the ten across nine connectors
@@ -61,8 +61,11 @@
 //! - a **pin bind** as C-187 added, one per operator-pinned value, each a literal that is nothing
 //!   but a placeholder — `zone_id = "{zone_id}"`, `teamId = "{teamId}"`. The emitter binds a `lit`
 //!   rather than a value precisely so that this module sees the pin at all.
+//! - an **operator-approved origin base** as C-508 added — a `base` literal such as
+//!   `"{origin}/api/v4"`. The binding context is part of the rule: the same text in a request body
+//!   remains vendor-owned syntax and is refused.
 //!
-//! # The two kinds are a **rule**, not an observation (C-232)
+//! # The classified kinds are a **rule**, not an observation (C-232)
 //!
 //! This paragraph used to end "in the shipped catalogue", with a caveat recording that C-110 had
 //! written a third kind — a GraphQL query document, a literal whose braces are the vendor's own
@@ -71,8 +74,9 @@
 //! `docs/designs/graphql-vendors.md` is the finding.
 //!
 //! A statement about what ships is not a rule: the next connector with a brace in a literal
-//! falsifies it again, silently, because nothing executes it. So [`unconfigurable`] classifies every
-//! brace-carrying literal into those two kinds and **refuses anything else** —
+//! falsifies it again, silently, because nothing executes it. So
+//! [`unconfigurable_with_origins`] classifies every brace-carrying literal into those three kinds
+//! and **refuses anything else** —
 //! [`Error::Unbuildable`], at projection and again at build, rather than a placeholder invented out
 //! of a vendor's syntax. That is the same choice the evaluator above already makes for a node it
 //! does not model, applied to the scan.
@@ -368,12 +372,12 @@ impl Request {
 
 /// **The endpoint-configuration variables `declaration` needs**, in stable order.
 ///
-/// Every `{name}` appearing in a string literal of one of the **two declared kinds** — a templated
-/// URL or a pin bind. See this module's documentation for why those two are exactly the connector's
-/// configuration and nothing else: flux interpolates `fmt` and never `lit`, so a brace surviving in
-/// a literal of either shape is by construction a name no evaluation fills.
+/// Every `{name}` appearing in a classified configuration literal: a templated URL, a pin bind, or
+/// the emitter's operator-approved origin `base`. See this module's documentation for why binding
+/// context is load-bearing: flux interpolates `fmt` and never `lit`, so a brace surviving in one of
+/// those shapes is by construction a name no evaluation fills.
 ///
-/// A brace-carrying literal that is neither kind contributes **nothing** here and is refused
+/// A brace-carrying literal that is not one of those shapes contributes **nothing** here and is refused
 /// outright by [`refuse_unconfigurable`] instead. That ordering is the C-232 fix: a variable this
 /// function reports is a variable a `[[config]]` field declares, so a test that binds what this
 /// reports is no longer binding whatever the scan happened to find.
@@ -382,8 +386,9 @@ impl Request {
 /// variable *before* anything is assembled — rather than a brace noticed in a finished URL.
 pub(crate) fn endpoint_variables(declaration: &CompositeOpDecl) -> Vec<String> {
     let mut found = BTreeSet::new();
+    let origin_templates = declared_origin_templates(&declaration.body.body);
     walk_literals(&declaration.body.body, &mut |literal| {
-        if unconfigurable(literal).is_some() {
+        if unconfigurable_with_origins(literal, &origin_templates).is_some() {
             return;
         }
         scan_template(literal, |name| {
@@ -394,24 +399,32 @@ pub(crate) fn endpoint_variables(declaration: &CompositeOpDecl) -> Vec<String> {
     found.into_iter().collect()
 }
 
-/// **A brace-carrying literal that is neither of the two declared kinds**, or `None`.
+/// **A brace-carrying literal that is not a classified configuration shape**, or `None`.
 ///
-/// The classification is deliberately the same pair of tests the rest of the module already makes,
-/// rather than a third opinion about what a placeholder is: [`sole_placeholder`] is what
+/// The classification deliberately reuses the tests the rest of the module already makes rather
+/// than adding another opinion about what a placeholder is: [`sole_placeholder`] is what
 /// [`endpoint_slots`] calls a pin bind, and `://` is what [`place_in_url`] splits a templated URL
 /// on. Two spellings of "is this a URL" would eventually disagree, and the one that disagreed would
 /// be the one deciding whether a vendor's own syntax gets filled with a tenant's settings.
-fn unconfigurable(literal: &str) -> Option<&str> {
+fn unconfigurable_with_origins<'a>(
+    literal: &'a str,
+    declared_origin_templates: &BTreeSet<String>,
+) -> Option<&'a str> {
     if !carries_placeholder(literal) {
         return None;
     }
     if sole_placeholder(literal).is_some()
         || literal.contains("://")
-        || origin_template(literal).is_some()
+        || declared_origin_templates.contains(literal)
     {
         return None;
     }
     Some(literal)
+}
+
+#[cfg(test)]
+fn unconfigurable(literal: &str) -> Option<&str> {
+    unconfigurable_with_origins(literal, &BTreeSet::new())
 }
 
 /// `{origin}` followed only by a connector-declared path. The value's `https://` scheme is supplied
@@ -422,6 +435,39 @@ fn origin_template(literal: &str) -> Option<&str> {
     let close = rest.find('}')?;
     let variable = &rest[..close];
     (!variable.is_empty() && rest[close + 1..].starts_with('/')).then_some(variable)
+}
+
+/// Origin templates are emitted only as the operation's `base` binding. Keeping that context is
+/// what distinguishes `{origin}/api/v4` from a vendor-owned body string that happens to have the
+/// same punctuation (C-232).
+fn declared_origin_templates(nodes: &[Node]) -> BTreeSet<String> {
+    fn collect(nodes: &[Node], found: &mut BTreeSet<String>) {
+        for node in nodes {
+            match node {
+                Node::Bind { name, value, .. } if name.0 == "base" => {
+                    if let Node::Lit {
+                        value: Value::String(text),
+                    } = value.as_ref()
+                    {
+                        if origin_template(text).is_some() {
+                            found.insert(text.clone());
+                        }
+                    }
+                }
+                Node::When {
+                    then, otherwise, ..
+                } => {
+                    collect(then, found);
+                    collect(otherwise, found);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut found = BTreeSet::new();
+    collect(nodes, &mut found);
+    found
 }
 
 /// Whether `literal` carries a `{…}` this module would read as a placeholder at all.
@@ -461,9 +507,10 @@ pub(crate) fn refuse_unconfigurable(
     declaration: &CompositeOpDecl,
 ) -> Result<(), Error> {
     let mut refused = None;
+    let origin_templates = declared_origin_templates(&declaration.body.body);
     walk_literals(&declaration.body.body, &mut |literal| {
         if refused.is_none() {
-            refused = unconfigurable(literal).map(str::to_owned);
+            refused = unconfigurable_with_origins(literal, &origin_templates).map(str::to_owned);
         }
     });
     match refused {
@@ -495,9 +542,10 @@ fn unconfigurable_reason(literal: &str) -> String {
             abbreviated(literal)
         ),
         None => format!(
-            "its body binds the string literal {}, whose `{{…}}` is neither a templated URL nor a \
-             configuration pin — the only two kinds this pack reads a brace in a literal as \
-             (C-193). Filling it would substitute a tenant's configuration into the vendor's own \
+            "its body binds the string literal {}, whose `{{…}}` is neither a templated URL, a \
+             configuration pin, nor the declared origin `base` — the only shapes this pack reads a \
+             brace in a literal as (C-193/C-508). Filling it would substitute a tenant's \
+             configuration into the vendor's own \
              syntax, which is what withdrew C-110's connector; making a literal opaque to this scan \
              is C-87, publishing the configuration surface",
             abbreviated(literal)
@@ -1028,11 +1076,11 @@ pub(crate) fn endpoint_slots(declaration: &CompositeOpDecl) -> BTreeMap<String, 
 
     collect_binds(body, &mut pins, &mut literals, &mut slots);
     place_pins(body, &pins, &literals, &mut slots);
-    walk_literals(body, &mut |literal| {
-        if let Some(variable) = origin_template(literal) {
+    for literal in declared_origin_templates(body) {
+        if let Some(variable) = origin_template(&literal) {
             record(&mut slots, variable, Slot::Origin);
         }
-    });
+    }
     slots
 }
 
@@ -2596,7 +2644,7 @@ mod tests {
         );
         assert!(
             unconfigurable_reason("query Viewer {\n  viewer {\n    id\n  }\n}\n")
-                .contains("neither a templated URL nor a configuration pin"),
+                .contains("neither a templated URL, a configuration pin, nor the declared origin"),
         );
     }
 }
