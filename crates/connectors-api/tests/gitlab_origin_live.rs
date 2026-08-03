@@ -8,7 +8,7 @@
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 
-use catalog::OperationKey;
+use catalog::{OperationKey, ProviderKey};
 use connector_pack::{
     Configuration, CredentialRef, Credentials, Egress, MemoryConfig, MemoryStore, Operation,
     Secret, SecretStore, DEFAULT_SERVICE,
@@ -174,9 +174,14 @@ async fn verify_and_an_ordinary_operation_reach_the_operator_pinned_https_origin
     .expect("configuration");
     let credentials = Credentials::new(store, TENANT).expect("credentials");
     let transport = live_egress(&fixture.certificate);
-    let project = |id| {
+    let provider = catalog::provider(ProviderKey::id("gitlab")).expect("shipped GitLab provider");
+    let verify_entry = provider
+        .verify
+        .and_then(|id| provider.operation(OperationKey::id(id)))
+        .expect("GitLab's embedded verify operation");
+    let project = |entry| {
         Operation::project(
-            catalog::operation(OperationKey::id(id)).expect("shipped GitLab operation"),
+            entry,
             transport.clone(),
             credentials.clone(),
             configuration.clone(),
@@ -187,12 +192,16 @@ async fn verify_and_an_ordinary_operation_reach_the_operator_pinned_https_origin
         Workspace::new(env!("CARGO_MANIFEST_DIR")).expect("crate root"),
     )));
 
-    let verify = project("gitlab-user-get")
+    let verify = project(verify_entry)
         .execute(&context, json!({}))
         .await
         .expect("declared verify call reaches the fixture");
     assert!(!verify.is_error, "verify failed: {}", verify.content);
-    let ordinary = project("gitlab-issue-list")
+    let ordinary = project(
+        provider
+            .operation(OperationKey::id("gitlab-issue-list"))
+            .expect("shipped ordinary GitLab operation"),
+    )
         .execute(
             &context,
             json!({"project_id": 7, "state": null, "page": null, "per_page": null}),
