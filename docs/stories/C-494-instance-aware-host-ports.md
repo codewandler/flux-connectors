@@ -2,8 +2,7 @@
 id: C-494
 title: "Make the connector host ports instance-aware and migratable"
 area: Bridge
-status: in-progress
-priority: 1
+status: done
 areas: [bridge, credentials, configuration, release]
 design: docs/designs/instance-aware-host-ports.md
 note: "release-order bridge for flux-exchange X-14: enumerate addresses and atomically migrate the sole connection before a second instance is admitted"
@@ -28,7 +27,7 @@ second credential address or risking a half-migrated secret set.
 - [x] `Credentials::for_instance`, `Configuration::for_instance`, and
       `ConfigStore::get_for_instance` preserve the existing constructors and the sole-connection
       lookup while selecting the existing C-406 UUID address for an instance.
-- [ ] Public API documentation, focused tests, the full workspace gate and publish dry-runs are
+- [x] Public API documentation, focused tests, the full workspace gate and publish dry-runs are
       green; the connector crate set is prepared as one v0.18.0 release and publication remains
       CI-only.
 
@@ -40,3 +39,8 @@ second credential address or risking a half-migrated secret set.
   refusal; regenerated the complete catalogue and passed the Rust, public-site and host-page gates.
   The CI-equivalent publish dry-run remains open because Cargo correctly refuses this uncommitted
   implementation worktree and repository policy forbids bypassing that check with `--allow-dirty`.
+- 2026-08-03: Integrated the committed implementation with C-30, C-155 and the rich-runtime charter.
+  The complete workspace gate passed, both Node surfaces passed (44 public-site and 15 host-page
+  tests), generation remained a 1,102-artifact fixed point, and a clean disposable v0.18.0 cut
+  packaged and verified all four publication crates with `cargo publish --dry-run`. Nothing was
+  uploaded; publication remains tag-triggered CI only.
