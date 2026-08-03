@@ -22,7 +22,7 @@
 //! |---|---|---|
 //! | [`NO_CREDENTIAL`] | the operation's effective auth is empty, and it did not *declare* it so | C-17 |
 //! | [`CREDENTIAL_NOT_INJECTED`] | the operation's effective auth is **not** empty | C-10 |
-//! | [`UNBOUND_BASE_URL_TEMPLATE`] | the connector's base URL carries a `{name}` placeholder | C-17 |
+//! | [`UNBOUND_BASE_URL_TEMPLATE`] | the operation's base URL carries a `{name}` placeholder whose declared configuration field has no default | C-17 |
 //!
 //! The first two are complementary over every operation that has *not* declared itself public: one
 //! of them fires, which is the machine-readable form of "no provider can make a live call yet, and
@@ -69,7 +69,7 @@
 
 use serde::Serialize;
 
-use connector_spec::{Connector, Operation};
+use connector_spec::{Binding, Connector, Operation};
 
 /// Whether the emitter attaches a declared credential to the request it generates.
 ///
@@ -306,7 +306,19 @@ pub fn of(connector: &Connector, operation: &Operation) -> Status {
     //    no `[[config]]` field binds (C-86), so a provider reaching this point has declared what it
     //    needs — and the issue's job is to say the values are not *supplied* yet, naming all of them.
     let unbound =
-        connector_spec::config::template_variables(connector.base_url_of(&operation.service));
+        connector_spec::config::template_variables(connector.base_url_of(&operation.service))
+            .into_iter()
+            .filter(|variable| {
+                !connector.config.iter().any(|field| {
+                    field.service == operation.service
+                        && field.default.is_some()
+                        && matches!(
+                            field.binding(),
+                            Some(Binding::Endpoint { variable: bound }) if bound == *variable
+                        )
+                })
+            })
+            .collect::<Vec<_>>();
     if !unbound.is_empty() {
         let named = unbound
             .iter()

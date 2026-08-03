@@ -2,6 +2,9 @@
 
 use connector_spec::{provider, Approval, Format};
 
+#[path = "fixtures/origin_grammar.rs"]
+mod origin_grammar;
+
 fn fixture(origin: &str) -> String {
     format!(
         r#"
@@ -67,6 +70,18 @@ fn an_origin_accepts_only_an_absolute_https_origin_without_url_tail() {
         );
         let error = refusal(&source);
         assert!(error.contains("origin"), "{bad:?}: {error}");
+    }
+}
+
+#[test]
+fn the_loader_accepts_exactly_the_shared_origin_grammar_cases() {
+    for case in origin_grammar::ORIGIN_CASES {
+        assert_eq!(
+            Format::Origin.validate(case.value).is_ok(),
+            case.accepted,
+            "loader classified {:?} differently from the shared contract",
+            case.value
+        );
     }
 }
 
