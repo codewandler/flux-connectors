@@ -16,9 +16,26 @@
 
 ### Improved
 
+- **Hosts can keep several connections to the same integration separate.** They can enumerate a
+  tenant's connection addresses, select one stable instance for both credentials and configuration,
+  and move a connection's secrets as one atomic change. A secret backend that cannot guarantee the
+  operation refuses it instead of leaving a partial migration.
+
+- **Operation consequences are more precise.** Connectors can now declare semantic effects such as
+  moving money independently of the host resource they touch. Stripe capture and refund declare a
+  money effect, and capture is now correctly treated as destructive for grant and confirmation
+  policy.
+
 - **The roadmap now has one home for every integration.** Rich systems such as Docker, Kubernetes,
   SQL, and Prometheus will move to connectors that can run locally or through Exchange. This release
   changes the plan, not the integrations available today.
+
+### Fixed
+
+- **Query values are encoded without changing their meaning.** Explicit `false` and `0` values are
+  preserved and scalar values cannot reshape a request URL. Operations whose vendors require an
+  undeclared collection encoding stay out of the catalogue until that wire format can be expressed
+  safely.
 
 ## [0.17.0] — 2026-08-03
 

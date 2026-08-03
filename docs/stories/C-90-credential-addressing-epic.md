@@ -2,12 +2,11 @@
 id: C-90
 title: "Credential addressing and the secret-store seam (epic)"
 pillar: Spec
-status: in-progress
-priority: 2
+status: backlog
 design: docs/designs/credential-addressing.md
 epic: credential-addressing
 areas: [connector-spec, bridge]
-note: "EPIC — a hosted product needs two customers' Zendesk tokens in two places, and neither repo could say where. This repo owns the ADDRESS (pure, derived from pid + service, version deliberately omitted); a host library owns the client. Pure layer landed"
+note: "EPIC — the address, store seam and provider authorities landed; the Flux adapter remains an explicit parked story"
 ---
 
 # Credential addressing and the secret-store seam (epic)
@@ -35,6 +34,9 @@ store can be wrapped in a convention rather than each deployment inventing one.
 - [ ] The flux adapter — [C-93](C-93-flux-credential-store-adapter.md).
 
 ## Progress
+- 2026-08-03 — Returned the umbrella to backlog after the address vocabulary, secret-store seam and
+  provider authorities landed. C-93 owns the remaining Flux adapter and can resume when that seam is
+  scheduled; C-494 independently extends the delivered host seam for multiple instances.
 - 2026-07-30 — **The pure layer landed.** `crates/connector-spec/src/credential.rs`;
   `Connector::credential_ref_for` and `local_credential_name` beside `oip_of_member`. 9 tests in
   `tests/credential_paths.rs`. No artifact changed — the derivation reaches nothing generated.

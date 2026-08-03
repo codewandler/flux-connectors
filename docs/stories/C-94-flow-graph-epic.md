@@ -2,12 +2,11 @@
 id: C-94
 title: "The flow graph — connector members composed into one Flux op (epic)"
 pillar: Spec
-status: in-progress
-priority: 2
+status: backlog
 design: docs/designs/flow-graph.md
 epic: flow-graph
 areas: [connector-spec, connector-flux, bridge]
-note: "EPIC — four waves built the vocabulary (Operation=call node, EventDecl=source, oip=node id, wire paths=edges); this is the graph. NOT a second language: every past rejection was an EXPRESSION language, every acceptance was declarative structure. IR landed"
+note: "EPIC — the graph vocabulary, lowering and path map landed; boundary programs and richer nodes remain explicit backlog stories"
 ---
 
 # The flow graph — connector members composed into one Flux op (epic)
@@ -33,6 +32,9 @@ a flow editor renders, without inventing a language in front of Flux.
 - [ ] The richer node kinds flux-lang already has — [C-98](C-98-richer-node-kinds.md).
 
 ## Progress
+- 2026-08-03 — Returned the umbrella to backlog after graph lowering and the node/path map landed.
+  C-97/C-98 retain the remaining boundary-program and richer-node questions, so no scope is lost
+  while the board stops reporting the umbrella as active work.
 - 2026-07-30 — **The IR landed.** `crates/connector-spec/src/graph.rs`; `Connector::graphs`,
   `graphs_of`, `graph`. 18 tests in `tests/graphs.rs`, including a worked
   trigger → operation → gate → operation example. No artifact changed.

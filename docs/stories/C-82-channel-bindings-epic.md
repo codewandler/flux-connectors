@@ -2,12 +2,11 @@
 id: C-82
 title: "Channel bindings — generalize a flux channel over a connector (epic)"
 pillar: Spec
-status: in-progress
-priority: 2
+status: backlog
 design: docs/designs/channel-bindings.md
 epic: channel-bindings
 areas: [connector-spec, codegen, providers, bridge]
-note: "EPIC — flux's channel dispatch is a closed match with one arm per vendor, and its slack arm hand-builds a chat.postMessage this repo already compiles. A binding is a COMPOSITION of an event and a reply operation, not a new primitive. IR + loader landed; codegen and the flux seam remain"
+note: "EPIC — the binding vocabulary and catalogue projection landed; the remaining delivery-envelope and Flux seam work is parked behind the all-integrations runtime program"
 ---
 
 # Channel bindings — generalize a flux channel over a connector (epic)
@@ -36,6 +35,9 @@ Let a connector **describe** a flux ingress surface, so that `flux-channels` gai
 - [ ] The delivery envelope gap is filed — [C-85](C-85-delivery-envelope.md).
 
 ## Progress
+- 2026-08-03 — Returned the umbrella to backlog after its binding vocabulary and catalogue slices
+  landed. The remaining delivery-envelope and Flux seam work is explicit in C-85/C-84 and should
+  resume through the richer all-integrations runtime program rather than appear as an active lane.
 - 2026-07-30 — **IR and loader landed.** `crates/connector-spec/src/inbound.rs` carries `Transport`,
   `VerificationScheme`/`HmacSpec`, `Selector`, `EventDecl`, `Reply` and `ChannelBinding`; `Connector`
   gained `events` and `channels`, both inside the hash domain. 31 tests in

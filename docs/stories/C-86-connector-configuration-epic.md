@@ -2,12 +2,11 @@
 id: C-86
 title: "The connector configuration surface — enough declared data to generate the UI (epic)"
 pillar: Spec
-status: in-progress
-priority: 2
+status: backlog
 design: docs/designs/connector-configuration.md
 epic: connector-config
 areas: [connector-spec, connector-cli, providers, bridge]
-note: "EPIC — the repo modelled how a credential reaches the wire and nothing about how a human supplies it. Configuration has TWO levels (operator: the OAuth app; connection: the tenant), and conflating them leaks the product's own credential to every customer. IR + loader landed; codegen and OAuth remain"
+note: "EPIC — the two-level configuration vocabulary landed; catalogue projection and hosted OAuth remain explicit backlog stories"
 ---
 
 # The connector configuration surface — enough declared data to generate the UI (epic)
@@ -41,6 +40,9 @@ anyone reading the provider TOML.
 - [ ] The hosted redirect gap is closed — [C-89](C-89-hosted-oauth-redirect.md).
 
 ## Progress
+- 2026-08-03 — Returned the umbrella to backlog after the configuration IR and refusal rules
+  landed. C-87–C-89 retain the remaining catalogue and hosted-OAuth work without presenting the
+  umbrella itself as an actively staffed lane.
 - 2026-07-30 — **IR and loader landed.** `crates/connector-spec/src/config.rs` carries `ConfigField`,
   `Format`, the `binds` grammar and `Level`; `Connector` gained `config` and `verify`, both inside the
   hash domain. 22 tests in `tests/config_fields.rs`, 9 in `tests/auth_archetypes.rs`.
