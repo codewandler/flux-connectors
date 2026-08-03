@@ -241,6 +241,27 @@ fn credentials_and_configuration_must_name_the_same_tenant() {
     assert!(matches!(error, Error::TenantMismatch { .. }), "{error}");
 }
 
+#[test]
+fn credentials_and_configuration_must_name_the_same_instance() {
+    let entry = catalog::operation(OperationKey::id("zendesk-ticket-show")).expect("it ships");
+    let credentials = Credentials::for_instance(
+        Arc::new(MemoryStore::new()),
+        TENANT,
+        "0d3f79ae-b6df-4f77-8f77-438436c3b2ef",
+    )
+    .expect("valid credentials binding");
+    let configuration = Configuration::for_instance(
+        Arc::new(MemoryConfig::new()),
+        TENANT,
+        "cf61ba1f-c0ab-41a4-9c97-75a1c83ca57e",
+    )
+    .expect("valid configuration binding");
+
+    let error = Operation::project(entry, http(), credentials, configuration)
+        .expect_err("two instances are not one connection");
+    assert!(matches!(error, Error::InstanceMismatch { .. }), "{error}");
+}
+
 /// **A store whose answer drifts** — a database-backed one, a cache with a TTL, anything with
 /// interior mutability. Every `get` for `endpoint.subdomain` answers with a different host, and the
 /// reads are counted so the enforcement can be asserted rather than inferred.

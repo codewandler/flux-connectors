@@ -65,6 +65,13 @@ pub async fn channel_plan(
             configuration: configuration.tenant().to_owned(),
         });
     }
+    if credentials.instance() != configuration.instance() {
+        return Err(Error::InstanceMismatch {
+            operation: operation.clone(),
+            credentials: credentials.instance().map(|id| id.as_str().to_owned()),
+            configuration: configuration.instance().map(|id| id.as_str().to_owned()),
+        });
+    }
     let provider =
         catalog::provider(ProviderKey::id(provider_id)).ok_or_else(|| Error::UnknownProvider {
             provider: provider_id.to_owned(),

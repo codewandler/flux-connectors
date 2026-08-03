@@ -404,6 +404,15 @@ pub enum Error {
         reason: String,
     },
 
+    /// A connection instance is not the canonical UUID C-406's address requires.
+    #[error("`{instance}` cannot address a connection instance: {reason}")]
+    Instance {
+        /// The instance spelling that was refused.
+        instance: String,
+        /// `connector_address::credential::validate_instance`'s explanation.
+        reason: String,
+    },
+
     /// **No credential is stored where the operation's credential lives.**
     ///
     /// The request is not sent. That is the whole point of the variant: an unauthenticated call is
@@ -665,6 +674,20 @@ pub enum Error {
         credentials: String,
         /// The tenant the configuration port answers for.
         configuration: String,
+    },
+
+    /// The credential and configuration ports selected different connection instances.
+    #[error(
+        "`{operation}` was given credentials for instance {credentials:?} and configuration for \
+         instance {configuration:?}; one operation serves one connection"
+    )]
+    InstanceMismatch {
+        /// The operation being projected.
+        operation: String,
+        /// The credential port's UUID, if any.
+        credentials: Option<String>,
+        /// The configuration port's UUID, if any.
+        configuration: Option<String>,
     },
 
     /// **A credential the host's redactor will not hold, and therefore will not travel.**

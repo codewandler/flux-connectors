@@ -7,6 +7,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Hosts can safely admit several connections to one connector** (C-494). `CredentialScope` and
+  `SecretStore::references` expose a validated tenant/authority inventory containing addresses only;
+  `SecretBatch` applies checked moves, puts and deletes atomically in the memory and file stores.
+  Unsupported backends, including the current Vault adapter, refuse explicitly rather than falling
+  back to partial point mutations.
+- **The connector pack can bind one C-406 connection UUID.** `Credentials::for_instance`,
+  `Configuration::for_instance`, and `ConfigStore::get_for_instance` carry the same stable instance
+  into secret and non-secret lookup. Existing constructors and config stores retain the
+  sole-connection behaviour, while named instances fail closed unless the store implements them;
+  mismatched port instances are refused before projection or channel composition.
+
 ### Changed
 
 - **Connector operations can now publish policy-bearing semantic effects** (C-155). The closed Flux

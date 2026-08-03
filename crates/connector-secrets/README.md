@@ -7,9 +7,9 @@ descriptions into [Flux-Lang](https://github.com/codewandler/flux).
 
 ```toml
 [dependencies]
-connector-secrets = "0.5"
+connector-secrets = "0.18"
 # The Vault store and its HTTP transport are opt-in:
-# connector-secrets = { version = "0.5", features = ["vault"] }
+# connector-secrets = { version = "0.18", features = ["vault"] }
 ```
 
 ## What it is
@@ -29,6 +29,21 @@ let store = MemoryStore::new();
 let reference = CredentialRef::new("9f3a4b2c", "com.zendesk.api", "support", "api_token")?;
 store.put(&reference, &Secret::new("…")).await?;
 let secret = store.get(&reference).await?;
+```
+
+Hosts admitting a second connection can enumerate one validated tenant/authority scope and migrate
+the old sole-connection addresses as one checked batch. Inventory contains addresses only. Memory
+and file stores provide the atomic guarantee; backends that cannot, including the current Vault
+adapter, return `StoreError::Unsupported` rather than exposing a partial migration.
+
+```rust
+use connector_secrets::{CredentialScope, SecretBatch};
+
+let scope = CredentialScope::new("9f3a4b2c", "com.zendesk.api")?;
+let addresses = store.references(&scope).await?;
+let mut migration = SecretBatch::new(scope);
+migration.move_secret(addresses[0].clone(), instanced_reference)?;
+store.apply(&migration).await?;
 ```
 
 `Secret` does not implement `Serialize`, `Display` or `Debug` over its value — that is asserted by a

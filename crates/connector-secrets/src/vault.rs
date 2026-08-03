@@ -40,7 +40,10 @@
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
-use crate::{CredentialRef, Layout, Secret, SecretStore, StoreError, TenantLayout};
+use crate::{
+    CredentialRef, CredentialScope, Layout, Secret, SecretBatch, SecretStore, StoreError,
+    TenantLayout,
+};
 
 /// Vault's default KV v2 mount point.
 pub const DEFAULT_MOUNT: &str = "secret";
@@ -376,6 +379,21 @@ impl<T: VaultTransport, L: Layout + Send + Sync> SecretStore for VaultStore<T, L
             200 | 204 | 404 => Ok(()),
             status => Err(status_error(status, &path, &response.body)),
         }
+    }
+
+    async fn references(&self, _scope: &CredentialScope) -> Result<Vec<CredentialRef>, StoreError> {
+        Err(StoreError::Unsupported {
+            operation: "references".to_owned(),
+            reason: "Vault KV v2 listing and policy semantics are not implemented".to_owned(),
+        })
+    }
+
+    async fn apply(&self, _batch: &SecretBatch) -> Result<(), StoreError> {
+        Err(StoreError::Unsupported {
+            operation: "atomic batch".to_owned(),
+            reason: "Vault KV v2 provides no multi-path transaction used by this adapter"
+                .to_owned(),
+        })
     }
 }
 

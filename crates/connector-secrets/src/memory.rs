@@ -6,7 +6,10 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 
-use crate::{CredentialRef, Layout, Secret, SecretStore, StoreError, TenantLayout};
+use crate::{
+    batch, CredentialRef, CredentialScope, Layout, Secret, SecretBatch, SecretStore, StoreError,
+    TenantLayout,
+};
 
 /// A [`SecretStore`] held in memory.
 ///
@@ -124,6 +127,30 @@ impl<L: Layout + Send + Sync> SecretStore for MemoryStore<L> {
         // Idempotent, per the trait: the absence of a value is not an error to a caller whose
         // intent is "make sure this is gone".
         self.locked().remove(&path);
+        Ok(())
+    }
+
+    async fn references(&self, scope: &CredentialScope) -> Result<Vec<CredentialRef>, StoreError> {
+        self.locked()
+            .keys()
+            .map(|path| {
+                self.layout
+                    .parse(path)
+                    .map_err(|reason| StoreError::Layout { reason })
+            })
+            .filter_map(|result| match result {
+                Ok(reference) if scope.contains(&reference) => Some(Ok(reference)),
+                Ok(_) => None,
+                Err(error) => Some(Err(error)),
+            })
+            .collect()
+    }
+
+    async fn apply(&self, mutations: &SecretBatch) -> Result<(), StoreError> {
+        let mut entries = self.locked();
+        let mut candidate = entries.clone();
+        batch::apply_to(&mut candidate, &self.layout, mutations)?;
+        *entries = candidate;
         Ok(())
     }
 }

@@ -46,6 +46,29 @@ enforced by `Connector::member_names_of`, because a config field and an operatio
 would be ambiguous wherever a host looked either up. The full surface, field by field and with what
 reaches which artifact, is [designs/connector-surfaces.md](designs/connector-surfaces.md).
 
+## Vocabulary and ownership
+
+- A **Connector** is the complete compiled vendor declaration. The public catalogue's Rust type is
+  still named `Provider` for compatibility; prose says Connector. A **Model Provider** supplies
+  inference and an **Identity Provider** authenticates a caller—neither is a Connector.
+- A **Service** is one Connector API surface with its own endpoint/version and operation partition.
+  It is metadata inside the Connector, not a separately installed resource.
+- An **Operation** is one callable unit. A Tool is Flux's model-visible projection of an operation;
+  this repository does not define another execution unit.
+- An **Event Type** and **Channel Binding** are declarations of inbound schema and transport
+  requirements. A host installs and terminates the Channel, retains Event Deliveries and binds
+  Triggers. A webhook or WebSocket is transport, not a Trigger or Event synonym.
+- A **Credential Requirement** and configuration field state what an operator must supply. The host
+  owns Connections and their stable instance identities; connectors receive only the resolved UUID
+  and render the shared address vocabulary.
+- Datasource Definitions are a known upstream gap. Apps, Managed Agents, Service Accounts,
+  Datasources, Triggers, Event Deliveries, tenants and grants are host/Flux concepts, not additional
+  Connector resources to invent here.
+
+The ownership test is simple: if it is true of the vendor regardless of who runs it, it belongs in
+flux-connectors. If it requires a tenant, installed binding, held credential or retained delivery,
+the host owns it. If it changes how an effect executes, Flux owns it.
+
 ## North star
 
 **A connector is compiled, never interpreted.** The TOML is input to a compiler; the artifact that

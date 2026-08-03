@@ -18,10 +18,10 @@
 //! `tenants/<tenant>/<authority>/<credential>` comes from
 //! [`connector_secrets::CredentialRef`], which re-exports `connector-address`'s. That address gained an
 //! optional instance level in C-406 — `…/<authority>/@instances/<uuid>/…`, for a tenant holding more
-//! than one connection to one connector — and **this port composes the sole-connection form**, which
-//! is the same address it always rendered. Threading a connection through belongs to the host that
-//! knows how many a tenant holds (flux-exchange X-14); what must not happen is a second spelling
-//! being invented here. This module composes
+//! than one connection to one connector. [`Credentials::new`] composes the sole-connection form,
+//! which is the same address it always rendered; [`Credentials::for_instance`] composes C-406's
+//! existing UUID form after the host has resolved its own mutable label. What must not happen is a
+//! second spelling being invented here. This module composes
 //! one from facts the catalogue already carries — the provider's authority, the credential's leaf —
 //! and the *store* renders it through whichever [`Layout`](connector_secrets::Layout) the host
 //! configured. So a deployment with its own secret layout keeps it, and nothing here has an opinion
@@ -59,7 +59,9 @@
 
 use std::sync::Arc;
 
-use connector_secrets::{validate_tenant, CredentialRef, Secret, SecretStore, StoreError};
+use connector_secrets::{
+    validate_tenant, CredentialRef, InstanceId, Secret, SecretStore, StoreError,
+};
 use flux_runtime::ToolContext;
 
 use crate::auth::{self, Assembled};
@@ -87,6 +89,7 @@ pub const DEFAULT_SERVICE: &str = "default";
 pub struct Credentials {
     store: Arc<dyn SecretStore>,
     tenant: String,
+    instance: Option<InstanceId>,
 }
 
 /// `Arc<dyn SecretStore>` is not `Debug`, and the tenant is the part worth seeing. The store is
@@ -95,6 +98,7 @@ impl std::fmt::Debug for Credentials {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Credentials")
             .field("tenant", &self.tenant)
+            .field("instance", &self.instance)
             .finish_non_exhaustive()
     }
 }
@@ -115,12 +119,38 @@ impl Credentials {
         Ok(Self {
             store,
             tenant: tenant.to_owned(),
+            instance: None,
         })
+    }
+
+    /// Bind the credential store for one explicitly selected connection instance.
+    ///
+    /// The UUID is the existing C-406 address component. A host resolves any mutable label before
+    /// calling this constructor; connector-pack never sees or guesses one.
+    pub fn for_instance(
+        store: Arc<dyn SecretStore>,
+        tenant: &str,
+        instance: &str,
+    ) -> Result<Self, Error> {
+        let mut credentials = Self::new(store, tenant)?;
+        credentials.instance =
+            Some(
+                InstanceId::parse(instance).map_err(|reason| Error::Instance {
+                    instance: instance.to_owned(),
+                    reason,
+                })?,
+            );
+        Ok(credentials)
     }
 
     /// The tenant every address this port renders belongs to.
     pub fn tenant(&self) -> &str {
         &self.tenant
+    }
+
+    /// The selected connection UUID, absent for the sole-connection binding.
+    pub fn instance(&self) -> Option<&InstanceId> {
+        self.instance.as_ref()
     }
 
     /// Where `credential` of `provider` is kept for this port's tenant.
@@ -147,13 +177,21 @@ impl Credentials {
         // Always the elided default service: a credential is declared at provider level, so it
         // belongs to the connector rather than to one of its surfaces. `CredentialRef` can carry a
         // service, and that headroom is C-90's, for a vendor whose surfaces authenticate separately.
-        CredentialRef::new(&self.tenant, authority, DEFAULT_SERVICE, credential.leaf).map_err(
-            |reason| Error::CredentialAddress {
-                operation: operation.to_owned(),
-                credential: credential.name.to_owned(),
-                reason,
-            },
-        )
+        let reference = match &self.instance {
+            Some(instance) => CredentialRef::for_instance(
+                &self.tenant,
+                authority,
+                instance.as_str(),
+                DEFAULT_SERVICE,
+                credential.leaf,
+            ),
+            None => CredentialRef::new(&self.tenant, authority, DEFAULT_SERVICE, credential.leaf),
+        };
+        reference.map_err(|reason| Error::CredentialAddress {
+            operation: operation.to_owned(),
+            credential: credential.name.to_owned(),
+            reason,
+        })
     }
 
     /// **Divert a freshly minted secret into the bound store, and answer with its address** (C-136).
@@ -428,6 +466,31 @@ impl Credentials {
             });
         }
         Ok(assembled)
+    }
+}
+
+#[cfg(test)]
+mod instance_tests {
+    use super::*;
+
+    #[test]
+    fn an_instance_binding_renders_the_existing_instance_address() {
+        let instance = "0d3f79ae-b6df-4f77-8f77-438436c3b2ef";
+        let credentials = Credentials::for_instance(
+            Arc::new(connector_secrets::MemoryStore::new()),
+            "tenant-a",
+            instance,
+        )
+        .expect("valid binding");
+        let provider =
+            catalog::provider(catalog::ProviderKey::id("github")).expect("shipped provider");
+        let operation = provider.operations.first().expect("operation");
+        let credential = provider.auth.first().expect("credential");
+        let reference = credentials
+            .reference(operation.id, provider, credential)
+            .expect("address");
+
+        assert_eq!(reference.instance().map(InstanceId::as_str), Some(instance));
     }
 }
 

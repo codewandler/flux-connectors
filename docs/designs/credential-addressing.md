@@ -105,7 +105,9 @@ connection appears, the first credential's address gains a level and the host mu
 value. The refusal is what makes that loud — until the host names an instance it gets an error, and
 once it does it gets an address with nothing at it yet, which fails closed rather than answering from
 the wrong account. The alternative, qualifying every address unconditionally, strands every stored
-credential everywhere at once.
+credential everywhere at once. [C-494's host-port design](instance-aware-host-ports.md) supplies the
+scoped inventory and atomic batch that make this migration executable without revealing values or
+leaving half the connector at its old address.
 
 ### The API version is deliberately absent
 

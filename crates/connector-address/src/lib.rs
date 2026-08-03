@@ -56,7 +56,9 @@ pub mod address;
 pub mod credential;
 
 pub use address::{Gid, Oip, Pid};
-pub use credential::{CredentialRef, InstanceId, Layout, TenantInstances, TenantLayout};
+pub use credential::{
+    CredentialRef, CredentialScope, InstanceId, Layout, TenantInstances, TenantLayout,
+};
 
 /// The name of the implicit service every operation belongs to unless it names another.
 ///

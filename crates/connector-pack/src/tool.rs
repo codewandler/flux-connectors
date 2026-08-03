@@ -208,6 +208,13 @@ impl Operation {
                 configuration: configuration.tenant().to_owned(),
             });
         }
+        if credentials.instance() != configuration.instance() {
+            return Err(Error::InstanceMismatch {
+                operation: entry.id.to_owned(),
+                credentials: credentials.instance().map(|id| id.as_str().to_owned()),
+                configuration: configuration.instance().map(|id| id.as_str().to_owned()),
+            });
+        }
 
         // Refused at install rather than tolerated at dispatch. The gate below falls back to the
         // declared hosts when a request cannot be built, so an entry with no host would be a tool

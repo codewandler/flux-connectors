@@ -124,6 +124,49 @@ impl fmt::Display for InstanceId {
     }
 }
 
+/// Every credential address for one tenant and one connector authority.
+///
+/// A host uses this as the boundary of an inventory or atomic migration. Both components are
+/// validated once at construction, and [`contains`](Self::contains) then makes it impossible for a
+/// batch assembled for one connector to drift into another tenant or authority.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CredentialScope {
+    tenant: String,
+    authority: String,
+}
+
+impl CredentialScope {
+    /// Validate and bind a tenant/authority scope.
+    ///
+    /// # Errors
+    ///
+    /// The same reason [`CredentialRef`] would refuse for either component.
+    pub fn new(tenant: &str, authority: &str) -> Result<Self, String> {
+        validate_tenant(tenant)?;
+        crate::address::validate_authority(authority)
+            .map_err(|reason| format!("authority: {reason}"))?;
+        Ok(Self {
+            tenant: tenant.to_owned(),
+            authority: authority.to_owned(),
+        })
+    }
+
+    /// The tenant whose addresses are in scope.
+    pub fn tenant(&self) -> &str {
+        &self.tenant
+    }
+
+    /// The connector authority whose addresses are in scope.
+    pub fn authority(&self) -> &str {
+        &self.authority
+    }
+
+    /// Whether `reference` is inside this exact tenant/authority boundary.
+    pub fn contains(&self, reference: &CredentialRef) -> bool {
+        reference.tenant() == self.tenant && reference.authority() == self.authority
+    }
+}
+
 /// The connections one tenant holds to one connector, and which of them an address names.
 ///
 /// This is the input `connector_spec::Connector::credential_ref_for` needs and cannot derive: a

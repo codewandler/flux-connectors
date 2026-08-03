@@ -67,6 +67,12 @@
 //! - **The tenant is in the reference**, not baked into the store instance. One store serves every
 //!   tenant, and the address says whose credential is being asked for.
 //!
+//! C-494 adds two host guarantees beside those point operations. [`SecretStore::references`]
+//! inventories addresses inside a validated [`CredentialScope`] without exposing values, and
+//! [`SecretStore::apply`] commits a checked [`SecretBatch`] atomically. Both default to an explicit
+//! [`StoreError::Unsupported`] refusal, because decomposing an unsupported migration into point
+//! writes would expose a half-moved connector.
+//!
 //! Adapting *to* flux's trait remains worth doing and is a separate story (C-93); it is
 //! complementary, not competing.
 //!
@@ -81,6 +87,7 @@
 // Unix only, and deliberately: the whole of what protects a credential in it is `0600` on the file
 // and `0700` on its directory, and a platform that cannot spell those would get a store that
 // implied a safety it did not have. See the module documentation.
+mod batch;
 #[cfg(unix)]
 pub mod file;
 mod memory;
@@ -88,6 +95,7 @@ mod secret;
 #[cfg(feature = "vault")]
 pub mod vault;
 
+pub use batch::SecretBatch;
 #[cfg(unix)]
 pub use file::FileStore;
 pub use memory::MemoryStore;
@@ -104,8 +112,8 @@ pub use vault::VaultStore;
 // lived in `connector-spec`, it was the whole compiler, permanently, so that
 // `use connector_secrets::CredentialRef` resolved outside this workspace.
 pub use connector_address::credential::{
-    validate_instance, validate_tenant, CredentialRef, InstanceId, Layout, TenantInstances,
-    TenantLayout, INSTANCES_SEGMENT, MAX_TENANT, TENANTS_ROOT,
+    validate_instance, validate_tenant, CredentialRef, CredentialScope, InstanceId, Layout,
+    TenantInstances, TenantLayout, INSTANCES_SEGMENT, MAX_TENANT, TENANTS_ROOT,
 };
 
 use async_trait::async_trait;
@@ -154,6 +162,25 @@ pub trait SecretStore: Send + Sync {
     ///
     /// Any of [`StoreError`] except [`NotFound`](StoreError::NotFound), per the above.
     async fn delete(&self, reference: &CredentialRef) -> Result<(), StoreError>;
+
+    /// List the addresses inside `scope`, never their values.
+    ///
+    /// Stores without a proven listing policy refuse explicitly; a caller must not infer an empty
+    /// inventory from that refusal.
+    async fn references(&self, _scope: &CredentialScope) -> Result<Vec<CredentialRef>, StoreError> {
+        Err(StoreError::Unsupported {
+            operation: "references".to_owned(),
+            reason: "this secret store cannot enumerate a credential scope".to_owned(),
+        })
+    }
+
+    /// Apply every mutation in `batch` atomically, or expose none of them.
+    async fn apply(&self, _batch: &SecretBatch) -> Result<(), StoreError> {
+        Err(StoreError::Unsupported {
+            operation: "atomic batch".to_owned(),
+            reason: "this secret store cannot guarantee atomic mutation".to_owned(),
+        })
+    }
 }
 
 /// What a [`SecretStore`] can fail with.
@@ -220,6 +247,24 @@ pub enum StoreError {
     #[error("the layout could not resolve the address: {reason}")]
     Layout {
         /// The layout's own explanation.
+        reason: String,
+    },
+
+    /// A checked mutation conflicts with the state already stored at its address.
+    #[error("the secret store cannot apply a mutation at {path}: {reason}")]
+    Conflict {
+        /// The rendered address in conflict.
+        path: String,
+        /// The checked precondition that failed.
+        reason: String,
+    },
+
+    /// The backend cannot provide a requested guarantee.
+    #[error("the secret store does not support {operation}: {reason}")]
+    Unsupported {
+        /// The store operation that was requested.
+        operation: String,
+        /// Why this backend cannot honour it.
         reason: String,
     },
 }

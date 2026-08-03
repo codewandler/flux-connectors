@@ -7,7 +7,7 @@ descriptions into [Flux-Lang](https://github.com/codewandler/flux).
 
 ```toml
 [dependencies]
-connector-pack = "0.5"
+connector-pack = "0.18"
 ```
 
 ## What it is
@@ -32,6 +32,18 @@ One tool per operation, rather than one tool for the whole provider, is what let
 
 Credentials are bound to a tenant at construction and never looked up globally, and a credential
 value is registered with the host's redactor before it can reach a model-visible surface.
+
+When a host has resolved a tenant-scoped connection label to C-406's stable UUID, it binds both
+ports to that instance. The original constructors remain the sole-connection form:
+
+```rust
+let credentials = Credentials::for_instance(host_secret_store, "9f3a4b2c", instance_uuid)?;
+let configuration = Configuration::for_instance(config_source, "9f3a4b2c", instance_uuid)?;
+```
+
+`ConfigStore::get_for_instance` delegates to the original lookup only when no instance was named;
+existing stores therefore compile unchanged and refuse a named instance until they deliberately
+support it. Projection also refuses credential and configuration ports bound to different UUIDs.
 
 ## What it is not
 

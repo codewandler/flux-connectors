@@ -46,7 +46,8 @@
 //!
 //! # The key names the service, because the connector does (C-197)
 //!
-//! A value is addressed by **`(tenant, provider, service, kind, name)`**. The service is not
+//! A sole-connection value is addressed by **`(tenant, provider, service, kind, name)`**; an
+//! instance-aware host additionally keys it by the selected C-406 UUID. The service is not
 //! decoration: a *service* owns its own `base_url`, so a `{var}` is a variable of one service's URL
 //! and two services of one connector can spell the same one. `contentful` does —
 //! `delivery_space_id` and `management_space_id` both bind `endpoint.space_id`, under `delivery`
@@ -82,7 +83,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use connector_secrets::validate_tenant;
+use connector_secrets::{validate_tenant, InstanceId};
 
 use crate::Error;
 
@@ -212,7 +213,7 @@ pub trait ConfigStore: Send + Sync {
     ///
     /// # It must be stable, and that is a requirement rather than an expectation
     ///
-    /// **An implementation must answer the same `(tenant, provider, field)` with the same value for
+    /// **An implementation must answer the same `(tenant, provider, instance, service, field)` with the same value for
     /// as long as the store is bound.** A store that reads a database on every call, or a cache that
     /// can expire between two calls, does not satisfy this and must resolve its values eagerly and
     /// hand over a fixed set instead — which is what [`MemoryConfig`] is for.
@@ -231,11 +232,30 @@ pub trait ConfigStore: Send + Sync {
     /// one store across many operations, and each projection is a fresh read — a store that drifts
     /// between them gives two connectors two different views of one tenant.
     fn get(&self, tenant: &str, provider: &str, service: &str, field: Field<'_>) -> Option<String>;
+
+    /// The value for a selected connection instance.
+    ///
+    /// The compatibility default delegates only when no instance was selected. A named instance
+    /// never borrows the sole connection's value: existing stores compile unchanged and fail
+    /// closed until they deliberately implement instance-aware lookup.
+    fn get_for_instance(
+        &self,
+        tenant: &str,
+        provider: &str,
+        instance: Option<&InstanceId>,
+        service: &str,
+        field: Field<'_>,
+    ) -> Option<String> {
+        match instance {
+            None => self.get(tenant, provider, service, field),
+            Some(_) => None,
+        }
+    }
 }
 
 /// **The configuration adapter a host binds when it constructs the pack.**
 ///
-/// Holds a store and the tenant every lookup is made for, mirroring
+/// Holds a store, tenant and optional connection UUID every lookup is made for, mirroring
 /// [`Credentials`](crate::Credentials) exactly — including the tenant validation, so a
 /// misconfiguration is a startup failure rather than a runtime one. Cloning is cheap and shares the
 /// store, which is what lets one bound port serve every operation of every provider in a pack.
@@ -243,6 +263,7 @@ pub trait ConfigStore: Send + Sync {
 pub struct Configuration {
     values: Arc<dyn ConfigStore>,
     tenant: String,
+    instance: Option<InstanceId>,
 }
 
 /// `Arc<dyn ConfigStore>` is not `Debug`, and the tenant is the part worth seeing. The store is
@@ -252,6 +273,7 @@ impl std::fmt::Debug for Configuration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Configuration")
             .field("tenant", &self.tenant)
+            .field("instance", &self.instance)
             .finish_non_exhaustive()
     }
 }
@@ -272,12 +294,35 @@ impl Configuration {
         Ok(Self {
             values,
             tenant: tenant.to_owned(),
+            instance: None,
         })
+    }
+
+    /// Bind settings for one explicitly selected connection UUID.
+    pub fn for_instance(
+        values: Arc<dyn ConfigStore>,
+        tenant: &str,
+        instance: &str,
+    ) -> Result<Self, Error> {
+        let mut configuration = Self::new(values, tenant)?;
+        configuration.instance =
+            Some(
+                InstanceId::parse(instance).map_err(|reason| Error::Instance {
+                    instance: instance.to_owned(),
+                    reason,
+                })?,
+            );
+        Ok(configuration)
     }
 
     /// The tenant every lookup this port makes is for.
     pub fn tenant(&self) -> &str {
         &self.tenant
+    }
+
+    /// The selected connection UUID, absent for the sole-connection binding.
+    pub fn instance(&self) -> Option<&InstanceId> {
+        self.instance.as_ref()
     }
 
     /// **Read every field in `fields` once**, and hand back the frozen result.
@@ -312,7 +357,13 @@ impl Configuration {
             .into_iter()
             .filter_map(|field| {
                 self.values
-                    .get(&self.tenant, provider, service, field)
+                    .get_for_instance(
+                        &self.tenant,
+                        provider,
+                        self.instance.as_ref(),
+                        service,
+                        field,
+                    )
                     .filter(|value| !value.trim().is_empty())
                     .map(|value| (field.key(), value))
             })
@@ -355,7 +406,13 @@ impl Configuration {
             let Some(field) = field else { continue };
             let value = self
                 .values
-                .get(&self.tenant, provider.id, channel.service, field)
+                .get_for_instance(
+                    &self.tenant,
+                    provider.id,
+                    self.instance.as_ref(),
+                    channel.service,
+                    field,
+                )
                 .filter(|value| !value.trim().is_empty())
                 .or_else(|| declaration.default.map(str::to_owned));
             if let Some(value) = value {
@@ -561,6 +618,44 @@ impl ConfigStore for MemoryConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_named_instance_uses_the_instance_aware_config_port() {
+        #[derive(Default)]
+        struct Instances;
+
+        impl ConfigStore for Instances {
+            fn get(
+                &self,
+                _tenant: &str,
+                _provider: &str,
+                _service: &str,
+                _field: Field<'_>,
+            ) -> Option<String> {
+                Some("unscoped".to_owned())
+            }
+
+            fn get_for_instance(
+                &self,
+                _tenant: &str,
+                _provider: &str,
+                instance: Option<&InstanceId>,
+                _service: &str,
+                _field: Field<'_>,
+            ) -> Option<String> {
+                instance.map(|instance| format!("instance-{}", instance.as_str()))
+            }
+        }
+
+        let instance = "0d3f79ae-b6df-4f77-8f77-438436c3b2ef";
+        let configuration =
+            Configuration::for_instance(Arc::new(Instances), "t", instance).expect("valid binding");
+        let snapshot = configuration.snapshot("acme", "default", [Field::Endpoint("account")]);
+        assert_eq!(
+            snapshot.lookup(Field::Endpoint("account")).as_deref(),
+            Some(format!("instance-{instance}").as_str())
+        );
+    }
 
     /// A tenant id reaches no path from this port, but it must still be the *same* notion of a
     /// tenant the credential port validates — the two are asserted to agree at install

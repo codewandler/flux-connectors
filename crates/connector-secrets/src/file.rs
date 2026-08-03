@@ -60,7 +60,10 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 
-use crate::{CredentialRef, Layout, Secret, SecretStore, StoreError, TenantLayout};
+use crate::{
+    batch, CredentialRef, CredentialScope, Layout, Secret, SecretBatch, SecretStore, StoreError,
+    TenantLayout,
+};
 
 /// The first line of every file this store writes.
 const HEADER: &str = "# codewandler-connector-secrets file store, v1";
@@ -395,6 +398,33 @@ impl<L: Layout + Send + Sync> SecretStore for FileStore<L> {
         }
         Ok(())
     }
+
+    async fn references(&self, scope: &CredentialScope) -> Result<Vec<CredentialRef>, StoreError> {
+        self.locked()
+            .keys()
+            .map(|path| {
+                self.layout
+                    .parse(path)
+                    .map_err(|reason| StoreError::Layout { reason })
+            })
+            .filter_map(|result| match result {
+                Ok(reference) if scope.contains(&reference) => Some(Ok(reference)),
+                Ok(_) => None,
+                Err(error) => Some(Err(error)),
+            })
+            .collect()
+    }
+
+    async fn apply(&self, mutations: &SecretBatch) -> Result<(), StoreError> {
+        let mut entries = self.locked();
+        let mut candidate = entries.clone();
+        batch::apply_to(&mut candidate, &self.layout, mutations)?;
+        // Persist the complete candidate before changing the in-process view. A write failure leaves
+        // both representations at the old state, matching the point methods' rollback guarantee.
+        self.write_through(&candidate)?;
+        *entries = candidate;
+        Ok(())
+    }
 }
 
 /// Path and entry count. **Never a value, and never an address** — a derived `Debug` would print
@@ -602,6 +632,48 @@ mod tests {
 
     fn reference() -> CredentialRef {
         CredentialRef::new("9f3a4b2c", "com.zendesk.api", "support", "api_token").expect("valid")
+    }
+
+    #[tokio::test]
+    async fn an_atomic_move_survives_reopen_as_one_state() {
+        let scratch = Scratch::new("batch-move");
+        let path = scratch.store();
+        let source = reference();
+        let destination = CredentialRef::for_instance(
+            "9f3a4b2c",
+            "com.zendesk.api",
+            "0d3f79ae-b6df-4f77-8f77-438436c3b2ef",
+            "support",
+            "api_token",
+        )
+        .expect("valid instance address");
+        let store = FileStore::open(&path).expect("open");
+        store
+            .put(&source, &Secret::new(SENTINEL))
+            .await
+            .expect("put");
+        let scope = CredentialScope::new("9f3a4b2c", "com.zendesk.api").expect("scope");
+        let mut batch = SecretBatch::new(scope.clone());
+        batch
+            .move_secret(source.clone(), destination.clone())
+            .expect("in scope");
+        store.apply(&batch).await.expect("atomic move");
+        drop(store);
+
+        let reopened = FileStore::open(&path).expect("reopen");
+        assert!(reopened.get(&source).await.unwrap_err().is_not_found());
+        assert_eq!(
+            reopened
+                .get(&destination)
+                .await
+                .expect("destination")
+                .expose_secret(),
+            SENTINEL
+        );
+        assert_eq!(
+            reopened.references(&scope).await.expect("inventory"),
+            vec![destination]
+        );
     }
 
     fn mode_of(path: &Path) -> u32 {
