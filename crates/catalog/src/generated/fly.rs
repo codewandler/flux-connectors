@@ -15,6 +15,7 @@ pub(crate) static PROVIDER: crate::Provider = crate::Provider {
     auth: AUTH,
     operations: OPERATIONS,
     config: CONFIG,
+    verify: Some("fly-regions-list"),
     events: EVENTS,
     channels: CHANNELS,
     config_choices: CONFIG_CHOICES,

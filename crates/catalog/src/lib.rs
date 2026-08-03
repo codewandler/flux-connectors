@@ -469,6 +469,10 @@ pub struct Channel {
 }
 
 /// One complete configuration field, with no stored value.
+///
+/// Activation policy is carried as [`Approval`] rather than left inside [`Self::declaration_json`]:
+/// a host enforcing whether a configured value may become active must match a closed vocabulary,
+/// not search serialized source text for a token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfigField {
     pub name: &'static str,
@@ -479,12 +483,37 @@ pub struct ConfigField {
     pub format: &'static str,
     pub required: bool,
     pub default: Option<&'static str>,
+    /// Extra authorization required before the configured value becomes active.
+    pub approval: Approval,
     pub secret: bool,
     pub docs_url: Option<&'static str>,
     pub binds: &'static str,
     pub also_binds: &'static [&'static str],
     /// Canonical JSON for the complete form declaration, including choices.
     pub declaration_json: &'static str,
+}
+
+/// Extra authorization required before a supplied configuration value becomes active.
+///
+/// Mirrors `connector_spec::Approval`. Deliberately closed: a new activation policy must produce a
+/// compile error in every consumer that decides whether a value may influence a request.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Approval {
+    /// The ordinary configuration flow may activate the value.
+    #[default]
+    None,
+    /// A deployment operator must approve and pin a non-default value for this connection.
+    Operator,
+}
+
+impl Approval {
+    /// The stable token used by the connector declaration and public catalogue.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Operator => "operator",
+        }
+    }
 }
 
 /// **How a connector executes** — flux's runtime axis, as the catalogue publishes it (C-405).
@@ -581,6 +610,11 @@ pub struct Provider {
     pub operations: &'static [Operation],
     /// Complete configuration declarations, never values.
     pub config: &'static [ConfigField],
+    /// The bounded, low-risk operation a host invokes to verify this connector's configuration.
+    ///
+    /// The operation id is guaranteed by the loader to name one of [`Self::operations`]. `None`
+    /// means the connector declares no Test-connection read; it is not an invitation to guess one.
+    pub verify: Option<&'static str>,
     /// Inbound events in declaration order.
     pub events: &'static [Event],
     /// Channel bindings in declaration order.
