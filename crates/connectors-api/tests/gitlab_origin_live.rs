@@ -202,12 +202,12 @@ async fn verify_and_an_ordinary_operation_reach_the_operator_pinned_https_origin
             .operation(OperationKey::id("gitlab-issue-list"))
             .expect("shipped ordinary GitLab operation"),
     )
-        .execute(
-            &context,
-            json!({"project_id": 7, "state": null, "page": null, "per_page": null}),
-        )
-        .await
-        .expect("ordinary call reaches the fixture");
+    .execute(
+        &context,
+        json!({"project_id": 7, "state": null, "page": null, "per_page": null}),
+    )
+    .await
+    .expect("ordinary call reaches the fixture");
     assert!(
         !ordinary.is_error,
         "ordinary call failed: {}",
