@@ -27,7 +27,7 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{AuthScheme, Connector, HttpMethod, Idempotency, Risk};
+use connector_spec::{Approval, AuthScheme, Connector, Format, HttpMethod, Idempotency, Risk};
 
 #[path = "../../connector-spec/tests/support/shipped_provider.rs"]
 mod shipped_provider;
@@ -35,9 +35,10 @@ mod shipped_provider;
 /// The provider id, and therefore the file name and every op id's prefix.
 const PROVIDER: &str = "gitlab";
 
-/// One host: GitLab's own SaaS. A self-managed instance lives at an operator-chosen host and is out
-/// of scope — see the header comment on `base_url` in `providers/gitlab.toml`.
-const BASE_URL: &str = "https://gitlab.com/api/v4";
+/// The connector owns the REST path while one reviewed default or operator-approved origin fills
+/// the endpoint head.
+const BASE_URL: &str = "{origin}/api/v4";
+const DEFAULT_ORIGIN: &str = "https://gitlab.com";
 
 /// The credential name and the environment variable it resolves from.
 const TOKEN: &str = "gitlab.token";
@@ -117,8 +118,7 @@ fn the_gitlab_connector_loads_and_authenticates_with_a_bearer_personal_access_to
     assert_eq!(connector.vendor, "GitLab");
     assert_eq!(
         connector.base_url, BASE_URL,
-        "gitlab.com is the only host this connector addresses; a self-managed instance is out of \
-         scope until endpoint binding (C-68) lands"
+        "the connector must retain ownership of `/api/v4` after the resolved origin"
     );
 
     let token = connector
@@ -318,20 +318,37 @@ fn every_gitlab_operation_emits_an_analyzable_module() {
     }
 }
 
-/// The one `[[config]]` field: the personal access token, secret and bound to the credential it
-/// declares. `secret` must agree with `binds` (`connector_spec::config::Binding::is_secret`), which
-/// this pins so a future edit cannot desynchronize the two.
+/// The two `[[config]]` fields: an operator-approved origin and the personal access token. The
+/// origin is a non-secret connection setting whose reviewed default preserves GitLab.com; the
+/// token remains secret and bound to the credential it declares.
 #[test]
-fn the_config_surface_asks_for_the_token_and_nothing_else() {
+fn the_config_surface_asks_for_the_origin_and_token_and_nothing_else() {
     let connector = load();
 
     assert_eq!(
         connector.config.len(),
-        1,
-        "gitlab needs exactly one human-supplied value: the token. There is no subdomain, no OAuth \
-         app, nothing else to ask for"
+        2,
+        "gitlab needs one endpoint choice and one credential, with no GitLab-only side channel"
     );
-    let field = &connector.config[0];
+    let origin = connector
+        .config_field("origin")
+        .expect("gitlab declares its origin field");
+    assert!(
+        !origin.label.is_empty(),
+        "a config field must be renderable"
+    );
+    assert!(!origin.help.is_empty(), "a config field must be renderable");
+    assert_eq!(origin.format, Format::Origin);
+    assert_eq!(origin.approval, Approval::Operator);
+    assert_eq!(origin.default.as_deref(), Some(DEFAULT_ORIGIN));
+    assert_eq!(origin.binds, "endpoint.origin");
+    assert!(!origin.secret, "an origin is public connection metadata");
+
+    let field = connector
+        .config
+        .iter()
+        .find(|field| field.binds == format!("credential.{TOKEN}"))
+        .expect("gitlab declares its personal access token field");
     assert!(!field.label.is_empty(), "a config field must be renderable");
     assert!(!field.help.is_empty(), "a config field must be renderable");
     assert_eq!(field.binds, format!("credential.{TOKEN}"));

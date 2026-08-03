@@ -67,6 +67,14 @@ fn configuration() -> Configuration {
                 Some(credential) => {
                     values.with_username(TENANT, entry.provider, entry.service, credential, "acme")
                 }
+                None if endpoint_format(entry, variable) == Some("origin") => values
+                    .with_approved_endpoint(
+                        TENANT,
+                        entry.provider,
+                        entry.service,
+                        variable,
+                        "https://self-managed.example:8443",
+                    ),
                 None => {
                     values.with_endpoint(TENANT, entry.provider, entry.service, variable, "acme")
                 }
@@ -74,6 +82,19 @@ fn configuration() -> Configuration {
         }
     }
     Configuration::new(Arc::new(values), TENANT).expect("a valid tenant id")
+}
+
+/// The published form declaration governing one endpoint placeholder, when there is one.
+fn endpoint_format(entry: &catalog::Operation, variable: &str) -> Option<&'static str> {
+    let binding = format!("endpoint.{variable}");
+    catalog::provider(catalog::ProviderKey::id(entry.provider))
+        .and_then(|provider| {
+            provider
+                .config
+                .iter()
+                .find(|field| field.service == entry.service && field.binds == binding)
+        })
+        .map(|field| field.format)
 }
 
 /// An empty configuration port. Projection reads no *values* — only the variables an operation's
