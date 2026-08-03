@@ -17,9 +17,9 @@ host uses to execute it, without introducing a second engine trait graph.
 
 ## Acceptance
 
-- [ ] Flux 0.54.0 is verified on crates.io before any connector dependency points at it.
-- [ ] **Failing first:** moving only one authored engine pin makes the engine-line manifest test fail.
-- [ ] All six authored Flux engine requirements move together from 0.52 to 0.54; the independent
+- [x] Flux 0.54.0 is verified on crates.io before any connector dependency points at it.
+- [x] **Failing first:** moving only one authored engine pin makes the engine-line manifest test fail.
+- [x] All six authored Flux engine requirements move together from 0.52 to 0.54; the independent
       `flux-spec` line remains unchanged and `Cargo.lock` resolves exactly one engine line.
 - [ ] The complete four-crate publish closure packages and verifies with `cargo publish --dry-run`
       only; no local publish is attempted.
@@ -30,3 +30,8 @@ host uses to execute it, without introducing a second engine trait graph.
 
 - 2026-08-03: filed while Flux 0.54.0's exact-SHA binary release candidate is building; connector
   source remains on 0.52 until the registry artifacts are live.
+- 2026-08-03: crates.io publication workflow 30781537591 completed successfully and registry search
+  resolved the channel/server closure at 0.54.0 before the first manifest edit. Moving only
+  `flux-lang` to 0.54 made `every_flux_requirement_states_the_recorded_line` fail with the exact
+  0.54/0.52 mismatch; all six pins plus `ENGINE_LINE` then moved together, and all three manifest /
+  lock / spec-line tests pass with one 0.54 engine line.

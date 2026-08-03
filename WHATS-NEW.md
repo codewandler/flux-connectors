@@ -14,6 +14,13 @@
 
 ## [Unreleased]
 
+### Action needed
+
+- **Upgrade a host's Flux engine to 0.54 when adopting this release.** The connector pack and its
+  host exchange runtime objects directly, and the new generated WebSocket plans require the guarded
+  channel executor introduced on that engine line. Keeping a host on Flux 0.52 resolves two
+  incompatible engines instead of linking them.
+
 ### New
 
 - **Asterisk ARI can now deliver live events over its WebSocket.** Configure the same HTTPS

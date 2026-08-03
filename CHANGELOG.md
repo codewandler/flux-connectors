@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed — breaking for `connector-pack` consumers
+
+- **The connector runtime seam moves from Flux 0.52 to Flux 0.54** (C-493). Hosts must move their
+  engine pins with this release: the pack's generated channel plans and the guarded WebSocket
+  executor now share the same `Tool`, `System`, and result types. All six authored requirements and
+  the resolved lock move as one registry-only unit; the independent `flux-spec` line remains 1.3.
+
 ### Changed — breaking for `connector-catalog` consumers
 
 - **Generated channel bindings now expose their complete routing contract** (C-489–C-491).
