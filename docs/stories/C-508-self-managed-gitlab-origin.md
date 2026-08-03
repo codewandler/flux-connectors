@@ -2,7 +2,7 @@
 id: C-508
 title: "A GitLab connection supports an operator-approved self-managed HTTPS origin"
 pillar: Connector
-status: ready
+status: in-progress
 priority: 0
 design: docs/designs/connector-configuration.md
 epic: connector-config

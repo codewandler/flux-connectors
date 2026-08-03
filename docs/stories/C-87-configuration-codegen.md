@@ -2,7 +2,7 @@
 id: C-87
 title: Publish the configuration surface into the manifest and the catalogue
 pillar: Codegen
-status: ready
+status: in-progress
 priority: 0
 design: docs/designs/connector-configuration.md
 epic: connector-config
