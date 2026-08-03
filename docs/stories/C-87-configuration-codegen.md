@@ -3,11 +3,11 @@ id: C-87
 title: Publish the configuration surface into the manifest and the catalogue
 pillar: Codegen
 status: ready
-priority: 3
+priority: 0
 design: docs/designs/connector-configuration.md
 epic: connector-config
 areas: [connector-cli, catalog, web]
-note: "includes a BREAKING change to settle — site.rs flattens the whole OAuth2Spec to `oauth2: bool`, so a hosted product cannot build an authorize URL at all"
+note: "M1 critical: complete config/verify projection is required for UI and CLI onboarding; also includes a BREAKING change because site.rs flattens OAuth2Spec to `oauth2: bool`"
 ---
 
 # Publish the configuration surface into the manifest and the catalogue
@@ -39,6 +39,9 @@ reaches no artifact, so a product still cannot render a form without parsing pro
       is the first artifact that would let the site show more than `auth: bearer`.
 
 ## Progress
+- 2026-08-03: Raised to Milestone 1 priority. Until the complete config and `verify` projection
+  reaches consumer artifacts, neither the Exchange console nor the Flux CLI can honestly collect
+  connector settings such as a Zendesk domain or C-508's self-managed GitLab origin.
 - Not started. The IR half landed 2026-07-30 with [C-86](C-86-connector-configuration-epic.md).
 
 ## Notes
