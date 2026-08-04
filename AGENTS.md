@@ -710,9 +710,11 @@ tenants/<tenant>/<authority>[/@instances/<uuid>][/<service>]/<credential>
 
 ## Durable credential store contract
 
-`connector-secrets::FileStore` is one logical v1 store with platform-native owner-only enforcement,
-not two persistence implementations. The address format, bounded reads and writes, atomic whole-file
-replacement and `SecretBatch` all-or-nothing contract are identical on every supported platform.
+`connector-secrets::FileStore` is one logical v1/v2 store with platform-native owner-only
+enforcement, not two persistence implementations. The address format, bounded reads and writes,
+atomic whole-file replacement and `SecretBatch` all-or-nothing contract are identical on every
+supported platform. V1 remains byte-identical until transaction use; v2 couples credentials with the
+inclusive retired-generation fence and bounded prepared/terminal ledger.
 
 - **Unix and Windows prove different facts.** Unix requires the current process owner and modes
   `0700` on the state directory and `0600` on the file. Windows requires the process token's
@@ -724,6 +726,17 @@ replacement and `SecretBatch` all-or-nothing contract are identical on every sup
   the platform access controls. Unix root, Windows administrators and a copied backup are outside
   this guarantee. This backend is for one local operator and one writer; a shared or multi-operator
   deployment needs a real secret service such as Vault.
+- **One 0.20 writer holds one lifetime native lease.** Open acquires it before reading, recovery or
+  cleanup. Unix uses the owner-only one-link lease file plus a kernel lock; Windows validates the
+  owner-only protected DACL and takes the exclusive native range lock. A second 0.20 opener refuses,
+  and abrupt exit releases the lease. Released 0.19.1 did not take it: stop every legacy writer
+  before the first 0.20 open, because mixed-version concurrent writing is unsupported and an
+  already-open legacy writer can erase v2 recovery metadata.
+- **Prepared credential transactions remain provider-owned.** `PreparedSecretStore` admits one
+  invisible complete candidate, exposes only `Absent|Prepared|Committed`, fences replay through an
+  inclusive non-zero generation, and retains at most 4096 terminal outcomes until explicit owner
+  acknowledgement. Memory and file stores implement it; Vault refuses `Unsupported`. Callers never
+  emulate the port with point writes or inspect a batch's private mutations.
 - **A shared ancestor is not yours to narrow.** A store directly beneath `/tmp` or another shared
   directory is refused, but the diagnostic must never recommend changing that ancestor's mode. Use
   a conventional per-user state root or create an owner-only child directory beneath it.
@@ -917,15 +930,15 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
 
-CI keeps that complete Linux gate and adds two portability proofs for `connector-secrets` (C-509).
-The release-target matrix runs `cargo check --all-targets` for `aarch64-apple-darwin`,
-`x86_64-apple-darwin`, `aarch64-unknown-linux-gnu`, `x86_64-unknown-linux-gnu` and
-`x86_64-pc-windows-msvc`, so the public `FileStore` surface cannot disappear on one target. That
-matrix is compile evidence only. A separate `windows-latest` job runs the complete crate test suite
-natively, including durable restart/batch/failure and Windows owner/DACL fixtures; cross-compilation
-alone is never evidence that the Windows backend works. The Unix foreign-owner fixture needs
-`chown(2)`, so its own Linux CI leg runs the explicitly ignored test as root; the ordinary suite is
-not allowed to skip the only native ownership proof silently.
+CI keeps that complete Linux gate and retains a supplementary cross-compilation matrix for
+`connector-secrets`. The required evidence is the native matrix: it asserts the runtime host triple
+and runs the complete crate suite on `aarch64-apple-darwin`, `x86_64-apple-darwin`,
+`aarch64-unknown-linux-gnu`, `x86_64-unknown-linux-gnu` and `x86_64-pc-windows-msvc`. That includes
+prepared-transaction child crashes and recovery, lifetime lease processes, concurrency, migration,
+bounds and native owner/mode or owner/DACL/link refusals. The Unix foreign-owner fixtures need
+`chown(2)`, so every native Unix row runs the explicitly ignored tests as root; the ordinary suite is
+not allowed to turn the ownership proof into a silent skip. Cross-compilation is never substituted
+for native security or durability evidence.
 
 **Two Node suites are part of CI and are not part of that Rust block** —
 `crates/connectors-api/ui` (the host page) and `web/` (the public site). `ci.yml` runs them, pinned.

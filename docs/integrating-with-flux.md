@@ -88,7 +88,8 @@ the same lines as above. A host that gets its `Arc<dyn Tool>` from flux-web need
 
 | You want | Comes from |
 |---|---|
-| `CredentialRef`, `InstanceId`, `Layout`, `TenantLayout`, `TenantInstances`, `Secret`, `SecretStore`, `StoreError`, `MemoryStore`, `FileStore` (unix) | `connector_pack` — no extra dependency |
+| `CredentialRef`, `InstanceId`, `Layout`, `TenantLayout`, `TenantInstances`, `Secret`, `SecretStore`, `StoreError`, `MemoryStore`, `FileStore` | `connector_pack` — no extra dependency; `FileStore` is native on Linux, macOS and Windows |
+| `SecretBatch`, `PreparedSecretStore`, `PreparedSecretError`, `SecretTransactionGeneration`, `SecretTransactionId`, `SecretProposalDigest`, `SecretTransactionState` | `codewandler-connector-secrets` — add it |
 | `TENANTS_ROOT`, `INSTANCES_SEGMENT`, `MAX_TENANT`, `validate_tenant`, `validate_instance` | `codewandler-connector-secrets` — add it |
 | `VaultStore` | `codewandler-connector-secrets` with `features = ["vault"]` — the dependency alone is not enough |
 | `Pid`, `Gid`, `Oip` — the **identifier** half of the vocabulary | `codewandler-connector-address` — add it; it is *not* re-exported by either crate above |
@@ -105,6 +106,11 @@ compile — `no Pid in the root` — which is the check worth knowing before you
 `package ID specification 'reqwest' did not match any packages`, and the resolved graph contains no
 `rustls`, `hyper`, `native-tls` or `openssl` either. A host that wants only the trait, the addressing
 and `MemoryStore` links no HTTP stack.
+
+The durable `FileStore` takes one lifetime writer/recovery lease and supports one recoverable
+prepared credential batch. Before upgrading it, stop every 0.19.1 writer; that release predates the
+lease, so concurrent 0.19/0.20 writers are unsupported. The first transaction use migrates clean v1
+state to v2, after which a fresh 0.19.1 process refuses the unknown format.
 
 > **`codewandler-connector-spec` is no longer in the closure**
 > ([C-407](stories/C-407-extract-the-credential-address-crate.md)). The fourth crate used to be the

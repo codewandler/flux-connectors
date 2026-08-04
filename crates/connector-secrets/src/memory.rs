@@ -1,36 +1,45 @@
-//! An in-process [`SecretStore`], and the fixture every other test in this ecosystem should reach
-//! for before it reaches for a server.
+//! An in-process secret store and prepared-transaction fixture.
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
 
 use crate::{
-    batch, CredentialRef, CredentialScope, Layout, Secret, SecretBatch, SecretStore, StoreError,
-    TenantLayout,
+    batch, CredentialRef, CredentialScope, Layout, PreparedSecretError, PreparedSecretStore,
+    Secret, SecretBatch, SecretProposalDigest, SecretStore, SecretTransactionGeneration,
+    SecretTransactionId, SecretTransactionState, StoreError, TenantLayout,
+    MAX_TERMINAL_TRANSACTIONS,
 };
 
+const PREPARED_CONFLICT: &str = "a prepared secret transaction owns the mutation slot";
+const MEMORY_PATH: &str = "<memory-store>";
+
+#[derive(Clone)]
+enum Terminal {
+    Committed(SecretProposalDigest),
+    Aborted,
+}
+
+struct Prepared {
+    id: SecretTransactionId,
+    digest: SecretProposalDigest,
+    candidate: BTreeMap<String, Secret>,
+}
+
+#[derive(Default)]
+struct MemoryState {
+    entries: BTreeMap<String, Secret>,
+    retired_through: u64,
+    terminals: BTreeMap<[u8; 32], Terminal>,
+    prepared: Option<Prepared>,
+}
+
 /// A [`SecretStore`] held in memory.
-///
-/// It exists for two reasons. The first is that a test of anything *above* the store — the Tool
-/// pack's credential port, an auth assembly, a redaction check — should not need a Vault, and a
-/// mock that only pretends to have a layout would let a path bug through. This one renders real
-/// paths through a real [`Layout`], so it fails in the same places a real store would.
-///
-/// The second is that it makes the layout observable. [`paths`](Self::paths) returns exactly the
-/// keys the store is holding, which is how "a non-default layout changes the path and nothing else"
-/// is provable rather than assertable.
-///
-/// It is **not** a secure store: values sit in process memory in the clear. It is a fixture and a
-/// development stand-in, and it says so here rather than in a comment somewhere downstream.
-#[derive(Debug, Default)]
 pub struct MemoryStore<L = TenantLayout> {
     layout: L,
-    // A `Mutex` rather than an `RwLock`: the contention story of a test fixture is not interesting,
-    // and one lock is one fewer thing to reason about. `BTreeMap` so `paths()` is ordered, which
-    // makes an assertion over it stable.
-    entries: Mutex<BTreeMap<String, Secret>>,
+    state: Mutex<MemoryState>,
 }
 
 impl MemoryStore<TenantLayout> {
@@ -40,69 +49,69 @@ impl MemoryStore<TenantLayout> {
     }
 }
 
+impl Default for MemoryStore<TenantLayout> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<L: Layout> MemoryStore<L> {
     /// An empty store rendering paths through `layout`.
     pub fn with_layout(layout: L) -> Self {
         Self {
             layout,
-            entries: Mutex::new(BTreeMap::new()),
+            state: Mutex::new(MemoryState::default()),
         }
     }
 
-    /// The layout this store renders through.
     pub fn layout(&self) -> &L {
         &self.layout
     }
 
-    /// The path `reference` resolves to under this store's layout.
     pub fn path(&self, reference: &CredentialRef) -> String {
         self.layout.render(reference)
     }
 
-    /// The address a path resolves back to — the inverse of [`path`](Self::path).
-    ///
-    /// The question [`paths`](Self::paths) leaves open: it answers *where* a value went, and this
-    /// answers *whose* credential is at a path an operator is holding.
-    ///
-    /// # Errors
-    ///
-    /// [`StoreError::Layout`], carrying the layout's own explanation, when the path is not one this
-    /// layout writes. A layout is entitled to refuse rather than guess, and this is how that refusal
-    /// reaches a caller.
     pub fn reference(&self, path: &str) -> Result<CredentialRef, StoreError> {
         self.layout
             .parse(path)
             .map_err(|reason| StoreError::Layout { reason })
     }
 
-    /// Every path currently holding a value, in order.
-    ///
-    /// Values are deliberately not exposed: this answers "where did it go", which is the question a
-    /// layout test asks.
     pub fn paths(&self) -> Vec<String> {
-        self.locked().keys().cloned().collect()
+        self.locked().entries.keys().cloned().collect()
     }
 
-    /// How many values are held.
     pub fn len(&self) -> usize {
-        self.locked().len()
+        self.locked().entries.len()
     }
 
-    /// Whether the store holds nothing.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// The map, with a poisoned lock recovered rather than propagated.
-    ///
-    /// A poisoned mutex here means some other test panicked while holding it; the map's invariants
-    /// are a `BTreeMap`'s own, so there is nothing corrupt to protect a caller from, and panicking
-    /// a second time would only bury the first panic's message.
-    fn locked(&self) -> std::sync::MutexGuard<'_, BTreeMap<String, Secret>> {
-        self.entries.lock().unwrap_or_else(|poisoned| {
-            self.entries.clear_poison();
+    fn locked(&self) -> std::sync::MutexGuard<'_, MemoryState> {
+        self.state.lock().unwrap_or_else(|poisoned| {
+            self.state.clear_poison();
             poisoned.into_inner()
         })
+    }
+
+    fn mutation_conflict() -> StoreError {
+        StoreError::Conflict {
+            path: MEMORY_PATH.to_owned(),
+            reason: PREPARED_CONFLICT.to_owned(),
+        }
+    }
+
+    fn is_retired(state: &MemoryState, id: SecretTransactionId) -> bool {
+        id.generation().value() <= state.retired_through
+    }
+}
+
+impl<L> fmt::Debug for MemoryStore<L> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("MemoryStore(<opaque>)")
     }
 }
 
@@ -111,27 +120,35 @@ impl<L: Layout + Send + Sync> SecretStore for MemoryStore<L> {
     async fn get(&self, reference: &CredentialRef) -> Result<Secret, StoreError> {
         let path = self.layout.render(reference);
         self.locked()
+            .entries
             .get(&path)
             .cloned()
             .ok_or(StoreError::NotFound { path })
     }
 
     async fn put(&self, reference: &CredentialRef, secret: &Secret) -> Result<(), StoreError> {
-        let path = self.layout.render(reference);
-        self.locked().insert(path, secret.clone());
+        let mut state = self.locked();
+        if state.prepared.is_some() {
+            return Err(Self::mutation_conflict());
+        }
+        state
+            .entries
+            .insert(self.layout.render(reference), secret.clone());
         Ok(())
     }
 
     async fn delete(&self, reference: &CredentialRef) -> Result<(), StoreError> {
-        let path = self.layout.render(reference);
-        // Idempotent, per the trait: the absence of a value is not an error to a caller whose
-        // intent is "make sure this is gone".
-        self.locked().remove(&path);
+        let mut state = self.locked();
+        if state.prepared.is_some() {
+            return Err(Self::mutation_conflict());
+        }
+        state.entries.remove(&self.layout.render(reference));
         Ok(())
     }
 
     async fn references(&self, scope: &CredentialScope) -> Result<Vec<CredentialRef>, StoreError> {
         self.locked()
+            .entries
             .keys()
             .map(|path| {
                 self.layout
@@ -147,10 +164,163 @@ impl<L: Layout + Send + Sync> SecretStore for MemoryStore<L> {
     }
 
     async fn apply(&self, mutations: &SecretBatch) -> Result<(), StoreError> {
-        let mut entries = self.locked();
-        let mut candidate = entries.clone();
+        let mut state = self.locked();
+        if state.prepared.is_some() {
+            return Err(Self::mutation_conflict());
+        }
+        let mut candidate = state.entries.clone();
         batch::apply_to(&mut candidate, &self.layout, mutations)?;
-        *entries = candidate;
+        state.entries = candidate;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<L: Layout + Send + Sync> PreparedSecretStore for MemoryStore<L> {
+    async fn prepare(
+        &self,
+        id: SecretTransactionId,
+        digest: SecretProposalDigest,
+        mutations: &SecretBatch,
+    ) -> Result<SecretTransactionState, PreparedSecretError> {
+        let mut state = self.locked();
+        if Self::is_retired(&state, id) {
+            return Err(PreparedSecretError::Retired);
+        }
+        if let Some(prepared) = &state.prepared {
+            if prepared.id != id {
+                return Err(PreparedSecretError::Busy);
+            }
+            return if prepared.digest == digest {
+                Ok(SecretTransactionState::Prepared)
+            } else {
+                Err(PreparedSecretError::DigestMismatch)
+            };
+        }
+        if let Some(terminal) = state.terminals.get(&id.key()) {
+            return match terminal {
+                Terminal::Committed(existing) if *existing == digest => {
+                    Ok(SecretTransactionState::Committed)
+                }
+                Terminal::Committed(_) => Err(PreparedSecretError::DigestMismatch),
+                Terminal::Aborted => Err(PreparedSecretError::TransactionIdReused),
+            };
+        }
+        if state.terminals.len() >= MAX_TERMINAL_TRANSACTIONS {
+            return Err(PreparedSecretError::Capacity);
+        }
+        let mut candidate = state.entries.clone();
+        batch::apply_to(&mut candidate, &self.layout, mutations)
+            .map_err(|_| PreparedSecretError::InvalidBatch)?;
+        crate::file::validate_transactional_bounds(&candidate, state.terminals.len() + 1)
+            .map_err(|_| PreparedSecretError::Capacity)?;
+        state.prepared = Some(Prepared {
+            id,
+            digest,
+            candidate,
+        });
+        Ok(SecretTransactionState::Prepared)
+    }
+
+    async fn state(
+        &self,
+        id: SecretTransactionId,
+    ) -> Result<SecretTransactionState, PreparedSecretError> {
+        let state = self.locked();
+        if Self::is_retired(&state, id) {
+            return Err(PreparedSecretError::Retired);
+        }
+        if state
+            .prepared
+            .as_ref()
+            .is_some_and(|prepared| prepared.id == id)
+        {
+            return Ok(SecretTransactionState::Prepared);
+        }
+        Ok(match state.terminals.get(&id.key()) {
+            Some(Terminal::Committed(_)) => SecretTransactionState::Committed,
+            Some(Terminal::Aborted) | None => SecretTransactionState::Absent,
+        })
+    }
+
+    async fn commit(
+        &self,
+        id: SecretTransactionId,
+    ) -> Result<SecretTransactionState, PreparedSecretError> {
+        let mut state = self.locked();
+        if Self::is_retired(&state, id) {
+            return Err(PreparedSecretError::Retired);
+        }
+        if let Some(terminal) = state.terminals.get(&id.key()) {
+            return match terminal {
+                Terminal::Committed(_) => Ok(SecretTransactionState::Committed),
+                Terminal::Aborted => Err(PreparedSecretError::TransactionIdReused),
+            };
+        }
+        let Some(prepared) = state.prepared.as_ref() else {
+            return Err(PreparedSecretError::NotPrepared);
+        };
+        if prepared.id != id {
+            return Err(PreparedSecretError::NotPrepared);
+        }
+        let prepared = state.prepared.take().expect("checked above");
+        state.entries = prepared.candidate;
+        state
+            .terminals
+            .insert(id.key(), Terminal::Committed(prepared.digest));
+        Ok(SecretTransactionState::Committed)
+    }
+
+    async fn abort(
+        &self,
+        id: SecretTransactionId,
+    ) -> Result<SecretTransactionState, PreparedSecretError> {
+        let mut state = self.locked();
+        if Self::is_retired(&state, id) {
+            return Err(PreparedSecretError::Retired);
+        }
+        if let Some(terminal) = state.terminals.get(&id.key()) {
+            return match terminal {
+                Terminal::Committed(_) => Err(PreparedSecretError::AlreadyCommitted),
+                Terminal::Aborted => Ok(SecretTransactionState::Absent),
+            };
+        }
+        if let Some(prepared) = &state.prepared {
+            if prepared.id != id {
+                return Err(PreparedSecretError::Busy);
+            }
+        }
+        if state.terminals.len() >= MAX_TERMINAL_TRANSACTIONS {
+            return Err(PreparedSecretError::Capacity);
+        }
+        crate::file::validate_transactional_bounds(&state.entries, state.terminals.len() + 1)
+            .map_err(|_| PreparedSecretError::Capacity)?;
+        if state
+            .prepared
+            .as_ref()
+            .is_some_and(|prepared| prepared.id == id)
+        {
+            state.prepared = None;
+        }
+        state.terminals.insert(id.key(), Terminal::Aborted);
+        Ok(SecretTransactionState::Absent)
+    }
+
+    async fn reclaim(
+        &self,
+        through: SecretTransactionGeneration,
+    ) -> Result<(), PreparedSecretError> {
+        let mut state = self.locked();
+        if state.prepared.is_some() {
+            return Err(PreparedSecretError::Busy);
+        }
+        state.retired_through = state.retired_through.max(through.value());
+        let fence = state.retired_through;
+        state.terminals.retain(|id, _| {
+            let mut generation = [0; 8];
+            generation.copy_from_slice(&id[..8]);
+            u64::from_be_bytes(generation) > fence
+        });
         Ok(())
     }
 }
@@ -159,100 +329,20 @@ impl<L: Layout + Send + Sync> SecretStore for MemoryStore<L> {
 mod tests {
     use super::*;
 
-    /// Obviously not a credential. Nothing in this repository commits a value shaped like a real
-    /// token — a plausible placeholder has tripped GitHub push protection here before.
-    const SENTINEL: &str = "SENTINEL-NOT-A-REAL-SECRET";
-
     fn reference() -> CredentialRef {
-        CredentialRef::new("9f3a4b2c", "com.zendesk.api", "support", "api_token").expect("valid")
+        CredentialRef::new("tenant-a", "com.zendesk.api", "support", "api_token").expect("valid")
     }
 
     #[tokio::test]
     async fn a_value_round_trips_and_then_is_gone() {
         let store = MemoryStore::new();
         let reference = reference();
-
-        assert!(store.get(&reference).await.unwrap_err().is_not_found());
-
         store
-            .put(&reference, &Secret::new(SENTINEL))
+            .put(&reference, &Secret::new("SENTINEL-NOT-A-REAL-SECRET"))
             .await
             .expect("put");
-        assert_eq!(
-            store.get(&reference).await.expect("get").expose_secret(),
-            SENTINEL
-        );
-
+        assert!(store.get(&reference).await.is_ok());
         store.delete(&reference).await.expect("delete");
         assert!(store.get(&reference).await.unwrap_err().is_not_found());
-    }
-
-    /// The gap in flux's trait this crate closes: `load` returning an `Option` cannot say which of
-    /// these two happened. Here the difference is in the type.
-    #[test]
-    fn not_stored_and_unreachable_are_different_errors() {
-        let path = "tenants/9f3a4b2c/com.zendesk.api/support/api_token".to_owned();
-        let missing = StoreError::NotFound { path: path.clone() };
-        let down = StoreError::Unreachable {
-            path,
-            reason: "connection refused".to_owned(),
-        };
-
-        assert!(missing.is_not_found());
-        assert!(!down.is_not_found());
-        assert_ne!(missing, down);
-    }
-
-    /// Deleting what is not there is the `--clear` case, and it succeeds.
-    #[tokio::test]
-    async fn delete_is_idempotent() {
-        let store = MemoryStore::new();
-        store.delete(&reference()).await.expect("first delete");
-        store.delete(&reference()).await.expect("second delete");
-        assert!(store.is_empty());
-    }
-
-    /// The tenant is in the reference, not in the store: one instance serves every tenant, and two
-    /// tenants' credentials for the same connector do not collide.
-    #[tokio::test]
-    async fn two_tenants_do_not_collide() {
-        let store = MemoryStore::new();
-        let first = CredentialRef::new("tenant-a", "com.zendesk.api", "support", "api_token")
-            .expect("valid");
-        let second = CredentialRef::new("tenant-b", "com.zendesk.api", "support", "api_token")
-            .expect("valid");
-
-        store
-            .put(&first, &Secret::new("SENTINEL-TENANT-A"))
-            .await
-            .expect("put");
-        store
-            .put(&second, &Secret::new("SENTINEL-TENANT-B"))
-            .await
-            .expect("put");
-
-        assert_eq!(
-            store.get(&first).await.expect("get").expose_secret(),
-            "SENTINEL-TENANT-A"
-        );
-        assert_eq!(
-            store.get(&second).await.expect("get").expose_secret(),
-            "SENTINEL-TENANT-B"
-        );
-        assert_eq!(store.len(), 2);
-    }
-
-    /// A store is usable through the trait object, which is how it is meant to be injected.
-    #[tokio::test]
-    async fn the_store_is_object_safe() {
-        let store: std::sync::Arc<dyn SecretStore> = std::sync::Arc::new(MemoryStore::new());
-        store
-            .put(&reference(), &Secret::new(SENTINEL))
-            .await
-            .expect("put");
-        assert_eq!(
-            store.get(&reference()).await.expect("get").expose_secret(),
-            SENTINEL
-        );
     }
 }

@@ -14,6 +14,21 @@
 
 ## [Unreleased]
 
+### Action needed
+
+- **Stop every process using the old local credential store before upgrading.** The new release
+  prevents two current processes from writing one store, but older processes do not participate in
+  that protection. Quiesce every 0.19.1 process before the first 0.20 open: an already-open legacy
+  process can rewrite its cached v1 image and erase v2 recovery state. Once a transaction migrates
+  the file, a newly started 0.19.1 process safely refuses its newer format.
+
+### New
+
+- **Hosts can recover credential changes coordinated with their own metadata after a crash.** One
+  complete credential update can be prepared invisibly, committed atomically or abandoned without
+  resurrection. Explicit generation retirement keeps recovery history bounded, and the durable
+  local store rejects a second writer for its lifetime.
+
 ## [0.19.1] — 2026-08-04
 
 ### Fixed

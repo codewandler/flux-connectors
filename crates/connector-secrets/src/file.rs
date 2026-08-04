@@ -27,19 +27,24 @@
 //!
 //! # Concurrency
 //!
-//! One process. The map is held in memory and every mutation rewrites the whole file, so two
-//! processes pointed at one path will each overwrite the other's last write. That is a correct trade
-//! for the host this exists for — a single-operator deployment is one process — and it is stated
-//! rather than defended: a store meant for several writers wants a real backend, which is what the
-//! [`SecretStore`] port is for.
+//! One active 0.20 writer. [`FileStore::open`] takes a non-blocking exclusive kernel lease before it
+//! reads, recovers or cleans state and holds the lease for the store lifetime. Released 0.19.1 did
+//! not take this lease, so every legacy writer must be stopped before the first 0.20 open; concurrent
+//! mixed-version writing is unsupported. A store meant for several writers wants a real backend,
+//! which is what the [`SecretStore`] port is for.
 //!
-//! # The format
+//! # The formats
 //!
 //! ```text
 //! # codewandler-connector-secrets file store, v1
 //! tenants/dev-local/com.anthropic.api/api_key 53454e54494e454c
 //! tenants/dev-local/com.zendesk.api/support/api_token 53454e54494e454c
 //! ```
+//!
+//! Clean v1 remains byte-identical until the first prepared-transaction operation. V2 adds one
+//! inclusive retired-generation fence and a canonical bounded transaction ledger ahead of the same
+//! credential-entry grammar. A fixed owner-only sibling stage carries the complete next image while
+//! one transaction is prepared. A fresh 0.19.1 reader refuses v2 by its existing version check.
 //!
 //! One entry per line, `<address> <hex of the value>`, sorted. A blank line and a `#` comment are
 //! skipped. The separator is a space because **no address can contain one** — every segment of a
@@ -59,6 +64,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use async_trait::async_trait;
+use fs2::FileExt as _;
 
 use crate::{
     batch, CredentialRef, CredentialScope, Layout, Secret, SecretBatch, SecretStore, StoreError,
@@ -71,6 +77,7 @@ mod platform;
 #[cfg(windows)]
 #[path = "file/windows.rs"]
 mod platform;
+mod prepared;
 
 #[cfg(not(any(unix, windows)))]
 compile_error!("FileStore needs a platform-native owner-only filesystem implementation");
@@ -123,8 +130,20 @@ pub struct FileStore<L = TenantLayout> {
     // is sorted and a diff between two versions of it is readable — and so `paths()` is ordered, the
     // same property `MemoryStore` offers.
     entries: Mutex<BTreeMap<String, Secret>>,
+    transactions: Mutex<prepared::FileTransactions>,
+    // The kernel releases this non-blocking exclusive lease if the process exits abruptly.
+    _lease: File,
     #[cfg(test)]
     fail_next_write: std::sync::atomic::AtomicBool,
+}
+
+impl<L> Drop for FileStore<L> {
+    fn drop(&mut self) {
+        // Closing the descriptor releases a kernel lock, including after abrupt process exit. The
+        // explicit unlock makes ordinary in-process reopen deterministic before field destruction
+        // completes and is deliberately best effort during Drop.
+        let _ = fs2::FileExt::unlock(&self._lease);
+    }
 }
 
 impl FileStore<TenantLayout> {
@@ -163,18 +182,44 @@ impl<L: Layout> FileStore<L> {
             platform::ensure_directory(directory)?;
         }
 
-        let (entries, existed) = match platform::open_existing(&path)? {
+        let lease_path = fixed_sibling(&path, "lease");
+        let lease = platform::open_lease(&lease_path, &path)?;
+        lease
+            .try_lock_exclusive()
+            .map_err(|_| StoreError::Conflict {
+                path: path.display().to_string(),
+                reason: "another FileStore holds the writer/recovery lease".to_owned(),
+            })?;
+
+        let (entries, mut transactions, existed) = match platform::open_existing(&path)? {
             Some(mut file) => {
                 let contents = read_bounded(&mut file, &path)?;
-                (parse(&contents, &layout, &path)?, true)
+                if contents.lines().next() == Some(prepared::HEADER_V2) {
+                    let (entries, transactions) = prepared::parse_v2(&contents, &layout, &path)?;
+                    (entries, transactions, true)
+                } else {
+                    (
+                        parse(&contents, &layout, &path)?,
+                        prepared::FileTransactions::default(),
+                        true,
+                    )
+                }
             }
-            None => (BTreeMap::new(), false),
+            None => (
+                BTreeMap::new(),
+                prepared::FileTransactions::default(),
+                false,
+            ),
         };
+
+        recover_stage(&path, &layout, &mut transactions)?;
 
         let store = Self {
             layout,
             path,
             entries: Mutex::new(entries),
+            transactions: Mutex::new(transactions),
+            _lease: lease,
             #[cfg(test)]
             fail_next_write: std::sync::atomic::AtomicBool::new(false),
         };
@@ -297,6 +342,13 @@ impl<L: Layout> FileStore<L> {
         })
     }
 
+    fn locked_transactions(&self) -> std::sync::MutexGuard<'_, prepared::FileTransactions> {
+        self.transactions.lock().unwrap_or_else(|poisoned| {
+            self.transactions.clear_poison();
+            poisoned.into_inner()
+        })
+    }
+
     /// Rewrite the whole file, atomically.
     ///
     /// **Atomic by the platform replacement primitive**, which is the only way to get it: a file
@@ -310,6 +362,47 @@ impl<L: Layout> FileStore<L> {
     /// another one. It is also created with `create_new`, so this never writes through a name
     /// somebody else placed there.
     fn write_through(&self, entries: &BTreeMap<String, Secret>) -> Result<(), StoreError> {
+        let encoded_size =
+            validate_candidate_bounds(entries).map_err(|reason| StoreError::Backend {
+                path: self.path.display().to_string(),
+                reason,
+            })?;
+        let mut rendered = String::with_capacity(encoded_size);
+        rendered.push_str(HEADER);
+        rendered.push('\n');
+        for (address, secret) in entries {
+            rendered.push_str(address);
+            rendered.push(' ');
+            rendered.push_str(&hex_encode(secret.expose_secret().as_bytes()));
+            rendered.push('\n');
+        }
+        self.write_rendered_to(&self.path, &rendered, false)
+    }
+
+    fn write_live(
+        &self,
+        entries: &BTreeMap<String, Secret>,
+        transactions: &prepared::FileTransactions,
+    ) -> Result<(), StoreError> {
+        if transactions.version_two {
+            let rendered = prepared::encode_v2(entries, transactions).map_err(|reason| {
+                StoreError::Backend {
+                    path: self.path.display().to_string(),
+                    reason,
+                }
+            })?;
+            self.write_rendered_to(&self.path, &rendered, false)
+        } else {
+            self.write_through(entries)
+        }
+    }
+
+    fn write_rendered_to(
+        &self,
+        destination: &Path,
+        rendered: &str,
+        require_directory_sync: bool,
+    ) -> Result<(), StoreError> {
         let directory = self
             .path
             .parent()
@@ -317,7 +410,7 @@ impl<L: Layout> FileStore<L> {
             .unwrap_or_else(|| Path::new("."));
         let temporary = directory.join(format!(
             ".{}.{}.{}.tmp",
-            self.path
+            destination
                 .file_name()
                 .and_then(|name| name.to_str())
                 .unwrap_or("credentials"),
@@ -329,8 +422,9 @@ impl<L: Layout> FileStore<L> {
         // Refuse a destination widened or replaced after this store was opened before candidate
         // bytes are even rendered, much less written to a temporary. `replace` repeats the check
         // immediately before the atomic operation to cover the intervening race.
-        platform::validate_destination(&self.path)?;
-        let result = self.write_temporary(&temporary, entries);
+        platform::validate_destination(destination)?;
+        let result =
+            self.write_temporary(&temporary, destination, rendered, require_directory_sync);
         if result.is_err() {
             // Best effort: the write already failed, and a failure to clean up after it is not the
             // error worth reporting.
@@ -344,64 +438,19 @@ impl<L: Layout> FileStore<L> {
     fn write_temporary(
         &self,
         temporary: &Path,
-        entries: &BTreeMap<String, Secret>,
+        destination: &Path,
+        rendered: &str,
+        require_directory_sync: bool,
     ) -> Result<(), StoreError> {
-        if entries.len() > MAX_ENTRIES {
-            return Err(StoreError::Backend {
-                path: self.path.display().to_string(),
-                reason: format!(
-                    "the store would contain {} entries, exceeding the {MAX_ENTRIES}-entry limit",
-                    entries.len()
-                ),
-            });
-        }
-        if entries
-            .values()
-            .any(|secret| secret.expose_secret().len() > MAX_VALUE_BYTES)
-        {
-            return Err(StoreError::Backend {
-                path: self.path.display().to_string(),
-                reason: format!(
-                    "a credential value exceeds the {MAX_VALUE_BYTES}-byte value limit; the value \
-                     and its address are omitted"
-                ),
-            });
-        }
-        let encoded_size = entries
-            .iter()
-            .try_fold(HEADER.len() + 1, |size, (address, secret)| {
-                let value_len = secret.expose_secret().len();
-                size.checked_add(address.len())?
-                    .checked_add(1)?
-                    .checked_add(value_len.checked_mul(2)?)?
-                    .checked_add(1)
-            });
-        let Some(encoded_size) = encoded_size.filter(|size| *size <= MAX_FILE_BYTES) else {
-            return Err(StoreError::Backend {
-                path: self.path.display().to_string(),
-                reason: format!(
-                    "the encoded store would exceed the {MAX_FILE_BYTES}-byte limit; refusing the \
-                     whole mutation rather than allocating or writing a partial file"
-                ),
-            });
-        };
-
-        let mut rendered = String::with_capacity(encoded_size);
-        rendered.push_str(HEADER);
-        rendered.push('\n');
-        for (address, secret) in entries {
-            rendered.push_str(address);
-            rendered.push(' ');
-            rendered.push_str(&hex_encode(secret.expose_secret().as_bytes()));
-            rendered.push('\n');
-        }
-
         let mut file = platform::create_new(temporary, &self.path)?;
+        crash_failpoint(destination, &self.path, "create");
         file.write_all(rendered.as_bytes())
             .map_err(|error| unreachable(&self.path, &error))?;
+        crash_failpoint(destination, &self.path, "write");
         // Without this the rename can land before the bytes do, and a power cut leaves a file that
         // is present, correctly named, and empty.
         platform::flush(&file, &self.path)?;
+        crash_failpoint(destination, &self.path, "flush");
         drop(file);
 
         #[cfg(test)]
@@ -412,18 +461,80 @@ impl<L: Layout> FileStore<L> {
             });
         }
 
-        platform::replace(temporary, &self.path)?;
+        platform::replace(temporary, destination)?;
+        crash_failpoint(destination, &self.path, "replace");
 
         // The rename itself is a directory operation, so durability of *it* needs the directory
-        // flushed. Best effort: a filesystem that refuses to open a directory read-only is not a
-        // reason to report the write as failed, since it has already succeeded as far as any reader
-        // is concerned.
+        // flushed. Prepared transactions require that proof before acknowledging a transition. The
+        // pre-existing point-write contract keeps its best-effort behaviour because an error after
+        // replacement would make its in-memory rollback disagree with the durable file.
         if let Some(directory) = temporary.parent() {
-            platform::sync_directory(directory);
+            let synced = platform::sync_directory(directory);
+            if require_directory_sync {
+                synced?;
+            }
         }
+        crash_failpoint(destination, &self.path, "directory-sync");
 
         Ok(())
     }
+}
+
+pub(crate) fn validate_candidate_bounds(
+    entries: &BTreeMap<String, Secret>,
+) -> Result<usize, String> {
+    if entries.len() > MAX_ENTRIES {
+        return Err(format!(
+            "the store would contain {} entries, exceeding the {MAX_ENTRIES}-entry limit",
+            entries.len()
+        ));
+    }
+    if entries
+        .values()
+        .any(|secret| secret.expose_secret().len() > MAX_VALUE_BYTES)
+    {
+        return Err(format!(
+            "a credential value exceeds the {MAX_VALUE_BYTES}-byte value limit; the value and its \
+             address are omitted"
+        ));
+    }
+    let encoded_size = entries
+        .iter()
+        .try_fold(HEADER.len() + 1, |size, (address, secret)| {
+            let value_len = secret.expose_secret().len();
+            size.checked_add(address.len())?
+                .checked_add(1)?
+                .checked_add(value_len.checked_mul(2)?)?
+                .checked_add(1)
+        });
+    encoded_size
+        .filter(|size| *size <= MAX_FILE_BYTES)
+        .ok_or_else(|| {
+            format!(
+                "the encoded store would exceed the {MAX_FILE_BYTES}-byte limit; refusing the whole \
+                 mutation rather than allocating or writing a partial file"
+            )
+        })
+}
+
+pub(crate) fn validate_transactional_bounds(
+    entries: &BTreeMap<String, Secret>,
+    terminal_records_after_decision: usize,
+) -> Result<(), String> {
+    let credential_bytes = validate_candidate_bounds(entries)?;
+    // The committed form is the longest record grammar. Reserve one full line per terminal record,
+    // plus the prepared record that successful prepare must be able to turn into a terminal without
+    // discovering capacity after the coordinator's decision.
+    const MAX_TRANSACTION_LINE_BYTES: usize = 160;
+    let ledger_bytes = terminal_records_after_decision
+        .checked_mul(MAX_TRANSACTION_LINE_BYTES)
+        .and_then(|size| size.checked_add(prepared::HEADER_V2.len() + 1 + 36))
+        .ok_or_else(|| "the transaction ledger size overflowed".to_owned())?;
+    credential_bytes
+        .checked_add(ledger_bytes)
+        .filter(|size| *size <= MAX_FILE_BYTES)
+        .map(|_| ())
+        .ok_or_else(|| format!("the encoded store would exceed the {MAX_FILE_BYTES}-byte limit"))
 }
 
 #[async_trait]
@@ -438,11 +549,15 @@ impl<L: Layout + Send + Sync> SecretStore for FileStore<L> {
 
     async fn put(&self, reference: &CredentialRef, secret: &Secret) -> Result<(), StoreError> {
         let address = self.layout.render(reference);
+        let transactions = self.locked_transactions();
+        if transactions.prepared().is_some() {
+            return Err(prepared_conflict(&self.path));
+        }
         let mut entries = self.locked();
         let replaced = entries.insert(address.clone(), secret.clone());
         // Write while still holding the lock, so two concurrent writers cannot interleave a map
         // mutation with the other's file rewrite and persist a state neither of them held.
-        if let Err(error) = self.write_through(&entries) {
+        if let Err(error) = self.write_live(&entries, &transactions) {
             // The file is the store. A value that reached the map but not the disk would be
             // resolvable until the next restart and gone after it, which is a worse failure than
             // refusing — so the map is put back the way it was and the caller is told.
@@ -457,12 +572,16 @@ impl<L: Layout + Send + Sync> SecretStore for FileStore<L> {
 
     async fn delete(&self, reference: &CredentialRef) -> Result<(), StoreError> {
         let address = self.layout.render(reference);
+        let transactions = self.locked_transactions();
+        if transactions.prepared().is_some() {
+            return Err(prepared_conflict(&self.path));
+        }
         let mut entries = self.locked();
         // Idempotent, per the trait.
         let Some(previous) = entries.remove(&address) else {
             return Ok(());
         };
-        if let Err(error) = self.write_through(&entries) {
+        if let Err(error) = self.write_live(&entries, &transactions) {
             entries.insert(address, previous);
             return Err(error);
         }
@@ -486,12 +605,16 @@ impl<L: Layout + Send + Sync> SecretStore for FileStore<L> {
     }
 
     async fn apply(&self, mutations: &SecretBatch) -> Result<(), StoreError> {
+        let transactions = self.locked_transactions();
+        if transactions.prepared().is_some() {
+            return Err(prepared_conflict(&self.path));
+        }
         let mut entries = self.locked();
         let mut candidate = entries.clone();
         batch::apply_to(&mut candidate, &self.layout, mutations)?;
         // Persist the complete candidate before changing the in-process view. A write failure leaves
         // both representations at the old state, matching the point methods' rollback guarantee.
-        self.write_through(&candidate)?;
+        self.write_live(&candidate, &transactions)?;
         *entries = candidate;
         Ok(())
     }
@@ -501,16 +624,7 @@ impl<L: Layout + Send + Sync> SecretStore for FileStore<L> {
 /// every key, and C-159 is this repository's precedent for a derived rendering becoming the leak.
 impl<L> fmt::Debug for FileStore<L> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let held: Box<dyn fmt::Debug> = match self.entries.try_lock() {
-            Ok(entries) => Box::new(entries.len()),
-            // Not worth deadlocking a `{:?}` over.
-            Err(_) => Box::new("<locked>"),
-        };
-        formatter
-            .debug_struct("FileStore")
-            .field("path", &self.path)
-            .field("entries", &held)
-            .finish()
+        formatter.write_str("FileStore(<opaque>)")
     }
 }
 
@@ -524,6 +638,126 @@ pub(super) fn unreachable(path: &Path, error: &std::io::Error) -> StoreError {
         path: path.display().to_string(),
         reason: error.to_string(),
     }
+}
+
+fn prepared_conflict(path: &Path) -> StoreError {
+    StoreError::Conflict {
+        path: path.display().to_string(),
+        reason: "a prepared secret transaction owns the mutation slot".to_owned(),
+    }
+}
+
+fn fixed_sibling(store: &Path, suffix: &str) -> PathBuf {
+    let directory = store
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let name = store
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("credentials");
+    directory.join(format!(".{name}.{suffix}"))
+}
+
+fn remove_fixed(path: &Path, store: &Path) -> Result<(), StoreError> {
+    let Some(file) = platform::open_existing(path)? else {
+        return Ok(());
+    };
+    drop(file);
+    std::fs::remove_file(path).map_err(|error| unreachable(store, &error))?;
+    if let Some(directory) = path.parent() {
+        platform::sync_directory(directory)?;
+    }
+    crash_failpoint(path, store, "cleanup");
+    Ok(())
+}
+
+#[cfg(test)]
+fn crash_failpoint(destination: &Path, store: &Path, boundary: &str) {
+    let target = if destination == fixed_sibling(store, "prepared") {
+        "stage"
+    } else {
+        "live"
+    };
+    let expected = format!("{target}:{boundary}");
+    if std::env::var("CONNECTOR_SECRETS_CRASH_AT").ok().as_deref() == Some(expected.as_str()) {
+        std::process::abort();
+    }
+}
+
+#[cfg(not(test))]
+fn crash_failpoint(_destination: &Path, _store: &Path, _boundary: &str) {}
+
+fn recover_stage<L: Layout>(
+    store: &Path,
+    layout: &L,
+    live: &mut prepared::FileTransactions,
+) -> Result<(), StoreError> {
+    let stage_path = fixed_sibling(store, "prepared");
+    let Some(mut stage_file) = platform::open_existing(&stage_path)? else {
+        if live.prepared().is_some() {
+            return Err(StoreError::Backend {
+                path: store.display().to_string(),
+                reason: "the live store is prepared but its complete fixed stage is absent"
+                    .to_owned(),
+            });
+        }
+        return Ok(());
+    };
+    let stage_contents = read_bounded(&mut stage_file, &stage_path)?;
+    let (stage_entries, stage) = prepared::parse_v2(&stage_contents, layout, &stage_path)?;
+    if stage.prepared().is_some() || stage.retired_through != live.retired_through {
+        return Err(StoreError::Backend {
+            path: store.display().to_string(),
+            reason: "the fixed stage does not match the live transaction ledger".to_owned(),
+        });
+    }
+
+    if let Some((id, digest)) = live.prepared() {
+        let mut expected = live.records.clone();
+        expected.insert(id.key(), prepared::FileRecord::Committed(digest));
+        if stage.records != expected {
+            return Err(StoreError::Backend {
+                path: store.display().to_string(),
+                reason: "the fixed stage does not match the live prepared record".to_owned(),
+            });
+        }
+        live.candidate = Some(prepared::Candidate {
+            id,
+            digest,
+            entries: stage_entries,
+        });
+        return Ok(());
+    }
+
+    let mut differing = stage
+        .records
+        .keys()
+        .chain(live.records.keys())
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    differing.retain(|id| stage.records.get(id) != live.records.get(id));
+    let differing = differing.into_iter().collect::<Vec<_>>();
+    let cleanup_only = match differing.as_slice() {
+        [] => true,
+        [id] => matches!(
+            (stage.records.get(id), live.records.get(id)),
+            (
+                Some(prepared::FileRecord::Committed(_)),
+                None | Some(prepared::FileRecord::Aborted)
+            )
+        ),
+        _ => false,
+    };
+    if !cleanup_only {
+        return Err(StoreError::Backend {
+            path: store.display().to_string(),
+            reason:
+                "the leftover fixed stage has no unambiguous recovery relation to the live store"
+                    .to_owned(),
+        });
+    }
+    remove_fixed(&stage_path, store)
 }
 
 fn read_bounded(file: &mut File, path: &Path) -> Result<String, StoreError> {
@@ -793,6 +1027,7 @@ mod tests {
         );
 
         reopened.delete(&reference()).await.expect("delete");
+        drop(reopened);
         let again = FileStore::open(&path).expect("reopen");
         assert!(again.get(&reference()).await.unwrap_err().is_not_found());
     }
@@ -952,13 +1187,16 @@ mod tests {
     fn a_shared_parent_refusal_recommends_an_owner_only_child_not_chmodding_the_parent() {
         use std::os::unix::fs::MetadataExt as _;
 
-        let path = std::env::temp_dir().join(format!(
-            "connector-secrets-shared-parent-{}-{}",
-            std::process::id(),
-            NEXT_TEMPORARY.fetch_add(1, Ordering::Relaxed)
-        ));
-        let parent = path.parent().expect("a parent");
-        let before = std::fs::symlink_metadata(parent).expect("inspect shared parent");
+        // `std::env::temp_dir()` is a genuinely shared 01777 directory on Linux, but on macOS it
+        // normally resolves to a private per-user directory. Construct the unsafe direct parent so
+        // this test proves the security predicate instead of assuming a platform's temp layout.
+        let scratch = Scratch::new("shared-parent-refusal");
+        let parent = scratch.0.join("shared");
+        std::fs::create_dir_all(&parent).expect("create deliberately shared parent");
+        std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o777))
+            .expect("make the direct parent non-owner-only");
+        let path = parent.join("credentials.store");
+        let before = std::fs::symlink_metadata(&parent).expect("inspect shared parent");
         let snapshot = (
             before.mode(),
             before.uid(),
@@ -977,7 +1215,7 @@ mod tests {
         assert!(!message.contains(SENTINEL), "{message}");
         assert!(!path.exists(), "a refusal must not create the store");
 
-        let after = std::fs::symlink_metadata(parent).expect("reinspect shared parent");
+        let after = std::fs::symlink_metadata(&parent).expect("reinspect shared parent");
         assert_eq!(
             snapshot,
             (
@@ -1064,17 +1302,17 @@ mod tests {
         std::fs::write(
             &path,
             format!(
-                "{VERSION_PREFIX}2\ntenants/a/com.acme.api/token {}\n",
+                "{VERSION_PREFIX}3\ntenants/a/com.acme.api/token {}\n",
                 hex_encode(SENTINEL.as_bytes())
             ),
         )
-        .expect("write a v2 file");
+        .expect("write a v3 file");
 
-        let error = FileStore::open(&path).expect_err("a v2 file must not load as v1");
+        let error = FileStore::open(&path).expect_err("a v3 file must not load as v1 or v2");
         let message = error.to_string();
         assert!(matches!(error, StoreError::Backend { .. }), "{error:?}");
         assert!(
-            message.contains("\"2\""),
+            message.contains("\"3\""),
             "the refusal must name it: {message}"
         );
         assert!(!message.contains(SENTINEL));
@@ -1264,12 +1502,13 @@ mod tests {
             .expect("read the directory")
             .filter_map(Result::ok)
             .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .filter(|name| name != "credentials")
+            .filter(|name| name != "credentials" && name != ".credentials.lease")
             .collect();
         assert!(
             leftovers.is_empty(),
             "the directory holds files the store did not mean to leave: {leftovers:?}"
         );
+        drop(store);
         assert_eq!(FileStore::open(&path).expect("reopen").len(), 8);
     }
 
@@ -1962,5 +2201,420 @@ mod portable_tests {
         let message = error.to_string();
         assert!(message.contains(&MAX_VALUE_BYTES.to_string()), "{message}");
         assert!(!message.contains(&"41".repeat(64)), "{message}");
+    }
+}
+
+#[cfg(test)]
+mod transaction_crash_tests {
+    use super::*;
+    use crate::{
+        CredentialScope, PreparedSecretError, PreparedSecretStore, SecretProposalDigest,
+        SecretTransactionGeneration, SecretTransactionId, SecretTransactionState,
+    };
+    use std::process::{Command, Stdio};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{Duration, Instant};
+
+    const OLD: &str = "SENTINEL-NOT-A-REAL-SECRET-crash-old";
+    const NEW: &str = "SENTINEL-NOT-A-REAL-SECRET-crash-new";
+
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(label: &str) -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "connector-secrets-transaction-{label}-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            let _ = std::fs::remove_dir_all(&path);
+            Self(path)
+        }
+
+        fn store(&self) -> PathBuf {
+            self.0.join("store").join("credentials")
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn generation() -> SecretTransactionGeneration {
+        SecretTransactionGeneration::from_protocol_bytes([0, 0, 0, 0, 0, 0, 0, 1])
+            .expect("non-zero")
+    }
+
+    fn id() -> SecretTransactionId {
+        SecretTransactionId::new(generation(), [0x51; 24])
+    }
+
+    fn digest() -> SecretProposalDigest {
+        SecretProposalDigest::from_protocol_bytes([0x52; 32])
+    }
+
+    fn reference() -> CredentialRef {
+        CredentialRef::new("tenant-a", "com.acme.api", "default", "token").expect("valid")
+    }
+
+    fn batch() -> SecretBatch {
+        let reference = reference();
+        let mut batch = SecretBatch::new(
+            CredentialScope::new(reference.tenant(), reference.authority()).expect("scope"),
+        );
+        batch.put(reference, Secret::new(NEW)).expect("mutation");
+        batch
+    }
+
+    fn released_v0_19_1_accepts(contents: &str) -> bool {
+        // This is the released v0.19.1 parser's version gate: any version line other than v1 is a
+        // hard refusal. Keep the fixture small so it proves the upgrade boundary, not a second
+        // implementation of the legacy store.
+        !contents.lines().any(|line| {
+            line.strip_prefix(VERSION_PREFIX)
+                .is_some_and(|version| version != VERSION)
+        })
+    }
+
+    fn run(operation: &str, store: &Path) {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("runtime");
+        runtime.block_on(async {
+            let store = FileStore::open(store).expect("child open");
+            match operation {
+                "prepare" => {
+                    let _ = store.prepare(id(), digest(), &batch()).await;
+                }
+                "commit" => {
+                    let _ = store.commit(id()).await;
+                }
+                "abort" => {
+                    let _ = store.abort(id()).await;
+                }
+                "reclaim" => {
+                    let _ = store.reclaim(generation()).await;
+                }
+                _ => panic!("unknown child operation"),
+            }
+        });
+        panic!("the configured crash boundary was not reached");
+    }
+
+    #[test]
+    fn prepared_crash_child() {
+        let Ok(operation) = std::env::var("CONNECTOR_SECRETS_CRASH_CHILD") else {
+            return;
+        };
+        let store = PathBuf::from(std::env::var_os("CONNECTOR_SECRETS_CRASH_STORE").expect("path"));
+        run(&operation, &store);
+    }
+
+    #[test]
+    fn lease_child() {
+        let Ok(mode) = std::env::var("CONNECTOR_SECRETS_LEASE_CHILD") else {
+            return;
+        };
+        let store = PathBuf::from(std::env::var_os("CONNECTOR_SECRETS_LEASE_STORE").expect("path"));
+        match mode.as_str() {
+            "hold" => {
+                let _store = FileStore::open(&store).expect("holder open");
+                let ready = std::env::var_os("CONNECTOR_SECRETS_LEASE_READY").expect("ready path");
+                std::fs::write(ready, b"ready").expect("signal ready");
+                std::thread::sleep(Duration::from_secs(30));
+            }
+            "probe" => match FileStore::open(&store) {
+                Ok(_) => std::process::exit(0),
+                Err(StoreError::Conflict { .. }) => std::process::exit(42),
+                Err(_) => std::process::exit(43),
+            },
+            _ => panic!("unknown lease child mode"),
+        }
+    }
+
+    #[test]
+    fn legacy_writer_child() {
+        if std::env::var_os("CONNECTOR_SECRETS_LEGACY_CHILD").is_none() {
+            return;
+        }
+        let store = PathBuf::from(
+            std::env::var_os("CONNECTOR_SECRETS_LEGACY_STORE").expect("legacy store path"),
+        );
+        let ready = PathBuf::from(
+            std::env::var_os("CONNECTOR_SECRETS_LEGACY_READY").expect("legacy ready path"),
+        );
+        let release = PathBuf::from(
+            std::env::var_os("CONNECTOR_SECRETS_LEGACY_RELEASE").expect("legacy release path"),
+        );
+        let opened = std::fs::read_to_string(&store).expect("legacy open");
+        assert!(released_v0_19_1_accepts(&opened), "fixture must open v1");
+        std::fs::write(&ready, b"ready").expect("signal legacy open");
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !release.exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(release.exists(), "legacy writer was not released");
+        // Released 0.19.1 held this parsed v1 image in memory and rewrote it wholesale for every
+        // point mutation. Reinstalling the bytes it opened models the unsafe stale-writer edge
+        // without teaching this fixture a second credential-address encoder.
+        std::fs::write(&store, opened).expect("legacy v1 rewrite");
+    }
+
+    #[test]
+    fn every_durable_transaction_boundary_recovers_one_complete_state() {
+        let cases: &[(&str, &[&str])] = &[
+            (
+                "prepare",
+                &[
+                    "stage:create",
+                    "stage:write",
+                    "stage:flush",
+                    "stage:replace",
+                    "stage:directory-sync",
+                    "live:create",
+                    "live:write",
+                    "live:flush",
+                    "live:replace",
+                    "live:directory-sync",
+                ],
+            ),
+            (
+                "commit",
+                &[
+                    "live:create",
+                    "live:write",
+                    "live:flush",
+                    "live:replace",
+                    "live:directory-sync",
+                    "stage:cleanup",
+                ],
+            ),
+            (
+                "abort",
+                &[
+                    "live:create",
+                    "live:write",
+                    "live:flush",
+                    "live:replace",
+                    "live:directory-sync",
+                    "stage:cleanup",
+                ],
+            ),
+            (
+                "reclaim",
+                &[
+                    "live:create",
+                    "live:write",
+                    "live:flush",
+                    "live:replace",
+                    "live:directory-sync",
+                ],
+            ),
+        ];
+
+        for (operation, boundaries) in cases {
+            for boundary in *boundaries {
+                let scratch = Scratch::new(&format!(
+                    "crash-{}-{}",
+                    operation,
+                    boundary.replace(':', "-")
+                ));
+                let path = scratch.store();
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .expect("runtime");
+                runtime.block_on(async {
+                    let store = FileStore::open(&path).expect("setup open");
+                    store
+                        .put(&reference(), &Secret::new(OLD))
+                        .await
+                        .expect("seed");
+                    if matches!(*operation, "commit" | "abort") {
+                        store
+                            .prepare(id(), digest(), &batch())
+                            .await
+                            .expect("prepare");
+                    } else if *operation == "reclaim" {
+                        store.abort(id()).await.expect("terminal tombstone");
+                    }
+                });
+
+                let status = Command::new(std::env::current_exe().expect("test executable"))
+                    .arg("--exact")
+                    .arg("file::transaction_crash_tests::prepared_crash_child")
+                    .arg("--nocapture")
+                    .env("CONNECTOR_SECRETS_CRASH_CHILD", operation)
+                    .env("CONNECTOR_SECRETS_CRASH_STORE", &path)
+                    .env("CONNECTOR_SECRETS_CRASH_AT", boundary)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                    .expect("spawn crash child");
+                assert!(!status.success(), "{operation} did not crash at {boundary}");
+
+                runtime.block_on(async {
+                    let recovered = FileStore::open(&path).unwrap_or_else(|error| {
+                        panic!("{operation}/{boundary} did not recover: {error}")
+                    });
+                    let transaction = recovered.state(id()).await;
+                    let value = recovered
+                        .get(&reference())
+                        .await
+                        .expect("one complete credential image")
+                        .expose_secret()
+                        .to_owned();
+                    match *operation {
+                        "prepare" => match transaction {
+                            Ok(SecretTransactionState::Absent) => assert_eq!(value, OLD),
+                            Ok(SecretTransactionState::Prepared) => {
+                                assert_eq!(value, OLD);
+                                recovered
+                                    .commit(id())
+                                    .await
+                                    .expect("candidate remains committable");
+                                assert_eq!(
+                                    recovered
+                                        .get(&reference())
+                                        .await
+                                        .expect("new")
+                                        .expose_secret(),
+                                    NEW
+                                );
+                            }
+                            other => panic!("unexpected prepare recovery at {boundary}: {other:?}"),
+                        },
+                        "commit" => match transaction {
+                            Ok(SecretTransactionState::Prepared) => assert_eq!(value, OLD),
+                            Ok(SecretTransactionState::Committed) => assert_eq!(value, NEW),
+                            other => panic!("unexpected commit recovery at {boundary}: {other:?}"),
+                        },
+                        "abort" => match transaction {
+                            Ok(SecretTransactionState::Prepared)
+                            | Ok(SecretTransactionState::Absent) => assert_eq!(value, OLD),
+                            other => panic!("unexpected abort recovery at {boundary}: {other:?}"),
+                        },
+                        "reclaim" => match transaction {
+                            Ok(SecretTransactionState::Absent)
+                            | Err(PreparedSecretError::Retired) => assert_eq!(value, OLD),
+                            other => panic!("unexpected reclaim recovery at {boundary}: {other:?}"),
+                        },
+                        _ => unreachable!(),
+                    }
+                });
+            }
+        }
+    }
+
+    #[test]
+    fn two_children_prove_lease_refusal_and_abrupt_release() {
+        let scratch = Scratch::new("lease-processes");
+        let path = scratch.store();
+        drop(FileStore::open(&path).expect("initialize"));
+        let ready = scratch.0.join("holder.ready");
+        let executable = std::env::current_exe().expect("test executable");
+        let mut holder = Command::new(&executable)
+            .arg("--exact")
+            .arg("file::transaction_crash_tests::lease_child")
+            .arg("--nocapture")
+            .env("CONNECTOR_SECRETS_LEASE_CHILD", "hold")
+            .env("CONNECTOR_SECRETS_LEASE_STORE", &path)
+            .env("CONNECTOR_SECRETS_LEASE_READY", &ready)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn holder");
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !ready.exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(ready.exists(), "holder did not acquire the lease");
+
+        let probe = || {
+            Command::new(&executable)
+                .arg("--exact")
+                .arg("file::transaction_crash_tests::lease_child")
+                .arg("--nocapture")
+                .env("CONNECTOR_SECRETS_LEASE_CHILD", "probe")
+                .env("CONNECTOR_SECRETS_LEASE_STORE", &path)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .expect("spawn probe")
+        };
+        assert_eq!(probe().code(), Some(42), "contending child must refuse");
+        holder.kill().expect("abruptly terminate holder");
+        holder.wait().expect("reap holder");
+        assert!(
+            probe().success(),
+            "kernel lease must release after process exit"
+        );
+    }
+
+    #[test]
+    fn native_upgrade_fixture_proves_legacy_quiescence_and_v2_refusal() {
+        let scratch = Scratch::new("legacy-upgrade");
+        let path = scratch.store();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("runtime");
+        runtime.block_on(async {
+            let store = FileStore::open(&path).expect("initialize v1");
+            store
+                .put(&reference(), &Secret::new(OLD))
+                .await
+                .expect("seed legacy value");
+        });
+
+        let ready = scratch.0.join("legacy.ready");
+        let release = scratch.0.join("legacy.release");
+        let mut legacy = Command::new(std::env::current_exe().expect("test executable"))
+            .arg("--exact")
+            .arg("file::transaction_crash_tests::legacy_writer_child")
+            .arg("--nocapture")
+            .env("CONNECTOR_SECRETS_LEGACY_CHILD", "1")
+            .env("CONNECTOR_SECRETS_LEGACY_STORE", &path)
+            .env("CONNECTOR_SECRETS_LEGACY_READY", &ready)
+            .env("CONNECTOR_SECRETS_LEGACY_RELEASE", &release)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn already-open legacy writer");
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !ready.exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(ready.exists(), "legacy writer did not open v1");
+
+        runtime.block_on(async {
+            let current =
+                FileStore::open(&path).expect("0.20 opener ignores no active legacy lock");
+            assert_eq!(
+                current.abort(id()).await,
+                Ok(SecretTransactionState::Absent)
+            );
+            let v2 = std::fs::read_to_string(&path).expect("read migrated v2");
+            assert!(
+                !released_v0_19_1_accepts(&v2),
+                "a fresh released v0.19.1 parser must refuse v2"
+            );
+
+            std::fs::write(&release, b"rewrite").expect("release legacy writer");
+            assert!(legacy.wait().expect("wait for legacy writer").success());
+            assert_eq!(
+                current.state(id()).await,
+                Ok(SecretTransactionState::Absent),
+                "an already-open legacy writer can erase the acknowledged tombstone"
+            );
+        });
+        assert!(released_v0_19_1_accepts(
+            &std::fs::read_to_string(&path).expect("legacy v1 survived")
+        ));
     }
 }

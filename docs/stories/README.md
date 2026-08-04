@@ -24,6 +24,7 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 
 ## Now (in progress)
 - [C-495 — All official integrations become connectors (epic)](C-495-all-integrations-are-connectors-epic.md) · Bridge · EPIC — every official integration is connector-owned and Exchange-executed; migrate all 18 Flux adapters without a local Flux runtime or fallback
+- [C-515 — Publish recoverable prepared secret transactions](C-515-recoverable-prepared-secret-transactions.md) · Bridge · Milestone 1 blocker — publish the generation-fenced connector-secrets 0.20.0 prepared-store port before Exchange X-134 can begin
 
 ## Next (ready — take the top one unless the user named a story)
 - [C-227 — C-55 gave the pipeline constant headers and constant body fields and stopped — a vendor-constant query parameter cannot be declared, and it costs Confluence every content read](C-227-a-vendor-constant-query-parameter-cannot-be-declared.md) · Spec · found by the C-219 implementor 2026-07-31. This is NOT the C-30 percent-encoding gap: a constant needs no encoding machinery, which is why it is the smaller change and the one that actually unblocks confluence's content reads
@@ -31,9 +32,6 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 - [C-224 — `RateLimit` takes a fixed pair, so a header-discovered budget survives only as prose — and two shipped connectors now decline to declare one](C-224-ratelimit-cannot-express-a-discovered-budget.md) · Spec · found by the C-216 implementor 2026-07-31. hubspot declined on tier grounds, discord on discovered-bound grounds. Two independent refusals of the same declaration is the signal the shape is wrong, not that the connectors are lazy
 - [C-402 — Decide whether a whole-host template needs an operator allowlist](C-402-whole-host-template-allowlist.md) · Bridge · DECIDED 2026-08-01, refined by C-508: the connector declares a closed host bound or an explicit operator-pinned self-managed-origin policy; the loader REFUSES a whole-host template declaring neither
 - [C-477 — Align runtime API versions with vendored provider contracts](C-477-pin-runtime-api-version-contracts.md) · Connector · compatibility follow-up — GitHub can send its dated API version; Stripe needs an explicit account-version decision
-
-### All Integrations Connectors
-- [C-515 — Publish recoverable prepared secret transactions](C-515-recoverable-prepared-secret-transactions.md) · Bridge · Milestone 1 blocker — publish the generation-fenced connector-secrets 0.20.0 prepared-store port before Exchange X-134 can begin
 
 ### Anthropic Managed Agents — the first vendor that declares both transports and its own event set
 _The `channel-bindings` and `inbound-events` epics built a model for the reverse call direction —_
