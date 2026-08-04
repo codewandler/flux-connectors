@@ -217,7 +217,7 @@ workflow.
 | `crates/connector-cli` | Filesystem and future network orchestration for the `flux-connectors` binary. |
 | `crates/catalog` | Dependency-free `connector-catalog`, with every operation embedded at compile time. |
 | `crates/connector-pack` | Host library: projects catalogue operations onto flux `ToolSpec`s and installs them as a Tool pack. Assembles auth; opens no socket. |
-| `crates/connector-secrets` | Host library: resolves a credential *address* to a *value*. `SecretStore`, an in-memory store, and an optional Vault KV v2 client. Unreachable from the compiler, by test. |
+| `crates/connector-secrets` | Host library: resolves a credential *address* to a *value*. `SecretStore`, generation-fenced recoverable prepared transactions in memory or an owner-only leased file, and an optional Vault KV v2 client. Unreachable from the compiler, by test. |
 | `providers/` | Hand-authored provider definitions. |
 | `connectors/` | The generated Flux modules and capability manifests. |
 | `specs/` | Vendored spec cache used by offline builds. Currently flux's own core catalogue only — no vendor spec is vendored yet. |

@@ -397,6 +397,9 @@ impl<T: VaultTransport, L: Layout + Send + Sync> SecretStore for VaultStore<T, L
     }
 }
 
+#[async_trait]
+impl<T: VaultTransport, L: Layout + Send + Sync> crate::PreparedSecretStore for VaultStore<T, L> {}
+
 /// `Debug` without the token. Derived would print it.
 impl<T, L> std::fmt::Debug for VaultStore<T, L> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -75,6 +75,20 @@
 //! [`StoreError::Unsupported`] refusal, because decomposing an unsupported migration into point
 //! writes would expose a half-moved connector.
 //!
+//! # Recoverable prepared transactions
+//!
+//! An owning host coordinating credentials with its own value-free metadata uses the object-safe
+//! [`PreparedSecretStore`] port. [`MemoryStore`] and [`FileStore`] admit one prepared batch, keep its
+//! candidate invisible until commit, fence replay with owner-allocated non-zero generations and
+//! bound terminal outcomes until [`PreparedSecretStore::reclaim`]. Unsupported backends refuse with
+//! [`PreparedSecretError::Unsupported`]; callers must not emulate preparation with point writes.
+//!
+//! `FileStore` holds a non-blocking exclusive native lease for its lifetime and persists the
+//! transaction ledger with credentials in v2. Released 0.19.1 writers do not participate in that
+//! lease: stop all of them before the first 0.20 open. An already-open legacy process can rewrite
+//! its cached v1 image and erase v2 recovery state; a fresh 0.19.1 opener safely refuses a migrated
+//! v2 file.
+//!
 //! Adapting *to* flux's trait remains worth doing and is a separate story (C-93); it is
 //! complementary, not competing.
 //!
@@ -92,6 +106,7 @@ mod batch;
 pub mod file;
 mod memory;
 mod secret;
+mod transaction;
 #[cfg(feature = "vault")]
 pub mod vault;
 
@@ -99,6 +114,10 @@ pub use batch::SecretBatch;
 pub use file::FileStore;
 pub use memory::MemoryStore;
 pub use secret::Secret;
+pub use transaction::{
+    PreparedSecretError, PreparedSecretStore, SecretProposalDigest, SecretTransactionGeneration,
+    SecretTransactionId, SecretTransactionState, MAX_TERMINAL_TRANSACTIONS,
+};
 #[cfg(feature = "vault")]
 pub use vault::VaultStore;
 

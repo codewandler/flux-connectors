@@ -7,9 +7,9 @@ descriptions into [Flux-Lang](https://github.com/codewandler/flux).
 
 ```toml
 [dependencies]
-connector-secrets = "0.19"
+connector-secrets = "0.20"
 # The Vault store and its HTTP transport are opt-in:
-# connector-secrets = { version = "0.19", features = ["vault"] }
+# connector-secrets = { version = "0.20", features = ["vault"] }
 ```
 
 ## What it is
@@ -46,12 +46,25 @@ migration.move_secret(addresses[0].clone(), instanced_reference)?;
 store.apply(&migration).await?;
 ```
 
+An owning host that must coordinate credential changes with its own value-free metadata can use the
+object-safe `PreparedSecretStore` port. `MemoryStore` and `FileStore` implement its one-prepared-slot,
+generation-fenced state machine; Vault returns the separate payload-free
+`PreparedSecretError::Unsupported`. The batch stays private, reads retain the old committed image
+until `commit`, and explicit reclamation bounds the durable terminal ledger.
+
 ## Portable durable storage
 
-`FileStore` is the same public `SecretStore` backend on Linux, macOS and Windows. It keeps one
-logical v1 format and one contract for bounded reads and writes, atomic whole-file replacement and
-all-or-nothing `SecretBatch` mutations. A host does not inspect a batch's private mutations or handle
-credential values differently to select the native backend.
+`FileStore` is the same public `SecretStore` backend on Linux, macOS and Windows. Clean v1 files
+remain byte-identical until the first prepared transaction. Transaction use migrates atomically to
+v2, which couples credentials, the inclusive retired-generation fence and the bounded terminal
+ledger. A fixed owner-only stage carries one complete invisible candidate; no transaction id or
+digest appears in its path.
+
+Opening a store acquires a non-blocking exclusive kernel lease held for the `FileStore` lifetime.
+Because 0.19.1 predates that lease, stop every 0.19.1 process that can write the store before the
+first 0.20 open. Concurrent mixed 0.19/0.20 writers are unsupported: an already-open legacy writer
+can overwrite v2 recovery metadata. After migration, a fresh 0.19.1 opener refuses v2 rather than
+guessing at it.
 
 The platform protection is deliberately specific:
 
@@ -65,8 +78,8 @@ The platform protection is deliberately specific:
 
 This is owner-only persistence, not encryption. Anyone able to bypass those controls can recover the
 logical file bytes; Unix root, Windows administrators and copied backups are outside the guarantee.
-`FileStore` is for one local operator and one writer. Use a real secret service such as Vault for a
-shared or multi-operator deployment.
+`FileStore` is for one local operator and one active writer; the lease rejects a second 0.20 opener.
+Use a real secret service such as Vault for a shared or multi-operator deployment.
 
 Put the file in a conventional per-user state directory or an owner-only child directory. A path
 directly beneath a shared directory such as `/tmp` is refused; do not narrow the shared ancestor's

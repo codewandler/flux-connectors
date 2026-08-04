@@ -8,11 +8,17 @@ use crate::{CredentialRef, CredentialScope, Layout, Secret, StoreError};
 ///
 /// Every address is checked when the operation is added. An address may occur only once in a batch,
 /// keeping the result independent of operation ordering and making a migration auditable as a set.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SecretBatch {
     scope: CredentialScope,
     touched: BTreeSet<CredentialRef>,
     operations: Vec<Mutation>,
+}
+
+impl std::fmt::Debug for SecretBatch {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("SecretBatch(<opaque>)")
+    }
 }
 
 #[derive(Debug, Clone)]

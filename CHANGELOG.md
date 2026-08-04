@@ -7,7 +7,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Recoverable prepared credential transactions are now a public host port** (C-515).
+  `connector-secrets` adds opaque generation/id/digest types and the object-safe
+  `PreparedSecretStore` state machine. `MemoryStore` and `FileStore` reserve one complete invisible
+  `SecretBatch`, publish it atomically on commit, persist abort-before-prepare tombstones, refuse
+  cross-id ledger mutation while prepared, and bound terminal outcomes at 4096 until the owner
+  advances an inclusive generation fence. Vault explicitly returns the separate payload-free
+  `Unsupported` error.
+
 ### Changed
+
+- **`FileStore` now holds a lifetime native writer/recovery lease and speaks transactional v2**
+  (C-515). Clean v1 files are not eagerly migrated; first transaction use couples credentials, the
+  retirement fence and canonical terminal ledger in one atomic live file and uses a fixed owner-only
+  complete-image stage. Recovery, child-process crash tests and canonical parsing refuse ambiguous,
+  oversized, mismatched or already-retired records. Every 0.19.1 writer must be stopped before 0.20
+  opens the store because an already-open legacy process can rewrite cached v1 and erase v2 recovery
+  state; a fresh legacy opener refuses v2. Five native CI rows assert their host triples and run the
+  crash, lease, concurrency and platform-protection suite instead of treating cross-compilation as
+  runtime evidence.
 
 - **The repository now speaks flux-roadmap Decision 0006's datasource vocabulary** (C-510). The
   catalogue datasource (C-137…C-140) is amended before any dispatch: the compiled-in catalogue

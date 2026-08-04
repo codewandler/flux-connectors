@@ -39,6 +39,7 @@ vault = ["dep:reqwest", "dep:serde_json"]
 connector-address.workspace = true
 
 async-trait.workspace = true
+fs2.workspace = true
 thiserror.workspace = true
 
 reqwest = { workspace = true, optional = true }

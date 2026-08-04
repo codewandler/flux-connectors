@@ -16,7 +16,8 @@ use std::path::Path;
 use std::ptr::{null, null_mut};
 
 use windows_sys::Win32::Foundation::{
-    GetLastError, LocalFree, ERROR_INSUFFICIENT_BUFFER, GENERIC_READ, HANDLE, INVALID_HANDLE_VALUE,
+    GetLastError, LocalFree, ERROR_INSUFFICIENT_BUFFER, GENERIC_READ, GENERIC_WRITE, HANDLE,
+    INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::Security::Authorization::{
     ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW, GetSecurityInfo,
@@ -105,6 +106,57 @@ pub(super) fn open_existing(path: &Path) -> Result<Option<File>, StoreError> {
     }
     let handle = open_secure_handle(path, Expected::File, true)?;
     Ok(Some(File::from(handle)))
+}
+
+pub(super) fn open_lease(path: &Path, store: &Path) -> Result<File, StoreError> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => {
+            inspect_path(path, Expected::File)?;
+            let wide = wide(path).map_err(|error| unreachable(store, &error))?;
+            // SAFETY: The path buffer remains live; OPEN_EXISTING does not create or repair state.
+            let raw = unsafe {
+                CreateFileW(
+                    wide.as_ptr(),
+                    GENERIC_READ | GENERIC_WRITE | READ_CONTROL,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                    null(),
+                    OPEN_EXISTING,
+                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT,
+                    null_mut(),
+                )
+            };
+            let handle = owned_handle(raw).map_err(|error| unreachable(store, &error))?;
+            inspect_handle(&handle, path, Expected::File)?;
+            Ok(File::from(handle))
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let sid = current_process_sid().map_err(|error| unreachable(store, &error))?;
+            let descriptor =
+                creation_descriptor(&sid).map_err(|error| unreachable(store, &error))?;
+            let attributes = SECURITY_ATTRIBUTES {
+                nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+                lpSecurityDescriptor: descriptor.0,
+                bInheritHandle: 0,
+            };
+            let wide = wide(path).map_err(|error| unreachable(store, &error))?;
+            // SAFETY: All buffers and the security descriptor remain live for CREATE_NEW.
+            let raw = unsafe {
+                CreateFileW(
+                    wide.as_ptr(),
+                    GENERIC_READ | GENERIC_WRITE | FILE_ALL_ACCESS | READ_CONTROL,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                    &attributes,
+                    CREATE_NEW,
+                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT,
+                    null_mut(),
+                )
+            };
+            let handle = owned_handle(raw).map_err(|error| unreachable(store, &error))?;
+            inspect_handle(&handle, path, Expected::File)?;
+            Ok(File::from(handle))
+        }
+        Err(error) => Err(unreachable(store, &error)),
+    }
 }
 
 pub(super) fn create_new(temporary: &Path, store: &Path) -> Result<File, StoreError> {
@@ -204,9 +256,10 @@ pub(super) fn replace(temporary: &Path, store: &Path) -> Result<(), StoreError> 
     Ok(())
 }
 
-pub(super) fn sync_directory(_directory: &Path) {
+pub(super) fn sync_directory(_directory: &Path) -> Result<(), StoreError> {
     // ReplaceFileW / MoveFileExW are the Windows durability primitives used above. Windows does not
     // expose the Unix directory-fsync operation through ordinary directory handles.
+    Ok(())
 }
 
 fn create_directory(path: &Path, store: &Path) -> Result<(), StoreError> {

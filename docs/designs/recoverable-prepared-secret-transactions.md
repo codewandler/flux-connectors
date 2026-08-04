@@ -2,7 +2,8 @@
 
 This is the provider-owned contract for C-515. It extends `connector-secrets` without exposing a
 credential value, private `Mutation`, staged path or second credential schema to Exchange. Roadmap
-Decisions 0004 and 0007 at `daf80d5` own the cross-repository recovery boundary.
+Decisions 0004 and 0007 at dispatched roadmap commit `34aec70` own the cross-repository recovery
+boundary.
 
 ## Public API
 
@@ -163,8 +164,9 @@ is never repaired, replaced or reaped.
 
 Released 0.19.1 predates this lease and therefore cannot be made to honor it. Operators must stop
 every 0.19.1 writer before the first 0.20 open, and concurrent mixed-version writers are explicitly
-unsupported. Once a transaction has written v2, a newly opened 0.19.1 store refuses the version;
-that refusal does not retroactively make a legacy process that opened v1 safe to keep running.
+unsupported. A legacy process that already opened v1 can rewrite its cached image and erase v2
+recovery state. Once a transaction has written v2, a newly opened 0.19.1 store refuses the version;
+that refusal does not retroactively make the already-open process safe to keep running.
 
 The live v2 file atomically contains:
 
@@ -257,11 +259,15 @@ write, file flush, atomic replacement and cleanup. Unix additionally covers ever
 sync. Windows instead covers `FlushFileBuffers`, `ReplaceFileW` or write-through `MoveFileExW`,
 post-replacement handle validation and cleanup; it does not invent a directory-fsync primitive the
 platform lacks. Reclaim recovery observes either the complete old fence/ledger or the complete new
-fence/ledger, never a partially retired generation. Two-child tests prove lease contention and release
-after abrupt exit. A cross-id race test proves that an abort which returns success cannot be erased
-by another transaction's staged commit. An upgrade fixture demonstrates why an already-open 0.19.1
-writer must be quiesced and separately proves that a fresh 0.19.1 open refuses v2. Platform-native
-suites retain owner/mode or owner/DACL, link/reparse, wrong-kind, bound and unsafe-root cases.
+fence/ledger, never a partially retired generation. Two-child tests prove lease contention and
+release after abrupt exit. With one FileStore id prepared, barrier-released concurrent calls pin
+cross-id unseen abort and prepare to payload-free `Busy` and cross-id commit to the non-mutating
+`NotPrepared`; committing the selected id and reopening then proves that a previously acknowledged
+abort tombstone survived its immutable stage. An upgrade fixture demonstrates why an already-open
+0.19.1 writer must be quiesced and separately proves that a fresh 0.19.1 open refuses v2. A public
+rendering/filesystem test checks raw, escaped, percent-encoded and base64-shaped address/path/secret
+sentinels. Platform-native suites retain owner/mode or owner/DACL, link/reparse, wrong-kind, bound and
+unsafe-root cases.
 
 The exact native set is `aarch64-apple-darwin`, `x86_64-apple-darwin`,
 `aarch64-unknown-linux-gnu`, `x86_64-unknown-linux-gnu` and `x86_64-pc-windows-msvc`.

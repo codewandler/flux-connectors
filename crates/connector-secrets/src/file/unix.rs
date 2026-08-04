@@ -54,6 +54,22 @@ pub(super) fn open_existing(path: &Path) -> Result<Option<File>, StoreError> {
     Ok(Some(File::from(descriptor)))
 }
 
+pub(super) fn open_lease(path: &Path, store: &Path) -> Result<File, StoreError> {
+    let flags = OFlags::RDWR | OFlags::NONBLOCK | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+    let descriptor = match rustix::fs::open(path, flags, Mode::empty()) {
+        Ok(descriptor) => descriptor,
+        Err(rustix::io::Errno::NOENT) => rustix::fs::open(
+            path,
+            flags | OFlags::CREATE | OFlags::EXCL,
+            Mode::RUSR | Mode::WUSR,
+        )
+        .map_err(|error| unreachable(store, &std::io::Error::from(error)))?,
+        Err(error) => return Err(unreachable(store, &std::io::Error::from(error))),
+    };
+    inspect_handle(&descriptor, path, Expected::File, FILE_MODE)?;
+    Ok(File::from(descriptor))
+}
+
 pub(super) fn validate_destination(path: &Path) -> Result<(), StoreError> {
     let existing = open_existing(path)?;
     drop(existing);
@@ -94,10 +110,11 @@ pub(super) fn replace(temporary: &Path, store: &Path) -> Result<(), StoreError> 
     Ok(())
 }
 
-pub(super) fn sync_directory(directory: &Path) {
-    if let Ok(handle) = File::open(directory) {
-        let _ = handle.sync_all();
-    }
+pub(super) fn sync_directory(directory: &Path) -> Result<(), StoreError> {
+    let handle = File::open(directory).map_err(|error| unreachable(directory, &error))?;
+    handle
+        .sync_all()
+        .map_err(|error| unreachable(directory, &error))
 }
 
 fn inspect_path(path: &Path, expected: Expected, widest: u32) -> Result<(), StoreError> {
@@ -114,6 +131,9 @@ fn inspect_path(path: &Path, expected: Expected, widest: u32) -> Result<(), Stor
     };
     if !right_kind {
         return denied(path, expected.kind_reason());
+    }
+    if matches!(expected, Expected::File) && metadata.nlink() != 1 {
+        return denied(path, "it does not have exactly one hard link");
     }
     inspect_owner_mode(path, metadata.uid(), metadata.mode(), widest)
 }
@@ -134,6 +154,9 @@ fn inspect_handle(
     };
     if !right_kind {
         return denied(path, expected.kind_reason());
+    }
+    if matches!(expected, Expected::File) && metadata.st_nlink != 1 {
+        return denied(path, "it does not have exactly one hard link");
     }
     inspect_owner_mode(path, metadata.st_uid, u32::from(metadata.st_mode), widest)
 }

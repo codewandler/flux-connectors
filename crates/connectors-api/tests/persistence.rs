@@ -99,7 +99,7 @@ async fn a_credential_survives_the_host_being_rebuilt() {
     );
 
     // Everything the first host held is gone. Only the file it wrote remains.
-    drop(first);
+    first.stop().await;
 
     // The second host. A new session, because sessions are deliberately *not* persisted — C-207's
     // notes are explicit that conflating the two stores would make stolen cookies outlive the
@@ -135,11 +135,10 @@ async fn a_credential_loaded_from_disk_reaches_no_surface() {
     let scratch = Scratch::new("no-surface");
     let idp = Idp::start().await;
 
-    {
-        let first = serve(&idp, &scratch).await;
-        let cookie = sign_in(&first, OPERATOR).await;
-        store_credential(&first, &cookie, SENTINEL).await;
-    }
+    let first = serve(&idp, &scratch).await;
+    let cookie = sign_in(&first, OPERATOR).await;
+    store_credential(&first, &cookie, SENTINEL).await;
+    first.stop().await;
 
     let base = serve(&idp, &scratch).await;
     let client = client();
@@ -240,7 +239,7 @@ async fn a_credential_loaded_from_disk_reaches_no_surface() {
         .await
         .expect("the delete completes");
     assert_eq!(deleted.status(), 204);
-    drop(base);
+    base.stop().await;
 
     let reopened = serve(&idp, &scratch).await;
     let cookie = sign_in(&reopened, OPERATOR).await;
@@ -407,7 +406,43 @@ impl Drop for Scratch {
 /// `support::serve` cannot be reused: it builds the `App` itself with `App::new`, and the store is
 /// what varies here. Everything else — the identity provider, the ephemeral loopback port, the real
 /// router — is the same.
-async fn serve(idp: &Idp, scratch: &Scratch) -> String {
+struct Hosted {
+    base: String,
+    task: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl Hosted {
+    async fn stop(mut self) {
+        if let Some(task) = self.task.take() {
+            task.abort();
+            let _ = task.await;
+        }
+    }
+}
+
+impl std::ops::Deref for Hosted {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.base
+    }
+}
+
+impl std::fmt::Display for Hosted {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.base.fmt(formatter)
+    }
+}
+
+impl Drop for Hosted {
+    fn drop(&mut self) {
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
+    }
+}
+
+async fn serve(idp: &Idp, scratch: &Scratch) -> Hosted {
     use std::net::{Ipv4Addr, SocketAddr};
 
     let app = {
@@ -450,10 +485,13 @@ async fn serve(idp: &Idp, scratch: &Scratch) -> String {
         .await
         .expect("an ephemeral loopback port");
     let address = listener.local_addr().expect("a bound address");
-    tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         let _ = axum::serve(listener, connectors_api::router(app)).await;
     });
-    format!("http://{address}")
+    Hosted {
+        base: format!("http://{address}"),
+        task: Some(task),
+    }
 }
 
 /// `PUT` one credential through the real HTTP surface, and assert the response carries nothing.

@@ -210,14 +210,9 @@ pub use tool::{Egress, Operation};
 // `connector-secrets` takes towards `connector-spec`'s addressing. A host binding this pack's
 // credential port should not have to name three crates to spell one address.
 pub use connector_secrets::{
-    CredentialRef, InstanceId, Layout, MemoryStore, Secret, SecretStore, StoreError,
+    CredentialRef, FileStore, InstanceId, Layout, MemoryStore, Secret, SecretStore, StoreError,
     TenantInstances, TenantLayout,
 };
-// The store a host that must survive its own restart binds (C-207). Unix-only upstream, because
-// what protects a credential in it is a file mode; re-exported under the same condition rather than
-// papered over, so a platform without it gets a missing name instead of a weaker store.
-#[cfg(unix)]
-pub use connector_secrets::FileStore;
 
 use catalog::ProviderKey;
 use flux_runtime::{Tool, ToolRegistry};
