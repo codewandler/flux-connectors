@@ -24,7 +24,6 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 
 ## Now (in progress)
 - [C-495 — All official integrations become connectors (epic)](C-495-all-integrations-are-connectors-epic.md) · Bridge · EPIC — every official integration is connector-owned and Exchange-executed; migrate all 18 Flux adapters without a local Flux runtime or fallback
-- [C-515 — Publish recoverable prepared secret transactions](C-515-recoverable-prepared-secret-transactions.md) · Bridge · Milestone 1 blocker — publish the generation-fenced connector-secrets 0.20.0 prepared-store port before Exchange X-134 can begin
 
 ## Next (ready — take the top one unless the user named a story)
 - [C-227 — C-55 gave the pipeline constant headers and constant body fields and stopped — a vendor-constant query parameter cannot be declared, and it costs Confluence every content read](C-227-a-vendor-constant-query-parameter-cannot-be-declared.md) · Spec · found by the C-219 implementor 2026-07-31. This is NOT the C-30 percent-encoding gap: a constant needs no encoding machinery, which is why it is the smaller change and the one that actually unblocks confluence's content reads
@@ -492,6 +491,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-508 — A GitLab connection supports an operator-approved self-managed HTTPS origin](C-508-self-managed-gitlab-origin.md) · Connector · Milestone 1 critical: GitLab must support gitlab.com by default and an operator-pinned self-managed origin before the collaboration migration can replace the native plugin
 - [C-509 — Persist connector secrets owner-only on every Flux platform](C-509-portable-owner-only-secret-store.md) · Bridge · Milestone 1 blocker — Exchange X-127 cannot support Windows or ship a complete local composition while connector-secrets 0.19 exposes its durable store only on Unix
 - [C-510 — Adopt the Decision 0006 datasource vocabulary](C-510-adopt-the-decision-0006-datasource-vocabulary.md) · Bridge · Decision 0006 defines the family's one datasource concept — a declared read-only record surface — and places vendor-data Datasource Definitions here. This reconciles C-137…C-140 onto the indexed DatasourceBackend they always needed and charters the [[datasources]] IR surface before Milestone 5 deletes the plugin channel
+- [C-515 — Publish recoverable prepared secret transactions](C-515-recoverable-prepared-secret-transactions.md) · Bridge · Released in v0.20.0; five native hosts and the immutable Exchange registry-adoption checkpoint are verified
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->
