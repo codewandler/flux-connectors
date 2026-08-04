@@ -857,6 +857,12 @@ mod tests {
 
                 let error = FileStore::open(&path).expect_err("unsafe descriptor must refuse");
                 let message = error.to_string();
+                if label == "unreadable" {
+                    assert!(matches!(error, StoreError::Unreachable { .. }), "{error:?}");
+                    assert!(message.to_ascii_lowercase().contains("denied"), "{message}");
+                } else {
+                    assert!(matches!(error, StoreError::Denied { .. }), "{error:?}");
+                }
                 assert!(message.contains(&target.display().to_string()), "{message}");
                 assert!(!message.contains(SENTINEL), "{message}");
                 assert!(!message.contains("com.acme.api"), "{message}");
@@ -878,35 +884,118 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn mutations_revalidate_file_and_directory_descriptors_before_writing() {
+        let sid = sid_string(&current_process_sid().expect("process SID")).expect("SID text");
+        let widened = format!("O:{sid}D:P(A;;FA;;;{sid})(A;;FR;;;WD)");
+        for directory in [false, true] {
+            let scratch = Scratch::new("post-open-mutation");
+            let path = scratch.store();
+            let store = FileStore::open(&path).expect("open");
+            let prior =
+                CredentialRef::new("tenant-a", "com.acme.api", "default", "token").expect("prior");
+            store
+                .put(&prior, &Secret::new(SENTINEL))
+                .await
+                .expect("plant");
+            let bytes = std::fs::read(&path).expect("bytes");
+            let target = if directory {
+                path.parent().expect("directory")
+            } else {
+                path.as_path()
+            };
+            let control = control_handle(target, directory);
+            let original = descriptor_sddl(&control);
+            apply_sddl(
+                &control,
+                &widened,
+                OWNER_SECURITY_INFORMATION
+                    | DACL_SECURITY_INFORMATION
+                    | PROTECTED_DACL_SECURITY_INFORMATION,
+            );
+            let planted = descriptor_sddl(&control);
+            let next =
+                CredentialRef::new("tenant-b", "com.acme.api", "default", "token").expect("next");
+            let error = store
+                .put(&next, &Secret::new(format!("{SENTINEL}-new")))
+                .await
+                .expect_err("must refuse");
+            assert!(matches!(error, StoreError::Denied { .. }), "{error:?}");
+            let message = error.to_string();
+            assert!(message.contains(&target.display().to_string()), "{message}");
+            assert!(!message.contains(SENTINEL));
+            assert!(!message.contains("com.acme.api"));
+            assert_eq!(
+                store
+                    .get(&prior)
+                    .await
+                    .expect("prior remains")
+                    .expose_secret(),
+                SENTINEL
+            );
+            assert!(store.get(&next).await.unwrap_err().is_not_found());
+            assert_eq!(std::fs::read(&path).expect("bytes remain"), bytes);
+            assert_eq!(descriptor_sddl(&control), planted);
+            assert!(
+                store.stale_temporaries().is_empty(),
+                "temporary was written"
+            );
+            apply_sddl(
+                &control,
+                &original,
+                OWNER_SECURITY_INFORMATION
+                    | DACL_SECURITY_INFORMATION
+                    | PROTECTED_DACL_SECURITY_INFORMATION,
+            );
+        }
+    }
+
     #[test]
     fn reparse_points_and_wrong_kinds_are_refused_unchanged() {
         let (scratch, real) = planted_store("reparse");
         let link = real.parent().expect("parent").join("linked-credentials");
         std::os::windows::fs::symlink_file(&real, &link).expect("create file symlink");
+        let linked_target = std::fs::read_link(&link).expect("link target");
         let before = std::fs::symlink_metadata(&link)
             .expect("link metadata")
             .file_attributes();
+        let link_control = control_handle(&link, false);
+        let link_descriptor = descriptor_sddl(&link_control);
         let error = FileStore::open(&link).expect_err("reparse point must refuse");
-        assert!(!error.to_string().contains(SENTINEL));
+        let message = error.to_string();
+        assert!(message.contains(&link.display().to_string()), "{message}");
+        assert!(!message.contains(SENTINEL));
+        assert!(!message.contains("com.acme.api"));
+        assert_eq!(
+            std::fs::read_link(&link).expect("link unchanged"),
+            linked_target
+        );
         assert_eq!(
             std::fs::symlink_metadata(&link)
                 .expect("link remains")
                 .file_attributes(),
             before
         );
+        assert_eq!(descriptor_sddl(&link_control), link_descriptor);
 
         let wrong = scratch.0.join("state").join("directory-at-file");
         std::fs::create_dir(&wrong).expect("plant directory");
         let before = std::fs::metadata(&wrong)
             .expect("metadata")
             .file_attributes();
+        let wrong_control = control_handle(&wrong, true);
+        let wrong_descriptor = descriptor_sddl(&wrong_control);
         let error = FileStore::open(&wrong).expect_err("wrong kind must refuse");
-        assert!(!error.to_string().contains(SENTINEL));
+        let message = error.to_string();
+        assert!(message.contains(&wrong.display().to_string()), "{message}");
+        assert!(!message.contains(SENTINEL));
+        assert!(!message.contains("com.acme.api"));
         assert_eq!(
             std::fs::metadata(&wrong)
                 .expect("unchanged")
                 .file_attributes(),
             before
         );
+        assert_eq!(descriptor_sddl(&wrong_control), wrong_descriptor);
     }
 }
