@@ -1913,7 +1913,7 @@ mod portable_tests {
             .expect("bounded reader exists");
         let body = &source[start
             ..source[start..]
-                .find("\n}\n")
+                .find("\nfn parse")
                 .map(|end| start + end)
                 .expect("bounded reader ends")];
         assert!(

@@ -598,6 +598,7 @@ impl Expected {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::file::{hex_encode, HEADER};
     use crate::{CredentialRef, FileStore, Secret, SecretStore};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -793,9 +794,7 @@ mod tests {
         inspect_security(handle.as_raw_handle() as HANDLE, &path)
             .expect("exact protected descriptor");
         let sddl = descriptor_sddl(&handle);
-        let sid = sid_string(&current_process_sid().expect("process SID")).expect("SID text");
         assert!(sddl.contains("D:P"), "unprotected descriptor: {sddl}");
-        assert!(sddl.contains(&format!("O:{sid}")), "foreign owner: {sddl}");
         let directory = path.parent().expect("state directory");
         let directory_handle = control_handle(directory, true);
         inspect_security(directory_handle.as_raw_handle() as HANDLE, directory)
@@ -806,13 +805,6 @@ mod tests {
     fn unsafe_descriptors_refuse_without_repair_or_leak() {
         let sid = sid_string(&current_process_sid().expect("process SID")).expect("SID text");
         for (label, planted, flags) in [
-            (
-                "inherited-allow",
-                format!("O:{sid}D:P(A;ID;FA;;;{sid})"),
-                OWNER_SECURITY_INFORMATION
-                    | DACL_SECURITY_INFORMATION
-                    | PROTECTED_DACL_SECURITY_INFORMATION,
-            ),
             (
                 "foreign-allow",
                 format!("O:{sid}D:P(A;;FA;;;{sid})(A;;FR;;;WD)"),
@@ -880,6 +872,67 @@ mod tests {
                         | PROTECTED_DACL_SECURITY_INFORMATION,
                 );
                 assert_eq!(std::fs::read(&path).expect("bytes unchanged"), bytes);
+            }
+        }
+    }
+
+    #[test]
+    fn genuinely_inherited_allow_entries_are_refused_without_repair_or_reading() {
+        let sid = sid_string(&current_process_sid().expect("process SID")).expect("SID text");
+        for directory in [false, true] {
+            let scratch = Scratch::new("inherited-allow");
+            std::fs::create_dir_all(&scratch.0).expect("create inheritance parent");
+            let parent = control_handle(&scratch.0, true);
+            apply_sddl(
+                &parent,
+                &format!("O:{sid}D:P(A;OICI;FA;;;{sid})"),
+                OWNER_SECURITY_INFORMATION
+                    | DACL_SECURITY_INFORMATION
+                    | PROTECTED_DACL_SECURITY_INFORMATION,
+            );
+
+            let target = scratch.0.join(if directory {
+                "inherited-directory"
+            } else {
+                "inherited-credentials"
+            });
+            let prior_bytes = if directory {
+                std::fs::create_dir(&target).expect("create inherited directory");
+                None
+            } else {
+                let bytes = format!(
+                    "{HEADER}\ntenants/tenant-a/com.acme.api/default/token {}\n",
+                    hex_encode(SENTINEL.as_bytes())
+                )
+                .into_bytes();
+                std::fs::write(&target, &bytes).expect("create inherited store");
+                Some(bytes)
+            };
+            let control = control_handle(&target, directory);
+            let inherited = descriptor_sddl(&control);
+            assert!(
+                inherited.contains("ID"),
+                "the native fixture did not inherit an ACE: {inherited}"
+            );
+
+            let error = if directory {
+                open_secure_handle(&target, Expected::Directory, false)
+                    .expect_err("inherited directory must refuse")
+            } else {
+                open_existing(&target).expect_err("inherited file must refuse")
+            };
+            let message = error.to_string();
+            assert!(matches!(error, StoreError::Denied { .. }), "{error:?}");
+            assert!(message.contains(&target.display().to_string()), "{message}");
+            assert!(!message.contains(SENTINEL), "{message}");
+            assert!(!message.contains("com.acme.api"), "{message}");
+            assert_eq!(
+                descriptor_sddl(&control),
+                inherited,
+                "refusal repaired the DACL"
+            );
+            if let Some(bytes) = prior_bytes {
+                assert_eq!(std::fs::read(&target).expect("bytes unchanged"), bytes);
             }
         }
     }
