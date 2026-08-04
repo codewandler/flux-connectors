@@ -2,12 +2,11 @@
 id: C-515
 title: "Publish recoverable prepared secret transactions"
 pillar: Bridge
-status: in-progress
-priority: 0
+status: done
 design: docs/designs/recoverable-prepared-secret-transactions.md
 epic: all-integrations-connectors
 areas: [connector-secrets, persistence, transactions, security, windows, release]
-note: "Milestone 1 blocker — publish the generation-fenced connector-secrets 0.20.0 prepared-store port before Exchange X-134 can begin"
+note: "Released in v0.20.0; five native hosts and the immutable Exchange registry-adoption checkpoint are verified"
 ---
 
 # Publish recoverable prepared secret transactions
@@ -112,12 +111,12 @@ journal, log or derive identity from a credential value.
       abort-before-prepare fencing including cross-id abort-versus-commit, one prepared slot and
       mutation exclusion. A native upgrade fixture proves an already-open 0.19.1 writer is unsafe
       and must be quiesced, while a fresh 0.19.1 open refuses the migrated v2 file.
-- [ ] Native CI asserts the runtime host triple and executes the complete child-crash, lease,
+- [x] Native CI asserts the runtime host triple and executes the complete child-crash, lease,
       concurrency, owner/mode-or-DACL, link/reparse, wrong-kind, bound and unsafe-root suite on
       `aarch64-apple-darwin`, `x86_64-apple-darwin`, `aarch64-unknown-linux-gnu`,
       `x86_64-unknown-linux-gnu` and `x86_64-pc-windows-msvc`. Cross-compilation or another
       architecture standing in is supplementary only.
-- [ ] The change is released as `connector-secrets` 0.20.0: existing `StoreError` and method
+- [x] The change is released as `connector-secrets` 0.20.0: existing `StoreError` and method
       signatures remain source-compatible, manual opaque Debug retains trait availability, and the
       new FileStore lease/v2 format plus the unsupported mixed-0.19/0.20-writer transition are
       documented as the pre-1.0 minor boundary. README/rustdoc, the linked design, both changelogs
@@ -128,6 +127,28 @@ journal, log or derive identity from a credential value.
 
 ## Progress
 
+- 2026-08-04: Closure evidence is immutable and complete. Exact-host release CI run
+  [`30925896962`](https://github.com/codewandler/flux-connectors/actions/runs/30925896962) is
+  terminal green at canonical commit
+  `c764f5c3b8e745cc65e90a298b04851647b76778` for the complete native
+  `aarch64-apple-darwin`, `x86_64-apple-darwin`, `aarch64-unknown-linux-gnu`,
+  `x86_64-unknown-linux-gnu` and `x86_64-pc-windows-msvc` jobs; each asserted its runtime host and
+  ran the durable backend suite. The same run's workspace, publication-closure dry run and both
+  consumer gates are green.
+- 2026-08-04: Tag and release
+  [`v0.20.0`](https://github.com/codewandler/flux-connectors/releases/tag/v0.20.0) point to that
+  canonical commit; tag-triggered crates.io run
+  [`30927493484`](https://github.com/codewandler/flux-connectors/actions/runs/30927493484) is terminal
+  green. Fresh registry downloads measured SHA-256
+  `bdee7fb0d488de4ed97dbd3b8414e04138c122ee36b6f9c97a174bb317913d8c` (address),
+  `9a7737659b74876b09ff6e09b253402c5bdfcafcbde89373cb76f689bd8ffed2` (catalog),
+  `edf98bece86f6364aba3e7dd48c3b7e161146942e9e8450d5dc286143b627717` (secrets) and
+  `8e858a844dab8324d42bb83c98c4ffb6823681eb1157ddb96a79d5d7a42cff48` (pack). Immutable Exchange
+  adoption checkpoint `bd040b9ae5c53454c8df21fd720f8272398cd7c6` has exactly one registry
+  `codewandler-connector-secrets 0.20.0` lock record with the released secrets checksum and composes
+  one retained store through `Arc<dyn PreparedSecretStore>`, recovery before readiness and the
+  closed five-method port without a copied credential schema or point-write emulation. This is
+  C-515 downstream-consumption evidence only; it does not claim Exchange X-134 complete or merged.
 - 2026-08-04: Failing-first `cargo test -p codewandler-connector-secrets --test
   prepared_transactions` failed to compile because the prepared transaction types and methods did
   not exist. After implementation, `cargo test -p codewandler-connector-secrets --no-fail-fast`
