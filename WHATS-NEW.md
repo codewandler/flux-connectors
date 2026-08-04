@@ -14,6 +14,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Durable local credentials now work on Windows as well as Linux and macOS.** New state is
+  restricted to the current operating-system user, while existing files or directories with unsafe
+  ownership, permissions or links are refused without changing them. A store placed directly under
+  a shared directory now tells the operator to choose a private child or per-user state location;
+  it no longer suggests changing the shared directory itself.
+
 ## [0.19.0] — 2026-08-04
 
 ### Action needed

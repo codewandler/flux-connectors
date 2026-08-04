@@ -1,4 +1,4 @@
-//! A [`SecretStore`] that survives the process, in one `0600` file.
+//! A [`SecretStore`] that survives the process in one platform-protected file.
 //!
 //! [`MemoryStore`](crate::MemoryStore) is honest about what it is — *"the process exiting is the
 //! cleanup"* — and that is the right store for a test and the wrong one for a deployment. A host
@@ -12,12 +12,13 @@
 //!
 //! | | |
 //! |---|---|
-//! | file mode `0600`, directory mode `0700` | set in the `open(2)`/`mkdir(2)` call, not fixed up afterwards, and re-checked on every open |
-//! | the write is atomic | a full rewrite into a sibling temporary file, `fsync`, then `rename(2)` — a crash mid-write leaves the previous file whole |
+//! | Unix owner plus file mode `0600` and directory mode `0700` | set in the create calls, not fixed up afterwards; owner, mode, kind and no-follow handle metadata are checked before every read or write |
+//! | Windows process `TokenUser` SID plus a non-null protected DACL | set in the create calls with one explicit full-control allow entry for that SID; owner, DACL, kind and non-reparse handle metadata are checked before every read or write |
+//! | the write is atomic | a bounded full rewrite into a protected sibling temporary, flush, then the platform replacement primitive — a failed write leaves the previous file whole |
 //! | the file never sits inside a served directory | the path is the caller's, and [`connectors_api`](https://docs.rs/) refuses one under its own workspace root |
 //! | hex encoding | **framing, not protection.** It exists so a value containing a newline cannot forge a second entry, and so a careless `grep` over the filesystem does not match a token. `xxd -r` undoes it. |
 //! | encryption at rest | **absent.** There is no key, no passphrase and no OS keychain integration. |
-//! | protection from root, or from a backup that copies the file | **absent.** |
+//! | protection from Unix root, Windows administrators, or a backup that copies the file | **absent.** |
 //!
 //! That table is the whole security argument, and it is deliberately short. A store that implied more
 //! would be worse than one that implies nothing: the operator's own decision — whether this machine
@@ -112,7 +113,8 @@ static NEXT_TEMPORARY: AtomicU64 = AtomicU64::new(0);
 /// A [`SecretStore`] kept in one file.
 ///
 /// See the [module documentation](self) for what protects the values in it and what does not — the
-/// short answer is a file mode and nothing else.
+/// short answer is the current OS identity plus native owner-only filesystem controls, and nothing
+/// cryptographic.
 ///
 pub struct FileStore<L = TenantLayout> {
     layout: L,
@@ -128,16 +130,18 @@ pub struct FileStore<L = TenantLayout> {
 impl FileStore<TenantLayout> {
     /// Open — or create — the store at `path`, using the blessed [`TenantLayout`].
     ///
-    /// The containing directory is created at [`DIR_MODE`] if it is absent, and the file at
-    /// [`FILE_MODE`] if it is. An existing file or directory that is readable by anyone but its
-    /// owner is **refused**, not tightened: the file already had that mode while it held values, so
-    /// quietly `chmod`-ing it now would repair the symptom and hide the exposure.
+    /// On Unix the containing directory is created at `0700` and the file at `0600`. On Windows
+    /// both are created for the process `TokenUser` SID with a protected DACL allowing only that
+    /// SID. Existing state with a foreign owner, wider access, a link/reparse point, the wrong kind
+    /// or uninspectable metadata is **refused**, never tightened or repaired: it may already have
+    /// exposed values, and changing it silently would hide that evidence.
     ///
     /// # Errors
     ///
-    /// [`StoreError::Unreachable`] for an IO failure, [`StoreError::Denied`] for a mode this store
-    /// will not use, and [`StoreError::Backend`] for a file it cannot parse. Every one of them names
-    /// the file path and none of them carries a value.
+    /// [`StoreError::Unreachable`] for an IO or security-inspection failure,
+    /// [`StoreError::Denied`] for native protection this store will not use, and
+    /// [`StoreError::Backend`] for a file it cannot parse. Every one names the filesystem path and
+    /// none carries a value.
     pub fn open(path: impl Into<PathBuf>) -> Result<Self, StoreError> {
         Self::open_with_layout(path, TenantLayout)
     }
@@ -295,15 +299,16 @@ impl<L: Layout> FileStore<L> {
 
     /// Rewrite the whole file, atomically.
     ///
-    /// **Atomic by `rename(2)`**, which is the only way to get it: a file opened for truncation is
-    /// observably empty between the truncate and the write, and a crash in that window loses every
-    /// credential rather than the one being written. So the new contents go to a fresh sibling file
-    /// created at [`FILE_MODE`], are flushed to disk, and then replace the old file in one step. A
-    /// reader either sees the whole previous version or the whole new one.
+    /// **Atomic by the platform replacement primitive**, which is the only way to get it: a file
+    /// opened for truncation is observably empty between the truncate and the write, and a crash in
+    /// that window loses every credential rather than the one being written. The new contents go to
+    /// a fresh owner-only sibling, are flushed, and then replace the old file in one step. A reader
+    /// sees the whole previous version or the whole new one.
     ///
-    /// The temporary lives in the **same directory** deliberately — `rename(2)` is atomic only
-    /// within a filesystem, and a temporary in `/tmp` could be on another one. It is also created
-    /// with `create_new`, so this never writes through a name somebody else placed there.
+    /// The temporary lives in the **same directory** deliberately — replacement is atomic only
+    /// within one filesystem/volume, and a temporary in a global scratch directory could be on
+    /// another one. It is also created with `create_new`, so this never writes through a name
+    /// somebody else placed there.
     fn write_through(&self, entries: &BTreeMap<String, Secret>) -> Result<(), StoreError> {
         let directory = self
             .path
@@ -509,7 +514,6 @@ impl<L> fmt::Debug for FileStore<L> {
     }
 }
 
-/// Create `directory` at [`DIR_MODE`] if it is absent, and refuse it if it is too open.
 /// An IO failure, as a [`StoreError`].
 ///
 /// `std::io::Error`'s own message names an errno and, for the calls used here, nothing else. It

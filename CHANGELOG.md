@@ -7,6 +7,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Durable connector credentials are owner-only on every supported platform** (C-509).
+  `connector-secrets::FileStore` now exposes the same bounded v1 format and atomic `SecretBatch`
+  backend on Linux, macOS and Windows. Unix verifies the effective owner plus `0700`/`0600` modes;
+  Windows creates and verifies process-`TokenUser` ownership with a non-null protected DACL that
+  allows only that SID. Both paths refuse unsafe object kinds, links/reparse points and
+  uninspectable or widened security metadata before reading or writing a value, preserve the unsafe
+  evidence without repair, and direct shared-directory users to an owner-only child rather than
+  suggesting that they narrow `/tmp`.
+
 ## [0.19.0] — 2026-08-04
 
 ### Added
