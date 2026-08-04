@@ -167,6 +167,34 @@ instance-aware host-port worktree, Flux's pending remote-approval and generated-
 and Exchange's delivered X-107 Service Account work are prerequisites that this program consumes rather
 than duplicates. See [the accepted design](designs/all-integrations-are-connectors.md).
 
+### Vendor datasources — a connector declares its data surface as a projection over its operations
+
+flux-roadmap Decision 0006 gives the family one datasource definition — a named, declared,
+read-only record surface: *operations do; datasources know* — and resolves the Exchange concepts
+table's one ambiguous owner cell to this repository: **which entities a vendor exposes and how to
+read them is a fact of the integration**, true regardless of who runs it. The stakes are the
+migration program's: the decision records that seventeen of the eighteen official plugins declare
+datasources through the plugin protocol Milestone 5 removes, and until this epic the connector IR
+had no surface to replace them.
+
+The shape is deliberately not a second retrieval path. A `[[datasources]]` member is a **projection
+over that connector's declared operations** — it joins the per-service member namespace, derives
+its entity schemas from the IR rather than stating them twice, and binds each read verb to a named
+operation with explicit parameter, filter, cursor and field mappings. Every read executes as an
+admitted operation, so Exchange constructs no request of its own and existing grant metadata
+governs reads with no new machinery; the member reaches credentials only as the backing operation's
+declared auth, never a value. The surface ships with non-empty artifact reach from its first
+release — manifest, public catalogue, embedded catalogue, never the generated `.flux` module — and
+its cursor vocabulary supersedes the dead `quirks.pagination` surface, which is removed rather than
+left declared-but-unreachable.
+
+Done looks like: the IR member with its load-time refusals (C-512), the three-artifact emission
+(C-513), the pagination supersession (C-514) — and, before any Milestone 4 wave deletes a
+datasource-declaring plugin, every declaration mapped to a proven connector datasource member or an
+explicit reviewed removal, which C-501/C-502 now carry as checkable acceptance rather than prose.
+C-510 records the adoption. See
+[vendor-datasource-declarations.md](designs/vendor-datasource-declarations.md).
+
 ### Zendesk suite — grow from Support without moving the addresses already published
 
 Zendesk currently ships as one implicit/default Support service. Its seven operation addresses and
@@ -235,15 +263,21 @@ every one is model-facing surface: schema in the context window, a name to disam
 pick wrong. A datasource is a fixed handful of operations whether the catalogue holds 97 or 970. The two are complementary: discover through the
 datasource, invoke through the pack.
 
-The seam is flux's and already built — `LiveDatasource`, `try_register_live_datasource`, and
-`ClientBuilder::try_with_live_datasource`, which is the same call a host uses for the pack. The
-catalogue is already shaped for it, which is what the addressing work bought: the `oip` is a stable
-record id, and a channel binding's link to its reply operation is C-82's composition made traversable.
+The seam is flux's and already built — and Decision 0006 (rule 9) fixed *which* seam, amending
+C-137…C-140 before any dispatch: the compiled-in catalogue binds as an **indexed**
+`DatasourceBackend` registered through `try_register_datasource_ops` into the same registry a host
+hands the pack, not as the two-op `LiveDatasource` projection the epic first named, whose method
+set has no search or relation at all. The catalogue is already shaped for it, which is what the
+addressing work bought: the `oip` is a stable record id, and a channel binding's link to its reply
+operation is C-82's composition made traversable.
 
-Done looks like search, get, list, relation and batch-get answered offline from the compiled-in
-catalogue — with search good enough to act on, since one that returns the wrong connector confidently
-is worse than none. What it must **not** become is an HTTP service: that is the proxy charter question
-C-34 already gates. See [connectors-datasource.md](designs/connectors-datasource.md).
+Done looks like search, get, list, relation, batch-get and sources answered offline from the
+compiled-in catalogue — with search good enough to act on, since one that returns the wrong
+connector confidently is worse than none, and the trait's mutating methods refusing, typed, on a
+dataset that is a fixed point of a build. What it must **not** become is an HTTP service: that is
+the proxy charter question C-34 already gates. And it is not the *vendor-data* datasource surface —
+that is the `vendor-datasources` epic below. See
+[connectors-datasource.md](designs/connectors-datasource.md).
 
 ### Authentication as a connector surface — a login that cannot leak
 
@@ -323,7 +357,7 @@ The constraint that shapes every option: these are not two attempts at one thing
 [C-147](stories/C-147-explorer-runs-an-operation.md) forbids the public site collecting a credential
 or implying a live call, and this surface exists to do both. So credential capture and execution can
 never move into a shared component — convergence means sharing the browsing half and keeping the
-operating half in the host. [C-142](stories/C-142-detach-the-explorer-components.md) already detached
+operating half in the host. [C-142](stories/C-142-reusable-explorer-components.md) already detached
 the components from VitePress for exactly this, and their README marks the page tier as the one a
 host may reasonably decline.
 

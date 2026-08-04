@@ -36,6 +36,10 @@ a caller can check.
 
 ## Notes
 
+- **Amended 2026-08-04 per flux-roadmap Decision 0006 (rule 9):** `search` is a method of the
+  indexed `DatasourceBackend` the catalogue now binds as — the live trait this epic previously
+  named has no search at all, which is one of the reasons the binding was corrected. The op set
+  this story completes is search/get/list/relation/batch_get/sources.
 - **Depends on [C-139](C-139-datasource-backend.md)** for the backend, and is much more useful after
   [C-119](C-119-provider-roles-epic.md)/[C-121](C-121-llm-catalogue-role.md) give roles to search on.
   It can land before roles — just say so, and do not pretend the role dimension exists.
