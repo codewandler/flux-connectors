@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.19.1] — 2026-08-04
+
 ### Fixed
 
 - **Durable local credentials now work on Windows as well as Linux and macOS.** New state is
