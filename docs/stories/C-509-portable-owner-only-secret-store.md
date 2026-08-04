@@ -2,8 +2,8 @@
 id: C-509
 title: "Persist connector secrets owner-only on every Flux platform"
 pillar: Bridge
-status: ready
-priority: 0
+status: in-progress
+design: docs/designs/portable-owner-only-secret-store.md
 epic: all-integrations-connectors
 areas: [connector-secrets, persistence, security, windows, release]
 note: "Milestone 1 blocker — Exchange X-127 cannot support Windows or ship a complete local composition while connector-secrets 0.19 exposes its durable store only on Unix"
