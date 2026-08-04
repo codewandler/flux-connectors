@@ -836,7 +836,7 @@ mod tests {
             ),
             (
                 "unreadable",
-                format!("O:{sid}D:P(D;;RC;;;{sid})(A;;FA;;;{sid})"),
+                format!("O:{sid}D:P(D;;RC;;;OW)(A;;FA;;;{sid})"),
                 OWNER_SECURITY_INFORMATION
                     | DACL_SECURITY_INFORMATION
                     | PROTECTED_DACL_SECURITY_INFORMATION,
@@ -860,7 +860,6 @@ mod tests {
                 assert!(message.contains(&target.display().to_string()), "{message}");
                 assert!(!message.contains(SENTINEL), "{message}");
                 assert!(!message.contains("com.acme.api"), "{message}");
-                assert_eq!(std::fs::read(&path).expect("bytes unchanged"), bytes);
                 assert_eq!(
                     descriptor_sddl(&control),
                     planted_equivalent,
@@ -874,6 +873,7 @@ mod tests {
                         | DACL_SECURITY_INFORMATION
                         | PROTECTED_DACL_SECURITY_INFORMATION,
                 );
+                assert_eq!(std::fs::read(&path).expect("bytes unchanged"), bytes);
             }
         }
     }
