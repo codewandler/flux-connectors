@@ -50,6 +50,96 @@ jobs:
       - name: Format
         run: cargo fmt --all --check
 
+  connector-secrets-targets:
+    name: connector-secrets · ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+          - aarch64-unknown-linux-gnu
+          - x86_64-unknown-linux-gnu
+          - x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Install Rust toolchain and target
+        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: "1.97.0"
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: connector-secrets-${{ matrix.target }}
+
+      # Cross-compilation covers the target-specific backend and every integration-test consumer.
+      # It does not replace native security and durability execution below.
+      - name: Check the public crate surface
+        run: cargo check --locked -p codewandler-connector-secrets --all-targets --target ${{ matrix.target }}
+
+  connector-secrets-windows:
+    name: connector-secrets · native Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: "1.97.0"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      # This full native suite executes the durable backend, reopen/migration and injected-failure
+      # fixtures, plus the Windows owner, protected-DACL and unsafe-object refusals. A target check
+      # alone cannot prove any of those OS behaviours.
+      - name: Test the durable backend natively
+        run: cargo test --locked -p codewandler-connector-secrets
+
+  connector-secrets-unix-owner:
+    name: connector-secrets · Unix foreign owner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: "1.97.0"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      # Creating a genuinely foreign-owned fixture needs privilege. The test is ignored in the
+      # ordinary package suite and refuses to run unless it is root, so this explicit leg cannot
+      # turn a missing ownership proof into a silent skip.
+      - name: Refuse a foreign Unix owner without repair
+        run: |
+          store_log="$RUNNER_TEMP/foreign-owned-store.log"
+          sudo env \
+            "PATH=$PATH" \
+            "CARGO_HOME=${CARGO_HOME:-$HOME/.cargo}" \
+            "RUSTUP_HOME=${RUSTUP_HOME:-$HOME/.rustup}" \
+            cargo test --locked -p codewandler-connector-secrets --lib \
+              file::tests::a_foreign_owned_store_is_refused_without_repair -- --ignored --exact \
+            | tee "$store_log"
+          grep -F "test result: ok. 1 passed; 0 failed; 0 ignored;" "$store_log"
+
+          directory_log="$RUNNER_TEMP/foreign-owned-directory.log"
+          sudo env \
+            "PATH=$PATH" \
+            "CARGO_HOME=${CARGO_HOME:-$HOME/.cargo}" \
+            "RUSTUP_HOME=${RUSTUP_HOME:-$HOME/.rustup}" \
+            cargo test --locked -p codewandler-connector-secrets --lib \
+              file::tests::a_foreign_owned_directory_is_refused_without_repair -- --ignored --exact \
+            | tee "$directory_log"
+          grep -F "test result: ok. 1 passed; 0 failed; 0 ignored;" "$directory_log"
+
   host-page:
     name: the host's operator page
     runs-on: ubuntu-latest
