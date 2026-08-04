@@ -24,7 +24,6 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 
 ## Now (in progress)
 - [C-495 — All official integrations become connectors (epic)](C-495-all-integrations-are-connectors-epic.md) · Bridge · EPIC — every official integration is connector-owned and Exchange-executed; migrate all 18 Flux adapters without a local Flux runtime or fallback
-- [C-509 — Persist connector secrets owner-only on every Flux platform](C-509-portable-owner-only-secret-store.md) · Bridge · Milestone 1 blocker — Exchange X-127 cannot support Windows or ship a complete local composition while connector-secrets 0.19 exposes its durable store only on Unix
 
 ## Next (ready — take the top one unless the user named a story)
 - [C-227 — C-55 gave the pipeline constant headers and constant body fields and stopped — a vendor-constant query parameter cannot be declared, and it costs Confluence every content read](C-227-a-vendor-constant-query-parameter-cannot-be-declared.md) · Spec · found by the C-219 implementor 2026-07-31. This is NOT the C-30 percent-encoding gap: a constant needs no encoding machinery, which is why it is the smaller change and the one that actually unblocks confluence's content reads
@@ -484,6 +483,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-505 — Establish the native-plugin migration inventory and Exchange conformance ratchet](C-505-gate-the-native-plugin-migration.md) · Bridge · MILESTONE 1 lane 15 — freeze the complete native-adapter inventory and reusable legacy-versus-Exchange conformance format before the first migration wave
 - [C-507 — Adopt the Exchange-only execution path for official integrations](C-507-adopt-the-exchange-only-integration-path.md) · Bridge · Decision 0001 makes Exchange the sole executor for official external integrations; this supersedes local Flux execution and local-versus-hosted parity throughout C-495…C-505
 - [C-508 — A GitLab connection supports an operator-approved self-managed HTTPS origin](C-508-self-managed-gitlab-origin.md) · Connector · Milestone 1 critical: GitLab must support gitlab.com by default and an operator-pinned self-managed origin before the collaboration migration can replace the native plugin
+- [C-509 — Persist connector secrets owner-only on every Flux platform](C-509-portable-owner-only-secret-store.md) · Bridge · Milestone 1 blocker — Exchange X-127 cannot support Windows or ship a complete local composition while connector-secrets 0.19 exposes its durable store only on Unix
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

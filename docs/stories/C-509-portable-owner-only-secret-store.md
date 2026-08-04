@@ -2,7 +2,7 @@
 id: C-509
 title: "Persist connector secrets owner-only on every Flux platform"
 pillar: Bridge
-status: in-progress
+status: done
 design: docs/designs/portable-owner-only-secret-store.md
 epic: all-integrations-connectors
 areas: [connector-secrets, persistence, security, windows, release]
@@ -20,39 +20,39 @@ falling back to memory.
 
 ## Acceptance
 
-- [ ] `FileStore` and its public `SecretStore` implementation compile for
+- [x] `FileStore` and its public `SecretStore` implementation compile for
       `aarch64-apple-darwin`, `x86_64-apple-darwin`, `aarch64-unknown-linux-gnu`,
       `x86_64-unknown-linux-gnu` and `x86_64-pc-windows-msvc`. The Windows build contains the real
       durable backend; a cfg-disabled type, in-memory substitute or compile-only façade is refused.
-- [ ] The logical v1 file format, credential addressing, bounded reads/writes, atomic whole-file
+- [x] The logical v1 file format, credential addressing, bounded reads/writes, atomic whole-file
       replacement and `SecretBatch` all-or-nothing semantics remain one implementation contract.
       An external host uses the existing public port and never needs access to a credential value or
       to crate-private mutation representation in order to obtain the platform-native backend.
-- [ ] Unix creation remains `0700` for the state directory and `0600` for the file. Existing wrong
+- [x] Unix creation remains `0700` for the state directory and `0600` for the file. Existing wrong
       owner, wider mode, symlink/wrong object kind or uninspectable metadata refuses before a value
       is read and is never repaired silently.
-- [ ] Windows creation uses a protected DACL owned by the process identity's SID, with access
+- [x] Windows creation uses a protected DACL owned by the process identity's SID, with access
       granted only to that SID. An inherited allow entry, allow entry for another SID, foreign owner,
       reparse point, wrong object kind or unreadable security descriptor refuses before a value is
       read or written and is never repaired silently.
-- [ ] Failing-first native Unix and Windows fixtures widen each relevant permission/ownership
+- [x] Failing-first native Unix and Windows fixtures widen each relevant permission/ownership
       property, prove the affected path is named without any value or credential address, and prove
       refusal leaves the planted metadata byte-for-byte/security-descriptor-equivalent unchanged.
       Native Windows CI runs the backend and restart/batch tests; cross-compilation alone is not
       acceptance evidence.
-- [ ] A credential path directly beneath a shared directory such as `/tmp` remains refused, but the
+- [x] A credential path directly beneath a shared directory such as `/tmp` remains refused, but the
       message never recommends `chmod 700 /tmp` or narrowing another shared ancestor. It directs the
       operator to create an owner-only child or use a conventional per-user state root. A
       failing-first diagnostic test pins this exact safety property.
-- [ ] A native restart proof writes more than one credential, applies a first-to-second connection
+- [x] A native restart proof writes more than one credential, applies a first-to-second connection
       migration as one batch, reopens the store in a new instance and resolves only the committed
       post-migration addresses. An injected write failure exposes neither a partial batch nor a
       truncated prior file on both Windows and Unix.
-- [ ] `AGENTS.md`, the crate README/rustdoc and both changelogs describe the platform-native
+- [x] `AGENTS.md`, the crate README/rustdoc and both changelogs describe the platform-native
       protection honestly: Unix modes and Windows owner/DACL checks are distinct, neither is
       encryption, administrator/root and copied backups remain outside the guarantee, and the
       backend is still for one local operator.
-- [ ] The complete Rust workspace gate, publish-closure dry runs and native platform CI pass. The
+- [x] The complete Rust workspace gate, publish-closure dry runs and native platform CI pass. The
       merged change is release-ready for the coordinator's patch release; dependency completion for
       Exchange X-127 is the verified crates.io publication, not merely this repository merge.
 
@@ -64,6 +64,13 @@ falling back to memory.
   expose batch internals or duplicate persistence in Exchange.
 - 2026-08-04: The same audit reproduced `/tmp/flux-secret` refusing the shared `/tmp` parent and
   advising `chmod 700 /tmp`. Refusal is correct; changing permissions on the shared ancestor is not.
+- 2026-08-04: The diagnostic's failing-first exact test reproduced the unsafe `chmod 700 /tmp`
+  advice before implementation. The completed implementation passes the five dispatched release
+  target checks, the full Rust workspace build/test/clippy/fmt gate, and the four-crate publication
+  dry run. PR #8 run `30875755616` then passed the native Windows backend suite, the privileged Unix
+  foreign-owner fixtures, and all five target jobs. The first Windows run exposed and fixed three
+  native-only assumptions — SDDL SID aliasing, synthetic inherited-ACE normalization and CRLF source
+  text — before this story was closed.
 
 ## Notes
 
