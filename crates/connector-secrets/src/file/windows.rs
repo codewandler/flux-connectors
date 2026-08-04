@@ -594,3 +594,319 @@ impl Expected {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{CredentialRef, FileStore, Secret, SecretStore};
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertSecurityDescriptorToStringSecurityDescriptorW, SetSecurityInfo,
+    };
+    use windows_sys::Win32::Security::{
+        GetSecurityDescriptorDacl, GetSecurityDescriptorOwner, PROTECTED_DACL_SECURITY_INFORMATION,
+        UNPROTECTED_DACL_SECURITY_INFORMATION,
+    };
+    use windows_sys::Win32::Storage::FileSystem::{WRITE_DAC, WRITE_OWNER};
+
+    const SENTINEL: &str = "SENTINEL-NOT-A-REAL-SECRET-windows-acl";
+
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(label: &str) -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "connector-secrets-windows-{label}-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            let _ = std::fs::remove_dir_all(&path);
+            Self(path)
+        }
+
+        fn store(&self) -> PathBuf {
+            self.0.join("state").join("credentials")
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn planted_store(label: &str) -> (Scratch, PathBuf) {
+        let scratch = Scratch::new(label);
+        let path = scratch.store();
+        let store = FileStore::open(&path).expect("create protected store");
+        let reference =
+            CredentialRef::new("tenant-a", "com.acme.api", "default", "token").expect("reference");
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("runtime")
+            .block_on(store.put(&reference, &Secret::new(SENTINEL)))
+            .expect("plant real credential");
+        drop(store);
+        (scratch, path)
+    }
+
+    fn control_handle(path: &Path, directory: bool) -> OwnedHandle {
+        let wide = wide(path).expect("path");
+        let flags = FILE_FLAG_OPEN_REPARSE_POINT
+            | if directory {
+                FILE_FLAG_BACKUP_SEMANTICS
+            } else {
+                FILE_ATTRIBUTE_NORMAL
+            };
+        // SAFETY: path buffer lives through the call; returned handle is uniquely owned below.
+        let raw = unsafe {
+            CreateFileW(
+                wide.as_ptr(),
+                FILE_ALL_ACCESS | READ_CONTROL | WRITE_DAC | WRITE_OWNER,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                null(),
+                OPEN_EXISTING,
+                flags,
+                null_mut(),
+            )
+        };
+        owned_handle(raw).expect("open retained control handle")
+    }
+
+    fn descriptor_sddl(handle: &OwnedHandle) -> String {
+        let mut descriptor = null_mut();
+        // SAFETY: output pointers are local and descriptor is LocalFree-owned on success.
+        let status = unsafe {
+            GetSecurityInfo(
+                handle.as_raw_handle() as HANDLE,
+                SE_FILE_OBJECT,
+                OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                null_mut(),
+                null_mut(),
+                null_mut(),
+                null_mut(),
+                &mut descriptor,
+            )
+        };
+        assert_eq!(
+            status,
+            0,
+            "GetSecurityInfo: {}",
+            std::io::Error::from_raw_os_error(status as i32)
+        );
+        let descriptor_guard = LocalAllocation(descriptor);
+        let mut rendered = null_mut();
+        // SAFETY: descriptor remains live and output pointers are local.
+        assert_ne!(
+            unsafe {
+                ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                    descriptor,
+                    SDDL_REVISION_1,
+                    OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                    &mut rendered,
+                    null_mut(),
+                )
+            },
+            0
+        );
+        let rendered_guard = LocalAllocation(rendered as *mut c_void);
+        let mut length = 0usize;
+        // SAFETY: the API returned a nul-terminated LocalAlloc UTF-16 string.
+        while unsafe { *rendered.add(length) } != 0 {
+            length += 1;
+        }
+        // SAFETY: the scan found the terminator in the live allocation.
+        let result = String::from_utf16(unsafe { std::slice::from_raw_parts(rendered, length) })
+            .expect("descriptor SDDL is UTF-16");
+        drop(rendered_guard);
+        drop(descriptor_guard);
+        result
+    }
+
+    fn apply_sddl(handle: &OwnedHandle, sddl: &str, security_information: u32) {
+        let encoded = wide(std::ffi::OsStr::new(sddl)).expect("SDDL");
+        let mut descriptor = null_mut();
+        // SAFETY: input/output buffers are live; success returns LocalAlloc descriptor.
+        assert_ne!(
+            unsafe {
+                ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                    encoded.as_ptr(),
+                    SDDL_REVISION_1,
+                    &mut descriptor,
+                    null_mut(),
+                )
+            },
+            0,
+            "parse SDDL: {}",
+            std::io::Error::last_os_error()
+        );
+        let guard = LocalAllocation(descriptor);
+        let mut owner = null_mut();
+        let mut owner_defaulted = 0;
+        let mut dacl = null_mut();
+        let mut dacl_present = 0;
+        let mut dacl_defaulted = 0;
+        // SAFETY: descriptor is valid/live and outputs are local.
+        assert_ne!(
+            unsafe { GetSecurityDescriptorOwner(descriptor, &mut owner, &mut owner_defaulted) },
+            0
+        );
+        // SAFETY: descriptor is valid/live and outputs are local.
+        assert_ne!(
+            unsafe {
+                GetSecurityDescriptorDacl(
+                    descriptor,
+                    &mut dacl_present,
+                    &mut dacl,
+                    &mut dacl_defaulted,
+                )
+            },
+            0
+        );
+        // SAFETY: owner/DACL pointers stay live under guard; retained handle owns requested rights.
+        let status = unsafe {
+            SetSecurityInfo(
+                handle.as_raw_handle() as HANDLE,
+                SE_FILE_OBJECT,
+                security_information,
+                owner,
+                null_mut(),
+                dacl,
+                null_mut(),
+            )
+        };
+        assert_eq!(
+            status,
+            0,
+            "SetSecurityInfo: {}",
+            std::io::Error::from_raw_os_error(status as i32)
+        );
+        drop(guard);
+    }
+
+    #[test]
+    fn creation_is_owned_and_protected_for_only_the_process_sid() {
+        let (_scratch, path) = planted_store("protected-creation");
+        let handle = control_handle(&path, false);
+        inspect_security(handle.as_raw_handle() as HANDLE, &path)
+            .expect("exact protected descriptor");
+        let sddl = descriptor_sddl(&handle);
+        let sid = sid_string(&current_process_sid().expect("process SID")).expect("SID text");
+        assert!(sddl.contains("D:P"), "unprotected descriptor: {sddl}");
+        assert!(sddl.contains(&format!("O:{sid}")), "foreign owner: {sddl}");
+        let directory = path.parent().expect("state directory");
+        let directory_handle = control_handle(directory, true);
+        inspect_security(directory_handle.as_raw_handle() as HANDLE, directory)
+            .expect("exact protected directory descriptor");
+    }
+
+    #[test]
+    fn unsafe_descriptors_refuse_without_repair_or_leak() {
+        let sid = sid_string(&current_process_sid().expect("process SID")).expect("SID text");
+        for (label, planted, flags) in [
+            (
+                "inherited-allow",
+                format!("O:{sid}D:P(A;ID;FA;;;{sid})"),
+                OWNER_SECURITY_INFORMATION
+                    | DACL_SECURITY_INFORMATION
+                    | PROTECTED_DACL_SECURITY_INFORMATION,
+            ),
+            (
+                "foreign-allow",
+                format!("O:{sid}D:P(A;;FA;;;{sid})(A;;FR;;;WD)"),
+                OWNER_SECURITY_INFORMATION
+                    | DACL_SECURITY_INFORMATION
+                    | PROTECTED_DACL_SECURITY_INFORMATION,
+            ),
+            (
+                "foreign-owner",
+                format!("O:BAD:P(A;;FA;;;{sid})"),
+                OWNER_SECURITY_INFORMATION
+                    | DACL_SECURITY_INFORMATION
+                    | PROTECTED_DACL_SECURITY_INFORMATION,
+            ),
+            (
+                "unprotected",
+                format!("O:{sid}D:(A;;FA;;;{sid})"),
+                OWNER_SECURITY_INFORMATION
+                    | DACL_SECURITY_INFORMATION
+                    | UNPROTECTED_DACL_SECURITY_INFORMATION,
+            ),
+            (
+                "unreadable",
+                format!("O:{sid}D:P(D;;RC;;;{sid})(A;;FA;;;{sid})"),
+                OWNER_SECURITY_INFORMATION
+                    | DACL_SECURITY_INFORMATION
+                    | PROTECTED_DACL_SECURITY_INFORMATION,
+            ),
+        ] {
+            for directory in [false, true] {
+                let (_scratch, path) = planted_store(label);
+                let bytes = std::fs::read(&path).expect("prior bytes");
+                let target = if directory {
+                    path.parent().expect("directory")
+                } else {
+                    path.as_path()
+                };
+                let control = control_handle(target, directory);
+                let original = descriptor_sddl(&control);
+                apply_sddl(&control, &planted, flags);
+                let planted_equivalent = descriptor_sddl(&control);
+
+                let error = FileStore::open(&path).expect_err("unsafe descriptor must refuse");
+                let message = error.to_string();
+                assert!(message.contains(&target.display().to_string()), "{message}");
+                assert!(!message.contains(SENTINEL), "{message}");
+                assert!(!message.contains("com.acme.api"), "{message}");
+                assert_eq!(std::fs::read(&path).expect("bytes unchanged"), bytes);
+                assert_eq!(
+                    descriptor_sddl(&control),
+                    planted_equivalent,
+                    "refusal repaired {label} (directory={directory})"
+                );
+
+                apply_sddl(
+                    &control,
+                    &original,
+                    OWNER_SECURITY_INFORMATION
+                        | DACL_SECURITY_INFORMATION
+                        | PROTECTED_DACL_SECURITY_INFORMATION,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn reparse_points_and_wrong_kinds_are_refused_unchanged() {
+        let (scratch, real) = planted_store("reparse");
+        let link = real.parent().expect("parent").join("linked-credentials");
+        std::os::windows::fs::symlink_file(&real, &link).expect("create file symlink");
+        let before = std::fs::symlink_metadata(&link)
+            .expect("link metadata")
+            .file_attributes();
+        let error = FileStore::open(&link).expect_err("reparse point must refuse");
+        assert!(!error.to_string().contains(SENTINEL));
+        assert_eq!(
+            std::fs::symlink_metadata(&link)
+                .expect("link remains")
+                .file_attributes(),
+            before
+        );
+
+        let wrong = scratch.0.join("state").join("directory-at-file");
+        std::fs::create_dir(&wrong).expect("plant directory");
+        let before = std::fs::metadata(&wrong)
+            .expect("metadata")
+            .file_attributes();
+        let error = FileStore::open(&wrong).expect_err("wrong kind must refuse");
+        assert!(!error.to_string().contains(SENTINEL));
+        assert_eq!(
+            std::fs::metadata(&wrong)
+                .expect("unchanged")
+                .file_attributes(),
+            before
+        );
+    }
+}
