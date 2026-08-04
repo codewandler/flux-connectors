@@ -246,9 +246,14 @@ SecretProposalDigest(<opaque>)
 ```
 
 They reveal no scope, address, operation, count, generation, id, digest, path, value or value length.
-The new types implement neither `Display` nor serde. Internally computing bounded encoded byte sizes
-is permitted; returning, logging, identifying by or persisting secret-derived metadata outside the
-credential sink is not.
+These value-bearing containers/stores and generation/id/digest types implement no `Display`. The
+closed payload-free state's variant `Debug` exposes only the already-returned public
+`Absent|Prepared|Committed` result. The closed payload-free error exposes variant `Debug` and fixed
+non-contextual `Display`/`Error`. No rendering exposes a concrete id, digest or generation value, or
+a contextual scope, address, mutation fact, path, credential value, length or secret-derived fact
+beyond that explicit state result. No new type implements serde. Internally computing bounded
+encoded byte sizes is permitted; returning, logging, identifying by or persisting secret-derived
+metadata outside the credential sink is not.
 
 ## Native crash evidence
 

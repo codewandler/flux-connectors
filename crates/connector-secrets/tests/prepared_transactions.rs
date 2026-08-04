@@ -551,21 +551,28 @@ async fn public_renderings_and_non_credential_files_hide_encoded_sentinels() {
         .put(&address, &Secret::new("must-not-render"))
         .await
         .expect_err("ordinary write must conflict while prepared");
+    let states = [
+        SecretTransactionState::Absent,
+        SecretTransactionState::Prepared,
+        SecretTransactionState::Committed,
+    ];
+    let errors = [
+        PreparedSecretError::Unsupported,
+        PreparedSecretError::Busy,
+        PreparedSecretError::DigestMismatch,
+        PreparedSecretError::TransactionIdReused,
+        PreparedSecretError::NotPrepared,
+        PreparedSecretError::AlreadyCommitted,
+        PreparedSecretError::Retired,
+        PreparedSecretError::Capacity,
+        PreparedSecretError::InvalidBatch,
+        PreparedSecretError::Backend,
+    ];
+    let error_displays = errors.map(|error| error.to_string()).join(" ");
 
     let public = format!(
-        "{store:?} {batch:?} {id:?} {proposal:?} {conflict:?} {conflict} {:?}",
-        [
-            PreparedSecretError::Unsupported,
-            PreparedSecretError::Busy,
-            PreparedSecretError::DigestMismatch,
-            PreparedSecretError::TransactionIdReused,
-            PreparedSecretError::NotPrepared,
-            PreparedSecretError::AlreadyCommitted,
-            PreparedSecretError::Retired,
-            PreparedSecretError::Capacity,
-            PreparedSecretError::InvalidBatch,
-            PreparedSecretError::Backend,
-        ]
+        "{store:?} {batch:?} {id:?} {proposal:?} {conflict:?} {conflict} {states:?} {errors:?} \
+         {error_displays}"
     );
     let sentinels = [
         "tenant-address-sentinel",
@@ -676,6 +683,75 @@ fn protocol_types_are_fixed_width_nonzero_and_opaque() {
         "SecretBatch(<opaque>)"
     );
     assert_eq!(format!("{:?}", MemoryStore::new()), "MemoryStore(<opaque>)");
+}
+
+#[test]
+fn payload_free_state_and_error_renderings_are_fixed() {
+    let states = [
+        (SecretTransactionState::Absent, "Absent"),
+        (SecretTransactionState::Prepared, "Prepared"),
+        (SecretTransactionState::Committed, "Committed"),
+    ];
+    for (state, expected) in states {
+        assert_eq!(format!("{state:?}"), expected);
+    }
+
+    let errors = [
+        (
+            PreparedSecretError::Unsupported,
+            "Unsupported",
+            "prepared transactions are unsupported",
+        ),
+        (
+            PreparedSecretError::Busy,
+            "Busy",
+            "the prepared transaction slot is busy",
+        ),
+        (
+            PreparedSecretError::DigestMismatch,
+            "DigestMismatch",
+            "the proposal digest does not match",
+        ),
+        (
+            PreparedSecretError::TransactionIdReused,
+            "TransactionIdReused",
+            "the transaction id was already used",
+        ),
+        (
+            PreparedSecretError::NotPrepared,
+            "NotPrepared",
+            "the transaction was not prepared",
+        ),
+        (
+            PreparedSecretError::AlreadyCommitted,
+            "AlreadyCommitted",
+            "the transaction was already committed",
+        ),
+        (
+            PreparedSecretError::Retired,
+            "Retired",
+            "the transaction generation was retired",
+        ),
+        (
+            PreparedSecretError::Capacity,
+            "Capacity",
+            "the prepared transaction store is at capacity",
+        ),
+        (
+            PreparedSecretError::InvalidBatch,
+            "InvalidBatch",
+            "the secret batch is invalid",
+        ),
+        (
+            PreparedSecretError::Backend,
+            "Backend",
+            "the prepared transaction backend failed",
+        ),
+    ];
+    for (error, expected_debug, expected_display) in errors {
+        assert_eq!(format!("{error:?}"), expected_debug);
+        assert_eq!(error.to_string(), expected_display);
+    }
 }
 
 #[tokio::test]

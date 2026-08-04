@@ -89,11 +89,16 @@ journal, log or derive identity from a credential value.
 - [x] `MemoryStore` implements identical transitions and the one-prepared reservation. Vault and any
       backend that cannot prove durable semantics return `Unsupported`; callers cannot emulate the
       port with point writes or treat unsupported as absent.
-- [x] `Secret` retains its existing redacted `Debug`; `SecretBatch`, stores and every new public type
-      use opaque manual `Debug` output containing no scope, address, mutation kind/count, id, digest,
-      generation, value or value length. Raw, escaped, percent-encoded and base64 sentinels are absent
-      from errors, traces, fixtures, paths, locks and every persisted file outside the committed
-      credential store and fixed staging sink. None of the new types implements `Display` or serde.
+- [x] `Secret` retains its existing redacted `Debug`; value-bearing containers/stores and the new
+      generation/id/digest types use opaque manual `Debug` and no `Display`. The closed payload-free
+      state enum's variant `Debug` exposes only the already-returned public
+      `Absent|Prepared|Committed` result. The closed payload-free error may expose variant `Debug` and
+      fixed non-contextual `Display`/`Error`. No rendering exposes a concrete id, digest or generation
+      value, or a contextual scope, address, mutation kind/count, path, credential value, value length
+      or secret-derived fact beyond that explicit state result. Raw, escaped, percent-encoded and
+      base64 sentinels are absent from errors, traces, fixtures, paths, locks and every persisted file
+      outside the committed credential store and fixed staging sink. None of the new types implements
+      serde.
 - [x] Failing-first tests spawn and abruptly terminate a real child process at every applicable
       prepare, commit, abort and reclaim stage/live-file write, file flush, atomic replacement,
       Unix directory sync and cleanup boundary; Windows instead pins `FlushFileBuffers`,
@@ -126,7 +131,7 @@ journal, log or derive identity from a credential value.
 - 2026-08-04: Failing-first `cargo test -p codewandler-connector-secrets --test
   prepared_transactions` failed to compile because the prepared transaction types and methods did
   not exist. After implementation, `cargo test -p codewandler-connector-secrets --no-fail-fast`
-  measured 43 passed/2 deliberately ignored unit tests, 24 passed integration tests and 5 passed
+  measured 43 passed/2 deliberately ignored unit tests, 25 passed integration tests and 5 passed
   doctests. The suite includes the child-crash matrix, two-process lease proof, mixed-version
   fixture, concurrent FileStore cross-id refusals/tombstone survival, encoded-sentinel rendering
   audit and retired-fence parser/encoder adversarial cases.
