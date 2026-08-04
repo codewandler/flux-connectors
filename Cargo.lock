@@ -348,10 +348,12 @@ dependencies = [
  "async-trait",
  "codewandler-connector-address",
  "reqwest 0.12.28",
+ "rustix",
  "serde",
  "serde_json",
  "thiserror",
  "tokio",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

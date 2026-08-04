@@ -9,7 +9,8 @@
 //!
 //! # It is outside the compile path, and that is asserted
 //!
-//! Everything here that is worth having opens a socket. If `connector-cli` could reach it, then
+//! This host library performs runtime IO: [`FileStore`] reaches the filesystem and the optional
+//! Vault transport opens a socket. If `connector-cli` could reach either, then
 //! *"generation is explicit, committed, deterministic and offline"* would stop being a statement
 //! about the build, and `crates/connector-cli/tests/no_network.rs` — whose strongest leg is a source
 //! audit of `connector-cli/src` — would no longer be able to see the violation, because the socket
@@ -45,13 +46,14 @@
 //! | | survives the process | what protects a value at rest | prerequisite |
 //! |---|---|---|---|
 //! | [`MemoryStore`] | no | the process boundary | none |
-//! | [`FileStore`] | yes | a `0600` file mode, and **nothing else** | a writable directory |
+//! | [`FileStore`] | yes | Unix owner + `0700`/`0600`, or Windows `TokenUser` owner + protected owner-only DACL; **not encryption** | an owner-only local state directory |
 //! | `VaultStore` | yes | Vault's own storage and policy | a Vault an operator runs |
 //!
-//! [`FileStore`] is the middle rung C-207 added, and its row is written the way it is on purpose:
-//! its values are **not encrypted**, and its module documentation says so at length rather than
-//! leaving an operator to infer it from the absence of a key parameter. It is the right store for a
-//! local single-operator deployment and the wrong one for a shared machine.
+//! [`FileStore`] is the middle rung C-207 added and C-509 made portable. Its values are **not
+//! encrypted**, and its module documentation distinguishes the Unix and Windows guarantees rather
+//! than treating one platform's mechanism as portable. Unix root, Windows administrators and copied
+//! backups remain outside the guarantee. It is the right store for one local operator and the wrong
+//! one for a shared or multi-writer deployment.
 //!
 //! # Three gaps in flux's trait, closed deliberately
 //!
@@ -82,13 +84,11 @@
 //! current is the host's problem, and flux already owns substantial machinery for it. Nothing here
 //! should grow a second, differently-shaped version of that.
 
-#![forbid(unsafe_code)]
+// Native Windows security creation and descriptor inspection require direct Win32 calls. Unsafe is
+// denied everywhere except the small `file::platform` module that owns those calls.
+#![deny(unsafe_code)]
 
-// Unix only, and deliberately: the whole of what protects a credential in it is `0600` on the file
-// and `0700` on its directory, and a platform that cannot spell those would get a store that
-// implied a safety it did not have. See the module documentation.
 mod batch;
-#[cfg(unix)]
 pub mod file;
 mod memory;
 mod secret;
@@ -96,7 +96,6 @@ mod secret;
 pub mod vault;
 
 pub use batch::SecretBatch;
-#[cfg(unix)]
 pub use file::FileStore;
 pub use memory::MemoryStore;
 pub use secret::Secret;

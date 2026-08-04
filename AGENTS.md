@@ -148,7 +148,7 @@ The connector boundary comes first for any proposed integration:
 | `connector-cli` | Binary, orchestration, filesystem IO, and all future network IO | Reach the network during `build`, `diff`, or `check` |
 | `connector-catalog` | Static provider/operation metadata and embedded Flux | Execute operations, touch the network/filesystem, or gain runtime dependencies |
 | `connector-pack` | Projecting catalogue operations onto flux `ToolSpec`s, assembling auth onto a request, giving that request this software's `User-Agent` (C-223 — the host constructs no request, and a client-level header would be invisible to the dry run; see [docs/designs/host-identity.md](docs/designs/host-identity.md)), and handing the registry declarations | Open a socket, hold an HTTP client, resolve a host, or construct a runtime — egress is a constructor argument (`Egress`), and `permission_subjects`/`intents` must never be defaulted away |
-| `connector-secrets` | Resolving a `CredentialRef` **address** to a **value**: the `SecretStore` port, `MemoryStore`, the `0600` `FileStore` (C-207, unix-only — a file mode is its whole security argument), and the optional Vault KV v2 client | Be reachable from `connector-cli` — it opens sockets, and that edge would end the offline guarantee; also: no expiry, refresh, rotation or revocation |
+| `connector-secrets` | Resolving a `CredentialRef` **address** to a **value**: the `SecretStore` port, `MemoryStore`, the portable owner-only `FileStore` (Unix owner plus `0700`/`0600`; Windows process `TokenUser` SID plus a non-null protected DACL), and the optional Vault KV v2 client | Be reachable from `connector-cli` — it opens sockets, and that edge would end the offline guarantee; also: no expiry, refresh, rotation or revocation |
 | `connectors-api` | **The reference/development host** (C-200): proving the delivered HTTP seams without becoming the official execution placement | Construct a request of its own — every route ends in `connector-pack` (`pack` for the model-facing registry, `resolve` for a caller naming one operation — C-413); compete with Exchange as the supported integration boundary; be depended on by anything (it is a **leaf**, and `dependency_fence.rs` holds both directions); be published (`publish = false`) |
 
 The first four are the **compiler**. `connector-pack` and `connector-secrets` are **host libraries**,
@@ -708,6 +708,26 @@ tenants/<tenant>/<authority>[/@instances/<uuid>][/<service>]/<credential>
   loader. The cautionary case is real and close: action-proxy puts two client-supplied headers
   straight into a Vault path with no validation.
 
+## Durable credential store contract
+
+`connector-secrets::FileStore` is one logical v1 store with platform-native owner-only enforcement,
+not two persistence implementations. The address format, bounded reads and writes, atomic whole-file
+replacement and `SecretBatch` all-or-nothing contract are identical on every supported platform.
+
+- **Unix and Windows prove different facts.** Unix requires the current process owner and modes
+  `0700` on the state directory and `0600` on the file. Windows requires the process token's
+  `TokenUser` SID as owner and a non-null protected DACL whose only allow entry grants that SID. A
+  foreign owner, wider Unix mode, inherited or foreign Windows allow entry, symlink/reparse point,
+  wrong object kind or uninspectable metadata is refused before a value is read or written and is
+  never repaired silently.
+- **Owner-only is not encryption.** The logical file bytes are recoverable by anyone who bypasses
+  the platform access controls. Unix root, Windows administrators and a copied backup are outside
+  this guarantee. This backend is for one local operator and one writer; a shared or multi-operator
+  deployment needs a real secret service such as Vault.
+- **A shared ancestor is not yours to narrow.** A store directly beneath `/tmp` or another shared
+  directory is refused, but the diagnostic must never recommend changing that ancestor's mode. Use
+  a conventional per-user state root or create an owner-only child directory beneath it.
+
 ## Member contract
 
 A service has **five member kinds**, and they share **one name namespace** —
@@ -896,6 +916,16 @@ cargo test --workspace --no-fail-fast
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
+
+CI keeps that complete Linux gate and adds two portability proofs for `connector-secrets` (C-509).
+The release-target matrix runs `cargo check --all-targets` for `aarch64-apple-darwin`,
+`x86_64-apple-darwin`, `aarch64-unknown-linux-gnu`, `x86_64-unknown-linux-gnu` and
+`x86_64-pc-windows-msvc`, so the public `FileStore` surface cannot disappear on one target. That
+matrix is compile evidence only. A separate `windows-latest` job runs the complete crate test suite
+natively, including durable restart/batch/failure and Windows owner/DACL fixtures; cross-compilation
+alone is never evidence that the Windows backend works. The Unix foreign-owner fixture needs
+`chown(2)`, so its own Linux CI leg runs the explicitly ignored test as root; the ordinary suite is
+not allowed to skip the only native ownership proof silently.
 
 **Two Node suites are part of CI and are not part of that Rust block** —
 `crates/connectors-api/ui` (the host page) and `web/` (the public site). `ci.yml` runs them, pinned.

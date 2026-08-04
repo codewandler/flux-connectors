@@ -32,9 +32,6 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 - [C-402 — Decide whether a whole-host template needs an operator allowlist](C-402-whole-host-template-allowlist.md) · Bridge · DECIDED 2026-08-01, refined by C-508: the connector declares a closed host bound or an explicit operator-pinned self-managed-origin policy; the loader REFUSES a whole-host template declaring neither
 - [C-477 — Align runtime API versions with vendored provider contracts](C-477-pin-runtime-api-version-contracts.md) · Connector · compatibility follow-up — GitHub can send its dated API version; Stripe needs an explicit account-version decision
 
-### All Integrations Connectors
-- [C-509 — Persist connector secrets owner-only on every Flux platform](C-509-portable-owner-only-secret-store.md) · Bridge · Milestone 1 blocker — Exchange X-127 cannot support Windows or ship a complete local composition while connector-secrets 0.19 exposes its durable store only on Unix
-
 ### Anthropic Managed Agents — the first vendor that declares both transports and its own event set
 _The `channel-bindings` and `inbound-events` epics built a model for the reverse call direction —_
 - [C-444 — Decide: may a connector create and run a Managed Agents session?](C-444-decide-managed-agents-charter.md) · Spec · DECISION, not a task — the fourth shape of C-123's question. Management plane is ordinary SaaS; the SESSION plane runs an agent loop and bills inference, and flux has flux-agent/flux-orchestrate of its own. Nothing in the epic's session half may start before this
@@ -486,6 +483,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-505 — Establish the native-plugin migration inventory and Exchange conformance ratchet](C-505-gate-the-native-plugin-migration.md) · Bridge · MILESTONE 1 lane 15 — freeze the complete native-adapter inventory and reusable legacy-versus-Exchange conformance format before the first migration wave
 - [C-507 — Adopt the Exchange-only execution path for official integrations](C-507-adopt-the-exchange-only-integration-path.md) · Bridge · Decision 0001 makes Exchange the sole executor for official external integrations; this supersedes local Flux execution and local-versus-hosted parity throughout C-495…C-505
 - [C-508 — A GitLab connection supports an operator-approved self-managed HTTPS origin](C-508-self-managed-gitlab-origin.md) · Connector · Milestone 1 critical: GitLab must support gitlab.com by default and an operator-pinned self-managed origin before the collaboration migration can replace the native plugin
+- [C-509 — Persist connector secrets owner-only on every Flux platform](C-509-portable-owner-only-secret-store.md) · Bridge · Milestone 1 blocker — Exchange X-127 cannot support Windows or ship a complete local composition while connector-secrets 0.19 exposes its durable store only on Unix
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->
