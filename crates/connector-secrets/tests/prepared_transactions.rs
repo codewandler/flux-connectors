@@ -582,6 +582,12 @@ async fn public_renderings_and_non_credential_files_hide_encoded_sentinels() {
         );
     }
 
+    // Windows enforces the lifetime lease with a byte-range lock, so attempting to read the lease
+    // through a second handle correctly fails with ERROR_LOCK_VIOLATION. Release the store before
+    // inspecting the fixed, non-credential artifacts; the separate process tests pin that the lock
+    // remains held for the complete FileStore lifetime.
+    drop(store);
+
     for entry in std::fs::read_dir(&scratch.0).expect("read scratch") {
         let entry = entry.expect("directory entry");
         let entry_path = entry.path();

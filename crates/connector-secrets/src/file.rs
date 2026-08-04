@@ -1187,13 +1187,16 @@ mod tests {
     fn a_shared_parent_refusal_recommends_an_owner_only_child_not_chmodding_the_parent() {
         use std::os::unix::fs::MetadataExt as _;
 
-        let path = std::env::temp_dir().join(format!(
-            "connector-secrets-shared-parent-{}-{}",
-            std::process::id(),
-            NEXT_TEMPORARY.fetch_add(1, Ordering::Relaxed)
-        ));
-        let parent = path.parent().expect("a parent");
-        let before = std::fs::symlink_metadata(parent).expect("inspect shared parent");
+        // `std::env::temp_dir()` is a genuinely shared 01777 directory on Linux, but on macOS it
+        // normally resolves to a private per-user directory. Construct the unsafe direct parent so
+        // this test proves the security predicate instead of assuming a platform's temp layout.
+        let scratch = Scratch::new("shared-parent-refusal");
+        let parent = scratch.0.join("shared");
+        std::fs::create_dir_all(&parent).expect("create deliberately shared parent");
+        std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o777))
+            .expect("make the direct parent non-owner-only");
+        let path = parent.join("credentials.store");
+        let before = std::fs::symlink_metadata(&parent).expect("inspect shared parent");
         let snapshot = (
             before.mode(),
             before.uid(),
@@ -1212,7 +1215,7 @@ mod tests {
         assert!(!message.contains(SENTINEL), "{message}");
         assert!(!path.exists(), "a refusal must not create the store");
 
-        let after = std::fs::symlink_metadata(parent).expect("reinspect shared parent");
+        let after = std::fs::symlink_metadata(&parent).expect("reinspect shared parent");
         assert_eq!(
             snapshot,
             (
