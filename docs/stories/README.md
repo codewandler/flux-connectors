@@ -32,6 +32,9 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 - [C-402 — Decide whether a whole-host template needs an operator allowlist](C-402-whole-host-template-allowlist.md) · Bridge · DECIDED 2026-08-01, refined by C-508: the connector declares a closed host bound or an explicit operator-pinned self-managed-origin policy; the loader REFUSES a whole-host template declaring neither
 - [C-477 — Align runtime API versions with vendored provider contracts](C-477-pin-runtime-api-version-contracts.md) · Connector · compatibility follow-up — GitHub can send its dated API version; Stripe needs an explicit account-version decision
 
+### All Integrations Connectors
+- [C-515 — Publish recoverable prepared secret transactions](C-515-recoverable-prepared-secret-transactions.md) · Bridge · Milestone 1 blocker — Exchange X-134 needs crash-recoverable atomic connection onboarding without moving credential bytes or crate-private SecretBatch mutations into Exchange
+
 ### Anthropic Managed Agents — the first vendor that declares both transports and its own event set
 _The `channel-bindings` and `inbound-events` epics built a model for the reverse call direction —_
 - [C-444 — Decide: may a connector create and run a Managed Agents session?](C-444-decide-managed-agents-charter.md) · Spec · DECISION, not a task — the fourth shape of C-123's question. Management plane is ordinary SaaS; the SESSION plane runs an agent loop and bills inference, and flux has flux-agent/flux-orchestrate of its own. Nothing in the epic's session half may start before this
