@@ -8,7 +8,7 @@ repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
 readme = "README.md"
-documentation = "https://docs.rs/connector-catalog"
+documentation = "https://docs.rs/codewandler-connector-catalog"
 keywords = ["flux", "connector", "catalog", "api", "codegen"]
 categories = ["api-bindings", "data-structures"]
 
@@ -21,8 +21,8 @@ path = "src/lib.rs"
 
 # No dependencies, deliberately. The catalog is data plus lookups over it: every operation's Flux
 # source and metadata is a `&'static` baked in by `include_str!` and a generated table, so there is
-# nothing to parse at runtime and nothing for a consumer to resolve. `cargo add connector-catalog`
-# costs them exactly one crate.
+# nothing to parse at runtime and nothing for a consumer to resolve.
+# `cargo add codewandler-connector-catalog` costs them exactly one crate.
 [dependencies]
 
 [dev-dependencies]

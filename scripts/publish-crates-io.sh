@@ -130,10 +130,10 @@ crate_version() {
 }
 
 # A dry run is ONE cargo invocation over the whole closure, not a loop, and that is not a shortcut:
-# `cargo publish --dry-run -p codewandler-connector-secrets` on its own fails, because verifying it means
-# building it against a `connector-spec` that is not on crates.io yet. Given every package at once,
-# cargo verifies each against the others' freshly packaged copies — which is exactly the situation
-# the real publish creates one crate at a time. Nothing is uploaded.
+# `cargo publish --dry-run -p codewandler-connector-secrets` on its own fails when its matching
+# `codewandler-connector-address` version is not live yet. Given every package at once, cargo verifies
+# each against the others' freshly packaged copies — exactly the situation the real publish creates
+# one crate at a time. Nothing is uploaded.
 if [ "$MODE" = "dry-run" ]; then
   args=()
   for c in "${CRATES[@]}"; do args+=(-p "$c"); done

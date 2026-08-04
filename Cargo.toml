@@ -38,7 +38,7 @@ members = [
 
 [workspace.package]
 edition = "2021"
-version = "0.19.1"
+version = "0.20.0"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/codewandler/flux-connectors"
 homepage = "https://github.com/codewandler/flux-connectors"
@@ -52,9 +52,9 @@ rust-version = "1.87"
 # `CredentialRef` from `connector-secrets` was enough to drag all of it into the crates.io closure.
 # `crates/connector-cli/tests/publish_closure.rs::no_machinery_crate_is_published` is what keeps that
 # edge from growing back.
-connector-address = { package = "codewandler-connector-address", version = "0.19.1", path = "crates/connector-address" }
-connector-spec = { package = "codewandler-connector-spec", version = "0.19.1", path = "crates/connector-spec" }
-connector-flux = { version = "0.19.1", path = "crates/connector-flux" }
+connector-address = { package = "codewandler-connector-address", version = "0.20.0", path = "crates/connector-address" }
+connector-spec = { package = "codewandler-connector-spec", version = "0.20.0", path = "crates/connector-spec" }
+connector-flux = { version = "0.20.0", path = "crates/connector-flux" }
 # The catalog (C-38): generated data, and the crate a consumer adds to get it. Nothing in this
 # workspace depends on it — it is the leaf the pipeline writes into — but it is listed here so that
 # a consumer inside the workspace picks up the same pin as one outside it.
@@ -62,17 +62,17 @@ connector-flux = { version = "0.19.1", path = "crates/connector-flux" }
 # `[lib] name = "catalog"`, so dependents `use catalog::`. Without a `package =` alias cargo binds
 # the extern to the *lib* name; with one it binds to the *key*. Keying it `connector-catalog` here
 # therefore renames the extern to `connector_catalog` and breaks every `use catalog::` in the tree.
-catalog = { package = "codewandler-connector-catalog", version = "0.19.1", path = "crates/catalog" }
+catalog = { package = "codewandler-connector-catalog", version = "0.20.0", path = "crates/catalog" }
 # The Tool pack (C-114): the flux interop layer. It is the one crate here that links flux's
 # *runtime* — see the note under `flux-runtime` below for why that does not contradict
 # "this repo compiles; flux executes".
-connector-pack = { package = "codewandler-connector-pack", version = "0.19.1", path = "crates/connector-pack" }
+connector-pack = { package = "codewandler-connector-pack", version = "0.20.0", path = "crates/connector-pack" }
 # The secret store (C-91): a **host library**, not part of the compiler. It is a workspace member so
 # that it is built and tested here, and nothing in the compile path may depend on it —
 # `crates/connector-cli/tests/dependency_fence.rs` asserts that over the resolved dependency graph,
 # because a Vault client reachable from `connector-cli` would quietly end the offline guarantee that
 # `no_network.rs` exists to state.
-connector-secrets = { package = "codewandler-connector-secrets", version = "0.19.1", path = "crates/connector-secrets" }
+connector-secrets = { package = "codewandler-connector-secrets", version = "0.20.0", path = "crates/connector-secrets" }
 
 # **The engine line is recorded once, in `crates/connector-cli/tests/flux_engine_line.rs`** (C-403).
 # `ENGINE_LINE` and `SPEC_LINE` there are the statement; the requirements below are required to

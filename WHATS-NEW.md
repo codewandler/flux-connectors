@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-08-04
+
 ### Action needed
 
 - **Stop every process using the old local credential store before upgrading.** The new release
@@ -28,6 +30,12 @@
   complete credential update can be prepared invisibly, committed atomically or abandoned without
   resurrection. Explicit generation retirement keeps recovery history bounded, and the durable
   local store rejects a second writer for its lifetime.
+
+### Fixed
+
+- **Dependency examples and documentation links now point to the published packages.** Copying an
+  installation snippet or following API documentation no longer lands on an unrelated or missing
+  package name.
 
 ## [0.19.1] — 2026-08-04
 

@@ -8,7 +8,7 @@ repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
 readme = "README.md"
-documentation = "https://docs.rs/connector-pack"
+documentation = "https://docs.rs/codewandler-connector-pack"
 keywords = ["flux", "connector", "tools", "agent", "api"]
 categories = ["api-bindings", "web-programming"]
 

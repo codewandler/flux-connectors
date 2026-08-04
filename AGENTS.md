@@ -1049,12 +1049,12 @@ version number is burned, and a wrong `description`, `readme` or `keywords` is f
   [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `cargo publish --dry-run` over the
   whole closure on every pull request, so a packaging error arrives as a review comment rather than
   as a release incident.
-- **Crate names are not settled.** None of the four names is reserved on crates.io today, and
-  `connector-cli` is already taken by an unrelated crate — evidence that bare `connector-*` names
-  collide. Whether these publish as `connector-*` or `codewandler-connector-*` (matching the
-  `codewandler-flux-*` family) is an open decision recorded in
-  [docs/designs/crates-io-publishing.md](docs/designs/crates-io-publishing.md). **A name, once
-  published, is permanent** — settle it before the first tag, not after.
+- **Crate names are settled.** The permanent public packages are
+  `codewandler-connector-address`, `codewandler-connector-catalog`,
+  `codewandler-connector-secrets` and `codewandler-connector-pack`; all four are live and unyanked
+  at `0.19.1` (re-measured 2026-08-04 with the crates.io
+  `/api/v1/crates/<name>/0.19.1` endpoint). Their shorter `[lib]` names remain the Rust import names;
+  README dependency snippets, crates.io links and docs.rs metadata use the public package names.
 
 See [docs/designs/crates-io-publishing.md](docs/designs/crates-io-publishing.md) for the reasoning
 and [C-190](docs/stories/C-190-publish-catalog-pack-secrets.md) for *when* the first publish
@@ -1105,9 +1105,9 @@ against the diff, not against memory.
    ```
 
    That promotes both changelogs, bumps `[workspace.package].version`, every internal
-   path-dependency requirement in `[workspace.dependencies]` and `README.md`, re-locks the
-   workspace, **regenerates every artifact**, runs the Rust gate plus both Node gates from
-   [Validation](#validation), commits
+   path-dependency requirement in `[workspace.dependencies]`, `README.md`, and the public package
+   requirements in all four packaged crate READMEs, re-locks the workspace, **regenerates every
+   artifact**, runs the Rust gate plus both Node gates from [Validation](#validation), commits
    `Release vX.Y.Z` and creates the annotated tag. It **does not push and never publishes**.
 
    Four properties are worth knowing rather than rediscovering, and each is pinned by

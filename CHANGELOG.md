@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-08-04
+
 ### Added
 
 - **Recoverable prepared credential transactions are now a public host port** (C-515).
@@ -18,6 +20,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `Unsupported` error.
 
 ### Changed
+
+- **Published crate setup now uses the permanent registry package names.** The four packaged
+  READMEs use the `codewandler-connector-*` dependencies and canonical docs.rs and crates.io links;
+  release cuts advance their major/minor examples with the workspace and preserve all customer
+  Markdown headings in annotated tags.
 
 - **`FileStore` now holds a lifetime native writer/recovery lease and speaks transactional v2**
   (C-515). Clean v1 files are not eagerly migrated; first transaction use couples credentials, the

@@ -7,7 +7,7 @@ descriptions into [Flux-Lang](https://github.com/codewandler/flux).
 
 ```toml
 [dependencies]
-connector-address = "0.8"
+codewandler-connector-address = "0.20"
 ```
 
 The library is `connector_address`.
@@ -45,8 +45,9 @@ traversing path.
 ## What it is not
 
 A compiler, a store, or a client. It holds no value, opens no socket and reads no file — an address
-is a **name**. [`connector-spec`](https://crates.io/crates/codewandler-connector-spec) produces these
-addresses from a connector definition;
+is a **name**.
+[`connector-spec`](https://github.com/codewandler/flux-connectors/tree/main/crates/connector-spec)
+produces these addresses from a connector definition;
 [`connector-secrets`](https://crates.io/crates/codewandler-connector-secrets) resolves a
 `CredentialRef` to a value and re-exports every name here, so a consumer never has to name two
 crates to spell one address.

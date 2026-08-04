@@ -1,7 +1,7 @@
 //! Publishing is the one irreversible thing this repository can do, so the order it happens in and
 //! the metadata it burns are asserted here rather than trusted.
 //!
-//! Four properties, each of which has a way of being wrong that only shows up at release time:
+//! Five properties, each of which has a way of being wrong that only shows up at release time:
 //!
 //! 1. **The closure is the closure.** C-190 names three consumable crates —
 //!    `connector-catalog`, `connector-secrets`, `connector-pack` — and `connector-secrets`
@@ -22,6 +22,9 @@
 //! 4. **The metadata is complete.** `description`, `license`, `repository`, `readme` and `keywords`
 //!    are what a crates.io page is made of, and none of them can be corrected in a version that has
 //!    already been published — only in the next one.
+//! 5. **Public package names reach every consumer-facing pointer.** A packaged README must tell
+//!    consumers to depend on the package that actually exists on crates.io, and `documentation`
+//!    must point docs.rs at that same published package rather than at the local crate name.
 //!
 //! The packaging itself (files excluded, a `readme` that points nowhere, a dependency without a
 //! version) is proved by `cargo publish --dry-run` in the `package` job of
@@ -252,6 +255,105 @@ fn every_published_crate_carries_its_metadata() {
         "published crates are missing metadata that cannot be corrected once a version is live:\n  \
          {}\nSet it in the crate's `[package]` table (or inherit it with `field.workspace = true`).",
         missing.join("\n  ")
+    );
+}
+
+/// Package names and Rust crate names deliberately differ: consumers install the prefixed package
+/// from crates.io, then import the shorter `[lib]` name. Keep the install-facing README and docs.rs
+/// metadata on the package side of that boundary.
+#[test]
+fn published_readmes_and_documentation_use_public_package_names() {
+    let workspace = Workspace::read();
+    let published = workspace.publish_order(ROOTS);
+    let workspace_version = workspace_version();
+    let release_line = workspace_release_line(&workspace_version);
+    let mut mistakes: Vec<String> = Vec::new();
+
+    for name in &published {
+        let manifest = workspace.manifest(name);
+        let expected_docs = format!("https://docs.rs/{name}");
+        if manifest.string("documentation") != Some(expected_docs.as_str()) {
+            mistakes.push(format!(
+                "{name}: documentation must be `{expected_docs}`, found {:?}",
+                manifest.string("documentation")
+            ));
+        }
+
+        let Some(readme_path) = manifest.readme() else {
+            mistakes.push(format!("{name}: no packaged README to verify"));
+            continue;
+        };
+        let path = workspace.directory(name).join(&readme_path);
+        let readme = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+        let expected_dependency = format!("{name} = \"{release_line}\"");
+        if !readme
+            .lines()
+            .any(|line| line.trim() == expected_dependency)
+        {
+            mistakes.push(format!(
+                "{name}: {readme_path} must contain the uncommented dependency example \
+                 `{expected_dependency}` for workspace release {}",
+                workspace_version
+            ));
+        }
+
+        let dependency_prefix = format!("{name} =");
+        for line in readme.lines() {
+            let install_text = line.trim().trim_start_matches("# ").trim();
+            let Some(right_hand_side) = install_text.strip_prefix(&dependency_prefix) else {
+                continue;
+            };
+            let snippet = format!("dependency = {}", right_hand_side.trim());
+            let requirement = snippet
+                .parse::<toml::Value>()
+                .ok()
+                .and_then(|document| document.get("dependency").cloned())
+                .and_then(|dependency| {
+                    dependency.as_str().map(str::to_owned).or_else(|| {
+                        dependency
+                            .as_table()
+                            .and_then(|table| table.get("version"))
+                            .and_then(toml::Value::as_str)
+                            .map(str::to_owned)
+                    })
+                });
+            if requirement.as_deref() != Some(release_line.as_str()) {
+                mistakes.push(format!(
+                    "{name}: every dependency example in {readme_path} must require \
+                     `{release_line}` for workspace release {workspace_version}; found \
+                     {requirement:?} in `{}`",
+                    line.trim()
+                ));
+            }
+        }
+
+        for public_name in &published {
+            let local_name = public_name.strip_prefix("codewandler-").unwrap_or_else(|| {
+                panic!("published package `{public_name}` has no `codewandler-` prefix")
+            });
+            let stale_dependency = format!("{local_name} =");
+            let stale_cargo_add = format!("cargo add {local_name}");
+            let stale_crates_io = format!("https://crates.io/crates/{local_name}");
+            for line in readme.lines() {
+                let install_text = line.trim().trim_start_matches("# ").trim();
+                if install_text.starts_with(&stale_dependency)
+                    || line.contains(&stale_cargo_add)
+                    || line.contains(&stale_crates_io)
+                {
+                    mistakes.push(format!(
+                        "{name}: {readme_path} uses unpublished package name `{local_name}` in `{}`",
+                        line.trim()
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        mistakes.is_empty(),
+        "published package pointers do not match the crates.io package names:\n  {}",
+        mistakes.join("\n  ")
     );
 }
 
@@ -570,6 +672,11 @@ impl Manifest {
         }
     }
 
+    /// A direct string value from `[package]`.
+    fn string(&self, field: &str) -> Option<&str> {
+        self.package.get(field)?.as_str()
+    }
+
     /// The `readme` path this crate declares, if it names a file rather than inheriting one.
     fn readme(&self) -> Option<String> {
         self.package
@@ -587,6 +694,36 @@ fn workspace_root() -> PathBuf {
         .nth(2)
         .expect("the crate manifest lives two directories below the workspace root")
         .to_path_buf()
+}
+
+/// The complete workspace package version, which every published member inherits.
+fn workspace_version() -> String {
+    let path = workspace_root().join("Cargo.toml");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+    let document: toml::Value = text
+        .parse()
+        .unwrap_or_else(|error| panic!("parse {}: {error}", path.display()));
+    document
+        .get("workspace")
+        .and_then(|workspace| workspace.get("package"))
+        .and_then(|package| package.get("version"))
+        .and_then(toml::Value::as_str)
+        .unwrap_or_else(|| panic!("{} has no `[workspace.package].version`", path.display()))
+        .to_owned()
+}
+
+/// Cargo's recommended dependency requirement for this pre-1.0 release: its major/minor line.
+fn workspace_release_line(version: &str) -> String {
+    let components: Vec<&str> = version.split('.').collect();
+    assert!(
+        components.len() == 3
+            && components.iter().all(|component| {
+                !component.is_empty() && component.bytes().all(|byte| byte.is_ascii_digit())
+            }),
+        "[workspace.package].version `{version}` is not numeric major.minor.patch"
+    );
+    format!("{}.{}", components[0], components[1])
 }
 
 /// The package a `[workspace.dependencies]` key resolves to, when the root manifest aliases it.

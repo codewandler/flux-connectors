@@ -1,11 +1,10 @@
 # Design: publishing to crates.io
 
-**Status:** approved, with one open decision (crate names) · **Pillar:** Build · **Stories:**
+**Status:** approved · **Pillar:** Build · **Stories:**
 [C-195](../stories/C-195-crates-io-release-workflow.md), [C-190](../stories/C-190-publish-catalog-pack-secrets.md)
 
-> Facts below were measured on 2026-07-31 against this workspace at `0.5.0` and against the live
-> crates.io API. The name availability in §3 is the part most likely to have changed — re-check it
-> before the first tag.
+> The original closure facts below were measured on 2026-07-31 against this workspace at `0.5.0`.
+> The settled package names in §3 were re-measured against the live crates.io API on 2026-08-04.
 
 ## Why
 
@@ -106,42 +105,24 @@ Deliberate divergences from flux's file, both small:
 - **`ubuntu-latest`, not `ubuntu-22.04`.** flux pins the image because it also builds release
   binaries whose glibc floor matters. Nothing here ships a binary.
 
-## 3. Crate names — open, and it must be closed before the first tag
+## 3. Crate names — settled public contract
 
-**Measured against the live crates.io API on 2026-07-31:**
+The repository chose the organization-prefixed package names before first publication. On
+2026-08-04, querying `https://crates.io/api/v1/crates/<name>/0.19.1` for each package returned these
+four live, unyanked records:
 
-| name | status |
+| package name | Rust library name |
 |---|---|
-| `connector-catalog` | free, **not reserved** |
-| `connector-spec` | free, **not reserved** |
-| `connector-secrets` | free, **not reserved** |
-| `connector-pack` | free, **not reserved** |
-| `connector-flux` | free, not reserved |
-| `connector-cli` | **TAKEN** — v0.12.0, "CLI for interacting with Tauri apps via tauri-plugin-connect" |
-| `codewandler-connector-*` (all four) | free, not reserved |
-| `codewandler-flux-lang` | taken by us — v0.41.0 |
+| `codewandler-connector-address` | `connector_address` |
+| `codewandler-connector-catalog` | `catalog` |
+| `codewandler-connector-secrets` | `connector_secrets` |
+| `codewandler-connector-pack` | `connector_pack` |
 
-Two facts follow, and they point in the same direction:
-
-1. **Nothing is reserved.** The assumption that `connector-catalog` is already ours is wrong. Any of
-   these names can be taken by anyone up to the moment we publish.
-2. **Bare `connector-*` names already collide.** `connector-cli` is gone to an unrelated project.
-   That is what a generic name in a crowded flat namespace does.
-
-The flux family is `codewandler-flux-*` — the vanity prefix on the *package*, the plain name on the
-`[lib]` (`codewandler-flux-lang` / `flux_lang`). This repository already uses that split once:
-`crates/catalog` is package `connector-catalog`, library `catalog`. Extending the org prefix
-(`codewandler-connector-catalog` / `catalog`) would be consistent, collision-proof, and legible as
-"same authors as flux".
-
-**This design does not choose.** The trade is real in both directions — `codewandler-connector-pack`
-is a mouthful, and `connector-pack` is shorter and still free — and a name is permanent. It is the
-repository owner's call, and the only thing that must not happen is it being decided implicitly by
-the first `git tag`.
-
-Whichever way it goes, the mechanism is name-agnostic: the workflow, the script and the test all
-read names from the manifests, so a rename is an edit to four `[package] name =` lines and nothing
-else. **Rename before the first publish; after it, both names exist forever.**
+Those package names are permanent. Manifests, packaged README dependency examples, `cargo add`
+commands, crates.io links and docs.rs metadata must use the `codewandler-connector-*` names. Rust
+source continues to use the shorter `[lib]` names. The workflow and publisher still derive names
+from manifests, while `publish_closure.rs` pins the install-facing and documentation pointers to
+the same public package names.
 
 ## 4. Metadata
 

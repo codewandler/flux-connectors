@@ -7,7 +7,7 @@ descriptions into [Flux-Lang](https://github.com/codewandler/flux).
 
 ```toml
 [dependencies]
-connector-catalog = "0.5"
+codewandler-connector-catalog = "0.20"
 ```
 
 The library is `catalog`, so you write `catalog::operation(…)`.
@@ -30,13 +30,15 @@ Adding the crate *is* getting the catalogue. Every operation's Flux source and t
 needs to decide whether to run it are `&'static` data baked into the binary by `include_str!` and a
 generated table: no filesystem lookup, no parsing, no initialization.
 
-**It has no dependencies, deliberately.** `cargo add connector-catalog` costs you exactly one crate.
+**It has no dependencies, deliberately.** `cargo add codewandler-connector-catalog` costs you
+exactly one crate.
 
 ## What it is not
 
 A runtime. This crate hands out **text** — it executes nothing and opens no socket. Flux runs the
-module it loads; see [`connector-pack`](https://crates.io/crates/connector-pack) for the tools that
-dispatch these operations inside a flux host.
+module it loads; see
+[`connector-pack`](https://crates.io/crates/codewandler-connector-pack) for the tools that dispatch
+these operations inside a flux host.
 
 Nothing here is hand-written: `flux-connectors build` generates the tables and the per-operation
 Flux, and they are committed and reviewed like every other artifact in the repository.

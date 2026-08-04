@@ -8,9 +8,9 @@ repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
 readme = "README.md"
-# The package name, not `connector-address`: docs.rs serves a crate under the name it was published
-# as. The four crates published before this one point at the unprefixed name, which is a mistake
-# only fixable in a later version of each — this one starts correct.
+# The package name, not the shorter Rust library name: docs.rs serves a crate under the name it was
+# published as. Older releases of this package family carried unprefixed documentation URLs; the
+# `codewandler-connector-*` names are the permanent public contract now.
 documentation = "https://docs.rs/codewandler-connector-address"
 keywords = ["flux", "connector", "address", "credentials", "uri"]
 categories = ["api-bindings", "data-structures"]

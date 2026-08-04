@@ -115,9 +115,24 @@ for image in assets/readme-snippet-*.svg; do
   [ -e "$image" ] && GENERATED_PATHS+=("$image")
 done
 
+# The packaged README install examples move on the same minor line as the workspace. Keep package
+# names beside paths so the rewrite below is exact and the release-path allowlist cannot omit one.
+PUBLIC_PACKAGES=(
+  codewandler-connector-address
+  codewandler-connector-catalog
+  codewandler-connector-secrets
+  codewandler-connector-pack
+)
+PUBLIC_README_PATHS=(
+  crates/connector-address/README.md
+  crates/catalog/README.md
+  crates/connector-secrets/README.md
+  crates/connector-pack/README.md
+)
+
 # Written by this script. Also required to be clean: a cut is taken on top of committed work, so a
 # dirty manifest or README means somebody's change is about to be labelled a release.
-BUMPED_PATHS=(Cargo.toml Cargo.lock README.md)
+BUMPED_PATHS=(Cargo.toml Cargo.lock README.md "${PUBLIC_README_PATHS[@]}")
 
 # The operator's own input to the cut, and the one thing that is EXPECTED to be dirty: AGENTS.md's
 # step 1 is "polish both changelogs and check them against the diff". They are promoted and
@@ -161,6 +176,9 @@ case "${ARGS[0]}" in
 esac
 echo "$NEW" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "bad target version: $NEW" >&2; exit 1; }
 [ "$NEW" != "$OLD" ] || { echo "target version equals current ($OLD)" >&2; exit 1; }
+IFS='.' read -r NEW_MAJOR NEW_MINOR _ <<<"$NEW"
+OLD_PUBLIC_REQUIREMENT="$MA.$MI"
+NEW_PUBLIC_REQUIREMENT="$NEW_MAJOR.$NEW_MINOR"
 ! git rev-parse -q --verify "refs/tags/v$NEW" >/dev/null || {
   echo "tag v$NEW already exists — that version is cut (and possibly published)" >&2
   exit 1
@@ -326,12 +344,54 @@ else
   echo "   !! README.md names no v$OLD — check whether it should name v$NEW" >&2
 fi
 
-# 5d) Re-lock, so the workspace members' own entries in Cargo.lock carry $NEW. `--workspace` touches
+# 5d) Packaged crate README requirements. Each exact old line must exist once before it is changed
+# and each exact new line must exist once afterwards. Locating the literal line number before using
+# `sed c` keeps regex metacharacters in TOML examples inert and prevents an unrelated version in
+# prose from moving.
+replace_exact_line() {
+  local file="$1" old_line="$2" new_line="$3"
+  local matches line_number
+  matches=$(grep -Fxc -- "$old_line" "$file" || true)
+  [ "$matches" -eq 1 ] || {
+    echo "!! $file must contain exactly one release-owned line:" >&2
+    echo "!!   $old_line" >&2
+    echo "!! found: $matches" >&2
+    exit 1
+  }
+  line_number=$(grep -Fnx -- "$old_line" "$file" | cut -d: -f1)
+  sed -i "${line_number}c\\${new_line}" "$file"
+  matches=$(grep -Fxc -- "$new_line" "$file" || true)
+  [ "$matches" -eq 1 ] || {
+    echo "!! $file did not receive the release-owned line:" >&2
+    echo "!!   $new_line" >&2
+    exit 1
+  }
+}
+
+[ "${#PUBLIC_PACKAGES[@]}" -eq "${#PUBLIC_README_PATHS[@]}" ] || {
+  echo "!! packaged README release-path inventory is inconsistent" >&2
+  exit 1
+}
+for index in "${!PUBLIC_PACKAGES[@]}"; do
+  package="${PUBLIC_PACKAGES[$index]}"
+  readme="${PUBLIC_README_PATHS[$index]}"
+  replace_exact_line \
+    "$readme" \
+    "$package = \"$OLD_PUBLIC_REQUIREMENT\"" \
+    "$package = \"$NEW_PUBLIC_REQUIREMENT\""
+done
+replace_exact_line \
+  crates/connector-secrets/README.md \
+  "# codewandler-connector-secrets = { version = \"$OLD_PUBLIC_REQUIREMENT\", features = [\"vault\"] }" \
+  "# codewandler-connector-secrets = { version = \"$NEW_PUBLIC_REQUIREMENT\", features = [\"vault\"] }"
+echo "   bumped 5 packaged README dependency example(s) $OLD_PUBLIC_REQUIREMENT -> $NEW_PUBLIC_REQUIREMENT"
+
+# 5e) Re-lock, so the workspace members' own entries in Cargo.lock carry $NEW. `--workspace` touches
 #     only those: third-party pins are not re-resolved by a release cut.
 cargo update --workspace >/dev/null 2>&1
 echo "   re-locked the workspace"
 
-# 5e) THE STEP THIS SCRIPT EXISTS FOR. Regenerate every artifact, so the 120-odd generated manifests
+# 5f) THE STEP THIS SCRIPT EXISTS FOR. Regenerate every artifact, so the 120-odd generated manifests
 #     and the lockfile that hashes them carry $NEW in the same commit as the bump.
 #     No `--png`: that needs `flux` on PATH and writes an unchecked asset.
 echo "   regenerating every artifact (this rewrites every file carrying the generator string)"
@@ -417,6 +477,8 @@ Release v$NEW
 
 - Bump [workspace.package].version and $pins internal path-dependency
   requirement(s) $OLD -> $NEW, and re-lock the workspace.
+- Move the four packaged README dependency examples from
+  $OLD_PUBLIC_REQUIREMENT -> $NEW_PUBLIC_REQUIREMENT.
 - Regenerate every artifact, so the generator string and connectors.lock
   carry $NEW in the same commit as the bump; $stamped generated file(s)
   name $NEW.
@@ -460,7 +522,7 @@ tag_body() {
   fi | sed '/./,$!d'
 }
 
-git tag -a "v$NEW" -F - <<TAG_MSG
+git tag -a --cleanup=verbatim "v$NEW" -F - <<TAG_MSG
 flux-connectors $NEW
 
 $(tag_body)

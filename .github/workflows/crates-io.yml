@@ -1,10 +1,12 @@
 # Publishes the flux-connectors crates.io closure when a version tag `vX.Y.Z` is pushed.
 #
-# The closure is four crates, not three: `connector-address`, `connector-catalog`,
-# `connector-secrets` and `connector-pack`. `connector-secrets` re-exports `CredentialRef` from
-# `connector-address`, so that crate travels with it or nothing outside this workspace resolves. It
-# used to be `connector-spec` — the compiler — which is what C-407 extracted the vocabulary to end.
-# The order is derived from the manifests by scripts/publish-crates-io.sh, not listed here.
+# The closure is four crates, not three: `codewandler-connector-address`,
+# `codewandler-connector-catalog`, `codewandler-connector-secrets` and
+# `codewandler-connector-pack`. `codewandler-connector-secrets` re-exports `CredentialRef` from
+# `codewandler-connector-address`, so that package travels with it or nothing outside this workspace
+# resolves. It used to be `codewandler-connector-spec` — the compiler — which is what C-407
+# extracted the vocabulary to end. The order is derived from the manifests by
+# scripts/publish-crates-io.sh, not listed here.
 #
 # REQUIRED SECRET: `CARGO_REGISTRY_TOKEN` — a crates.io API token (https://crates.io/settings/tokens)
 # from an account that can publish these names. Set it at
@@ -49,7 +51,7 @@ jobs:
       - name: Check the publish token is configured
         run: |
           if [ -z "${CARGO_REGISTRY_TOKEN}" ]; then
-            echo "::error::CARGO_REGISTRY_TOKEN is not set. Add it under Settings → Secrets and variables → Actions (a crates.io token that can publish the connector-* crates)."
+            echo "::error::CARGO_REGISTRY_TOKEN is not set. Add it under Settings → Secrets and variables → Actions (a crates.io token that can publish the codewandler-connector-* crates)."
             exit 1
           fi
 

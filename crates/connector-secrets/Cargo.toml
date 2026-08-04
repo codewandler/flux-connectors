@@ -8,7 +8,7 @@ repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
 readme = "README.md"
-documentation = "https://docs.rs/connector-secrets"
+documentation = "https://docs.rs/codewandler-connector-secrets"
 keywords = ["flux", "connector", "secrets", "vault", "credentials"]
 categories = ["api-bindings", "cryptography"]
 
