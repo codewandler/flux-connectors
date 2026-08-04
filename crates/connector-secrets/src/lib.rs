@@ -82,13 +82,11 @@
 //! current is the host's problem, and flux already owns substantial machinery for it. Nothing here
 //! should grow a second, differently-shaped version of that.
 
-#![forbid(unsafe_code)]
+// Native Windows security creation and descriptor inspection require direct Win32 calls. Unsafe is
+// denied everywhere except the small `file::platform` module that owns those calls.
+#![deny(unsafe_code)]
 
-// Unix only, and deliberately: the whole of what protects a credential in it is `0600` on the file
-// and `0700` on its directory, and a platform that cannot spell those would get a store that
-// implied a safety it did not have. See the module documentation.
 mod batch;
-#[cfg(unix)]
 pub mod file;
 mod memory;
 mod secret;
@@ -96,7 +94,6 @@ mod secret;
 pub mod vault;
 
 pub use batch::SecretBatch;
-#[cfg(unix)]
 pub use file::FileStore;
 pub use memory::MemoryStore;
 pub use secret::Secret;

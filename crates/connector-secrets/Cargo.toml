@@ -44,6 +44,19 @@ thiserror.workspace = true
 reqwest = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1.1.4", features = ["fs", "process"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+] }
+
 [dev-dependencies]
 # A runtime to drive the async trait in tests. `rt` + `macros` only: nothing here needs threads.
 tokio = { workspace = true, features = ["rt", "macros"] }

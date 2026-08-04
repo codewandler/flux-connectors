@@ -51,9 +51,8 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::fs::{DirBuilder, File, OpenOptions};
-use std::io::Write as _;
-use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _, PermissionsExt as _};
+use std::fs::File;
+use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -64,6 +63,16 @@ use crate::{
     batch, CredentialRef, CredentialScope, Layout, Secret, SecretBatch, SecretStore, StoreError,
     TenantLayout,
 };
+
+#[cfg(unix)]
+#[path = "file/unix.rs"]
+mod platform;
+#[cfg(windows)]
+#[path = "file/windows.rs"]
+mod platform;
+
+#[cfg(not(any(unix, windows)))]
+compile_error!("FileStore needs a platform-native owner-only filesystem implementation");
 
 /// The first line of every file this store writes.
 const HEADER: &str = "# codewandler-connector-secrets file store, v1";
@@ -77,9 +86,23 @@ const HEADER: &str = "# codewandler-connector-secrets file store, v1";
 const VERSION_PREFIX: &str = "# codewandler-connector-secrets file store, v";
 const VERSION: &str = "1";
 
+/// Maximum encoded bytes accepted from or written to one durable store.
+///
+/// The entire v1 store is intentionally held in memory for atomic whole-file replacement, so a
+/// bound is part of the format's operational contract rather than a transport detail.
+pub const MAX_FILE_BYTES: usize = 1024 * 1024;
+
+/// Maximum number of credential entries accepted in one durable store.
+pub const MAX_ENTRIES: usize = 4096;
+
+/// Maximum UTF-8 bytes accepted for one credential value.
+pub const MAX_VALUE_BYTES: usize = 64 * 1024;
+
+#[cfg(unix)]
 /// The mode a store file is created with, and the widest mode one may be opened at.
 pub const FILE_MODE: u32 = 0o600;
 
+#[cfg(unix)]
 /// The mode the containing directory is created with, and the widest it may be opened at.
 pub const DIR_MODE: u32 = 0o700;
 
@@ -91,11 +114,6 @@ static NEXT_TEMPORARY: AtomicU64 = AtomicU64::new(0);
 /// See the [module documentation](self) for what protects the values in it and what does not — the
 /// short answer is a file mode and nothing else.
 ///
-/// # Unix only
-///
-/// The whole safety argument is `0600` and `0700`, and there is no honest way to spell those on a
-/// platform without them. A store that silently degraded to "whatever the default ACL was" would be
-/// the implied-safety this module's own documentation refuses, so the type is absent there instead.
 pub struct FileStore<L = TenantLayout> {
     layout: L,
     path: PathBuf,
@@ -103,6 +121,8 @@ pub struct FileStore<L = TenantLayout> {
     // is sorted and a diff between two versions of it is readable — and so `paths()` is ordered, the
     // same property `MemoryStore` offers.
     entries: Mutex<BTreeMap<String, Secret>>,
+    #[cfg(test)]
+    fail_next_write: std::sync::atomic::AtomicBool,
 }
 
 impl FileStore<TenantLayout> {
@@ -136,29 +156,30 @@ impl<L: Layout> FileStore<L> {
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
         {
-            ensure_directory(directory)?;
+            platform::ensure_directory(directory)?;
         }
 
-        let entries = match std::fs::read_to_string(&path) {
-            Ok(contents) => {
-                check_mode(&path, FILE_MODE)?;
-                parse(&contents, &layout, &path)?
+        let (entries, existed) = match platform::open_existing(&path)? {
+            Some(mut file) => {
+                let contents = read_bounded(&mut file, &path)?;
+                (parse(&contents, &layout, &path)?, true)
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => BTreeMap::new(),
-            Err(error) => return Err(unreachable(&path, &error)),
+            None => (BTreeMap::new(), false),
         };
 
         let store = Self {
             layout,
             path,
             entries: Mutex::new(entries),
+            #[cfg(test)]
+            fail_next_write: std::sync::atomic::AtomicBool::new(false),
         };
 
         // Written eagerly so that "the store exists, with the right mode" is true after `open`
         // rather than after the first `put`. An operator who is told where their credentials live
         // should find something there, and a test asserting the mode should not have to store a
         // credential first to have something to assert about.
-        if !store.path.exists() {
+        if !existed {
             store.write_through(&store.locked())?;
         }
 
@@ -257,6 +278,11 @@ impl<L: Layout> FileStore<L> {
         self.len() == 0
     }
 
+    #[cfg(test)]
+    fn inject_write_failure(&self) {
+        self.fail_next_write.store(true, Ordering::SeqCst);
+    }
+
     /// The map, with a poisoned lock recovered rather than propagated — as [`MemoryStore`].
     ///
     /// [`MemoryStore`]: crate::MemoryStore
@@ -294,6 +320,11 @@ impl<L: Layout> FileStore<L> {
             NEXT_TEMPORARY.fetch_add(1, Ordering::Relaxed)
         ));
 
+        platform::ensure_directory(directory)?;
+        // Refuse a destination widened or replaced after this store was opened before candidate
+        // bytes are even rendered, much less written to a temporary. `replace` repeats the check
+        // immediately before the atomic operation to cover the intervening race.
+        platform::validate_destination(&self.path)?;
         let result = self.write_temporary(&temporary, entries);
         if result.is_err() {
             // Best effort: the write already failed, and a failure to clean up after it is not the
@@ -310,7 +341,48 @@ impl<L: Layout> FileStore<L> {
         temporary: &Path,
         entries: &BTreeMap<String, Secret>,
     ) -> Result<(), StoreError> {
-        let mut rendered = String::from(HEADER);
+        if entries.len() > MAX_ENTRIES {
+            return Err(StoreError::Backend {
+                path: self.path.display().to_string(),
+                reason: format!(
+                    "the store would contain {} entries, exceeding the {MAX_ENTRIES}-entry limit",
+                    entries.len()
+                ),
+            });
+        }
+        if entries
+            .values()
+            .any(|secret| secret.expose_secret().len() > MAX_VALUE_BYTES)
+        {
+            return Err(StoreError::Backend {
+                path: self.path.display().to_string(),
+                reason: format!(
+                    "a credential value exceeds the {MAX_VALUE_BYTES}-byte value limit; the value \
+                     and its address are omitted"
+                ),
+            });
+        }
+        let encoded_size = entries
+            .iter()
+            .try_fold(HEADER.len() + 1, |size, (address, secret)| {
+                let value_len = secret.expose_secret().len();
+                size.checked_add(address.len())?
+                    .checked_add(1)?
+                    .checked_add(value_len.checked_mul(2)?)?
+                    .checked_add(1)
+            });
+        let Some(encoded_size) = encoded_size.filter(|size| *size <= MAX_FILE_BYTES) else {
+            return Err(StoreError::Backend {
+                path: self.path.display().to_string(),
+                reason: format!(
+                    "the encoded store would exceed the {MAX_FILE_BYTES}-byte limit; refusing the \
+                     whole mutation rather than allocating or writing a partial file"
+                ),
+            });
+        };
+
+        let mut rendered = String::with_capacity(encoded_size);
+        rendered.push_str(HEADER);
         rendered.push('\n');
         for (address, secret) in entries {
             rendered.push_str(address);
@@ -319,37 +391,30 @@ impl<L: Layout> FileStore<L> {
             rendered.push('\n');
         }
 
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            // Set here rather than by `set_permissions` afterwards: between a `create` and a
-            // `chmod` the file exists at the default mode, and that window is the whole of what
-            // `0600` is protecting against. `umask` can only clear further bits, never add one.
-            .mode(FILE_MODE)
-            .open(temporary)
-            // **Every error on this path names the store, not the temporary.** The temporary's name
-            // carries a pid and a counter that mean nothing to an operator, and the message reaches
-            // a served surface through the host's `502` — so it discloses an internal path for no
-            // gain. The store's own path is the actionable half and the one already documented.
-            .map_err(|error| unreachable(&self.path, &error))?;
+        let mut file = platform::create_new(temporary, &self.path)?;
         file.write_all(rendered.as_bytes())
             .map_err(|error| unreachable(&self.path, &error))?;
         // Without this the rename can land before the bytes do, and a power cut leaves a file that
         // is present, correctly named, and empty.
-        file.sync_all()
-            .map_err(|error| unreachable(&self.path, &error))?;
+        platform::flush(&file, &self.path)?;
         drop(file);
 
-        std::fs::rename(temporary, &self.path).map_err(|error| unreachable(&self.path, &error))?;
+        #[cfg(test)]
+        if self.fail_next_write.swap(false, Ordering::SeqCst) {
+            return Err(StoreError::Unreachable {
+                path: self.path.display().to_string(),
+                reason: "injected failure before atomic replacement".to_owned(),
+            });
+        }
+
+        platform::replace(temporary, &self.path)?;
 
         // The rename itself is a directory operation, so durability of *it* needs the directory
         // flushed. Best effort: a filesystem that refuses to open a directory read-only is not a
         // reason to report the write as failed, since it has already succeeded as far as any reader
         // is concerned.
-        if let Some(directory) = self.path.parent() {
-            if let Ok(handle) = File::open(directory) {
-                let _ = handle.sync_all();
-            }
+        if let Some(directory) = temporary.parent() {
+            platform::sync_directory(directory);
         }
 
         Ok(())
@@ -445,50 +510,50 @@ impl<L> fmt::Debug for FileStore<L> {
 }
 
 /// Create `directory` at [`DIR_MODE`] if it is absent, and refuse it if it is too open.
-fn ensure_directory(directory: &Path) -> Result<(), StoreError> {
-    if !directory.exists() {
-        DirBuilder::new()
-            .recursive(true)
-            // Applied to every component this creates. As with the file mode, `umask` can only
-            // clear further bits.
-            .mode(DIR_MODE)
-            .create(directory)
-            .map_err(|error| unreachable(directory, &error))?;
-    }
-    check_mode(directory, DIR_MODE)
-}
-
-/// Refuse a path readable or writable by anyone but its owner.
-///
-/// Tightening it instead would be the wrong repair: the mode was wide while the file held values, so
-/// the exposure has already happened and an operator needs to know rather than to have it silently
-/// fixed under them.
-fn check_mode(path: &Path, widest: u32) -> Result<(), StoreError> {
-    let metadata = std::fs::metadata(path).map_err(|error| unreachable(path, &error))?;
-    let mode = metadata.permissions().mode() & 0o777;
-    if mode & !widest != 0 {
-        return Err(StoreError::Denied {
-            path: path.display().to_string(),
-            reason: format!(
-                "its mode is {mode:04o}, and a credential store must be no wider than {widest:04o} \
-                 — run `chmod {widest:o} {}` once you are satisfied nobody else has read it",
-                path.display()
-            ),
-        });
-    }
-    Ok(())
-}
-
 /// An IO failure, as a [`StoreError`].
 ///
 /// `std::io::Error`'s own message names an errno and, for the calls used here, nothing else. It
 /// never carries file contents, so this cannot carry a value — which is why the reason is passed
 /// through rather than flattened to "an IO error".
-fn unreachable(path: &Path, error: &std::io::Error) -> StoreError {
+pub(super) fn unreachable(path: &Path, error: &std::io::Error) -> StoreError {
     StoreError::Unreachable {
         path: path.display().to_string(),
         reason: error.to_string(),
     }
+}
+
+fn read_bounded(file: &mut File, path: &Path) -> Result<String, StoreError> {
+    let length = file
+        .metadata()
+        .map_err(|error| unreachable(path, &error))?
+        .len();
+    if length > MAX_FILE_BYTES as u64 {
+        return Err(StoreError::Backend {
+            path: path.display().to_string(),
+            reason: format!(
+                "the store is {length} bytes, exceeding the {MAX_FILE_BYTES}-byte limit; contents \
+                 were not read"
+            ),
+        });
+    }
+
+    let mut bytes = Vec::with_capacity(length as usize);
+    file.take(MAX_FILE_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| unreachable(path, &error))?;
+    if bytes.len() > MAX_FILE_BYTES {
+        return Err(StoreError::Backend {
+            path: path.display().to_string(),
+            reason: format!(
+                "the store grew beyond the {MAX_FILE_BYTES}-byte limit while it was being read; \
+                 contents were refused"
+            ),
+        });
+    }
+    String::from_utf8(bytes).map_err(|_| StoreError::Backend {
+        path: path.display().to_string(),
+        reason: "the store is not UTF-8".to_owned(),
+    })
 }
 
 /// Read a whole store file into a map, refusing anything it cannot account for.
@@ -539,6 +604,14 @@ fn parse<L: Layout>(
             .split_once(' ')
             .ok_or_else(|| bad("expected `<address> <hex>`, and there is no space".to_owned()))?;
 
+        if encoded.len() > MAX_VALUE_BYTES * 2 {
+            return Err(bad(format!(
+                "the encoded value is {} characters, exceeding the {}-byte decoded-value limit",
+                encoded.len(),
+                MAX_VALUE_BYTES
+            )));
+        }
+
         // The address must be one this layout writes, and must be spelled the way this layout
         // spells it. Both halves matter: the first is what keeps a hand-edited file from inventing
         // a tenant, and the second is what keeps one credential from having two entries.
@@ -563,6 +636,11 @@ fn parse<L: Layout>(
         if entries.insert(canonical, Secret::new(value)).is_some() {
             return Err(bad(format!(
                 "{address:?} appears more than once, and nothing here can say which is current"
+            )));
+        }
+        if entries.len() > MAX_ENTRIES {
+            return Err(bad(format!(
+                "the store contains more than the {MAX_ENTRIES}-entry limit"
             )));
         }
     }
@@ -596,9 +674,10 @@ fn hex_decode(encoded: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
+    use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
 
     /// Obviously not a credential, and long enough that a redactor would hold it.
     const SENTINEL: &str = "SENTINEL-NOT-A-REAL-SECRET-file-store";
@@ -787,7 +866,16 @@ mod tests {
         let scratch = Scratch::new("mode-refusal");
         let path = scratch.store();
         drop(FileStore::open(&path).expect("open"));
+        std::fs::write(
+            &path,
+            format!(
+                "{HEADER}\ntenants/9f3a4b2c/com.zendesk.api/support/api_token {}\n",
+                hex_encode(SENTINEL.as_bytes())
+            ),
+        )
+        .expect("plant a real entry");
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).expect("loosen it");
+        let before = std::fs::read(&path).expect("prior bytes");
 
         let error = FileStore::open(&path).expect_err("a 0644 store must be refused");
         assert!(
@@ -798,6 +886,9 @@ mod tests {
             error.to_string().contains("0644"),
             "the refusal must say what the mode is: {error}"
         );
+        assert!(!error.to_string().contains(SENTINEL));
+        assert!(!error.to_string().contains("com.zendesk.api"));
+        assert_eq!(std::fs::read(&path).expect("bytes remain"), before);
         assert_eq!(
             mode_of(&path),
             0o644,
@@ -815,13 +906,29 @@ mod tests {
         let scratch = Scratch::new("dir-mode-refusal");
         let path = scratch.store();
         drop(FileStore::open(&path).expect("open"));
+        std::fs::write(
+            &path,
+            format!(
+                "{HEADER}\ntenants/9f3a4b2c/com.zendesk.api/support/api_token {}\n",
+                hex_encode(SENTINEL.as_bytes())
+            ),
+        )
+        .expect("plant a real entry");
         let directory = path.parent().expect("a parent").to_owned();
         std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755))
             .expect("loosen it");
 
         let error = FileStore::open(&path).expect_err("a 0755 directory must be refused");
 
-        // Restored before asserting, so a failure still leaves a removable directory.
+        let unsafe_mode = mode_of(&directory);
+        let bytes = std::fs::read(&path).expect("prior bytes");
+
+        assert_eq!(unsafe_mode, 0o755, "refusal repaired the directory");
+        assert_eq!(std::fs::read(&path).expect("bytes remain"), bytes);
+        assert!(!error.to_string().contains(SENTINEL));
+        assert!(!error.to_string().contains("com.zendesk.api"));
+
+        // Restored after evidence so a failure still leaves a removable directory.
         std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(DIR_MODE))
             .expect("restore");
 
@@ -832,6 +939,74 @@ mod tests {
         assert!(
             error.to_string().contains("0755"),
             "the refusal must say what the mode is: {error}"
+        );
+    }
+
+    /// A store directly beneath a shared parent is still unsafe, but the operator must never be
+    /// told to narrow that shared parent for every other user of the machine.
+    #[test]
+    fn a_shared_parent_refusal_recommends_an_owner_only_child_not_chmodding_the_parent() {
+        use std::os::unix::fs::MetadataExt as _;
+
+        let path = std::env::temp_dir().join(format!(
+            "connector-secrets-shared-parent-{}-{}",
+            std::process::id(),
+            NEXT_TEMPORARY.fetch_add(1, Ordering::Relaxed)
+        ));
+        let parent = path.parent().expect("a parent");
+        let before = std::fs::symlink_metadata(parent).expect("inspect shared parent");
+        let snapshot = (
+            before.mode(),
+            before.uid(),
+            before.gid(),
+            before.dev(),
+            before.ino(),
+        );
+
+        let error = FileStore::open(&path).expect_err("a shared direct parent must be refused");
+        let message = error.to_string();
+        assert!(message.contains(&parent.display().to_string()), "{message}");
+        assert!(message.contains("owner-only child"), "{message}");
+        assert!(message.contains("per-user state"), "{message}");
+        assert!(!message.contains("chmod 700"), "{message}");
+        assert!(!message.contains("com.zendesk.api"), "{message}");
+        assert!(!message.contains(SENTINEL), "{message}");
+        assert!(!path.exists(), "a refusal must not create the store");
+
+        let after = std::fs::symlink_metadata(parent).expect("reinspect shared parent");
+        assert_eq!(
+            snapshot,
+            (
+                after.mode(),
+                after.uid(),
+                after.gid(),
+                after.dev(),
+                after.ino(),
+            ),
+            "refusal changed the shared parent's security metadata"
+        );
+    }
+
+    #[test]
+    fn an_oversized_store_is_refused_before_its_contents_are_parsed() {
+        const EXPECTED_LIMIT: usize = 1024 * 1024;
+
+        let scratch = Scratch::new("bounded-read");
+        let path = scratch.store();
+        drop(FileStore::open(&path).expect("open"));
+        std::fs::write(&path, format!("#{}", "x".repeat(EXPECTED_LIMIT)))
+            .expect("plant an oversized store");
+
+        let error = FileStore::open(&path).expect_err("an oversized store must be refused");
+        let message = error.to_string();
+        assert!(
+            message.contains("1048576"),
+            "the bound must be named: {message}"
+        );
+        assert!(message.contains(&path.display().to_string()), "{message}");
+        assert!(
+            !message.contains(&"x".repeat(64)),
+            "contents leaked: {message}"
         );
     }
 
@@ -919,43 +1094,48 @@ mod tests {
     /// cannot quietly become an assertion about nothing.
     #[test]
     fn the_write_path_keeps_all_three_legs_of_its_atomicity() {
-        let source = include_str!("file.rs");
-        let start = source
-            .find("fn write_temporary")
-            .expect("the write path is still called `write_temporary`");
-        let end = source[start..]
-            .find("\n    }\n")
-            .map(|offset| start + offset)
-            .expect("the function ends");
-        let body = &source[start..end];
-
-        for (fragment, why) in [
+        let unix = include_str!("file/unix.rs");
+        let windows = include_str!("file/windows.rs");
+        for (source, fragment, why) in [
             (
-                ".create_new(true)",
-                "without it the write follows a name somebody else placed there, through a symlink \
-                 or a planted file",
+                unix,
+                "OFlags::CREATE | OFlags::EXCL",
+                "Unix must create a fresh temporary",
             ),
             (
-                ".mode(FILE_MODE)",
-                "without it the temporary exists at the default mode for the width of the write, \
-                 holding every credential",
+                unix,
+                "OFlags::NOFOLLOW",
+                "Unix must not follow a planted temporary",
             ),
             (
+                unix,
                 "file.sync_all()",
-                "without it the rename can land before the bytes, and a power cut leaves a file \
-                 that is present, correctly named and empty",
+                "Unix must flush bytes before rename",
+            ),
+            (unix, "std::fs::rename", "Unix replacement must be atomic"),
+            (
+                windows,
+                "CREATE_NEW",
+                "Windows must create a fresh temporary",
             ),
             (
-                "std::fs::rename",
-                "without it there is no atomic step at all and the truncation window is back",
+                windows,
+                "FlushFileBuffers",
+                "Windows must flush bytes before replacement",
             ),
             (
-                "handle.sync_all()",
-                "without it the rename itself is not durable across a power cut",
+                windows,
+                "ReplaceFileW",
+                "Windows existing-target replacement must be atomic",
+            ),
+            (
+                windows,
+                "MoveFileExW",
+                "Windows first install must be same-directory atomic",
             ),
         ] {
             assert!(
-                body.contains(fragment),
+                source.contains(fragment),
                 "the atomic write no longer contains `{fragment}` — {why}. If this was deliberate, \
                  the module documentation and this test both have to say so."
             );
@@ -1202,6 +1382,262 @@ mod tests {
         assert!(store.get(&reference()).await.unwrap_err().is_not_found());
     }
 
+    #[test]
+    fn a_store_symlink_is_refused_without_reading_or_changing_either_object() {
+        use std::os::unix::fs::symlink;
+
+        let scratch = Scratch::new("store-symlink");
+        let real = scratch.store();
+        drop(FileStore::open(&real).expect("open real store"));
+        std::fs::write(
+            &real,
+            format!(
+                "{HEADER}\ntenants/9f3a4b2c/com.zendesk.api/support/api_token {}\n",
+                hex_encode(SENTINEL.as_bytes())
+            ),
+        )
+        .expect("plant target");
+        let link = real.parent().expect("parent").join("linked-credentials");
+        symlink(&real, &link).expect("plant symlink");
+        let before_link = std::fs::symlink_metadata(&link).expect("link metadata");
+        let before_target = std::fs::read(&real).expect("target bytes");
+
+        let error = FileStore::open(&link).expect_err("a symlink must be refused");
+        let message = error.to_string();
+        assert!(message.contains(&link.display().to_string()), "{message}");
+        assert!(!message.contains(SENTINEL), "{message}");
+        assert_eq!(std::fs::read(&real).expect("target remains"), before_target);
+        let after_link = std::fs::symlink_metadata(&link).expect("link remains");
+        assert_eq!(before_link.ino(), after_link.ino());
+        assert_eq!(before_link.mode(), after_link.mode());
+    }
+
+    #[test]
+    fn a_directory_symlink_is_refused_without_changing_it() {
+        use std::os::unix::fs::symlink;
+
+        let scratch = Scratch::new("directory-symlink");
+        let real = scratch.0.join("real-state");
+        drop(FileStore::open(real.join("credentials")).expect("create real directory"));
+        let link = scratch.0.join("linked-state");
+        symlink(&real, &link).expect("plant directory symlink");
+        let before = std::fs::symlink_metadata(&link).expect("link metadata");
+
+        let path = link.join("credentials");
+        let error = FileStore::open(&path).expect_err("a directory symlink must be refused");
+        let message = error.to_string();
+        assert!(message.contains(&link.display().to_string()), "{message}");
+        assert!(!message.contains(SENTINEL), "{message}");
+        let after = std::fs::symlink_metadata(&link).expect("link remains");
+        assert_eq!(before.ino(), after.ino());
+        assert_eq!(before.mode(), after.mode());
+    }
+
+    #[test]
+    fn wrong_object_kinds_are_refused_without_repair() {
+        let scratch = Scratch::new("wrong-kinds");
+        let store_as_directory = scratch.store();
+        std::fs::create_dir_all(store_as_directory.parent().expect("parent")).expect("parents");
+        std::fs::set_permissions(
+            store_as_directory.parent().expect("parent"),
+            std::fs::Permissions::from_mode(DIR_MODE),
+        )
+        .expect("secure parent");
+        std::fs::create_dir(&store_as_directory).expect("directory at store path");
+        let before = std::fs::symlink_metadata(&store_as_directory).expect("metadata");
+        let error =
+            FileStore::open(&store_as_directory).expect_err("directory is not a store file");
+        assert!(matches!(error, StoreError::Denied { .. }), "{error:?}");
+        let after = std::fs::symlink_metadata(&store_as_directory).expect("metadata remains");
+        assert_eq!((before.ino(), before.mode()), (after.ino(), after.mode()));
+
+        let file_as_directory = scratch.0.join("plain-file");
+        std::fs::write(&file_as_directory, b"not a directory").expect("plant file");
+        std::fs::set_permissions(
+            &file_as_directory,
+            std::fs::Permissions::from_mode(FILE_MODE),
+        )
+        .expect("secure file");
+        let before = std::fs::symlink_metadata(&file_as_directory).expect("metadata");
+        let path = file_as_directory.join("credentials");
+        let error = FileStore::open(&path).expect_err("file is not a state directory");
+        assert!(matches!(error, StoreError::Denied { .. }), "{error:?}");
+        let after = std::fs::symlink_metadata(&file_as_directory).expect("metadata remains");
+        assert_eq!((before.ino(), before.mode()), (after.ino(), after.mode()));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_fifo_swap_is_refused_without_blocking_or_reading() {
+        let scratch = Scratch::new("fifo");
+        let path = scratch.store();
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("parent");
+        std::fs::set_permissions(
+            path.parent().expect("parent"),
+            std::fs::Permissions::from_mode(DIR_MODE),
+        )
+        .expect("secure parent");
+        rustix::fs::mkfifoat(
+            rustix::fs::CWD,
+            &path,
+            rustix::fs::Mode::from_raw_mode(FILE_MODE),
+        )
+        .expect("plant fifo");
+        let before = std::fs::symlink_metadata(&path).expect("fifo metadata");
+
+        let error = FileStore::open(&path).expect_err("fifo must be refused without opening it");
+        assert!(matches!(error, StoreError::Denied { .. }), "{error:?}");
+        let after = std::fs::symlink_metadata(&path).expect("fifo remains");
+        assert_eq!((before.ino(), before.mode()), (after.ino(), after.mode()));
+    }
+
+    #[test]
+    fn an_unopenable_store_is_refused_without_reading_or_repair() {
+        let scratch = Scratch::new("unopenable");
+        let path = scratch.store();
+        drop(FileStore::open(&path).expect("open"));
+        std::fs::write(
+            &path,
+            format!(
+                "{HEADER}\ntenants/9f3a4b2c/com.zendesk.api/support/api_token {}\n",
+                hex_encode(SENTINEL.as_bytes())
+            ),
+        )
+        .expect("plant a real entry");
+        let bytes = std::fs::read(&path).expect("prior bytes");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000))
+            .expect("make unopenable");
+        let before = std::fs::symlink_metadata(&path).expect("metadata");
+
+        let error = FileStore::open(&path).expect_err("unopenable metadata handle must refuse");
+        let message = error.to_string();
+        assert!(!message.contains(SENTINEL), "{message}");
+        assert!(!message.contains("com.zendesk.api"), "{message}");
+        let after = std::fs::symlink_metadata(&path).expect("metadata remains");
+        assert_eq!((before.uid(), before.mode()), (after.uid(), after.mode()));
+
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(FILE_MODE))
+            .expect("restore for cleanup");
+        assert_eq!(std::fs::read(&path).expect("bytes remain"), bytes);
+    }
+
+    #[tokio::test]
+    async fn mutations_revalidate_widened_directory_and_file_before_writing_a_temporary() {
+        for widen_directory in [false, true] {
+            let scratch = Scratch::new(if widen_directory {
+                "mutated-directory"
+            } else {
+                "mutated-file"
+            });
+            let path = scratch.store();
+            let store = FileStore::open(&path).expect("open");
+            store
+                .put(&reference(), &Secret::new(SENTINEL))
+                .await
+                .expect("plant prior value");
+            let before = std::fs::read(&path).expect("prior file");
+            let widened = if widen_directory {
+                path.parent().expect("parent")
+            } else {
+                path.as_path()
+            };
+            let mode = if widen_directory { 0o755 } else { 0o644 };
+            std::fs::set_permissions(widened, std::fs::Permissions::from_mode(mode))
+                .expect("widen");
+
+            let other = CredentialRef::new("tenant-b", "com.zendesk.api", "support", "api_token")
+                .expect("other reference");
+            let error = store
+                .put(&other, &Secret::new(format!("{SENTINEL}-new")))
+                .await
+                .expect_err("widened metadata must refuse mutation");
+            let message = error.to_string();
+            assert!(!message.contains(SENTINEL), "{message}");
+            assert!(!message.contains("com.zendesk.api"), "{message}");
+            assert_eq!(std::fs::read(&path).expect("prior file remains"), before);
+            assert!(store.stale_temporaries().is_empty());
+            assert_eq!(mode_of(widened), mode, "refusal repaired unsafe metadata");
+
+            std::fs::set_permissions(
+                widened,
+                std::fs::Permissions::from_mode(if widen_directory { DIR_MODE } else { FILE_MODE }),
+            )
+            .expect("restore");
+        }
+    }
+
+    #[test]
+    #[ignore = "requires euid 0 to plant a foreign-owned file; CI invokes it explicitly with sudo"]
+    fn a_foreign_owned_store_is_refused_without_repair() {
+        assert_eq!(
+            rustix::process::geteuid().as_raw(),
+            0,
+            "this ignored fixture requires euid 0"
+        );
+        let scratch = Scratch::new("foreign-owned-store");
+        let path = scratch.store();
+        drop(FileStore::open(&path).expect("open as root"));
+        std::fs::write(
+            &path,
+            format!(
+                "{HEADER}\ntenants/9f3a4b2c/com.zendesk.api/support/api_token {}\n",
+                hex_encode(SENTINEL.as_bytes())
+            ),
+        )
+        .expect("plant a real entry");
+        let bytes = std::fs::read(&path).expect("prior bytes");
+        rustix::fs::chown(&path, Some(rustix::process::Uid::from_raw(65534)), None)
+            .expect("plant foreign owner");
+        let before = std::fs::symlink_metadata(&path).expect("metadata");
+
+        let error = FileStore::open(&path).expect_err("foreign owner must be refused");
+        let message = error.to_string();
+        assert!(message.contains(&path.display().to_string()), "{message}");
+        assert!(!message.contains(SENTINEL), "{message}");
+        assert!(!message.contains("com.zendesk.api"), "{message}");
+        assert_eq!(std::fs::read(&path).expect("bytes remain"), bytes);
+        let after = std::fs::symlink_metadata(&path).expect("metadata remains");
+        assert_eq!((before.uid(), before.mode()), (after.uid(), after.mode()));
+    }
+
+    #[test]
+    #[ignore = "requires euid 0 to plant a foreign-owned directory; CI invokes it explicitly with sudo"]
+    fn a_foreign_owned_directory_is_refused_without_repair() {
+        assert_eq!(
+            rustix::process::geteuid().as_raw(),
+            0,
+            "this ignored fixture requires euid 0"
+        );
+        let scratch = Scratch::new("foreign-owned-directory");
+        let path = scratch.store();
+        drop(FileStore::open(&path).expect("open as root"));
+        std::fs::write(
+            &path,
+            format!(
+                "{HEADER}\ntenants/9f3a4b2c/com.zendesk.api/support/api_token {}\n",
+                hex_encode(SENTINEL.as_bytes())
+            ),
+        )
+        .expect("plant a real entry");
+        let bytes = std::fs::read(&path).expect("prior bytes");
+        let directory = path.parent().expect("parent");
+        rustix::fs::chown(directory, Some(rustix::process::Uid::from_raw(65534)), None)
+            .expect("plant foreign owner");
+        let before = std::fs::symlink_metadata(directory).expect("metadata");
+
+        let error = FileStore::open(&path).expect_err("foreign owner must be refused");
+        let message = error.to_string();
+        assert!(
+            message.contains(&directory.display().to_string()),
+            "{message}"
+        );
+        assert!(!message.contains(SENTINEL), "{message}");
+        assert!(!message.contains("com.zendesk.api"), "{message}");
+        assert_eq!(std::fs::read(&path).expect("bytes remain"), bytes);
+        let after = std::fs::symlink_metadata(directory).expect("metadata remains");
+        assert_eq!((before.uid(), before.mode()), (after.uid(), after.mode()));
+    }
+
     /// Usable through the trait object, which is how a host binds it.
     #[tokio::test]
     async fn the_store_is_object_safe() {
@@ -1225,5 +1661,302 @@ mod tests {
         assert_eq!(hex_decode("abc"), None, "odd length");
         assert_eq!(hex_decode("zz"), None, "not hex");
         assert_eq!(hex_decode("AA"), Some(vec![0xaa]), "uppercase is read");
+    }
+}
+
+#[cfg(test)]
+mod portable_tests {
+    use super::*;
+
+    const SENTINEL: &str = "SENTINEL-NOT-A-REAL-SECRET-portable-file-store";
+
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(label: &str) -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "connector-secrets-portable-{label}-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            let _ = std::fs::remove_dir_all(&path);
+            Self(path)
+        }
+
+        fn store(&self) -> PathBuf {
+            self.0.join("state").join("credentials")
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn reference(instance: Option<&str>, leaf: &str) -> CredentialRef {
+        match instance {
+            Some(instance) => {
+                CredentialRef::for_instance("tenant-a", "com.acme.api", instance, "default", leaf)
+            }
+            None => CredentialRef::new("tenant-a", "com.acme.api", "default", leaf),
+        }
+        .expect("valid reference")
+    }
+
+    #[tokio::test]
+    async fn a_multi_credential_connection_migration_survives_restart() {
+        let scratch = Scratch::new("migration-restart");
+        let path = scratch.store();
+        let first_instance = "0d3f79ae-b6df-4f77-8f77-438436c3b2ef";
+        let second_instance = "b183db27-ec61-4d47-9783-4db28c82f4f8";
+        let legacy_token = reference(None, "token");
+        let legacy_signing = reference(None, "signing_secret");
+        let first_token = reference(Some(first_instance), "token");
+        let first_signing = reference(Some(first_instance), "signing_secret");
+        let second_token = reference(Some(second_instance), "token");
+        let second_signing = reference(Some(second_instance), "signing_secret");
+
+        let store = FileStore::open(&path).expect("open");
+        store
+            .put(
+                &legacy_token,
+                &Secret::new(format!("{SENTINEL}-first-token")),
+            )
+            .await
+            .expect("put first token");
+        store
+            .put(
+                &legacy_signing,
+                &Secret::new(format!("{SENTINEL}-first-signing")),
+            )
+            .await
+            .expect("put first signing secret");
+
+        let scope = CredentialScope::new("tenant-a", "com.acme.api").expect("scope");
+        let mut migration = SecretBatch::new(scope.clone());
+        migration
+            .move_secret(legacy_token.clone(), first_token.clone())
+            .expect("move first token");
+        migration
+            .move_secret(legacy_signing.clone(), first_signing.clone())
+            .expect("move first signing secret");
+        migration
+            .put(
+                second_token.clone(),
+                Secret::new(format!("{SENTINEL}-second-token")),
+            )
+            .expect("put second token");
+        migration
+            .put(
+                second_signing.clone(),
+                Secret::new(format!("{SENTINEL}-second-signing")),
+            )
+            .expect("put second signing secret");
+        store.apply(&migration).await.expect("atomic migration");
+        drop(store);
+
+        let restarted = FileStore::open(&path).expect("restart");
+        assert!(restarted
+            .get(&legacy_token)
+            .await
+            .unwrap_err()
+            .is_not_found());
+        assert!(restarted
+            .get(&legacy_signing)
+            .await
+            .unwrap_err()
+            .is_not_found());
+        assert_eq!(
+            restarted.references(&scope).await.expect("references"),
+            vec![
+                first_signing.clone(),
+                first_token.clone(),
+                second_signing.clone(),
+                second_token.clone(),
+            ]
+        );
+        for (at, expected) in [
+            (first_token, format!("{SENTINEL}-first-token")),
+            (first_signing, format!("{SENTINEL}-first-signing")),
+            (second_token, format!("{SENTINEL}-second-token")),
+            (second_signing, format!("{SENTINEL}-second-signing")),
+        ] {
+            assert_eq!(
+                restarted
+                    .get(&at)
+                    .await
+                    .expect("migrated value")
+                    .expose_secret(),
+                expected
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn an_injected_write_failure_preserves_the_prior_file_and_batch() {
+        let scratch = Scratch::new("injected-batch-failure");
+        let path = scratch.store();
+        let source = reference(None, "token");
+        let untouched = reference(None, "signing_secret");
+        let destination = reference(Some("0d3f79ae-b6df-4f77-8f77-438436c3b2ef"), "token");
+        let planted = reference(Some("b183db27-ec61-4d47-9783-4db28c82f4f8"), "token");
+        let store = FileStore::open(&path).expect("open");
+        store
+            .put(&source, &Secret::new(format!("{SENTINEL}-source")))
+            .await
+            .expect("put source");
+        store
+            .put(&untouched, &Secret::new(format!("{SENTINEL}-untouched")))
+            .await
+            .expect("put untouched");
+        let before = std::fs::read(&path).expect("prior file");
+
+        let scope = CredentialScope::new("tenant-a", "com.acme.api").expect("scope");
+        let mut batch = SecretBatch::new(scope);
+        batch
+            .move_secret(source.clone(), destination.clone())
+            .expect("move");
+        batch
+            .put(planted.clone(), Secret::new(format!("{SENTINEL}-new")))
+            .expect("put");
+        store.inject_write_failure();
+        let error = store
+            .apply(&batch)
+            .await
+            .expect_err("injected failure must refuse the batch");
+        let message = error.to_string();
+        assert!(message.contains(&path.display().to_string()), "{message}");
+        assert!(!message.contains(SENTINEL), "{message}");
+        assert!(!message.contains("com.acme.api"), "{message}");
+        assert_eq!(std::fs::read(&path).expect("prior file remains"), before);
+        assert_eq!(
+            store
+                .get(&source)
+                .await
+                .expect("source remains")
+                .expose_secret(),
+            format!("{SENTINEL}-source")
+        );
+        assert!(store.get(&destination).await.unwrap_err().is_not_found());
+        assert!(store.get(&planted).await.unwrap_err().is_not_found());
+        assert!(store.stale_temporaries().is_empty());
+        drop(store);
+
+        let restarted = FileStore::open(&path).expect("restart after failure");
+        assert_eq!(std::fs::read(&path).expect("whole prior file"), before);
+        assert_eq!(
+            restarted
+                .get(&source)
+                .await
+                .expect("source after restart")
+                .expose_secret(),
+            format!("{SENTINEL}-source")
+        );
+        assert!(restarted
+            .get(&destination)
+            .await
+            .unwrap_err()
+            .is_not_found());
+        assert!(restarted.get(&planted).await.unwrap_err().is_not_found());
+    }
+
+    #[tokio::test]
+    async fn bounded_writes_refuse_before_allocating_or_changing_the_prior_file() {
+        let scratch = Scratch::new("bounded-write");
+        let path = scratch.store();
+        let store = FileStore::open(&path).expect("open");
+        let before = std::fs::read(&path).expect("prior file");
+        let error = store
+            .put(
+                &reference(None, "token"),
+                &Secret::new("x".repeat(MAX_VALUE_BYTES + 1)),
+            )
+            .await
+            .expect_err("oversized value must be refused");
+        let message = error.to_string();
+        assert!(message.contains(&MAX_VALUE_BYTES.to_string()), "{message}");
+        assert!(message.contains(&path.display().to_string()), "{message}");
+        assert!(!message.contains(&"x".repeat(64)), "{message}");
+        assert!(!message.contains("com.acme.api"), "{message}");
+        assert_eq!(std::fs::read(&path).expect("prior file remains"), before);
+        assert!(store.is_empty());
+        assert!(store.stale_temporaries().is_empty());
+    }
+
+    #[test]
+    fn bounded_reads_use_metadata_and_a_same_handle_max_plus_one_read() {
+        let scratch = Scratch::new("bounded-read-portable");
+        let path = scratch.store();
+        drop(FileStore::open(&path).expect("open"));
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .expect("open planted store");
+        file.set_len(MAX_FILE_BYTES as u64 + 1)
+            .expect("make a sparse oversized store");
+        drop(file);
+
+        let error = FileStore::open(&path).expect_err("oversized store must be refused");
+        let message = error.to_string();
+        assert!(message.contains(&MAX_FILE_BYTES.to_string()), "{message}");
+        assert!(message.contains(&path.display().to_string()), "{message}");
+
+        let source = include_str!("file.rs");
+        let start = source
+            .find("fn read_bounded")
+            .expect("bounded reader exists");
+        let body = &source[start
+            ..source[start..]
+                .find("\n}\n")
+                .map(|end| start + end)
+                .expect("bounded reader ends")];
+        assert!(
+            body.contains(".metadata()"),
+            "metadata check left the handle"
+        );
+        assert!(
+            body.contains("file.take(MAX_FILE_BYTES as u64 + 1)"),
+            "growth-race max+1 read left the same handle"
+        );
+    }
+
+    #[test]
+    fn logical_v1_reads_bound_entries_and_individual_values() {
+        let entries_scratch = Scratch::new("bounded-entry-count");
+        let entries_path = entries_scratch.store();
+        drop(FileStore::open(&entries_path).expect("open"));
+        let mut contents = String::from(HEADER);
+        contents.push('\n');
+        for index in 0..=MAX_ENTRIES {
+            contents.push_str(&format!("tenants/t{index}/com.acme.api/token 41\n"));
+        }
+        assert!(
+            contents.len() < MAX_FILE_BYTES,
+            "entry fixture must isolate its bound"
+        );
+        std::fs::write(&entries_path, contents).expect("plant too many entries");
+        let error = FileStore::open(&entries_path).expect_err("entry count must be bounded");
+        let message = error.to_string();
+        assert!(message.contains(&MAX_ENTRIES.to_string()), "{message}");
+        assert!(!message.contains("com.acme.api"), "{message}");
+
+        let value_scratch = Scratch::new("bounded-value-read");
+        let value_path = value_scratch.store();
+        drop(FileStore::open(&value_path).expect("open"));
+        let contents = format!(
+            "{HEADER}\ntenants/tenant-a/com.acme.api/token {}\n",
+            "41".repeat(MAX_VALUE_BYTES + 1)
+        );
+        assert!(
+            contents.len() < MAX_FILE_BYTES,
+            "value fixture must isolate its bound"
+        );
+        std::fs::write(&value_path, contents).expect("plant oversized encoded value");
+        let error = FileStore::open(&value_path).expect_err("individual value must be bounded");
+        let message = error.to_string();
+        assert!(message.contains(&MAX_VALUE_BYTES.to_string()), "{message}");
+        assert!(!message.contains(&"41".repeat(64)), "{message}");
     }
 }
