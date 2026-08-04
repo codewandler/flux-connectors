@@ -87,7 +87,8 @@ Artifacts, abbreviated: **F** = `connectors/<provider>[-<service>].flux` · **M*
 | **graphs** | `[[graphs]]` | **nothing** | **nothing** | **lowering exists and is uncalled**; no provider declares one |
 | **roles** | `roles` on `[[services]]` | **nothing** | **nothing** | **IR-only.** One variant, one provider — [C-121](../stories/C-121-llm-catalogue-role.md) |
 | **verify** | `verify` (connector level) | **M** + **J** · **nothing into F, by design** | a host and operator UI; the explorer | **complete** (C-87) — the bounded read behind Test connection |
-| **quirks.pagination** | `[operations.quirks.pagination]` | **nothing** | **nothing** | **IR-only.** Declared by real providers |
+| **datasources** | `[[datasources]]` | *planned:* **M** + **R** + **J** · **never F**, by design | Exchange, binding a member per tenant; Flux, through the embedded Exchange client; the explorer | **planned** — lands with [vendor-datasource-declarations.md](vendor-datasource-declarations.md); Decision 0006 rule 6 makes the declared reach an *entry criterion*, so the surface may not ship IR-only |
+| **quirks.pagination** | `[operations.quirks.pagination]` | **nothing** | **nothing** | **IR-only.** Declared by real providers — **superseded** by the datasource member's cursor vocabulary and removed, per Decision 0006 rule 6 (C-514) |
 | **quirks.rate_limit** | `[operations.quirks.rate_limit]` | **nothing** | **nothing** | **IR-only**, and **declared by no provider at all** |
 | **quirks.error_envelope** | `[operations.quirks.error_envelope]` | **F** as *prose appended to the op's description* — nothing else | the model reading the tool contract | **prose only** |
 | **runtime** | `runtime` (connector level) | **M** + **R** + **J**, always stated · **nothing into F, by design** | a host deciding whether it may run the connector at all | **complete** (C-405) — the second surface after `operations` to reach every artifact a consumer reads |
@@ -221,7 +222,7 @@ Each has a different reason and a different fix, and they should not be batched:
 |---|---|---|
 | `roles` | C-120 landed the declaration; the projection is a separate story | [C-121](../stories/C-121-llm-catalogue-role.md) — `ready` |
 | `graphs` | the emitter is not wired, and there is no input to wire it to | a provider that wants one |
-| `quirks.pagination` | no consumer was ever designed | undecided — see below |
+| `quirks.pagination` | no consumer was ever designed | **decided 2026-08-04**: superseded by the `[[datasources]]` binding's cursor vocabulary and removed — Decision 0006 rule 6, [C-514](../stories/C-514-retire-quirks-pagination.md) |
 | `quirks.rate_limit` | no consumer, **and no provider declares it** | probably deletion, not implementation |
 
 `quirks.rate_limit` is the one that should give a reader pause. It is a field in the IR, in the hash
@@ -258,6 +259,10 @@ anyone to decide whether it is *output*.
 - **Whether the list should grow.** A new surface must join the per-service namespace
   (`member_names_of`), state which artifacts it reaches, and answer the `HashDomain` destructuring.
   This document gives a proposal something to be compared against; it does not pre-approve one.
+  The first proposal to answer all three is the planned `datasources` row above —
+  [vendor-datasource-declarations.md](vendor-datasource-declarations.md) states its namespace
+  membership, its M+R+J reach and its hash-domain classification explicitly, which is exactly the
+  comparison this document exists to make possible.
 - **The `.flux` module's primacy.** It remains the human-readable contract and the artifact flux
   loads. Nothing here argues for a second execution format, and
   [connector-tool-pack.md](connector-tool-pack.md) records why the pack is an additional surface

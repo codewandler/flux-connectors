@@ -7,6 +7,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The repository now speaks flux-roadmap Decision 0006's datasource vocabulary** (C-510). The
+  catalogue datasource (C-137…C-140) is amended before any dispatch: the compiled-in catalogue
+  binds as an indexed `flux_capabilities::DatasourceBackend` — the six retrieval verbs
+  search/get/list/relation/batch_get/sources, with typed refusals from the trait's mutating
+  methods — instead of the two-op
+  `LiveDatasource` projection whose method set could not satisfy the stories' own acceptance.
+  Vendor-data Datasource Definitions are chartered here as a new `[[datasources]]` connector
+  surface (the `vendor-datasources` epic, C-511…C-514, designed in
+  `docs/designs/vendor-datasource-declarations.md`): a projection over the connector's declared
+  operations with IR-derived entity schemas, per-verb operation bindings, manifest/catalogue reach
+  from first release and never the `.flux` module, superseding and removing `quirks.pagination`.
+  C-501/C-502 now carry Decision 0006 rule 11's checkable rule that no datasource-declaring plugin
+  is deleted without a mapped, conformance-proven replacement. Documentation only — no runtime
+  capability is claimed.
+
 ## [0.19.1] — 2026-08-04
 
 ### Fixed

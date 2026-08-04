@@ -79,9 +79,9 @@ _Owner-stated 2026-08-01: *"it would be great to have something like a security 
 
 ### the connectors datasource — the catalogue, queryable from a session
 _A flux session has no way to ask **"which connector can do this?"**. The catalogue exists, it is_
-- [C-137 — The connectors datasource — the catalogue, queryable from a session (epic)](C-137-connectors-datasource-epic.md) · Bridge · EPIC — the Tool pack registers one tool per operation (97 and growing); a datasource is FIVE ops regardless of catalogue size. Discover through the datasource, invoke through the pack. flux's LiveDatasource seam already exists and binds at the same ClientBuilder call
+- [C-137 — The connectors datasource — the catalogue, queryable from a session (epic)](C-137-connectors-datasource-epic.md) · Bridge · EPIC — the Tool pack registers one tool per operation (97 and growing); a datasource is SIX ops regardless of catalogue size. Discover through the datasource, invoke through the pack. Decision 0006 rule 9 fixes the binding: the compiled-in catalogue is an INDEXED DatasourceBackend, not LiveDatasource
 - [C-138 — The datasource entity model, its links, and the oip as record id](C-138-datasource-entity-model.md) · Bridge · the addressing work already bought this — the oip (authority[/service]:version#member) is a stable record id, and a binding's link to its reply operation is C-82's composition made traversable
-- [C-139 — The LiveDatasource backend and its binding](C-139-datasource-backend.md) · Bridge · implements flux's existing LiveDatasource trait over the compiled-in catalogue. Binds through the SAME ClientBuilder call as the Tool pack, so a host configures discovery and invocation in one place
+- [C-139 — The indexed DatasourceBackend over the catalogue, and its registration](C-139-datasource-backend.md) · Bridge · implements flux's indexed DatasourceBackend trait over the compiled-in catalogue (Decision 0006 rule 9 — not LiveDatasource). Registers its six retrieval ops into the SAME ToolRegistry as the Tool pack; the trait's mutating methods return typed refusals on this read-only backend
 - [C-140 — Search that is good enough to act on](C-140-datasource-search.md) · Bridge · a search that returns the wrong connector confidently is worse than no search, because the caller acts on it. Role-aware search is what makes the roles epic pay off — 'find me a ticketing provider' is a role query
 
 ### Connectors v1 — spec to Flux
@@ -261,6 +261,12 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-20 — Emit auth from the unified model](C-20-emit-unified-auth.md) · Codegen
 - [C-21 — Declare effectful acquisition for host execution](C-21-effectful-acquisition.md) · Bridge · OAuth2 and session login · the token never enters generated Flux
 - [C-22 — Auth conformance matrix across provider archetypes](C-22-auth-conformance-matrix.md) · Bridge · a new provider shape must fail at the model, not at request time
+
+### Vendor Datasources
+- [C-511 — Vendor datasources — a connector declares its data surface as a projection over its operations (epic)](C-511-vendor-datasources-epic.md) · Spec · EPIC — Decision 0006 rules 5–6: vendor-data Datasource Definitions belong HERE, as a sixth member kind whose every read executes as an admitted operation. Seventeen of eighteen official plugins declare datasources through the protocol Milestone 5 deletes, and the IR has no replacement surface until this lands
+- [C-512 — The [[datasources]] member — namespace, derived schema, per-verb bindings and validation](C-512-datasources-ir-member.md) · Spec · the sixth member kind. A datasource member joins member_names_of, derives its entity schema from the IR, binds list/get to named operations with explicit param/filter/cursor/field mappings, and is refused at load when a binding dangles. Joins the HashDomain as compiled meaning
+- [C-513 — Publish the datasource surface into the manifest, the public catalogue and the embedded catalogue](C-513-publish-the-datasource-surface.md) · Codegen · Decision 0006 rule 6 makes non-empty artifact reach an ENTRY criterion: [[datasources]] reaches M + catalog.json/v1 + the embedded Rust catalogue from its first release, and never the generated .flux module — the plugin-manifest declared-then-dropped failure must not recur
+- [C-514 — Retire quirks.pagination into the datasource binding's cursor vocabulary](C-514-retire-quirks-pagination.md) · Spec · re-measured 2026-08-04: pagination still has no reader outside the loader, and two providers declare it (twilio ×2, babelforce patches ×2 — zendesk's 2026-07-31 row is stale). Decision 0006 rule 6: superseded by the [[datasources]] cursor vocabulary and REMOVED, not left as another declared-but-unreachable surface
 
 ## Done
 - [C-1 — Scaffold the Cargo workspace and the gate](C-1-scaffold-workspace.md) · Foundation · everything else builds on this
@@ -484,6 +490,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-507 — Adopt the Exchange-only execution path for official integrations](C-507-adopt-the-exchange-only-integration-path.md) · Bridge · Decision 0001 makes Exchange the sole executor for official external integrations; this supersedes local Flux execution and local-versus-hosted parity throughout C-495…C-505
 - [C-508 — A GitLab connection supports an operator-approved self-managed HTTPS origin](C-508-self-managed-gitlab-origin.md) · Connector · Milestone 1 critical: GitLab must support gitlab.com by default and an operator-pinned self-managed origin before the collaboration migration can replace the native plugin
 - [C-509 — Persist connector secrets owner-only on every Flux platform](C-509-portable-owner-only-secret-store.md) · Bridge · Milestone 1 blocker — Exchange X-127 cannot support Windows or ship a complete local composition while connector-secrets 0.19 exposes its durable store only on Unix
+- [C-510 — Adopt the Decision 0006 datasource vocabulary](C-510-adopt-the-decision-0006-datasource-vocabulary.md) · Bridge · Decision 0006 defines the family's one datasource concept — a declared read-only record surface — and places vendor-data Datasource Definitions here. This reconciles C-137…C-140 onto the indexed DatasourceBackend they always needed and charters the [[datasources]] IR surface before Milestone 5 deletes the plugin channel
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

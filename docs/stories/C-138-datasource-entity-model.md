@@ -39,6 +39,11 @@ flux's existing `EntitySchema` / `Record` / `Link` vocabulary.
 
 ## Notes
 
+- **Amended 2026-08-04 per flux-roadmap Decision 0006 (rule 9):** the catalogue datasource is
+  **indexed mode** — the backend this model feeds is `flux_capabilities::DatasourceBackend` and its
+  six retrieval verbs (search/get/list/relation/batch_get/sources), not the two-op `LiveDatasource`
+  projection this epic previously named. The model itself is unchanged; `sources` additionally
+  enumerates the source key(s) this backend holds, so the model must state what its source key is.
 - The vocabulary is flux's and already typed: `Record`, `Link`, `SchemaField`, `EntitySchema`,
   `Declaration` in `crates/flux-datasource/src/lib.rs`. Read them before modelling anything — this
   story implements an existing shape rather than designing one.
