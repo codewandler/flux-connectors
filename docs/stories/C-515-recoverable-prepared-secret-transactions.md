@@ -7,7 +7,7 @@ priority: 0
 design: docs/designs/recoverable-prepared-secret-transactions.md
 epic: all-integrations-connectors
 areas: [connector-secrets, persistence, transactions, security, windows, release]
-note: "Milestone 1 blocker — Exchange X-134 needs crash-recoverable atomic connection onboarding without moving credential bytes or crate-private SecretBatch mutations into Exchange"
+note: "Milestone 1 blocker — publish the generation-fenced connector-secrets 0.20.0 prepared-store port before Exchange X-134 can begin"
 ---
 
 # Publish recoverable prepared secret transactions
@@ -15,68 +15,107 @@ note: "Milestone 1 blocker — Exchange X-134 needs crash-recoverable atomic con
 ## Goal
 
 Let an owning host coordinate one crash-recoverable transaction across connector credentials and
-its own value-free metadata while `connector-secrets` remains the sole owner of credential values,
-file format and batch interpretation. Exchange can prepare, query, commit or abort an opaque secret
-transaction, but can never inspect or persist its values or mutation representation.
+its own value-free metadata while `connector-secrets` exclusively owns durable credential
+persistence, prepared representation, file format and batch interpretation. Exchange transiently
+receives local input and constructs a batch, but can never inspect its private mutations or persist,
+journal, log or derive identity from a credential value.
 
 ## Acceptance
 
-- [ ] `connector-secrets` publishes validated opaque `SecretTransactionId` and
-      `SecretProposalDigest` 256-bit newtypes, the closed state
-      `Absent|Prepared|Committed`, and an object-safe `PreparedSecretStore: SecretStore` port usable
-      as `Arc<dyn PreparedSecretStore>`. The port admits only `prepare(id, digest, &SecretBatch)`,
-      `state(id)`, `commit(id)` and `abort(id)`; it exposes no staged path, address, count, secret,
-      mutation iterator, backend handle or arbitrary transaction callback.
-- [ ] `prepare` durably stages one checked `SecretBatch` inside the credential backend without
-      changing any result from `get`, `references` or an ordinary `SecretStore` reader. Repeating a
-      prepared id with the same proposal digest returns the existing prepared transaction and never
-      replaces its staged values; a different digest refuses value-free. The digest is supplied by
-      the coordinator and the store never computes or persists a secret-derived hash, length,
-      presence fingerprint or serialized mutation list outside its credential sink.
-- [ ] `commit` atomically exposes exactly the staged batch and records `Committed` as one recoverable
-      backend decision. Repeating commit or querying after response loss returns `Committed` without
-      a second mutation. `abort` atomically removes a prepared transaction and is idempotent for
-      absent state; it can never undo or delete a committed transaction. A missing id, conflicting
-      digest, unavailable backend, unsafe metadata and already-committed abort have closed
-      value-free errors.
-- [ ] `FileStore` implements the port on Unix and Windows. Staged values live only in owner-only
-      credential-store files beneath its existing validated root; they are invisible to inventory
-      and removed after abort or successful publication. Current committed credential bytes and
-      `SecretStore::apply` semantics remain compatible. A clean old v1 store opens without migration
-      ambiguity, and an interrupted new transaction is recovered without weakening owner, mode,
-      DACL, link, reparse or bounded-file checks.
-- [ ] The backend retains committed transaction state long enough for deterministic coordinator
-      recovery and same-proposal replay under an explicit bounded retention policy. Reclamation
-      never deletes a live credential and never turns an unresolved/committed transaction into
-      `Absent`; an owner must supply an acknowledged safe floor before value-free transaction records
-      can be compacted.
-- [ ] `MemoryStore` implements identical state transitions for deterministic host tests. Vault and
-      any backend that cannot prove durable prepare/query/commit/abort semantics return one explicit
-      unsupported capability; a caller cannot emulate the port with point writes or treat
-      unsupported as an empty/absent transaction.
-- [ ] Failing-first crash injection covers every durable boundary: before/after stage-file write,
-      stage fsync, prepare publication, commit decision, credential publication, directory fsync,
-      committed-state publication and staged cleanup. Reopening a new store instance always reports
-      `Absent`, `Prepared` with old credentials visible, or `Committed` with the complete new batch;
-      it never exposes a partial batch, a truncated prior store or an ambiguous state.
-- [ ] Concurrent native tests prove one transaction id cannot be prepared with two digests, two ids
-      cannot race to mutate overlapping addresses, commit versus abort has one closed winner, and an
-      ordinary `put`, `delete` or `apply` cannot interleave with a prepared commit to lose updates.
-      Lock refusal remains value-free and never repairs unsafe state.
-- [ ] Raw, escaped, percent-encoded and base64 sentinels are absent from transaction ids, proposal
-      digests, state/error/debug/display output, traces, audit fixtures, paths, lock names and every
-      persisted file outside the existing committed store plus its explicitly allowlisted staging
-      sink. No public type containing `Secret` implements `Debug`, serialization or value-returning
-      inspection.
-- [ ] Native CI executes prepare/crash/reopen/commit/abort/concurrency and unsafe-root evidence on
+- [ ] `connector-secrets` publishes non-zero `SecretTransactionGeneration(u64)`, opaque
+      `SecretTransactionId([u8; 32])` and `SecretProposalDigest([u8; 32])` newtypes. An id is exactly
+      the generation's big-endian eight bytes plus a unique 192-bit nonce, but exposes no ordering,
+      `Display`, serialization derive or user-facing numeric transaction API. The provider API alone
+      constructs and extracts its protocol bytes; generation zero and wrap refuse.
+- [ ] The object-safe `PreparedSecretStore: SecretStore` port works as
+      `Arc<dyn PreparedSecretStore>` and exposes only `prepare(id, digest, &SecretBatch)`, `state(id)`,
+      `commit(id)`, `abort(id)` and `reclaim(through_generation)`. Its separate closed
+      payload-free `PreparedSecretError` leaves the existing exhaustive `StoreError` unchanged and
+      returns only `Unsupported`, `Busy`, `DigestMismatch`, `TransactionIdReused`, `NotPrepared`,
+      `AlreadyCommitted`, `Retired`, `Capacity`, `InvalidBatch` or `Backend`. No result contains an id,
+      digest, scope, address, mutation count, stage path or secret-derived fact.
+- [ ] Public transaction state is exactly `Absent|Prepared|Committed`. A never-seen id above the
+      retired generation reports `Absent`; prepare enters `Prepared`; commit enters `Committed`;
+      abort records an internal terminal tombstone but reports `Absent`. Abort records that tombstone
+      even before prepare, so a delayed prepare cannot resurrect it. A reclaimed id returns
+      `Retired`, never `Absent`. The design publishes the exhaustive prepare/state/commit/abort table,
+      including same/different digest replay and every commit-versus-abort winner.
+- [ ] One store admits at most one prepared transaction. Successful prepare validates scope,
+      duplicate addresses, move source/destination state, complete touched-address reservation,
+      entry/value/file/ledger bounds and both prospective encodings, then durably stages the complete
+      next credential image. While prepared, another prepare and ordinary `put`, `delete`, `apply` or
+      reclaim refuse; prepared-port operations return payload-free `Busy`, while the unchanged
+      ordinary mutation methods return existing `StoreError::Conflict` with only the store path and a
+      fixed value-free prepared-slot reason. Reads see the old committed image. Commit never
+      reinterprets the batch or discovers deterministic conflict after the coordinator's decision.
+- [ ] While one id is prepared, `abort` of any different unseen or terminal id that would rewrite
+      the live ledger returns `Busy` without mutation; it cannot publish a tombstone that the
+      prepared id's immutable staged image would later erase. State queries remain available, and
+      same-id abort retains the exhaustive transition above. Concurrent evidence pins this cross-id
+      rule and proves that every acknowledged abort tombstone survives a later commit.
+- [ ] Same-id/same-digest prepare returns the existing `Prepared` or `Committed` outcome without
+      inspecting or replacing the supplied batch. A different digest refuses. Commit is idempotent;
+      abort can never undo committed credentials. If commit wins, abort returns `AlreadyCommitted`;
+      if abort wins, commit returns `TransactionIdReused`. I/O failure is outcome-uncertain until a
+      later state query resolves it.
+- [ ] `reclaim(G)` is an explicit owner acknowledgement that no transaction in generations `<= G`
+      can be queried or replayed. It refuses while any transaction is prepared, advances one durable
+      inclusive generation fence and removes only terminal committed/aborted records. Every later
+      operation in a retired generation returns `Retired`; reclamation never deletes a credential.
+      At most 4096 terminal records and the existing 1 MiB store bound are admitted; capacity refuses
+      rather than evicting or growing without bound.
+- [ ] `FileStore::open` acquires one non-blocking exclusive writer/recovery lease before reading,
+      recovery or cleanup and holds it for the store lifetime. Unix validates an owner-UID, one-link,
+      regular `0600` lease and uses a kernel file lock. Windows validates current-`TokenUser`
+      ownership, a protected owner-only DACL, regular non-reparse metadata and `LockFileEx`. Another
+      0.20 opener/process refuses while held; abrupt process exit releases the lease; lease files are
+      never repaired, replaced or reaped. Because 0.19.1 does not participate in the lease, upgrade
+      instructions require every legacy writer to be stopped before the first 0.20 open and do not
+      support mixed-version concurrent writers.
+- [ ] FileStore v2 couples committed credentials, the retired-through fence and the bounded terminal
+      ledger in one owner-only atomic live file. A fixed-name owner-only stage holds the complete
+      prepared next image and contains no id/digest in its path. V2 fixture-pins the inclusive fence,
+      zero or more terminal records sorted by their raw 32-byte ids, at most one prepared record and
+      the existing canonical v1 credential-entry encoding. Prepared/committed records contain a
+      digest; abort-before-prepare records use a separate digestless grammar. A clean v1 file opens
+      without eager migration after legacy-writer quiescence; first transaction use writes v2; a
+      newly opened released 0.19.1 store then refuses v2 rather than erasing metadata. Interrupted
+      prepare/commit/abort/stage cleanup has the exact recovery cases in the linked design and never
+      yields a partial credential image or ambiguous public state.
+- [ ] `MemoryStore` implements identical transitions and the one-prepared reservation. Vault and any
+      backend that cannot prove durable semantics return `Unsupported`; callers cannot emulate the
+      port with point writes or treat unsupported as absent.
+- [ ] `Secret` retains its existing redacted `Debug`; `SecretBatch`, stores and every new public type
+      use opaque manual `Debug` output containing no scope, address, mutation kind/count, id, digest,
+      generation, value or value length. Raw, escaped, percent-encoded and base64 sentinels are absent
+      from errors, traces, fixtures, paths, locks and every persisted file outside the committed
+      credential store and fixed staging sink. None of the new types implements `Display` or serde.
+- [ ] Failing-first tests spawn and abruptly terminate a real child process at every applicable
+      prepare, commit, abort and reclaim stage/live-file write, file flush, atomic replacement,
+      Unix directory sync and cleanup boundary; Windows instead pins `FlushFileBuffers`,
+      `ReplaceFileW`/write-through `MoveFileExW`, post-replacement handle validation and cleanup. A
+      fresh process acquires the released lease and recovers only `Absent` with old credentials,
+      `Prepared` with old visible
+      credentials plus a complete invisible candidate, or `Committed` with the complete new image.
+      Reclaim recovery yields either the complete old fence/ledger or the complete new fence/ledger,
+      never a partially retired generation. Two-child tests prove lease refusal/release; concurrent
+      tests prove digest conflict,
+      abort-before-prepare fencing including cross-id abort-versus-commit, one prepared slot and
+      mutation exclusion. A native upgrade fixture proves an already-open 0.19.1 writer is unsafe
+      and must be quiesced, while a fresh 0.19.1 open refuses the migrated v2 file.
+- [ ] Native CI asserts the runtime host triple and executes the complete child-crash, lease,
+      concurrency, owner/mode-or-DACL, link/reparse, wrong-kind, bound and unsafe-root suite on
       `aarch64-apple-darwin`, `x86_64-apple-darwin`, `aarch64-unknown-linux-gnu`,
-      `x86_64-unknown-linux-gnu` and `x86_64-pc-windows-msvc`. Cross-compilation or one architecture
-      standing in for another is not acceptance evidence.
-- [ ] The crate README/rustdoc, `docs/designs/recoverable-prepared-secret-transactions.md`, both
-      changelogs and public documentation state the ownership boundary and exact crash model. The
-      full workspace gate, publication-closure dry run and native jobs pass. Completion requires a
-      verified crates.io release consumed by Exchange X-134; a path/git dependency or merged but
-      unpublished commit does not satisfy the provider dependency.
+      `x86_64-unknown-linux-gnu` and `x86_64-pc-windows-msvc`. Cross-compilation or another
+      architecture standing in is supplementary only.
+- [ ] The change is released as `connector-secrets` 0.20.0: existing `StoreError` and method
+      signatures remain source-compatible, manual opaque Debug retains trait availability, and the
+      new FileStore lease/v2 format plus the unsupported mixed-0.19/0.20-writer transition are
+      documented as the pre-1.0 minor boundary. README/rustdoc, the linked design, both changelogs
+      and public docs agree. The full workspace gate, publication closure and native jobs pass;
+      completion records the verified crates.io release and Exchange
+      X-134 resolving that registry version/checksum. A path/git dependency or unpublished commit
+      does not satisfy C-515.
 
 ## Progress
 
@@ -85,13 +124,18 @@ transaction, but can never inspect or persist its values or mutation representat
   keeps `SecretBatch::operations` and `Mutation` crate-private. Existing atomic `apply` cannot by
   itself distinguish a crash before versus after a cross-store commit decision without persisting
   secret values in the coordinator.
+- 2026-08-04: Final contract audit found that four methods could not express bounded reclamation,
+  prepare did not guarantee post-decision commit convergence, FileStore did not enforce its
+  single-writer assumption and abort could resurrect a delayed prepare. Roadmap authority `daf80d5`
+  closes those gaps with generation fences, terminal tombstones, one prepared reservation and a
+  lifetime native lease.
 
 ## Notes
 
 - Cross-repository authority:
   `../flux-roadmap/decisions/0004-flux-manages-a-verified-local-exchange.md` and
   `../flux-roadmap/decisions/0007-local-onboarding-uses-owner-bound-capabilities.md` at roadmap
-  commit `ced7426`.
+  commit `daf80d5`.
 - Exchange owns its value-free transaction journal, metadata roll-forward, connection publication,
   audit outbox and receipt. This story owns only the credential-side prepared transaction and never
   learns a connector label, setting, grant, Service Account, Exchange receipt or lifecycle concept.

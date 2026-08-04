@@ -33,7 +33,7 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 - [C-477 — Align runtime API versions with vendored provider contracts](C-477-pin-runtime-api-version-contracts.md) · Connector · compatibility follow-up — GitHub can send its dated API version; Stripe needs an explicit account-version decision
 
 ### All Integrations Connectors
-- [C-515 — Publish recoverable prepared secret transactions](C-515-recoverable-prepared-secret-transactions.md) · Bridge · Milestone 1 blocker — Exchange X-134 needs crash-recoverable atomic connection onboarding without moving credential bytes or crate-private SecretBatch mutations into Exchange
+- [C-515 — Publish recoverable prepared secret transactions](C-515-recoverable-prepared-secret-transactions.md) · Bridge · Milestone 1 blocker — publish the generation-fenced connector-secrets 0.20.0 prepared-store port before Exchange X-134 can begin
 
 ### Anthropic Managed Agents — the first vendor that declares both transports and its own event set
 _The `channel-bindings` and `inbound-events` epics built a model for the reverse call direction —_
