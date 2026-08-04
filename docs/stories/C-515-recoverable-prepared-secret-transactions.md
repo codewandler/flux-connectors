@@ -39,14 +39,17 @@ journal, log or derive identity from a credential value.
       abort records an internal terminal tombstone but reports `Absent`. Abort records that tombstone
       even before prepare, so a delayed prepare cannot resurrect it. A reclaimed id returns
       `Retired`, never `Absent`. The design publishes the exhaustive prepare/state/commit/abort table,
-      including same/different digest replay and every commit-versus-abort winner.
+      including same/different digest replay and every commit-versus-abort winner. At full terminal
+      capacity, abort of an unseen id returns payload-free `Capacity` without mutation; an `Absent`
+      success means the tombstone is durable.
 - [ ] One store admits at most one prepared transaction. Successful prepare validates scope,
       duplicate addresses, move source/destination state, complete touched-address reservation,
       entry/value/file/ledger bounds and both prospective encodings, then durably stages the complete
       next credential image. While prepared, another prepare and ordinary `put`, `delete`, `apply` or
       reclaim refuse; prepared-port operations return payload-free `Busy`, while the unchanged
       ordinary mutation methods return existing `StoreError::Conflict` with only the store path and a
-      fixed value-free prepared-slot reason. Reads see the old committed image. Commit never
+      fixed value-free prepared-slot reason. FileStore uses its live store path and MemoryStore uses
+      exactly `<memory-store>`. Reads see the old committed image. Commit never
       reinterprets the batch or discovers deterministic conflict after the coordinator's decision.
 - [ ] While one id is prepared, `abort` of any different unseen or terminal id that would rewrite
       the live ledger returns `Busy` without mutation; it cannot publish a tombstone that the
@@ -67,7 +70,8 @@ journal, log or derive identity from a credential value.
 - [ ] `FileStore::open` acquires one non-blocking exclusive writer/recovery lease before reading,
       recovery or cleanup and holds it for the store lifetime. Unix validates an owner-UID, one-link,
       regular `0600` lease and uses a kernel file lock. Windows validates current-`TokenUser`
-      ownership, a protected owner-only DACL, regular non-reparse metadata and `LockFileEx`. Another
+      ownership, a protected owner-only DACL with exactly one allow ACE for the current process SID,
+      regular non-reparse metadata and `LockFileEx`. Another
       0.20 opener/process refuses while held; abrupt process exit releases the lease; lease files are
       never repaired, replaced or reaped. Because 0.19.1 does not participate in the lease, upgrade
       instructions require every legacy writer to be stopped before the first 0.20 open and do not

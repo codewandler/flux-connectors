@@ -86,7 +86,7 @@ reported as `Absent`; a reclaimed generation returns `Retired` rather than a sta
 
 | Durable condition | `state` | `prepare(id, D, batch)` | `commit` | `abort` |
 |---|---|---|---|---|
-| unseen, generation above fence | `Absent` | validate and enter `Prepared` | `NotPrepared` | record aborted tombstone, return `Absent` |
+| unseen, generation above fence | `Absent` | validate and enter `Prepared` | `NotPrepared` | if terminal capacity remains, durably record aborted tombstone and return `Absent`; otherwise `Capacity` without mutation |
 | prepared with digest D | `Prepared` | same D: `Prepared`; other: `DigestMismatch` | publish once, return `Committed` | tombstone and remove stage, return `Absent` |
 | committed with digest D | `Committed` | same D: `Committed`; other: `DigestMismatch` | `Committed` | `AlreadyCommitted` |
 | aborted tombstone | `Absent` | `TransactionIdReused` | `TransactionIdReused` | `Absent` |
@@ -96,6 +96,11 @@ Same-digest prepare replay never inspects or compares the new batch. Commit and 
 commit wins, abort observes committed; if abort wins, commit observes the tombstone. Abort of an
 unseen id deliberately writes a tombstone: a delayed prepare can therefore never resurrect work the
 coordinator already abandoned.
+
+Abort of an unseen id is subject to the same hard terminal-ledger and file bounds as prepare. If it
+cannot durably add the tombstone, it returns payload-free `Capacity` without mutation; the
+coordinator reclaims acknowledged terminal generations and retries. Returning `Absent` from that
+abort is an acknowledgement that the tombstone is already durable, never a best-effort success.
 
 The table assumes no different transaction occupies the prepared slot. While id T1 is prepared,
 `abort(T2)` for any T2 whose terminal condition would require a live-ledger rewrite returns `Busy`
@@ -118,9 +123,10 @@ It then stages the complete already-validated next store image. While prepared, 
 `put`, `delete`, `apply` and `reclaim` refuse. Prepared-port methods return payload-free `Busy`.
 Because the inherited ordinary mutation methods retain their existing `StoreError` return type,
 `put`, `delete` and `apply` return `StoreError::Conflict` carrying only the already-supported store
-path and a fixed value-free reason that the prepared slot owns mutation; they do not return a new
-`StoreError` variant. `get`, `references` and `state` remain available and see the old committed
-image. Commit performs no mutation interpretation or merge and therefore cannot discover a
+path and a fixed value-free reason that the prepared slot owns mutation; FileStore uses its live
+store path and MemoryStore uses exactly `<memory-store>`, including multi-address `apply`. They do
+not return a new `StoreError` variant. `get`, `references` and `state` remain available and see the
+old committed image. Commit performs no mutation interpretation or merge and therefore cannot discover a
 deterministic conflict after Exchange records its decision. A transient I/O or unsafe-metadata
 refusal remains retryable; it does not authorize abort after the coordinator decision.
 
@@ -150,7 +156,8 @@ than recovery evidence or unbounded disk.
 `FileStore::open` acquires a fixed sibling lease before reading, recovering or cleaning anything and
 holds the handle for its lifetime. Unix accepts only an owner-UID, one-link regular `0600` lease and
 uses an exclusive kernel file lock. Windows accepts only current-`TokenUser` ownership, a protected
-current-user/System DACL, regular non-reparse metadata and an exclusive `LockFileEx` range. Another
+owner-only DACL with exactly one allow ACE for the current process SID, regular non-reparse metadata
+and an exclusive `LockFileEx` range. Another
 0.20 opener/process returns a value-free conflict. Abrupt exit releases the kernel lease. The lease
 is never repaired, replaced or reaped.
 
