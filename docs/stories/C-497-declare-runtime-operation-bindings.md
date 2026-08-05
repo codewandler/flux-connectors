@@ -36,12 +36,15 @@ container or plugin adapter without masquerading as an HTTP request or introduci
 ## Notes
 
 - C-405 delivered the runtime kind but deliberately changed no provider and no generated Flux.
-- **This story owns the cursor/stream/lease spelling** (noted 2026-08-04 by C-510): the
-  `[[datasources]]` member's cursor and paging vocabulary
-  ([vendor-datasource-declarations.md](../designs/vendor-datasource-declarations.md), C-512)
-  reuses the terms fixed here rather than minting a second one — per Decision 0006, the vendor
-  datasource surface lands with this Milestone 2 runtime-declaration work, and streaming datasource
-  reads wait for the Milestone 3 stream/lease vocabulary this design also fixes.
+- **This story owns the stream/tail/lease spelling — not the one-shot cursor spelling** (noted
+  2026-08-04 by C-510; inverted 2026-08-05 by the C-512 contract preflight): the one-shot cursor
+  vocabulary already ships as `Pagination::Cursor`'s `cursor_param`, `next_cursor_pointer` and
+  `max_pages`, and [C-512](C-512-datasources-ir-member.md) fixes that spelling — this story must
+  not mint a second one. C-512's datasource surface
+  ([vendor-datasource-declarations.md](../designs/vendor-datasource-declarations.md)) waits on
+  this story only for the stream/tail/lease terms: per Decision 0006 it lands with this
+  Milestone 2 runtime-declaration work, and streaming datasource reads wait for the Milestone 3
+  stream/lease vocabulary this design also fixes.
 - C-47 is the SQL lifecycle input; C-489…C-492 are the socket-channel input.
 - Exchange is the only official runtime consumer; Flux receives the projected operation through its
   embedded Exchange client and cannot select or execute this binding locally (C-507).

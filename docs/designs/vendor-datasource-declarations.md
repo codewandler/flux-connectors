@@ -4,7 +4,7 @@
 ([C-511](../stories/C-511-vendor-datasources-epic.md) … C-514) · **Authority:**
 `../flux-roadmap/decisions/0006-datasources-are-declared-read-surfaces.md`, rules 5, 6, 10, 11 and 12
 
-> Repository facts below were re-measured in this worktree on **2026-08-04**; flux symbols were read
+> Repository facts below were re-measured in this worktree on **2026-08-05**; flux symbols were read
 > in `/home/timo/projects/flux`. Re-grep by symbol; line numbers move.
 
 ## Why
@@ -37,7 +37,7 @@ shape:
 Concretely, a member declares:
 
 - **A name in the per-service member namespace.** `Connector::member_names_of`
-  (`crates/connector-spec/src/ir.rs:1930`) returns what is then six kinds together; a cross-kind
+  (`crates/connector-spec/src/ir.rs:1956`) returns what is then six kinds together; a cross-kind
   collision stays a loud load error, exactly as [connector-surfaces.md](connector-surfaces.md)
   demands of any new surface. It renders into the same `…#name` address form as every other member.
 - **An entity set whose schema is derived from the IR** — the backing operations' declared
@@ -51,13 +51,22 @@ Concretely, a member declares:
 - **Cursor and paging vocabulary on the binding.** How a listing pages — cursor parameter,
   next-cursor pointer, page bounds — is a fact of the binding, stated where the read is declared.
   This **supersedes the dead `quirks.pagination` surface**, which is removed rather than left as
-  another declared-but-unreachable shape (see below). Cursor and stream *terms* are shared with the
-  runtime-binding vocabulary [C-497](../stories/C-497-declare-runtime-operation-bindings.md)
-  defines; this design reuses them and must not mint a second spelling.
+  another declared-but-unreachable shape (see below). The one-shot cursor spelling already ships
+  in this repository — `Pagination::Cursor`'s `cursor_param`, `next_cursor_pointer` and
+  `max_pages` (`crates/connector-spec/src/ir.rs:524`) — and **C-512 fixes it; the runtime-binding
+  vocabulary [C-497](../stories/C-497-declare-runtime-operation-bindings.md) defines must not
+  mint a second spelling of it**. C-512 waits on C-497 only for the stream/tail/lease terms, which
+  datasource v1 does not use. This cursor is the paging of one `list` read — not the poll-channel
+  *cursor operation* (`ChannelBinding::cursor`), which names an operation a poll transport calls
+  on a schedule.
 - **Credential reach: the backing operation's declared auth, and nothing else.** A datasource
   member never names a credential value, never introduces an auth declaration of its own, and
   reaches secrets only in the sense that its backing operation already does. Cursors served to
   callers are Exchange-minted opaque continuation tokens carrying no credential material (rule 7).
+- **Read verbs bind read operations.** A `list` or `get` binding that names a
+  `direction = "write"` operation is refused at load, naming the member and the operation. The
+  check reads the resolved `Operation::direction` (C-516) — never `patch.directions`, which is
+  ingest input the resolver has already folded into that field.
 
 ### Who consumes it
 
@@ -82,8 +91,9 @@ Flux session loads, and the read seam is Exchange's, not the module's — the sa
 
 ## The `HashDomain` answer
 
-`Connector::hash_domain` (`crates/connector-spec/src/ir.rs:2156`; the exhaustive destructuring is
-the `HashDomain` struct at `ir.rs:2181`) forces every new field to be classified as compiled
+`Connector::hash_domain` (`crates/connector-spec/src/ir.rs:2182`; the `HashDomain` struct is at
+`ir.rs:2207`, and the exhaustive destructuring is in `HashDomain::of` at
+`ir.rs:2257`) forces every new field to be classified as compiled
 meaning or not. **`datasources` is compiled meaning and joins the hash domain.** Unlike the four
 dead surfaces connector-surfaces.md catalogues, this one reaches three artifacts from its first
 release, so the claim "editing it moves `ir_sha256` because a generated artifact changed" is true
@@ -97,7 +107,9 @@ load, display-only at refresh, contributions unchecked — must not recur. Three
 
 1. **Connector build time (this repository).** The loader refuses a binding to an operation the
    connector does not declare, a mapping to a parameter the operation does not take, a cursor
-   pointer into a response the operation does not declare, and a `get` binding with no id mapping.
+   pointer into a response the operation does not declare, a `get` binding with no id mapping,
+   and a `list`/`get` binding naming a `direction = "write"` operation — read from the resolved
+   `Operation::direction`, never `patch.directions`.
    `flux-connectors build` (`cargo run -p connector-cli -- build`) therefore fails loudly on a
    dangling projection, in the same pass that already refuses a dangling channel reply.
 2. **Exchange bind time.** A tenant Datasource binding references a *published* connector
@@ -134,11 +146,11 @@ stories builds it.
 
 ## `quirks.pagination` is superseded, and removed
 
-Re-measured 2026-08-04 in this worktree: `Quirks::pagination`
-(`crates/connector-spec/src/ir.rs:549`, the `Pagination` enum at `ir.rs:486`) still has **no reader
+Re-measured 2026-08-05 in this worktree: `Quirks::pagination`
+(`crates/connector-spec/src/ir.rs:572`, the `Pagination` enum at `ir.rs:509`) still has **no reader
 outside the loader** — `grep -rn pagination crates/connector-cli/src crates/connector-flux/src`
-finds only a doc comment. Two providers declare it: twilio (`providers/twilio.toml:306`, `:385`)
-and babelforce via patches (`providers/babelforce.toml:600`, `:714`);
+finds only a doc comment. Two providers declare it: twilio (`providers/twilio.toml:312`, `:393`)
+and babelforce via patches (`providers/babelforce.toml:997`, `:1111`);
 connector-surfaces.md's 2026-07-31 row also listed zendesk, which no longer declares one. The
 member's cursor vocabulary states the same facts where a consumer can reach them, so the field is
 **removed, not left unreachable** — the declarations migrate into datasource bindings or are
@@ -158,7 +170,7 @@ dropped with the removal reviewed in the same diff, and the `HashDomain` destruc
   and [C-502](../stories/C-502-migrate-data-and-secret-plugins.md) carry Decision 0006 rule 11's
   checkable no-deletion-without-mapped-replacement acceptance;
   [C-497](../stories/C-497-declare-runtime-operation-bindings.md) is cross-referenced as the owner
-  of the cursor/stream/lease terms.
+  of the stream/tail/lease terms — the one-shot cursor spelling is C-512's (see "The surface").
 
 ## Sequencing
 
