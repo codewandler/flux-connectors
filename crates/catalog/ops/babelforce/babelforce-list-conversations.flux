@@ -2,7 +2,7 @@ op babelforce-list-conversations(page: Number, max: Number, phone: String, state
   description "List conversations"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op babelforce-list-queued-calls(queueId: String, page: Number, max: Number) -> A
   description "List a queue's waiting calls"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

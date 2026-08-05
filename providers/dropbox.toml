@@ -18,28 +18,16 @@
 # has at least one genuine `GET` (box-user-me, notion-user-me); Dropbox has none, so this file is
 # what proves out the two questions the rest only gestured at.
 #
-# **Question 1: can a POST-shaped read be a `verify` operation?** Yes, and the answer comes from
+# **Question 1: can a read transported by POST be a `verify` operation?** Yes, and the answer comes from
 # reading the loader rather than from the phrasing of the configuration contract. `validate_verify`
 # (`crates/connector-spec/src/provider.rs`) checks the named operation's declared `risk` and refuses
-# only `high`/`destructive` — it never inspects the HTTP method. `dropbox-user-me` below is a `POST`
-# declared `risk = "medium"` (see Question 2's neighbour on why it cannot be `"low"`), and the loader
-# accepts it as `verify` without complaint. `crates/connector-flux/tests/dropbox_connector.rs`
-# (`the_verify_operation_is_a_post_read_declared_medium_risk`) pins this rather than leaving it as an
-# accident nobody asserted. This is the honest answer, not a workaround: Dropbox genuinely has no
-# lower-risk read to fall back to, and shipping no `verify` at all — leaving a settings page with no
-# unattended connection test — is the worse outcome.
+# only `high`/`destructive` — it never inspects the HTTP method. `dropbox-user-me` below is explicitly
+# authored `read`, `low`, and `idempotent` despite its `POST` transport, and the loader accepts it as
+# `verify`. The connector-flux test pins that counterexample rather than leaving it accidental.
 #
-# **Question 2: is a POST ever declared idempotent?** Not once, here, and not because none of these
-# operations actually are. `check_write_metadata` (`crates/connector-flux/src/op.rs`) refuses
-# `idempotency = "idempotent"` on `POST`/`PATCH` unconditionally — it allows the claim only for `PUT`
-# and `DELETE`, methods Dropbox's v2 API never uses at all. So an idempotent POST is *expressible* in
-# this schema in general, but it is not a spelling any Dropbox operation can honestly reach: every
-# operation below — including `dropbox-user-me`, `dropbox-folder-list`, `dropbox-metadata-get` and
-# `dropbox-search`, which are pure reads and genuinely safe to retry — is declared
-# `idempotency = "non_idempotent"`. That undersells the truth in the safe direction (flux's approval
-# gate over-prompts rather than auto-retrying something it should not), the same direction
-# `providers/notion.toml`'s two POST reads chose, and it is recorded here rather than "fixed" by lying
-# about the method.
+# **Question 2: does transport decide idempotency or direction?** No. `dropbox-user-me` proves it.
+# The other read-shaped RPCs remain conservatively authored as writes pending individual semantic
+# review; their method supplied no evidence and cannot move their direction during regeneration.
 #
 # ---------------------------------------------------------------------------------------------
 # CONTENT UPLOAD AND DOWNLOAD ARE DELIBERATELY EXCLUDED. THEY ARE A DIFFERENT ENCODING PROBLEM.
@@ -220,16 +208,13 @@ tags = ["storage"]
 [[operations]]
 id = "dropbox-user-me"
 method = "POST"
+direction = "read"
 path = "/2/users/get_current_account"
 description = "Get the account this access token authenticates as, confirming the token resolves and naming the account it belongs to. Takes no parameters. Dropbox routes this read through POST, like every operation this connector declares — there is no GET anywhere in Dropbox's v2 API"
-# `medium`, not `low`: `check_write_metadata` refuses `low` on any POST regardless of what it does,
-# because it reasons from the HTTP method and cannot see that this one changes nothing. `medium` is
-# the honest ceiling a read forced through POST can reach — see the header comment.
-risk = "medium"
-# `non_idempotent`, though repeating this call is in fact perfectly safe: `check_write_metadata`
-# refuses `idempotent` on any POST/PATCH regardless of method, and Dropbox uses only POST. See the
-# header comment's Question 2.
-idempotency = "non_idempotent"
+# A reviewed read despite Dropbox's POST-only transport. It is the connector's unattended
+# verification call, changes no vendor state, and is safe both to repeat and to cache.
+risk = "low"
+idempotency = "idempotent"
 
 [operations.response_schema]
 type = "object"
@@ -249,8 +234,9 @@ message_pointer = "/error_summary"
 [[operations]]
 id = "dropbox-folder-list"
 method = "POST"
+direction = "write"
 path = "/2/files/list_folder"
-description = "List the files and folders directly inside a folder, first page only. Each entry names its own type (file, folder, or deleted), name and full path. Dropbox routes this read through POST, so it is declared as a write"
+description = "List the files and folders directly inside a folder, first page only. Each entry names its own type (file, folder, or deleted), name and full path. Direction remains conservatively authored as write pending individual review; POST is transport only and supplied no evidence"
 risk = "medium"
 idempotency = "non_idempotent"
 
@@ -272,8 +258,9 @@ message_pointer = "/error_summary"
 [[operations]]
 id = "dropbox-metadata-get"
 method = "POST"
+direction = "write"
 path = "/2/files/get_metadata"
-description = "Get metadata for a file or folder at a given path: its type, name, id, and — for a file — size and content hash. Does not return a folder's contents (use dropbox-folder-list) or a file's content (use dropbox-temporary-link-get). Dropbox routes this read through POST, so it is declared as a write"
+description = "Get metadata for a file or folder at a given path: its type, name, id, and — for a file — size and content hash. Does not return a folder's contents (use dropbox-folder-list) or a file's content (use dropbox-temporary-link-get). Direction remains conservatively authored as write pending individual review; POST is transport only and supplied no evidence"
 risk = "medium"
 idempotency = "non_idempotent"
 
@@ -295,8 +282,9 @@ message_pointer = "/error_summary"
 [[operations]]
 id = "dropbox-search"
 method = "POST"
+direction = "write"
 path = "/2/files/search_v2"
-description = "Search file and folder names across the account, returning the first page of matches. Dropbox matches on name, not file content. Dropbox routes this read through POST, so it is declared as a write"
+description = "Search file and folder names across the account, returning the first page of matches. Dropbox matches on name, not file content. Direction remains conservatively authored as write pending individual review; POST is transport only and supplied no evidence"
 risk = "medium"
 idempotency = "non_idempotent"
 
@@ -320,14 +308,15 @@ message_pointer = "/error_summary"
 [[operations]]
 id = "dropbox-folder-create"
 method = "POST"
+direction = "write"
 path = "/2/files/create_folder_v2"
 description = "Create a new folder at the given path, including any missing parent folders. Naming a path that already exists answers 409 conflict rather than creating a duplicate, since autorename is not offered by this connector"
 # `medium`, not `high`. A new folder is visible only within the account that created it and is
 # attributed to the token, but Dropbox notifies nobody on a folder creation. It creates one object and
 # destroys nothing, the same reasoning `providers/box.toml`'s box-folder-create carries.
 risk = "medium"
-# Posting twice with the same path conflicts (409) rather than duplicating, but `check_write_metadata`
-# refuses `idempotent` on any POST regardless — and unlike box-folder-create there is no vendor
+# Posting twice with the same path conflicts (409) rather than duplicating, and the authored write
+# direction refuses `idempotent`; unlike box-folder-create there is no vendor
 # idempotency key on offer here either. `non_idempotent` is the honest declaration either way.
 idempotency = "non_idempotent"
 
@@ -349,9 +338,10 @@ message_pointer = "/error_summary"
 [[operations]]
 id = "dropbox-temporary-link-get"
 method = "POST"
+direction = "write"
 path = "/2/files/get_temporary_link"
-description = "Get a temporary, unauthenticated download link for an existing file's content, valid for approximately four hours. This connector cannot follow the link itself — it only returns the URL, for a caller to fetch separately. Dropbox routes this read through POST, so it is declared as a write"
-# `medium`, not `low` (POST forces that ceiling — see the header comment) and not `high`. Repeated
+description = "Get a temporary, unauthenticated download link for an existing file's content, valid for approximately four hours. This connector cannot follow the link itself — it only returns the URL, for a caller to fetch separately. Direction remains conservatively authored as write pending individual review; POST is transport only and supplied no evidence"
+# `medium`, not `low`, follows the conservative authored write direction. Repeated
 # calls just mint another link with the same expiry; nothing is deleted, no other user is notified,
 # and no lasting Dropbox-side state changes. The one real consequence — a link that grants file
 # access to whoever holds the URL until it expires — is named in the description rather than in the

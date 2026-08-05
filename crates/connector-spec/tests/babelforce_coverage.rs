@@ -334,10 +334,9 @@ const MIN_REASON: usize = 24;
 ///
 /// **`risk` and `idempotency` are here, not only the id, and that is what this file adds to
 /// `babelforce_spec_route.rs`.** Widening to 388 operations meant declaring a blunt
-/// `risk = "high"` over every manager write, and three of these nine *are* manager writes that ship
-/// as `medium`/`idempotent`. Those two fields reach a host's approval gate and its retry decision,
-/// so letting a bulk selector raise them would have been a silent behavioural change to three
-/// shipped tools dressed as a refactor. This is the assertion that would have caught it.
+/// `risk = "high"` over every manager write, and three of these nine *are* manager writes with a
+/// reviewed `medium` risk. Direction makes all three consequence-bearing, so none may claim the
+/// cache-skipping `idempotent` contract; this table pins the reconciled values.
 const EXPOSED: [(&str, HttpMethod, &str, Risk, Idempotency); 9] = [
     (
         "babelforce-agent-list",
@@ -358,7 +357,7 @@ const EXPOSED: [(&str, HttpMethod, &str, Risk, Idempotency); 9] = [
         HttpMethod::Put,
         "/api/v2/agents/{id}/status",
         Risk::Medium,
-        Idempotency::Idempotent,
+        Idempotency::NonIdempotent,
     ),
     (
         "babelforce-call-list",
@@ -386,7 +385,7 @@ const EXPOSED: [(&str, HttpMethod, &str, Risk, Idempotency); 9] = [
         HttpMethod::Put,
         "/api/v2/calls/{id}/session/set",
         Risk::Medium,
-        Idempotency::Idempotent,
+        Idempotency::NonIdempotent,
     ),
     (
         "babelforce-session-get",
@@ -400,7 +399,7 @@ const EXPOSED: [(&str, HttpMethod, &str, Risk, Idempotency); 9] = [
         HttpMethod::Put,
         "/api/v2/sessions/{id}",
         Risk::Medium,
-        Idempotency::Idempotent,
+        Idempotency::NonIdempotent,
     ),
 ];
 

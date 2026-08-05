@@ -40,11 +40,10 @@
 //!
 //! Creating a Statuspage incident publishes it to a public web page and — when
 //! `deliver_notifications` is true — emails and texts every subscriber. The story asks for that to
-//! be declared "as external-facing, not as an ordinary create", and **there is no field that can
-//! say so.** `effects` is not authorable at all: `crates/connector-flux/src/op.rs:616` hardcodes
-//! `effects: vec![from_tag("network")?]` for every generated op, which is the measurement C-155
-//! recorded. `Risk` has four values — `Low`, `Medium`, `High`, `Destructive` — and none of them
-//! means "external-facing".
+//! be declared "as external-facing, not as an ordinary create". Host effects now say this is a
+//! `write` over `network`, but neither token means "send notifications". Semantic effects are
+//! operation-wide, while this consequence depends on the `deliver_notifications` argument. `Risk`
+//! has four values — `Low`, `Medium`, `High`, `Destructive` — and none means "external-facing".
 //!
 //! So the honest declaration is `risk = "high"`, the same value this repository already gives
 //! `github-issue-create` and `launchdarkly-flag-toggle`, and
@@ -303,11 +302,11 @@ fn the_page_id_folds_into_the_base_url_as_one_bound_variable() {
 ///
 /// Both writes publish to a page the general public reads, and a create with
 /// `deliver_notifications = true` dispatches email and SMS to every subscriber. Nothing in this
-/// model can say "external-facing": `effects` is hardcoded to `["network"]` at
-/// `crates/connector-flux/src/op.rs:616` and is not authorable, and `Risk` has four values none of
-/// which means it. `high` is the honest choice — it is what puts the call behind flux's approval
-/// gate — and the asymmetry it cannot carry is stated in the operation's own `description`, which
-/// is the one string a model actually reads.
+/// model can say "external-facing only when this argument is true": host effects describe a write
+/// over the network, and semantic effects are operation-wide. `Risk` has four values none of which
+/// means it. `high` is the honest choice — it is what puts the call behind flux's approval gate —
+/// and the asymmetry it cannot carry is stated in the operation's own `description`, which is the
+/// one string a model actually reads.
 #[test]
 fn the_public_writes_are_high_risk_and_the_scale_cannot_say_why() {
     let connector = load();

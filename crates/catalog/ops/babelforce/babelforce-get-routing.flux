@@ -2,7 +2,7 @@ op babelforce-get-routing(id: String) -> Any
   description "Get Routing"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

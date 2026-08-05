@@ -2,7 +2,7 @@ op twilio-usage-record-list(IncludeSubaccounts: Bool, PageSize: Number, Page: Nu
   description "List usage records for the configured Twilio account with bounded pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"

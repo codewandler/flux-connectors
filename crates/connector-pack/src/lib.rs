@@ -293,8 +293,9 @@ pub enum Error {
     /// flux pairs `effects` with `access`: a declared effect with no host capability that could
     /// carry it is refused by `authority_requirements_from_declaration`, and therefore by
     /// `try_register_from`. Unreachable for a declaration this repository emits — every generated
-    /// op declares `["network"]` alone, which pairs with network access — and reported here rather
-    /// than left to surface at a host's startup with only the tool name to go on.
+    /// op declares `read` or `write` before `network`, which pairs with network access — and
+    /// reported here rather than left to surface at a host's startup with only the tool name to go
+    /// on.
     ///
     /// The refusal is deliberate. Satisfying flux by claiming an access kind the connector does not
     /// have would register a tool that looks gated and is not.

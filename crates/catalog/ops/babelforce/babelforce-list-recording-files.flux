@@ -2,7 +2,7 @@ op babelforce-list-recording-files -> Any
   description "List recording files"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

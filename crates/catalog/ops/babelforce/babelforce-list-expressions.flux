@@ -2,7 +2,7 @@ op babelforce-list-expressions -> Any
   description "Get a List of available Expressions"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -60,6 +60,7 @@ fn login(id: &str, secret: &str, credential: &str, tables: &str) -> String {
 [[operations]]
 id = "{id}"
 method = "POST"
+direction = "write"
 path = "/oauth/token"
 description = "Exchange client credentials for an access token."
 risk = "medium"
@@ -368,6 +369,7 @@ fn an_operation_declaring_both_credential_declarations_is_refused_naming_which_g
 [[operations]]
 id = "acme-oauth-token"
 method = "POST"
+direction = "write"
 path = "/oauth/token"
 description = "Exchange client credentials for an access token."
 risk = "medium"

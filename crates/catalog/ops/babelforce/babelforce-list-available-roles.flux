@@ -2,7 +2,7 @@ op babelforce-list-available-roles -> Any
   description "List available roles"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

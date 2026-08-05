@@ -6,7 +6,7 @@ op asterisk-ari-applications-list -> Any
   description "List all applications."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -18,7 +18,7 @@ op asterisk-ari-asterisk-ping -> Any
   description "Response pong message."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -30,7 +30,7 @@ op asterisk-ari-bridges-list -> Any
   description "List all active bridges in Asterisk."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -42,7 +42,7 @@ op asterisk-ari-bridges-create(type: String, bridgeId: String, name: String, var
   description "Create a new bridge."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -56,7 +56,7 @@ op asterisk-ari-bridges-destroy(bridgeId: String) -> Any
   description "Shut down a bridge."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -68,7 +68,7 @@ op asterisk-ari-channels-list -> Any
   description "List all active channels in Asterisk."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -80,7 +80,7 @@ op asterisk-ari-channels-originate(endpoint: String, extension: String, context:
   description "Create a new channel (originate)."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -94,7 +94,7 @@ op asterisk-ari-channels-hangup(channelId: String, reason_code: String, reason: 
   description "Delete (i.e. hangup) a channel."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -106,7 +106,7 @@ op asterisk-ari-device-states-list -> Any
   description "List all ARI controlled device states."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -118,7 +118,7 @@ op asterisk-ari-endpoints-list -> Any
   description "List all endpoints."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -130,7 +130,7 @@ op asterisk-ari-mailboxes-list -> Any
   description "List all mailboxes."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -142,7 +142,7 @@ op asterisk-ari-playbacks-get(playbackId: String) -> Any
   description "Get a playback's details."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -154,7 +154,7 @@ op asterisk-ari-playbacks-stop(playbackId: String) -> Any
   description "Stop a playback."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -166,7 +166,7 @@ op asterisk-ari-recordings-list-stored -> Any
   description "List recordings that are complete."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -178,7 +178,7 @@ op asterisk-ari-sounds-list(lang: String, format: String) -> Any
   description "List all sounds."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{host}:8089/ari"
@@ -190,7 +190,7 @@ op asterisk-ari-applications-get(applicationName: String) -> Any
   description "Get details of an application."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -202,7 +202,7 @@ op asterisk-ari-applications-filter(applicationName: String, body: Any) -> Any
   description "Filter application events types."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -216,7 +216,7 @@ op asterisk-ari-asterisk-get-object(configClass: String, objectType: String, id:
   description "Retrieve a dynamic configuration object."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -228,7 +228,7 @@ op asterisk-ari-asterisk-update-object(configClass: String, objectType: String, 
   description "Create or update a dynamic configuration object."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -242,7 +242,7 @@ op asterisk-ari-asterisk-delete-object(configClass: String, objectType: String, 
   description "Delete a dynamic configuration object."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -254,7 +254,7 @@ op asterisk-ari-asterisk-list-log-channels -> Any
   description "Gets Asterisk log channel information."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -266,7 +266,7 @@ op asterisk-ari-asterisk-add-log(logChannelName: String, configuration: String) 
   description "Adds a log channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -278,7 +278,7 @@ op asterisk-ari-asterisk-delete-log(logChannelName: String) -> Any
   description "Deletes a log channel."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -290,7 +290,7 @@ op asterisk-ari-asterisk-rotate-log(logChannelName: String) -> Any
   description "Rotates a log channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -302,7 +302,7 @@ op asterisk-ari-asterisk-list-modules -> Any
   description "List Asterisk modules."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -314,7 +314,7 @@ op asterisk-ari-asterisk-get-module(moduleName: String) -> Any
   description "Get Asterisk module information."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -326,7 +326,7 @@ op asterisk-ari-asterisk-load-module(moduleName: String) -> Any
   description "Load an Asterisk module."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -338,7 +338,7 @@ op asterisk-ari-asterisk-reload-module(moduleName: String) -> Any
   description "Reload an Asterisk module."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -350,7 +350,7 @@ op asterisk-ari-asterisk-unload-module(moduleName: String) -> Any
   description "Unload an Asterisk module."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -362,7 +362,7 @@ op asterisk-ari-asterisk-get-global-var(variable: String) -> Any
   description "Get the value of a global variable."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -374,7 +374,7 @@ op asterisk-ari-asterisk-set-global-var(variable: String, value: String) -> Any
   description "Set the value of a global variable."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -386,7 +386,7 @@ op asterisk-ari-bridges-get(bridgeId: String) -> Any
   description "Get bridge details."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -398,7 +398,7 @@ op asterisk-ari-bridges-create-with-id(bridgeId: String, type: String, name: Str
   description "Create a new bridge."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -412,7 +412,7 @@ op asterisk-ari-bridges-start-moh(bridgeId: String, mohClass: String) -> Any
   description "Play music on hold to a bridge or change the MOH class that is playing."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -424,7 +424,7 @@ op asterisk-ari-bridges-stop-moh(bridgeId: String) -> Any
   description "Stop playing music on hold to a bridge."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -436,7 +436,7 @@ op asterisk-ari-bridges-record(bridgeId: String, name: String, format: String, r
   description "Start a recording."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -448,7 +448,7 @@ op asterisk-ari-bridges-get-bridge-var(bridgeId: String, variable: String) -> An
   description "Get the value of a bridge variable or function."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -460,7 +460,7 @@ op asterisk-ari-bridges-set-bridge-var(bridgeId: String, variable: String, value
   description "Set the value of a bridge variable or function."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -472,7 +472,7 @@ op asterisk-ari-bridges-set-bridge-vars(bridgeId: String, variables: Any) -> Any
   description "Set the values of multiple bridge variables or functions."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -486,7 +486,7 @@ op asterisk-ari-bridges-clear-video-source(bridgeId: String) -> Any
   description "Removes any explicit video source in a multi-party mixing bridge. This operation has no effect on bridges with two or fewer participants. When no explicit video source is set, talk detection will be used to determine the active video stream."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -498,7 +498,7 @@ op asterisk-ari-bridges-set-video-source(bridgeId: String, channelId: String) ->
   description "Set a channel as the video source in a multi-party mixing bridge. This operation has no effect on bridges with two or fewer participants."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -510,7 +510,7 @@ op asterisk-ari-channels-create(endpoint: String, app: String, appArgs: String, 
   description "Create channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -524,7 +524,7 @@ op asterisk-ari-channels-external-media(channelId: String, app: String, external
   description "Start an External Media session."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -538,7 +538,7 @@ op asterisk-ari-channels-get(channelId: String) -> Any
   description "Channel details."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -550,7 +550,7 @@ op asterisk-ari-channels-originate-with-id(channelId: String, endpoint: String, 
   description "Create a new channel (originate with id)."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -564,7 +564,7 @@ op asterisk-ari-channels-answer(channelId: String) -> Any
   description "Answer a channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -576,7 +576,7 @@ op asterisk-ari-channels-continue-in-dialplan(channelId: String, context: String
   description "Exit application; continue execution in the dialplan."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -588,7 +588,7 @@ op asterisk-ari-channels-dial(channelId: String, caller: String, timeout: Number
   description "Dial a created channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -600,7 +600,7 @@ op asterisk-ari-channels-send-dtmf(channelId: String, dtmf: String, before: Numb
   description "Send provided DTMF to a given channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -612,7 +612,7 @@ op asterisk-ari-channels-hold(channelId: String) -> Any
   description "Hold a channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -624,7 +624,7 @@ op asterisk-ari-channels-unhold(channelId: String) -> Any
   description "Remove a channel from hold."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -636,7 +636,7 @@ op asterisk-ari-channels-start-moh(channelId: String, mohClass: String) -> Any
   description "Play music on hold to a channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -648,7 +648,7 @@ op asterisk-ari-channels-stop-moh(channelId: String) -> Any
   description "Stop playing music on hold to a channel."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -660,7 +660,7 @@ op asterisk-ari-channels-move(channelId: String, app: String, appArgs: String) -
   description "Move the channel from one Stasis application to another."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -672,7 +672,7 @@ op asterisk-ari-channels-mute(channelId: String, direction: String) -> Any
   description "Mute a channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -684,7 +684,7 @@ op asterisk-ari-channels-unmute(channelId: String, direction: String) -> Any
   description "Unmute a channel."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -696,7 +696,7 @@ op asterisk-ari-channels-progress(channelId: String) -> Any
   description "Indicate progress on a channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -708,7 +708,7 @@ op asterisk-ari-channels-record(channelId: String, name: String, format: String,
   description "Start a recording."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -720,7 +720,7 @@ op asterisk-ari-channels-redirect(channelId: String, endpoint: String) -> Any
   description "Redirect the channel to a different location."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -732,7 +732,7 @@ op asterisk-ari-channels-ring(channelId: String) -> Any
   description "Indicate ringing to a channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -744,7 +744,7 @@ op asterisk-ari-channels-ring-stop(channelId: String) -> Any
   description "Stop ringing indication on a channel if locally generated."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -756,7 +756,7 @@ op asterisk-ari-channels-rtpstatistics(channelId: String) -> Any
   description "RTP stats on a channel."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -768,7 +768,7 @@ op asterisk-ari-channels-start-silence(channelId: String) -> Any
   description "Play silence to a channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -780,7 +780,7 @@ op asterisk-ari-channels-stop-silence(channelId: String) -> Any
   description "Stop playing silence to a channel."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -792,7 +792,7 @@ op asterisk-ari-channels-snoop-channel(channelId: String, spy: String, whisper: 
   description "Start snooping."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -804,7 +804,7 @@ op asterisk-ari-channels-snoop-channel-with-id(channelId: String, snoopId: Strin
   description "Start snooping."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -816,7 +816,7 @@ op asterisk-ari-channels-transfer_progress(channelId: String, states: String) ->
   description "Inform the channel about the progress of the attended/blind transfer."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -828,7 +828,7 @@ op asterisk-ari-channels-get-channel-var(channelId: String, variable: String) ->
   description "Get the value of a channel variable or function."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -840,7 +840,7 @@ op asterisk-ari-channels-set-channel-var(channelId: String, variable: String, va
   description "Set the value of a channel variable or function."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -852,7 +852,7 @@ op asterisk-ari-channels-set-channel-vars(channelId: String, variables: Any) -> 
   description "Set the values of multiple channel variables or functions."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -866,7 +866,7 @@ op asterisk-ari-device-states-get(deviceName: String) -> Any
   description "Retrieve the current state of a device."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -878,7 +878,7 @@ op asterisk-ari-device-states-update(deviceName: String, deviceState: String) ->
   description "Change the state of a device controlled by ARI. (Note - implicitly creates the device state)."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -890,7 +890,7 @@ op asterisk-ari-device-states-delete(deviceName: String) -> Any
   description "Destroy a device-state controlled by ARI."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -902,7 +902,7 @@ op asterisk-ari-endpoints-refer(to: String, from: String, refer_to: String, to_s
   description "Refer an endpoint or technology URI to some technology URI or endpoint."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -916,7 +916,7 @@ op asterisk-ari-endpoints-send-message(to: String, from: String, body: String, v
   description "Send a message to some technology URI or endpoint."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -930,7 +930,7 @@ op asterisk-ari-endpoints-list-by-tech(tech: String) -> Any
   description "List available endoints for a given endpoint technology."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -942,7 +942,7 @@ op asterisk-ari-endpoints-get(tech: String, resource: String) -> Any
   description "Details for an endpoint."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -954,7 +954,7 @@ op asterisk-ari-endpoints-refer-to-endpoint(tech: String, resource: String, from
   description "Refer an endpoint or technology URI to some technology URI or endpoint."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -968,7 +968,7 @@ op asterisk-ari-endpoints-send-message-to-endpoint(tech: String, resource: Strin
   description "Send a message to some endpoint in a technology."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -982,7 +982,7 @@ op asterisk-ari-events-claim-channel(channelId: String, application: String) -> 
   description "Claim a broadcast channel for this application."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -994,7 +994,7 @@ op asterisk-ari-mailboxes-get(mailboxName: String) -> Any
   description "Retrieve the current state of a mailbox."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1006,7 +1006,7 @@ op asterisk-ari-mailboxes-update(mailboxName: String, oldMessages: Number, newMe
   description "Change the state of a mailbox. (Note - implicitly creates the mailbox)."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1018,7 +1018,7 @@ op asterisk-ari-mailboxes-delete(mailboxName: String) -> Any
   description "Destroy a mailbox."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1030,7 +1030,7 @@ op asterisk-ari-playbacks-control(playbackId: String, operation: String) -> Any
   description "Control a playback."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1042,7 +1042,7 @@ op asterisk-ari-recordings-get-live(recordingName: String) -> Any
   description "List live recordings."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1054,7 +1054,7 @@ op asterisk-ari-recordings-cancel(recordingName: String) -> Any
   description "Stop a live recording and discard it."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1066,7 +1066,7 @@ op asterisk-ari-recordings-mute(recordingName: String) -> Any
   description "Mute a live recording."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1078,7 +1078,7 @@ op asterisk-ari-recordings-unmute(recordingName: String) -> Any
   description "Unmute a live recording."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1090,7 +1090,7 @@ op asterisk-ari-recordings-pause(recordingName: String) -> Any
   description "Pause a live recording."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1102,7 +1102,7 @@ op asterisk-ari-recordings-unpause(recordingName: String) -> Any
   description "Unpause a live recording."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1114,7 +1114,7 @@ op asterisk-ari-recordings-stop(recordingName: String) -> Any
   description "Stop a live recording and store it."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1126,7 +1126,7 @@ op asterisk-ari-recordings-get-stored(recordingName: String) -> Any
   description "Get a stored recording's details."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1138,7 +1138,7 @@ op asterisk-ari-recordings-delete-stored(recordingName: String) -> Any
   description "Delete a stored recording."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1150,7 +1150,7 @@ op asterisk-ari-recordings-copy-stored(recordingName: String, destinationRecordi
   description "Copy a stored recording."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1162,7 +1162,7 @@ op asterisk-ari-recordings-get-stored-file(recordingName: String) -> Any
   description "Get the file associated with the stored recording."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"
@@ -1174,7 +1174,7 @@ op asterisk-ari-sounds-get(soundId: String) -> Any
   description "Get a sound's details."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

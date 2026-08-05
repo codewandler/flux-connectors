@@ -35,6 +35,7 @@ user_env = ["ACME_USER"]
 [[operations]]
 id = "acme-ping"
 method = "GET"
+direction = "read"
 path = "/ping"
 risk = "low"
 idempotency = "idempotent"
@@ -420,6 +421,7 @@ fn a_verify_operation_that_writes_is_refused() {
             "vendor = \"Acme\"\nverify = \"acme-ping\"",
         )
         .replace(r#"risk = "low""#, r#"risk = "high""#)
+        .replace(r#"direction = "read""#, r#"direction = "write""#)
         .replace(
             r#"idempotency = "idempotent""#,
             r#"idempotency = "non_idempotent""#,
@@ -611,6 +613,7 @@ env = ["ACME_API_TOKEN"]
 [[operations]]
 id = "acme-zone-list"
 method = "GET"
+direction = "read"
 path = "/zones"
 risk = "low"
 idempotency = "idempotent"
@@ -618,6 +621,7 @@ idempotency = "idempotent"
 [[operations]]
 id = "acme-record-list"
 method = "GET"
+direction = "read"
 path = "/zones/{{zone_id}}/records"
 risk = "low"
 idempotency = "idempotent"
@@ -915,6 +919,7 @@ env = ["ACME_API_KEY"]
 [[operations]]
 id = "acme-index-list"
 method = "GET"
+direction = "read"
 path = "/1/indexes"
 risk = "low"
 idempotency = "idempotent"

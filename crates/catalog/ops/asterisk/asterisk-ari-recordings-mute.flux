@@ -2,7 +2,7 @@ op asterisk-ari-recordings-mute(recordingName: String) -> Any
   description "Mute a live recording."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

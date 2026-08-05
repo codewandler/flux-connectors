@@ -89,6 +89,7 @@ sha256 = "a7a3293268f062d09eb576806f0e5af271c039b9427f9852c8280c8fecc692e7"
 # string, array and boolean filter is explicitly omitted and an upstream rename fails closed.
 [[patch.operations]]
 select = "issues/list-for-repo"
+direction = "read"
 rename = "github-issue-list"
 description = "List a repository's issues and pull requests with bounded integer pagination"
 risk = "low"
@@ -109,6 +110,7 @@ omit.query = [
 
 [[patch.operations]]
 select = "pulls/list-files"
+direction = "read"
 rename = "github-pull-files-list"
 description = "List the files changed by one pull request with bounded integer pagination"
 risk = "low"
@@ -116,6 +118,7 @@ idempotency = "idempotent"
 
 [[patch.operations]]
 select = "actions/list-workflow-runs-for-repo"
+direction = "read"
 rename = "github-workflow-run-list"
 description = "List a repository's GitHub Actions workflow runs with bounded integer pagination"
 risk = "low"
@@ -133,6 +136,7 @@ omit.query = [
 
 [[patch.operations]]
 select = "repos/list-commits"
+direction = "read"
 rename = "github-commit-list"
 description = "List commits in a repository with bounded integer pagination"
 risk = "low"
@@ -186,6 +190,7 @@ tags = ["source-control", "issue-tracking"]
 [[operations]]
 id = "github-repo-get"
 method = "GET"
+direction = "read"
 path = "/repos/{owner}/{repo}"
 description = "Get one repository's metadata, including its default branch, visibility and permissions"
 risk = "low"
@@ -244,6 +249,7 @@ properties = { id = { type = "integer", description = "The repository's global i
 [[operations]]
 id = "github-issue-get"
 method = "GET"
+direction = "read"
 path = "/repos/{owner}/{repo}/issues/{issue_number}"
 # Worth stating on the contract a model reads: GitHub models a pull request as an issue, so this
 # endpoint answers for a PR number too, returning the issue view of it (with a `pull_request` key).
@@ -294,6 +300,7 @@ properties = { id = { type = "integer", description = "The issue's global id. Fo
 [[operations]]
 id = "github-pull-get"
 method = "GET"
+direction = "read"
 path = "/repos/{owner}/{repo}/pulls/{pull_number}"
 description = "Get one pull request by number, with its merge state, head and base refs and review counts"
 risk = "low"
@@ -349,13 +356,14 @@ properties = { id = { type = "integer", description = "The pull request's own id
 # `idempotency = "non_idempotent"` because it is the truth and because a retry around either of
 # these would otherwise be sound-looking and wrong: replaying a create makes a second issue, not the
 # same one. GitHub offers no idempotency key on these endpoints, so `conditional` would be a claim
-# with nothing behind it. (The emitter also refuses a `POST` that declares itself `idempotent`, and
-# refuses any state-changing method declaring `risk = "low"` — `check_write_metadata`.)
+# with nothing behind it. (The emitter also refuses an authored write that declares itself
+# `idempotent` or `risk = "low"` — `check_write_metadata`.)
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
 id = "github-issue-create"
 method = "POST"
+direction = "write"
 path = "/repos/{owner}/{repo}/issues"
 description = "Open a new issue on a repository. The issue is immediately visible to everyone who can see the repository and notifies its subscribers"
 risk = "high"
@@ -422,6 +430,7 @@ properties = { id = { type = "integer", description = "The new issue's global id
 [[operations]]
 id = "github-issue-comment-add"
 method = "POST"
+direction = "write"
 path = "/repos/{owner}/{repo}/issues/{issue_number}/comments"
 # The same endpoint comments on a pull request, for the same reason `github-issue-get` reads one:
 # GitHub's issue and PR numbering is one sequence and PR conversation comments *are* issue comments.

@@ -132,6 +132,7 @@ tags = ["identity"]
 [[operations]]
 id = "okta-user-list"
 method = "GET"
+direction = "read"
 path = "/users"
 description = "List users in the Okta org. Returns a JSON array of user objects, most recently created first. Without a filter this is the org's active user population, so use `limit` to bound it — see okta-user-get to read one user by id or login"
 risk = "low"
@@ -153,6 +154,7 @@ items = { type = "object", required = ["id", "status", "profile"], properties = 
 [[operations]]
 id = "okta-user-get"
 method = "GET"
+direction = "read"
 path = "/users/{user_id}"
 description = "Get one user's full record, including their lifecycle status and profile attributes. Accepts the user's Okta id or their login, so a caller holding an email address does not need to list first"
 risk = "low"
@@ -174,6 +176,7 @@ properties = { id = { type = "string" }, status = { type = "string", description
 [[operations]]
 id = "okta-group-list"
 method = "GET"
+direction = "read"
 path = "/groups"
 description = "List groups in the Okta org. Returns a JSON array of group objects. A group is how Okta grants application access in bulk, so this is the set a membership question is asked against"
 risk = "low"
@@ -195,6 +198,7 @@ items = { type = "object", required = ["id", "type", "profile"], properties = { 
 [[operations]]
 id = "okta-user-group-list"
 method = "GET"
+direction = "read"
 path = "/users/{user_id}/groups"
 description = "List the groups one user is a member of. This is the direct answer to \"what access does this person have\", because Okta grants application assignments through group membership"
 risk = "low"
@@ -237,6 +241,7 @@ items = { type = "object", required = ["id", "type", "profile"], properties = { 
 [[operations]]
 id = "okta-user-deactivate"
 method = "POST"
+direction = "write"
 path = "/users/{user_id}/lifecycle/deactivate"
 description = "Deactivate a user, moving them to DEPROVISIONED. This takes effect immediately: Okta ends the person's active sessions, revokes their tokens and grants, and removes their access to every application the org assigns through Okta. They cannot sign in afterwards. An administrator can reactivate the account later, but that is a separate operation this connector does not offer, and it does not restore the sessions or tokens this call destroyed"
 risk = "destructive"

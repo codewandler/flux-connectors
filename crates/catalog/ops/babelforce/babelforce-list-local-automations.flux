@@ -2,7 +2,7 @@ op babelforce-list-local-automations(applicationId: String, page: Number, max: N
   description "List an application's actions"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

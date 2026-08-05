@@ -2,7 +2,7 @@ op babelforce-remove-tag-from-queue-selection(queueId: String, selectionId: Stri
   description "Remove a tag from a selection"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

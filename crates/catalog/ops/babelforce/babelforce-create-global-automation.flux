@@ -2,7 +2,7 @@ op babelforce-create-global-automation(body: Any) -> Any
   description "Create an event trigger"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

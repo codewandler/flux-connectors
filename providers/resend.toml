@@ -164,11 +164,9 @@ description = "Resend API key, sent as a bearer token on every request. Minted i
 #
 # **Resend does document an `Idempotency-Key` request header** for this endpoint, expiring after 24
 # hours. It is not declared here and the operation stays `non_idempotent` regardless, because
-# `check_write_metadata` (`crates/connector-flux/src/op.rs:708-730`) refuses a `POST` declaring
-# itself idempotent outright — the method, not the vendor's guarantee, is what it keys on. Declaring
-# the header while leaving the metadata unchanged would put a claim in the request that the tool
-# contract contradicts, so the honest form is neither, and the gap is recorded rather than papered
-# over.
+# `check_write_metadata` refuses `idempotent` on every authored write because Flux may skip one in
+# favour of a cached result. The vendor key could instead support `conditional`, but it is not
+# modelled here; retaining `non_idempotent` is conservative.
 # ---------------------------------------------------------------------------------------------
 
 [[services]]
@@ -183,6 +181,7 @@ tags = ["email"]
 [[operations]]
 id = "resend-email-send"
 method = "POST"
+direction = "write"
 path = "/emails"
 description = "Send one email immediately. Delivered within seconds and cannot be recalled once accepted. The sending domain must already be verified on this account — resend-domain-list names the ones that are"
 risk = "high"
@@ -239,6 +238,7 @@ properties = { id = { type = "string", format = "uuid", description = "Resend's 
 [[operations]]
 id = "resend-email-get"
 method = "GET"
+direction = "read"
 path = "/emails/{email_id}"
 description = "Read one sent message and its current delivery state. This is how a flow learns whether a send bounced, was delivered, or is still queued"
 risk = "low"
@@ -264,6 +264,7 @@ properties = { object = { const = "email" }, id = { type = "string", format = "u
 [[operations]]
 id = "resend-domain-list"
 method = "GET"
+direction = "read"
 path = "/domains"
 description = "List every sending domain on this account with its verification status. Also this connector's `verify` — a bounded read that runs unattended and needs nothing configured beyond the credential"
 risk = "low"
@@ -279,6 +280,7 @@ properties = { object = { const = "list" }, has_more = { type = "boolean", descr
 [[operations]]
 id = "resend-domain-get"
 method = "GET"
+direction = "read"
 path = "/domains/{domain_id}"
 description = "Read one sending domain, including the DNS records it needs and the status of each. This is the diagnostic for a domain that will not verify, and therefore for a send refused with an invalid-from error"
 risk = "low"

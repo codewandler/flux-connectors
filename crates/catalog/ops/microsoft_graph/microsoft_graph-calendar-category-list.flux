@@ -2,7 +2,7 @@ op microsoft_graph-calendar-category-list(_top: Number, _skip: Number) -> Any
   description "List the signed-in user's Outlook master categories with the Microsoft Graph MailboxSettings.Read permission"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://graph.microsoft.com"

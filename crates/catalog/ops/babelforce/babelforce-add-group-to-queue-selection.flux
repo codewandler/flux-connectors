@@ -2,7 +2,7 @@ op babelforce-add-group-to-queue-selection(queueId: String, selectionId: String,
   description "Add a group to a selection"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

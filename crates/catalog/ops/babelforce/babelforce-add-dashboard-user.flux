@@ -2,7 +2,7 @@ op babelforce-add-dashboard-user(id: String, body: Any) -> Any
   description "Grant a user access to a dashboard"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

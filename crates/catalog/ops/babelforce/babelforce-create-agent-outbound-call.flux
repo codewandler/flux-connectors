@@ -2,7 +2,7 @@ op babelforce-create-agent-outbound-call(id: String, body: Any) -> Any
   description "Place an outbound call for an agent"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

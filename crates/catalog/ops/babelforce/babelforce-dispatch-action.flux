@@ -2,7 +2,7 @@ op babelforce-dispatch-action(integrationId: String, action: String, callId: Str
   description "Run an integration action"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

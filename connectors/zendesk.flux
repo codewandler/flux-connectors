@@ -6,7 +6,7 @@ op zendesk-ticket-audit-list(ticket_id: Number) -> Any
   description "List the read-only audit history for one ticket, including field changes, comments and notifications"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -18,7 +18,7 @@ op zendesk-incremental-ticket-list(start_time: Number) -> Any
   description "Incrementally export tickets updated at or after a required Unix start time"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -30,7 +30,7 @@ op zendesk-incremental-user-list(start_time: Number, per_page: Number) -> Any
   description "Incrementally export users updated at or after a required Unix start time with an optional integer page size"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -42,7 +42,7 @@ op zendesk-incremental-organization-list(start_time: Number, per_page: Number) -
   description "Incrementally export organizations updated at or after a required Unix start time with an optional integer page size"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -54,7 +54,7 @@ op zendesk-incremental-ticket-event-list(start_time: Number) -> Any
   description "Incrementally export ticket audit events at or after a required Unix start time"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -66,7 +66,7 @@ op zendesk-custom-object-list(include_ui_path: Bool) -> Any
   description "List custom-object definitions, optionally including each definition's UI path"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -78,7 +78,7 @@ op zendesk-ticket-recent-list -> Any
   description "List the account's most recently created or updated tickets"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -90,7 +90,7 @@ op zendesk-view-ticket-list(view_id: String) -> Any
   description "List tickets from one numeric or built-in Zendesk view"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -102,7 +102,7 @@ op zendesk-user-show(user_id: Number) -> Any
   description "Get one Zendesk user by numeric id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -114,7 +114,7 @@ op zendesk-organization-show(organization_id: Number) -> Any
   description "Get one Zendesk organization by numeric id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -126,7 +126,7 @@ op zendesk-group-list -> Any
   description "List the account's Zendesk groups without exposing optional filters or pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -138,7 +138,7 @@ op zendesk-ticket-field-list -> Any
   description "List the account's ticket field definitions without optional locale, creator, sort or pagination inputs"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -150,7 +150,7 @@ op zendesk-ticket-form-list -> Any
   description "List the account's ticket forms without optional visibility, type, brand, locale, sort or pagination inputs"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -162,7 +162,7 @@ op zendesk-custom-status-list -> Any
   description "List the account's custom ticket statuses without optional category, activity or default filters"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -174,7 +174,7 @@ op zendesk-test -> Any
   description "Show Self"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -186,7 +186,7 @@ op zendesk-ticket-search(query: String) -> Any
   description "List Search Results"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -198,7 +198,7 @@ op zendesk-ticket-show(ticket_id: Number) -> Any
   description "Show Ticket"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -210,7 +210,7 @@ op zendesk-ticket-comment-list(ticket_id: Number, include_inline_images: Bool, p
   description "List Comments"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -222,7 +222,7 @@ op zendesk-ticket-update(ticket_id: Number, ticket: Any) -> Any
   description "Update Ticket"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

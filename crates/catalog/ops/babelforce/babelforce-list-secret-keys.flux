@@ -2,7 +2,7 @@ op babelforce-list-secret-keys(prefix: String) -> Any
   description "Retrieves a list of secret keys"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

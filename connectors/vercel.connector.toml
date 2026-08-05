@@ -10,6 +10,13 @@ module = "vercel.flux"
 operations = ["vercel-projects-list", "vercel-project-get", "vercel-deployments-list", "vercel-deployment-get", "vercel-deployment-cancel"]
 verify = "vercel-projects-list"
 
+[operation_directions]
+vercel-deployment-cancel = "write"
+vercel-deployment-get = "read"
+vercel-deployments-list = "read"
+vercel-project-get = "read"
+vercel-projects-list = "read"
+
 [operation_semantic_effects]
 vercel-deployment-cancel = []
 vercel-deployment-get = []

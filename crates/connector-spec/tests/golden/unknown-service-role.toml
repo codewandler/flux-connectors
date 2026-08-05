@@ -15,6 +15,7 @@ roles = ["llm_catalog"]
 id = "acme-models-list"
 service = "models"
 method = "GET"
+direction = "read"
 path = "/v1/models"
 description = "List the models."
 risk = "low"

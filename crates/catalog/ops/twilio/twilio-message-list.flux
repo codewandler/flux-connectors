@@ -2,7 +2,7 @@ op twilio-message-list(account_sid: String, page: Number, page_size: Number) -> 
   description "List messages sent from or received by this account"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"

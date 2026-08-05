@@ -2,7 +2,7 @@ op babelforce-create-queue-selection(queueId: String, body: Any) -> Any
   description "Create a queue selection"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

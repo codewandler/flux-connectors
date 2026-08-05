@@ -12,6 +12,38 @@ api_version = "v3"
 module = "babelforce-task-automation.flux"
 operations = ["babelforce-change-agent-lock", "babelforce-agent-action-on-task", "babelforce-tasks", "babelforce-submit-task", "babelforce-testing", "babelforce-list-secret-prefixes", "babelforce-list-secret-keys", "babelforce-create-secrets", "babelforce-patch-secrets", "babelforce-delete-secret-keys", "babelforce-read-selection-configuration", "babelforce-create-selection-configuration", "babelforce-update-selection-configuration", "babelforce-delete-selection-configuration", "babelforce-list", "babelforce-agent-interaction-duration", "babelforce-agent-interactions", "babelforce-task-journal", "babelforce-list-scripts", "babelforce-submit-script", "babelforce-get-script", "babelforce-update-script", "babelforce-delete-script", "babelforce-submit-task-template", "babelforce-task-usage", "babelforce-task-usage-types", "babelforce-task", "babelforce-update-task", "babelforce-manager-interrupt-on-task", "babelforce-change-task-state"]
 
+[operation_directions]
+babelforce-agent-action-on-task = "write"
+babelforce-agent-interaction-duration = "read"
+babelforce-agent-interactions = "read"
+babelforce-change-agent-lock = "write"
+babelforce-change-task-state = "write"
+babelforce-create-secrets = "write"
+babelforce-create-selection-configuration = "write"
+babelforce-delete-script = "write"
+babelforce-delete-secret-keys = "write"
+babelforce-delete-selection-configuration = "write"
+babelforce-get-script = "read"
+babelforce-list = "read"
+babelforce-list-scripts = "read"
+babelforce-list-secret-keys = "read"
+babelforce-list-secret-prefixes = "read"
+babelforce-manager-interrupt-on-task = "write"
+babelforce-patch-secrets = "write"
+babelforce-read-selection-configuration = "read"
+babelforce-submit-script = "write"
+babelforce-submit-task = "write"
+babelforce-submit-task-template = "write"
+babelforce-task = "read"
+babelforce-task-journal = "read"
+babelforce-task-usage = "read"
+babelforce-task-usage-types = "read"
+babelforce-tasks = "read"
+babelforce-testing = "write"
+babelforce-update-script = "write"
+babelforce-update-selection-configuration = "write"
+babelforce-update-task = "write"
+
 [operation_semantic_effects]
 babelforce-agent-action-on-task = []
 babelforce-agent-interaction-duration = []

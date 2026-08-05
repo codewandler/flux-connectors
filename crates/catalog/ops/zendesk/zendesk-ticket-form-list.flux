@@ -2,7 +2,7 @@ op zendesk-ticket-form-list -> Any
   description "List the account's ticket forms without optional visibility, type, brand, locale, sort or pagination inputs"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

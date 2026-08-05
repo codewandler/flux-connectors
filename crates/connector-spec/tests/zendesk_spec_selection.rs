@@ -131,86 +131,86 @@ const OMITTED_QUERY: [&str; 7] = [
 const EXISTING_SUPPORT_FLUX: [(&str, &str); 6] = [
     (
         "zendesk-ticket-audit-list",
-        "753452bcac1bcb16bb03eec70c55491d779b82f849c37803e25e0c28618263c0",
+        "d5ef74bd520652c0f846ab339b9ac3084e9f5f12b907bba5af4874f7a96c07cc",
     ),
     (
         "zendesk-incremental-ticket-list",
-        "627c924c1803461607de4895fedd299b094fb597481bf0ae8cdd0271a8263908",
+        "de20e4b1b870ef91647f84a4af6fa465b94879f8d6287b9d3679a9331d5ed78b",
     ),
     (
         "zendesk-incremental-user-list",
-        "e7c00dbf348a86080b8309f050abb12f04248ce0a9360e1ba6c651e7fcc20ee2",
+        "00dc61414b0de225d9c5bb9360e370dd5a4d724d1bf0780e8ff201fad3b5fc24",
     ),
     (
         "zendesk-incremental-organization-list",
-        "ad7a54f1effacd43ed04f95ff9c59613aee7e103fc31595e6a480b2fca9ae405",
+        "609ffa9cab07b83458360408f5665eae27849f3beb791f16df253f4403acfa13",
     ),
     (
         "zendesk-incremental-ticket-event-list",
-        "a4443933645b6890043ca02382fe310ae93e56170be83dddd3ff1edf2266c669",
+        "03124812f9b6b1bef8bf59f89e2d5d2576ffc656c53bb61b4bf6a3fe1117a767",
     ),
     (
         "zendesk-custom-object-list",
-        "25b96b055e8ea38678aaede2d0e35c4e203ff18c8a43d9ec016a0350c8b21ef4",
+        "020b6d65f12e98e6d0aca93fbb97d6b7308bdee47c8915b2c9e670949bded9d5",
     ),
 ];
 
 const EXISTING_NAMED_SERVICE_OPERATION_FLUX: [(&str, &str); 14] = [
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-article-create.flux",
-        "e3adcac4ed72f06d04001665206b9fd831f692059bf259c15656d29677d6cd54",
+        "8fbd63c007d2026bfa0d1426b3db49438d46a2166f620bc625785ffbbf98da12",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-article-get.flux",
-        "00248cff54d214e199be9e76a6b9509f6fbbd1561e416e3dfa3245de981f3841",
+        "eeaeb2aedb7ab36b3dd8f82f2d4a1319940c9b08420a039fb0a0c6b1a06f400e",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-article-incremental-list.flux",
-        "81937fb7abaa3e1c76fe49dd83f22c691417279da3cda8723c00db460ce266d2",
+        "e8cd4ace4ef9b76b26b3d27f38b8d84eee6dfa052698d2fc756e9b3070357679",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-article-list.flux",
-        "345308f0c4bf6096087fc0ffc6a34d29ca90248a4028d2cdf2769e5395d85a95",
+        "7d9cbaa7a183a48f1082bc06491a6f29435ff37921e59129ad77b833b031cfa3",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-category-list.flux",
-        "9ad6cc411ec63da741ee9f2bacdaa6a52ed1280161a5d566d0f8f7d3aa81087f",
+        "1a4a5a367c4f46c27448bdaf793df8af141f4d68f062d396bf894ecbc6e51bb9",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-section-list.flux",
-        "467263505558d010cd564573c34d15e62d434999b3364d9b401a2761eec6b7b3",
+        "8c9802c3e259b9ae7daa16c4dd6743d9f4e2028c7623bde7cb221e902f8245c6",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-translation-list.flux",
-        "3928cc18c7846b22b0c12dcba61ac203c7c7f61f989e2f7b55f9d0d043acb2b0",
+        "8e1906bf0049d34663bed04f1b86a4b2faf59c3218846ee840f6ba483506a2b7",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-messaging-conversation-create.flux",
-        "265e0bf13d0ef2bc5e5cbf6bcf6185844776d522889f786b8b71ad639ec5fc15",
+        "56a273fe9cec8ef70073b347380f63632f632be55752bb31bc3ab574fcafca81",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-messaging-conversation-get.flux",
-        "547483e221d9a2d3edcbf0cacddfc403ecf57ba317e502a656921956cb1226fc",
+        "b06062a6e80b0a5fd3692473ced78ef22b2bae3e4b46dd9728e177d0260bbb89",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-messaging-conversation-update.flux",
-        "c1380b8eddfc76055fa4ea3d9f9ba3f0e9ecd8599f5476d159e439902a8507ae",
+        "67952f07853edfe6f5056e1e5e903a61fa3ea5b173134c191931c039922f73fb",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-messaging-participant-list.flux",
-        "4f7c6d0b3895979284c5d57cdcac51cb85757b4c2ce760af71859de2b469d1df",
+        "6d3b76a8d33af811f5d41a601e166225b64d1e3a4de2ef8e930eb1824ddd00a0",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-messaging-user-create.flux",
-        "2237e85740de910dbb277d788411eccb3d7eedf084f6ef0cf02a967fc57f4d6c",
+        "8c1325c28b406c24da273e89d4a9f70ca33bf294b643b80a0acf51a7ca35a8a9",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-messaging-user-get.flux",
-        "bfba2a7c5b737374806f0963a155bd48c45ced40f9086dbcc3d3f6fc68f1acbf",
+        "aa46b10bd8de8fa95c966a15c4ea1d10998e221ddcf40dfa9bb90d730c1d3e3e",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-messaging-user-update.flux",
-        "5bc9372ab636ed67aa197e2e155c82303c16da696f2fe9f4eecd61593ba529db",
+        "bf478b245f55dcbef6079d8a91ac2e6782312d2f82a74270c4b6c64010031200",
     ),
 ];
 

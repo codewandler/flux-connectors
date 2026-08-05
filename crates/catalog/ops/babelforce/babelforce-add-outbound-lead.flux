@@ -2,7 +2,7 @@ op babelforce-add-outbound-lead(id: String, body: Any) -> Any
   description "Add a lead to a lead-list"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -12,6 +12,13 @@ module = "launchdarkly.flux"
 operations = ["launchdarkly-project-list", "launchdarkly-environment-list", "launchdarkly-flag-list", "launchdarkly-flag-get", "launchdarkly-flag-toggle"]
 verify = "launchdarkly-project-list"
 
+[operation_directions]
+launchdarkly-environment-list = "read"
+launchdarkly-flag-get = "read"
+launchdarkly-flag-list = "read"
+launchdarkly-flag-toggle = "write"
+launchdarkly-project-list = "read"
+
 [operation_semantic_effects]
 launchdarkly-environment-list = []
 launchdarkly-flag-get = []

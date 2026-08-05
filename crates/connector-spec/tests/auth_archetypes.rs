@@ -317,6 +317,7 @@ grants = ["authorization_code"]
 [[operations]]
 id = "acme-ping"
 method = "GET"
+direction = "read"
 path = "/ping"
 risk = "low"
 idempotency = "idempotent"

@@ -2,7 +2,7 @@ op asterisk-ari-bridges-record(bridgeId: String, name: String, format: String, r
   description "Start a recording."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

@@ -2,7 +2,7 @@ op zendesk-ticket-field-list -> Any
   description "List the account's ticket field definitions without optional locale, creator, sort or pagination inputs"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

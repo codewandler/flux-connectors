@@ -11,6 +11,13 @@ api_version = "v3"
 module = "hubspot.flux"
 operations = ["hubspot-contact-get", "hubspot-contact-create", "hubspot-contact-update", "hubspot-company-get", "hubspot-deal-get"]
 
+[operation_directions]
+hubspot-company-get = "read"
+hubspot-contact-create = "write"
+hubspot-contact-get = "read"
+hubspot-contact-update = "write"
+hubspot-deal-get = "read"
+
 [operation_semantic_effects]
 hubspot-company-get = []
 hubspot-contact-create = []

@@ -10,6 +10,13 @@ module = "calendly.flux"
 operations = ["calendly-user-me", "calendly-event-type-list", "calendly-scheduled-event-list", "calendly-scheduled-event-get", "calendly-invitee-list"]
 verify = "calendly-user-me"
 
+[operation_directions]
+calendly-event-type-list = "read"
+calendly-invitee-list = "read"
+calendly-scheduled-event-get = "read"
+calendly-scheduled-event-list = "read"
+calendly-user-me = "read"
+
 [operation_semantic_effects]
 calendly-event-type-list = []
 calendly-invitee-list = []

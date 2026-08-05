@@ -2,7 +2,7 @@ op launchdarkly-flag-toggle(project_key: String, feature_flag_key: String, body:
   description "Turn a feature flag on or off in one environment. This is a live production change: every SDK instance currently evaluating this flag in this environment — web, mobile and backend alike — switches to the other branch as soon as this call returns, for every real user it serves. It is reversible by toggling back, but it is not a private or staged edit"
   risk "high"
   idempotency "conditional"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://app.launchdarkly.com/api/v2"

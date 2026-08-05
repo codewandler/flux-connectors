@@ -12,6 +12,14 @@ module = "newrelic.flux"
 operations = ["newrelic-application-list", "newrelic-application-get", "newrelic-alert-policy-list", "newrelic-alert-violation-list", "newrelic-deployment-list", "newrelic-deployment-create"]
 verify = "newrelic-application-list"
 
+[operation_directions]
+newrelic-alert-policy-list = "read"
+newrelic-alert-violation-list = "read"
+newrelic-application-get = "read"
+newrelic-application-list = "read"
+newrelic-deployment-create = "write"
+newrelic-deployment-list = "read"
+
 [operation_semantic_effects]
 newrelic-alert-policy-list = []
 newrelic-alert-violation-list = []

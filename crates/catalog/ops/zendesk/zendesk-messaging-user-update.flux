@@ -2,7 +2,7 @@ op zendesk-messaging-user-update(userIdOrExternalId: String, toBeRetained: Bool)
   description "Set whether one Zendesk Messaging user is retained after becoming inactive"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"

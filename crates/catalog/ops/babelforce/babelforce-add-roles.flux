@@ -2,7 +2,7 @@ op babelforce-add-roles(body: Any) -> Any
   description "Assign roles to users"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -12,6 +12,17 @@ module = "freshdesk.flux"
 operations = ["freshdesk-test", "freshdesk-ticket-list", "freshdesk-ticket-get", "freshdesk-ticket-create", "freshdesk-ticket-update", "freshdesk-ticket-note-add", "freshdesk-contact-list", "freshdesk-contact-get", "freshdesk-contact-create"]
 verify = "freshdesk-test"
 
+[operation_directions]
+freshdesk-contact-create = "write"
+freshdesk-contact-get = "read"
+freshdesk-contact-list = "read"
+freshdesk-test = "read"
+freshdesk-ticket-create = "write"
+freshdesk-ticket-get = "read"
+freshdesk-ticket-list = "read"
+freshdesk-ticket-note-add = "write"
+freshdesk-ticket-update = "write"
+
 [operation_semantic_effects]
 freshdesk-contact-create = []
 freshdesk-contact-get = []

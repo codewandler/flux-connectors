@@ -2,7 +2,7 @@ op babelforce-call-get(id: String) -> Any
   description "Get a call"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op babelforce-ping -> Any
   description "Availability check (returns pong)"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

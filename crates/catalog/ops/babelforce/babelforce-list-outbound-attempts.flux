@@ -2,7 +2,7 @@ op babelforce-list-outbound-attempts(page: Number, max: Number, campaignId: Stri
   description "Get a List of all outbound call attempts (account-wide)"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

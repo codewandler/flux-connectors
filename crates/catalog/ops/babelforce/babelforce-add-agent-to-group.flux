@@ -2,7 +2,7 @@ op babelforce-add-agent-to-group(groupId: String, body: Any) -> Any
   description "Add an agent to a group"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

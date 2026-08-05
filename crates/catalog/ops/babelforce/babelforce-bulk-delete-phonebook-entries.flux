@@ -2,7 +2,7 @@ op babelforce-bulk-delete-phonebook-entries(body: Any) -> Any
   description "Bulk-delete phonebook entries"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

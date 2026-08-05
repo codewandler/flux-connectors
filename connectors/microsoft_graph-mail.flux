@@ -7,7 +7,7 @@ op microsoft_graph-mail-message-get(message_id: String) -> Any
   description "Get one Outlook message by id: subject, sender, recipients, timestamps and the body — HTML by default. This is personal correspondence; treat the sender, recipients and body as personal data. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://graph.microsoft.com"
@@ -19,7 +19,7 @@ op microsoft_graph-mail-message-reply(message_id: String, comment: String) -> An
   description "Reply to a message. Graph resolves the recipients automatically — the original message's `replyTo` if it specifies one, otherwise its `from` — and this operation cannot override, widen or add to that audience (C-56 excludes the `message` override Graph's own reply action accepts). Delivered within seconds and cannot be recalled. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://graph.microsoft.com"
@@ -33,7 +33,7 @@ op microsoft_graph-mail-folder-list -> Any
   description "List the top-level mail folders in the signed-in user's mailbox — Inbox, Drafts, Sent Items, and any custom top-level folders. Does not descend into subfolders. Graph's default page size here is 10; this connector cannot follow `@odata.nextLink` (an absolute URL, not a constructible cursor), so a mailbox with more than ten top-level folders is reported incompletely. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://graph.microsoft.com"
@@ -45,7 +45,7 @@ op microsoft_graph-mail-message-list(_top: Number, _skip: Number) -> Any
   description "List Outlook messages visible to the signed-in user with the Microsoft Graph Mail.Read permission; returns personal correspondence, so treat subjects, senders, recipients and bodies as personal data"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://graph.microsoft.com"

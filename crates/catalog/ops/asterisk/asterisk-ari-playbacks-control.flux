@@ -2,7 +2,7 @@ op asterisk-ari-playbacks-control(playbackId: String, operation: String) -> Any
   description "Control a playback."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

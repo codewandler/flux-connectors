@@ -2,7 +2,7 @@ op asterisk-ari-channels-send-dtmf(channelId: String, dtmf: String, before: Numb
   description "Send provided DTMF to a given channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

@@ -237,6 +237,7 @@ tags = ["observability"]
 [[operations]]
 id = "sentry-issue-get"
 method = "GET"
+direction = "read"
 path = "/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/"
 description = "Get one issue — its title, culprit, level, status, assignee, first and last seen timestamps and event counts. An issue is Sentry's group of like events, not a single occurrence; use `sentry-issue-event-latest` for the stack trace"
 risk = "low"
@@ -292,6 +293,7 @@ message_pointer = "/detail"
 [[operations]]
 id = "sentry-issue-update"
 method = "PUT"
+direction = "write"
 path = "/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/"
 description = "Change an issue's triage state: resolve it, ignore it, or return it to unresolved. This is the state the whole organization triages against — a resolved issue leaves the unresolved queue, and an ignored one stops alerting until it recurs on Sentry's terms. Recorded in the issue's activity feed under the token's owner"
 risk = "high"
@@ -360,6 +362,7 @@ message_pointer = "/detail"
 [[operations]]
 id = "sentry-project-get"
 method = "GET"
+direction = "read"
 path = "/api/0/projects/{organization_id_or_slug}/{project_id_or_slug}/"
 description = "Get one project — its name, slug, platform, teams, DSN-bearing client keys' status and whether it is currently accepting events. This is the project an issue belongs to, so it is how a triage flow finds out which service is broken"
 risk = "low"
@@ -405,6 +408,7 @@ message_pointer = "/detail"
 [[operations]]
 id = "sentry-issue-event-latest"
 method = "GET"
+direction = "read"
 path = "/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/events/latest/"
 # `latest` is a Sentry-defined path segment, not a parameter: the endpoint is
 # `…/events/latest/` and there is a sibling `…/events/oldest/`. Modelling it as a path parameter

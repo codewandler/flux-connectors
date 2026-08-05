@@ -12,6 +12,15 @@ module = "mailchimp.flux"
 operations = ["mailchimp-ping", "mailchimp-audience-list", "mailchimp-audience-get", "mailchimp-audience-member-list", "mailchimp-audience-member-get", "mailchimp-audience-member-upsert", "mailchimp-campaign-list"]
 verify = "mailchimp-ping"
 
+[operation_directions]
+mailchimp-audience-get = "read"
+mailchimp-audience-list = "read"
+mailchimp-audience-member-get = "read"
+mailchimp-audience-member-list = "read"
+mailchimp-audience-member-upsert = "write"
+mailchimp-campaign-list = "read"
+mailchimp-ping = "read"
+
 [operation_semantic_effects]
 mailchimp-audience-get = []
 mailchimp-audience-list = []

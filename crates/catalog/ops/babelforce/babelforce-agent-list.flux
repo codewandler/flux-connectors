@@ -2,7 +2,7 @@ op babelforce-agent-list(page: Number, max: Number, q: String, enabled: Bool, na
   description "List and filter agents. Doubles as the verification operation — cheap, read-only, and it fails loudly on a bad credential; this API has no /me endpoint"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://services.babelforce.com"

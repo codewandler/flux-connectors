@@ -2,7 +2,7 @@ op babelforce-list-metric-ids -> Any
   description "List available metric IDs"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

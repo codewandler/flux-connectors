@@ -2,7 +2,7 @@ op babelforce-authorize-integration(id: String, body: Any) -> Any
   description "Authorize an integration"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

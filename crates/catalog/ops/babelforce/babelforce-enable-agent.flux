@@ -2,7 +2,7 @@ op babelforce-enable-agent(id: String) -> Any
   description "Enable an agent"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

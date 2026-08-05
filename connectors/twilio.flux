@@ -6,7 +6,7 @@ op twilio-account-get(account_sid: String) -> Any
   description "Verify credentials by fetching the authenticated Twilio account"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"
@@ -18,7 +18,7 @@ op twilio-message-list(account_sid: String, page: Number, page_size: Number) -> 
   description "List messages sent from or received by this account"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"
@@ -30,7 +30,7 @@ op twilio-message-get(account_sid: String, message_sid: String) -> Any
   description "Fetch one message"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"
@@ -42,7 +42,7 @@ op twilio-call-list(account_sid: String, status: String, page: Number, page_size
   description "List calls made from or received by this account"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"
@@ -54,7 +54,7 @@ op twilio-call-get(account_sid: String, call_sid: String) -> Any
   description "Fetch one call"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"
@@ -66,7 +66,7 @@ op twilio-recording-list(IncludeSoftDeleted: Bool, PageSize: Number, Page: Numbe
   description "List recordings for the configured Twilio account with bounded pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"
@@ -79,7 +79,7 @@ op twilio-recording-get(Sid: String, IncludeSoftDeleted: Bool) -> Any
   description "Fetch one recording's metadata from the configured Twilio account"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"
@@ -92,7 +92,7 @@ op twilio-usage-record-list(IncludeSubaccounts: Bool, PageSize: Number, Page: Nu
   description "List usage records for the configured Twilio account with bounded pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"
@@ -105,7 +105,7 @@ op twilio-conference-list(PageSize: Number, Page: Number) -> Any
   description "List conferences for the configured Twilio account with bounded pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"

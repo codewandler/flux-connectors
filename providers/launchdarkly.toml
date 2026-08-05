@@ -138,6 +138,7 @@ tags = ["developer-tools"]
 [[operations]]
 id = "launchdarkly-project-list"
 method = "GET"
+direction = "read"
 path = "/projects"
 description = "List every project in the LaunchDarkly account. A project is the top-level grouping that owns environments and feature flags"
 risk = "low"
@@ -165,6 +166,7 @@ properties = { items = { type = "array", description = "The account's projects",
 [[operations]]
 id = "launchdarkly-environment-list"
 method = "GET"
+direction = "read"
 path = "/projects/{project_key}/environments"
 description = "List the environments (e.g. production, staging) that belong to one project"
 risk = "low"
@@ -198,6 +200,7 @@ properties = { items = { type = "array", description = "The project's environmen
 [[operations]]
 id = "launchdarkly-flag-list"
 method = "GET"
+direction = "read"
 path = "/flags/{project_key}"
 description = "List the feature flags defined in one project"
 risk = "low"
@@ -239,6 +242,7 @@ properties = { items = { type = "array", description = "The project's feature fl
 [[operations]]
 id = "launchdarkly-flag-get"
 method = "GET"
+direction = "read"
 path = "/flags/{project_key}/{feature_flag_key}"
 description = "Get one feature flag's full definition, including its current on/off state and targeting per environment"
 risk = "low"
@@ -276,6 +280,7 @@ properties = { key = { type = "string" }, name = { type = "string" }, kind = { t
 [[operations]]
 id = "launchdarkly-flag-toggle"
 method = "PATCH"
+direction = "write"
 path = "/flags/{project_key}/{feature_flag_key}"
 description = "Turn a feature flag on or off in one environment. This is a live production change: every SDK instance currently evaluating this flag in this environment — web, mobile and backend alike — switches to the other branch as soon as this call returns, for every real user it serves. It is reversible by toggling back, but it is not a private or staged edit"
 risk = "high"

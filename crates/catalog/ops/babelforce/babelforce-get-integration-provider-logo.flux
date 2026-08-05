@@ -2,7 +2,7 @@ op babelforce-get-integration-provider-logo(providerName: String, size: String) 
   description "Get a provider logo"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

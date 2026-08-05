@@ -2,7 +2,7 @@ op asterisk-ari-channels-snoop-channel(channelId: String, spy: String, whisper: 
   description "Start snooping."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

@@ -2,7 +2,7 @@ op babelforce-submit-task-schedule(cron: String, name: String, task: Any, templa
   description "Schedule new task"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op babelforce-list-agents-in-group(groupId: String, page: Number, max: Number) -
   description "List a group's agents"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

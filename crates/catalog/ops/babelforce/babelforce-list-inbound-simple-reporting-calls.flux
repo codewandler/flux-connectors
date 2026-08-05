@@ -2,7 +2,7 @@ op babelforce-list-inbound-simple-reporting-calls(page: Number, max: Number) -> 
   description "List inbound reporting calls"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

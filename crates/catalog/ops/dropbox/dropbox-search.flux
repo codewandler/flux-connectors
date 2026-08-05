@@ -1,8 +1,8 @@
 op dropbox-search(query: String) -> Any
-  description "Search file and folder names across the account, returning the first page of matches. Dropbox matches on name, not file content. Dropbox routes this read through POST, so it is declared as a write. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error_summary` in the response body."
+  description "Search file and folder names across the account, returning the first page of matches. Dropbox matches on name, not file content. Direction remains conservatively authored as write pending individual review; POST is transport only and supplied no evidence. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error_summary` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.dropboxapi.com"

@@ -2,7 +2,7 @@ op babelforce-get-metric-definition(id: String) -> Any
   description "Get a metric's definition"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

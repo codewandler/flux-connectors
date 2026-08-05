@@ -2,7 +2,7 @@ op babelforce-delete-business-hour(id: String) -> Any
   description "Delete a business-hours profile"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

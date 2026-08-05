@@ -2,7 +2,7 @@ op launchdarkly-flag-list(project_key: String, env: String, limit: Number, offse
   description "List the feature flags defined in one project"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://app.launchdarkly.com/api/v2"

@@ -12,6 +12,14 @@ module = "docusign.flux"
 operations = ["docusign-verify", "docusign-envelope-list", "docusign-envelope-get", "docusign-envelope-recipients-get", "docusign-envelope-create-from-template", "docusign-envelope-void"]
 verify = "docusign-verify"
 
+[operation_directions]
+docusign-envelope-create-from-template = "write"
+docusign-envelope-get = "read"
+docusign-envelope-list = "read"
+docusign-envelope-recipients-get = "read"
+docusign-envelope-void = "write"
+docusign-verify = "read"
+
 [operation_semantic_effects]
 docusign-envelope-create-from-template = []
 docusign-envelope-get = []

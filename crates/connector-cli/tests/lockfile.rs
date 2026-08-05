@@ -286,6 +286,12 @@ path = "{user_path}"
 service = "user"
 sha256 = "{}"
 
+[patch.directions.manager]
+getUser = "read"
+
+[patch.directions.user]
+getUser = "read"
+
 [[patch.operations]]
 service = "manager"
 select = "getUser"

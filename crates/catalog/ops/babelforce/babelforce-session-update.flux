@@ -1,8 +1,8 @@
 op babelforce-session-update(id: String, body: Any) -> Any
   description "Update the user-scoped variables of a session. The body is the variable map itself"
   risk "medium"
-  idempotency "idempotent"
-  effects ["network"]
+  idempotency "non_idempotent"
+  effects ["write", "network"]
   expose true
 
   base = "https://services.babelforce.com"

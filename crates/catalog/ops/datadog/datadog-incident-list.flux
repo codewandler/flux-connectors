@@ -2,7 +2,7 @@ op datadog-incident-list -> Any
   description "List the organization's incidents"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.datadoghq.com"

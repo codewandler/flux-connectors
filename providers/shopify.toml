@@ -227,6 +227,7 @@ tags = ["ecommerce"]
 [[operations]]
 id = "shopify-order-get"
 method = "GET"
+direction = "read"
 path = "/admin/api/2024-10/orders/{order_id}.json"
 description = "Get one order by id, with its line items, totals, fulfilment and financial status, and the customer and addresses attached to it. The response carries personal data: the customer's name, email, phone and shipping address"
 risk = "low"
@@ -289,6 +290,7 @@ message_pointer = "/errors"
 [[operations]]
 id = "shopify-product-get"
 method = "GET"
+direction = "read"
 path = "/admin/api/2024-10/products/{product_id}.json"
 description = "Get one product by id, with its title, description, status, vendor, options, variants and images"
 risk = "low"
@@ -335,6 +337,7 @@ message_pointer = "/errors"
 [[operations]]
 id = "shopify-product-update"
 method = "PUT"
+direction = "write"
 path = "/admin/api/2024-10/products/{product_id}.json"
 description = "Rename a product. The new title is live on the public storefront as soon as this returns, on every sales channel the product is published to. Shopify applies only the fields sent, so nothing else about the product changes"
 risk = "high"
@@ -385,10 +388,11 @@ message_pointer = "/errors"
 [[operations]]
 id = "shopify-customer-get"
 method = "GET"
+direction = "read"
 path = "/admin/api/2024-10/customers/{customer_id}.json"
 # Said on the contract a model reads, because `risk` cannot say it: this response is personal data.
-# `Risk` grades what a call *changes* — the emitter's `check_write_metadata` derives write-ness from
-# the method — so it has no axis for what a read *discloses*, and a read of a named individual's
+# `Risk` grades what a call *changes* from authored direction, so it has no axis for what a read
+# *discloses*, and a read of a named individual's
 # contact details and purchase history is `low` on the same scale as reading a product title. Filed
 # with C-74 as an adjacent gap; until it has somewhere structured to live, the description is what
 # reaches the model.
@@ -443,6 +447,7 @@ message_pointer = "/errors"
 [[operations]]
 id = "shopify-inventory-level-list"
 method = "GET"
+direction = "read"
 path = "/admin/api/2024-10/locations/{location_id}/inventory_levels.json"
 description = "List the inventory levels held at one location — the available quantity per inventory item. Returns the first page only, so a location stocking more items than one page holds is reported incompletely"
 risk = "low"

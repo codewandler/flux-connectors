@@ -1,8 +1,8 @@
 op babelforce-call-session-set(id: String, body: Any) -> Any
   description "Set session variables on a live call."
   risk "medium"
-  idempotency "idempotent"
-  effects ["network"]
+  idempotency "non_idempotent"
+  effects ["write", "network"]
   expose true
 
   base = "https://services.babelforce.com"

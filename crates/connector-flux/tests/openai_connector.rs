@@ -31,7 +31,7 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{AuthScheme, Connector, HttpMethod, Idempotency, Risk};
+use connector_spec::{AuthScheme, Connector, Idempotency, OperationDirection, Risk};
 
 #[path = "../../connector-spec/tests/support/shipped_provider.rs"]
 mod shipped_provider;
@@ -178,10 +178,9 @@ fn every_operation_authenticates_as_bearer_over_one_env_var() {
     }
 }
 
-/// **An operation an LLM can call that spends money is not `low` risk**, and a `POST` is not
-/// idempotent.
+/// **An operation an LLM can call that spends money is not `low` risk or idempotent.**
 ///
-/// `connector-flux`'s `check_write_metadata` already refuses both for any state-changing method, so
+/// `connector-flux`'s `check_write_metadata` already refuses both for any authored write, so
 /// this is not the emitter's gate restated: it is the *reason* stated where a reader looking at
 /// OpenAI will find it. Inference is billed per token, and `risk` is what flux's approval gate
 /// reads before letting a model run the call unattended.
@@ -189,10 +188,7 @@ fn every_operation_authenticates_as_bearer_over_one_env_var() {
 fn the_cost_bearing_operations_declare_what_they_cost() {
     let connector = load();
     for operation in &connector.operations {
-        let mutates = matches!(
-            operation.method,
-            HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch | HttpMethod::Delete
-        );
+        let mutates = operation.direction == OperationDirection::Write;
         if !mutates {
             continue;
         }
@@ -205,8 +201,7 @@ fn the_cost_bearing_operations_declare_what_they_cost() {
         assert_ne!(
             operation.idempotency,
             Idempotency::Idempotent,
-            "`{}` is a POST: declaring it idempotent makes a `retry` around it turn one charge into \
-             three",
+            "`{}` is an authored write: declaring it idempotent lets Flux skip or retry it unsafely",
             operation.id
         );
     }

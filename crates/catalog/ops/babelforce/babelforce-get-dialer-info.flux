@@ -2,7 +2,7 @@ op babelforce-get-dialer-info -> Any
   description "Get inbound dialer runtime information"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

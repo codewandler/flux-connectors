@@ -7,7 +7,8 @@ use async_trait::async_trait;
 use flux_lang::program::CompositeOpDecl;
 use flux_runtime::{Tool, ToolContext, ToolResult};
 use flux_spec::{
-    Intent, IntentBehavior, IntentCertainty, IntentRole, IntentSet, IntentTarget, ToolSpec,
+    Intent, IntentBehavior, IntentCertainty, IntentRole, IntentSet, IntentTarget,
+    StagingDisposition, ToolSpec,
 };
 use serde_json::Value;
 
@@ -618,14 +619,29 @@ impl Tool for Operation {
     fn intents(&self, params: &Value) -> IntentSet {
         let mut set = IntentSet::new();
         for subject in self.subjects(params) {
+            let (behavior, role) = match self.entry.direction {
+                catalog::OperationDirection::Read => {
+                    (IntentBehavior::NetworkFetch, IntentRole::ReadTarget)
+                }
+                catalog::OperationDirection::Write => {
+                    (IntentBehavior::NetworkConnect, IntentRole::WriteTarget)
+                }
+            };
             set.push(Intent {
-                behavior: IntentBehavior::NetworkFetch,
+                behavior,
                 target: IntentTarget::Url { url: subject },
-                role: IntentRole::ReadTarget,
+                role,
                 certainty: IntentCertainty::Certain,
             });
         }
         set
+    }
+
+    fn staging_disposition(&self) -> StagingDisposition {
+        match self.entry.direction {
+            catalog::OperationDirection::Read => StagingDisposition::Gather,
+            catalog::OperationDirection::Write => StagingDisposition::Capture,
+        }
     }
 
     /// Authenticate the request, build it, and hand it to flux.
@@ -684,18 +700,44 @@ mod tests {
     use super::*;
     use crate::tests::{empty_credentials, recording_http, test_configuration};
     use catalog::OperationKey;
+    use flux_spec::Effect;
     use serde_json::json;
 
-    fn projected(id: &str) -> Operation {
-        let entry = catalog::operation(OperationKey::id(id))
-            .unwrap_or_else(|| panic!("the shipped catalogue carries `{id}`"));
+    fn projected_entry(entry: &'static catalog::Operation) -> Operation {
         Operation::project(
             entry,
             recording_http(),
             empty_credentials(),
             test_configuration(),
         )
-        .unwrap_or_else(|error| panic!("`{id}`: {error}"))
+        .unwrap_or_else(|error| panic!("`{}`: {error}", entry.id))
+    }
+
+    fn projected(id: &str) -> Operation {
+        let entry = catalog::operation(OperationKey::id(id))
+            .unwrap_or_else(|| panic!("the shipped catalogue carries `{id}`"));
+        projected_entry(entry)
+    }
+
+    fn params_from_spec(spec: &ToolSpec) -> Value {
+        let mut params = serde_json::Map::new();
+        if let Some(properties) = spec
+            .input_schema
+            .get("properties")
+            .and_then(Value::as_object)
+        {
+            for (name, schema) in properties {
+                let value = match schema.get("type").and_then(Value::as_str) {
+                    Some("number") | Some("integer") => json!(1),
+                    Some("boolean") => json!(true),
+                    Some("array") => json!([]),
+                    Some("object") | None => json!({}),
+                    Some(_) => Value::String(format!("a-{name}")),
+                };
+                params.insert(name.clone(), value);
+            }
+        }
+        Value::Object(params)
     }
 
     #[test]
@@ -772,6 +814,99 @@ mod tests {
                 certainty: IntentCertainty::Certain,
             }],
         );
+        assert_eq!(tool.staging_disposition(), StagingDisposition::Gather);
+    }
+
+    #[test]
+    fn a_write_uses_mutating_intents_and_is_captured_for_ordered_execution() {
+        let tool = projected("zendesk-ticket-update");
+        let params = json!({ "ticket_id": 1, "ticket": {} });
+
+        assert_eq!(
+            tool.intents(&params).intents,
+            vec![Intent {
+                behavior: IntentBehavior::NetworkConnect,
+                target: IntentTarget::Url {
+                    url: "https://acme.zendesk.com/api/v2/tickets/1".to_string(),
+                },
+                role: IntentRole::WriteTarget,
+                certainty: IntentCertainty::Certain,
+            }],
+        );
+        assert_eq!(tool.staging_disposition(), StagingDisposition::Capture);
+    }
+
+    #[test]
+    fn every_catalogued_operation_projects_direction_to_intent_and_staging() {
+        for entry in catalog::operations() {
+            let tool = projected_entry(entry);
+            let params = params_from_spec(&tool.spec());
+            let request = tool
+                .build_request(&params)
+                .unwrap_or_else(|error| panic!("`{}` does not resolve: {error}", entry.id));
+            let subjects = tool.permission_subjects(&params);
+            let intents = tool.intents(&params);
+            assert_eq!(
+                subjects.as_slice(),
+                std::slice::from_ref(&request.url),
+                "`{}`",
+                entry.id
+            );
+            assert_eq!(
+                intents.intents.len(),
+                subjects.len(),
+                "`{}` must describe every gated destination as an intent",
+                entry.id
+            );
+
+            let (behavior, role, disposition) = match entry.direction {
+                catalog::OperationDirection::Read => (
+                    IntentBehavior::NetworkFetch,
+                    IntentRole::ReadTarget,
+                    StagingDisposition::Gather,
+                ),
+                catalog::OperationDirection::Write => (
+                    IntentBehavior::NetworkConnect,
+                    IntentRole::WriteTarget,
+                    StagingDisposition::Capture,
+                ),
+            };
+            assert_eq!(tool.staging_disposition(), disposition, "`{}`", entry.id);
+            for (intent, subject) in intents.intents.iter().zip(&subjects) {
+                assert_eq!(intent.behavior, behavior, "`{}`", entry.id);
+                assert_eq!(intent.role, role, "`{}`", entry.id);
+                assert_eq!(
+                    intent.target,
+                    IntentTarget::Url {
+                        url: subject.clone()
+                    },
+                    "`{}` must use the permission subject byte-for-byte as its intent target",
+                    entry.id
+                );
+                assert_eq!(intent.certainty, IntentCertainty::Certain, "`{}`", entry.id);
+            }
+        }
+    }
+
+    #[test]
+    fn the_unexposed_get_shaped_dialer_flush_stays_a_captured_write() {
+        let tool = projected("babelforce-flush-dialer");
+
+        assert!(tool.entry().flux.contains("method: \"GET\""));
+        assert!(tool.entry().flux.contains("expose false"));
+        assert_eq!(tool.entry().direction, catalog::OperationDirection::Write);
+        assert_eq!(tool.spec().effects, vec![Effect::Write, Effect::Network]);
+        assert_eq!(tool.spec().risk, flux_spec::Risk::High);
+        assert_eq!(
+            tool.spec().idempotency,
+            flux_spec::Idempotency::NonIdempotent
+        );
+        assert_eq!(tool.staging_disposition(), StagingDisposition::Capture);
+
+        for intent in tool.intents(&json!({})).intents {
+            assert_eq!(intent.behavior, IntentBehavior::NetworkConnect);
+            assert_eq!(intent.role, IntentRole::WriteTarget);
+        }
     }
 
     /// A parameter the caller omitted is refused rather than interpolated away. Left alone,

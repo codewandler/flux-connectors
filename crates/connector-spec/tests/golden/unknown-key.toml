@@ -6,6 +6,7 @@ base_url = "https://acme.zendesk.com"
 [[operations]]
 id = "zendesk.test"
 method = "GET"
+direction = "read"
 path = "/api/v2/users/me.json"
 risk = "low"
 idempotency = "idempotent"

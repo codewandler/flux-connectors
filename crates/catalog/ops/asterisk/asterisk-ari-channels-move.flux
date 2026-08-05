@@ -2,7 +2,7 @@ op asterisk-ari-channels-move(channelId: String, app: String, appArgs: String) -
   description "Move the channel from one Stasis application to another."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

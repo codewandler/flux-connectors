@@ -33,7 +33,9 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{AuthScheme, Connector, HttpMethod, Idempotency, Risk, SemanticEffect};
+use connector_spec::{
+    AuthScheme, Connector, Idempotency, OperationDirection, Risk, SemanticEffect,
+};
 
 #[path = "../../connector-spec/tests/support/shipped_provider.rs"]
 mod shipped_provider;
@@ -196,10 +198,9 @@ fn load() -> Connector {
         .connector
 }
 
-/// Whether the operation changes state on Stripe's side. The emitter derives write-ness from the verb
-/// the same way (`check_write_metadata`), and this connector has no method that disagrees with it.
-fn mutates(method: HttpMethod) -> bool {
-    !matches!(method, HttpMethod::Get | HttpMethod::Head)
+/// Whether the operation is authored to change Stripe state.
+fn mutates(direction: OperationDirection) -> bool {
+    direction == OperationDirection::Write
 }
 
 /// The connector exists, loads, and is the one C-106 specifies: a bearer secret key over
@@ -353,7 +354,7 @@ fn every_stripe_write_requires_a_caller_supplied_idempotency_key() {
 
     let mut writes = 0;
     for operation in &connector.operations {
-        if !mutates(operation.method) {
+        if !mutates(operation.direction) {
             assert!(
                 operation.params.header.is_empty(),
                 "read `{}` declares headers {:?}; a read needs no replay guard",
@@ -456,7 +457,7 @@ fn stripe_grades_its_operations_by_what_they_do_to_money() {
             operation.idempotency
         );
         assert_eq!(
-            mutates(operation.method),
+            mutates(operation.direction),
             *risk != Risk::Low,
             "`{id}`: the risk tier and the HTTP verb disagree about whether this is a write"
         );

@@ -7,7 +7,7 @@ op zendesk-help-center-category-list -> Any
   description "List Help Center categories; this zero-argument read also verifies that the shared Zendesk account and credential can reach the knowledge base"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -19,7 +19,7 @@ op zendesk-help-center-section-list -> Any
   description "List Help Center sections across all categories"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -31,7 +31,7 @@ op zendesk-help-center-article-list(start_time: Number) -> Any
   description "List Help Center articles, optionally limited to articles updated since a Unix timestamp"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -43,7 +43,7 @@ op zendesk-help-center-article-get(article_id: Number) -> Any
   description "Get one Help Center article by its numeric id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -55,7 +55,7 @@ op zendesk-help-center-translation-list(article_id: Number) -> Any
   description "List every translation of one Help Center article without exposing unencoded locale filters"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -67,7 +67,7 @@ op zendesk-help-center-article-incremental-list(start_time: Number) -> Any
   description "Incrementally list Help Center articles updated since an optional integer Unix timestamp"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"
@@ -79,7 +79,7 @@ op zendesk-help-center-article-create(section_id: Number, article: Any) -> Any
   description "Publish a new externally visible Help Center article in one numeric section"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

@@ -1,7 +1,7 @@
 op babelforce-list-scripts(type: String, filter: String, page: Number, page_size: Number) -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

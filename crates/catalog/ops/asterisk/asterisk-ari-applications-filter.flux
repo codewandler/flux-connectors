@@ -2,7 +2,7 @@ op asterisk-ari-applications-filter(applicationName: String, body: Any) -> Any
   description "Filter application events types."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

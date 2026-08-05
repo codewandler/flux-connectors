@@ -2,7 +2,7 @@ op asterisk-ari-channels-get-channel-var(channelId: String, variable: String) ->
   description "Get the value of a channel variable or function."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

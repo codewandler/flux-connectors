@@ -2,7 +2,7 @@ op babelforce-get-widget-settings(type: String) -> Any
   description "Get UI feature flags and type-specific settings for a widget type"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

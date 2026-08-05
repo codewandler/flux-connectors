@@ -2,7 +2,7 @@ op babelforce-delete-calendar(id: String) -> Any
   description "Delete a calendar"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

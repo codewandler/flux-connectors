@@ -2,7 +2,7 @@ op babelforce-update-agent-group(id: String, body: Any) -> Any
   description "Update an agent group"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -7,7 +7,7 @@ op postmark-email-send(from: String, to: String, cc: String, bcc: String, subjec
   description "Send a single email immediately from the token's server. Delivered within seconds and cannot be recalled. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.postmarkapp.com"
@@ -21,7 +21,7 @@ op postmark-deliverystats-get -> Any
   description "Get delivery statistics for this server: total inactive addresses and a breakdown of bounces by type. Also this connector's `verify` — a bounded read that runs unattended, needing no argument. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.postmarkapp.com"
@@ -33,7 +33,7 @@ op postmark-bounce-list(count: Number, offset: Number) -> Any
   description "List bounces recorded on this server, most recent first. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.postmarkapp.com"
@@ -45,7 +45,7 @@ op postmark-bounce-get(bounce_id: Number) -> Any
   description "Get one recorded bounce by id. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.postmarkapp.com"

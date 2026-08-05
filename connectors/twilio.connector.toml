@@ -12,6 +12,17 @@ module = "twilio.flux"
 operations = ["twilio-account-get", "twilio-message-list", "twilio-message-get", "twilio-call-list", "twilio-call-get", "twilio-recording-list", "twilio-recording-get", "twilio-usage-record-list", "twilio-conference-list"]
 verify = "twilio-account-get"
 
+[operation_directions]
+twilio-account-get = "read"
+twilio-call-get = "read"
+twilio-call-list = "read"
+twilio-conference-list = "read"
+twilio-message-get = "read"
+twilio-message-list = "read"
+twilio-recording-get = "read"
+twilio-recording-list = "read"
+twilio-usage-record-list = "read"
+
 [operation_semantic_effects]
 twilio-account-get = []
 twilio-call-get = []

@@ -9,6 +9,7 @@ base_url = "https://api.acme.example"
 [[operations]]
 id = "acme-cache-purge"
 method = "POST"
+direction = "write"
 path = "/cache/purge"
 description = "Empty the cache."
 risk = "high"

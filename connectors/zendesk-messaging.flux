@@ -7,7 +7,7 @@ op zendesk-messaging-conversation-create -> Any
   description "Create an empty SDK group conversation in the configured Zendesk Messaging app"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"
@@ -23,7 +23,7 @@ op zendesk-messaging-conversation-get(conversationId: String) -> Any
   description "Get one conversation by id; this bounded read is the Messaging service's diagnostic operation"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"
@@ -36,7 +36,7 @@ op zendesk-messaging-conversation-update(conversationId: String, displayName: St
   description "Set one conversation's display name to an absolute non-empty value"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"
@@ -51,7 +51,7 @@ op zendesk-messaging-participant-list(conversationId: String) -> Any
   description "List the participants of one conversation without exposing deep-object pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"
@@ -64,7 +64,7 @@ op zendesk-messaging-message-create(conversationId: String, author: Any, content
   description "Post Message"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"
@@ -79,7 +79,7 @@ op zendesk-messaging-message-list(conversationId: String) -> Any
   description "List Messages"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"
@@ -92,7 +92,7 @@ op zendesk-messaging-user-create(externalId: String) -> Any
   description "Create a Zendesk Messaging user with one required external id"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"
@@ -107,7 +107,7 @@ op zendesk-messaging-user-get(userIdOrExternalId: String) -> Any
   description "Get one Zendesk Messaging user by its vendor id or external id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"
@@ -120,7 +120,7 @@ op zendesk-messaging-user-update(userIdOrExternalId: String, toBeRetained: Bool)
   description "Set whether one Zendesk Messaging user is retained after becoming inactive"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"

@@ -230,7 +230,134 @@ prefix = "babelforce"
 "#;
 
 fn with(patch: &str) -> String {
-    format!("{POINTER}{patch}")
+    let definition = read("providers/babelforce.toml");
+    let start = definition
+        .find("[patch.directions.manager]")
+        .expect("the shipped provider carries reviewed directions");
+    let end = definition[start..]
+        .find("[patch.naming]")
+        .map(|offset| start + offset)
+        .expect("the reviewed direction maps precede naming");
+    format!("{POINTER}{}{patch}", &definition[start..end])
+}
+
+/// A deliberately transport-adversarial source: the write starts as `GET` and the read starts as
+/// `POST`. Tests swap only those upstream method keys while preserving service and `operationId`.
+fn direction_document(flush_method: &str, lookup_method: &str, flush_id: &str) -> String {
+    format!(
+        r#"{{
+  "openapi": "3.0.3",
+  "info": {{ "title": "Direction", "version": "1" }},
+  "servers": [{{ "url": "https://api.acme.test" }}],
+  "paths": {{
+    "/v1/widgets/flush": {{
+      "{flush_method}": {{
+        "operationId": "{flush_id}",
+        "summary": "Flush queued work",
+        "responses": {{ "200": {{ "description": "ok" }} }}
+      }}
+    }},
+    "/v1/widgets/lookup": {{
+      "{lookup_method}": {{
+        "operationId": "lookupWidgets",
+        "summary": "Look up widgets without changing them",
+        "responses": {{ "200": {{ "description": "ok" }} }}
+      }}
+    }}
+  }}
+}}"#
+    )
+}
+
+const DIRECTION_POINTER: &str = r#"
+id = "acme"
+vendor = "Acme"
+base_url = "https://api.acme.test"
+
+[spec]
+path = "specs/acme/direction.json"
+
+[patch.directions.default]
+flushWidgets = "write"
+lookupWidgets = "read"
+
+[patch.naming]
+rule = "kebab"
+prefix = "acme"
+
+# Both method selectors state the same transport-independent safety metadata. Swapping only an
+# upstream method therefore forces selector rematching without giving direction another source.
+[[patch.select]]
+path_prefix = "/v1"
+methods = ["GET"]
+risk = "high"
+idempotency = "non_idempotent"
+
+[[patch.select]]
+path_prefix = "/v1"
+methods = ["POST"]
+risk = "high"
+idempotency = "non_idempotent"
+"#;
+
+/// Direction survives the part the lowering-only test cannot reach: ingest and selector
+/// composition. The method keys change in the source document before either load, so each operation
+/// rematches the opposite selector. Stable service + vendor `operationId` remains the only source
+/// of read/write truth. `connector-flux::op_emitter` separately proves these values lower to the
+/// matching `read`/`write` effects.
+#[test]
+fn changing_only_upstream_methods_before_composition_preserves_authored_directions() {
+    let original_document = synthetic(
+        "specs/acme/direction.json",
+        direction_document("get", "post", "flushWidgets"),
+    );
+    let changed_document = synthetic(
+        "specs/acme/direction.json",
+        direction_document("post", "get", "flushWidgets"),
+    );
+
+    let original = load_from(DIRECTION_POINTER, &original_document);
+    let changed = load_from(DIRECTION_POINTER, &changed_document);
+
+    let original_flush = operation(&original, "acme-flush-widgets");
+    let changed_flush = operation(&changed, "acme-flush-widgets");
+    assert_eq!(original_flush.method, HttpMethod::Get);
+    assert_eq!(changed_flush.method, HttpMethod::Post);
+    assert_eq!(
+        original_flush.direction,
+        connector_spec::OperationDirection::Write
+    );
+    assert_eq!(changed_flush.direction, original_flush.direction);
+
+    let original_lookup = operation(&original, "acme-lookup-widgets");
+    let changed_lookup = operation(&changed, "acme-lookup-widgets");
+    assert_eq!(original_lookup.method, HttpMethod::Post);
+    assert_eq!(changed_lookup.method, HttpMethod::Get);
+    assert_eq!(
+        original_lookup.direction,
+        connector_spec::OperationDirection::Read
+    );
+    assert_eq!(changed_lookup.direction, original_lookup.direction);
+}
+
+/// An upstream identity rename may not inherit the old operation's reviewed truth. The old map row
+/// becomes an orphan and the newly selected identity has no direction; both sides are named so a
+/// refresh cannot silently promote the renamed operation.
+#[test]
+fn an_upstream_operation_id_rename_orphans_direction_and_refuses() {
+    let renamed = synthetic(
+        "specs/acme/direction.json",
+        direction_document("get", "post", "flushWidgetsRenamed"),
+    );
+    let refusal = refuse_from(DIRECTION_POINTER, &renamed);
+    assert!(
+        refusal.contains("flushWidgets") && refusal.contains("names no `operationId`"),
+        "the stale reviewed map key must be reported as an orphan: {refusal}"
+    );
+    assert!(
+        refusal.contains("flushWidgetsRenamed") && refusal.contains("states no `direction`"),
+        "the renamed selected operation must fail closed without reviewed truth: {refusal}"
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -563,6 +690,9 @@ path = "specs/acme/internal.json"
 rule = "kebab"
 prefix = "acme"
 
+[patch.directions.default]
+listThings = "read"
+
 [[patch.select]]
 path_prefix = "/v1"
 "#;
@@ -767,6 +897,14 @@ fn the_derived_id_set_is_pinned() {
 [[patch.select]]
 service = "task-automation"
 path_prefix = "/api/v3"
+methods = ["GET"]
+risk = "high"
+idempotency = "non_idempotent"
+
+[[patch.select]]
+service = "task-automation"
+path_prefix = "/api/v3"
+methods = ["POST", "PUT", "PATCH", "DELETE"]
 risk = "high"
 idempotency = "non_idempotent"
 "#,
@@ -840,9 +978,10 @@ idempotency = "non_idempotent"
     );
 }
 
-/// **Silence on a mutating method refuses the build.** It must not default to `low`.
+/// **Silence on an authored write refuses the build.** It must not default to `low`, regardless of
+/// the transport method carrying it.
 #[test]
-fn silence_on_a_mutating_method_refuses() {
+fn silence_on_an_authored_write_refuses() {
     let refusal = refuse(&with(
         r#"
 [[patch.select]]
@@ -856,14 +995,14 @@ methods = ["DELETE"]
         "an unstated DELETE must be refused by name: {refusal}"
     );
     assert!(
-        !refusal.is_empty() && refusal.contains("DELETE"),
-        "the refusal names the method that made silence unacceptable: {refusal}"
+        !refusal.is_empty() && refusal.contains("authored write"),
+        "the refusal names the authored direction that makes silence unacceptable: {refusal}"
     );
 }
 
-/// A non-mutating operation may go unstated: a method that changes nothing has no damage claim to
-/// get wrong, and the values a read forces are `low` and `idempotent`. The asymmetry with the test
-/// above is the whole of C-414.
+/// An authored read may leave risk and idempotency unstated: it has no vendor-state damage claim to
+/// get wrong, and the values a read forces are `low` and `idempotent`. Direction itself remains an
+/// explicit identity-keyed fact. The asymmetry with the test above is the whole of C-414.
 #[test]
 fn a_read_may_go_unstated() {
     let connector = load(&with(
@@ -1004,7 +1143,7 @@ methods = ["GET"]
 /// back.
 #[test]
 fn the_canonical_surface_is_selected_and_the_file_stays_reviewable() {
-    let definition = read("crates/connector-spec/tests/fixtures/babelforce-canonical.toml");
+    let definition = read("providers/babelforce.toml");
     let loaded = provider::load_with_spec("providers/babelforce.toml", &definition, &cache())
         .unwrap_or_else(|error| panic!("the canonical fixture must load:\n{error}"));
     let connector = &loaded.connector;
@@ -1105,17 +1244,18 @@ fn the_canonical_surface_is_selected_and_the_file_stays_reviewable() {
         "everything past the curated nine is catalogued and callable without reaching a model"
     );
 
-    // **The size claim, measured.** Declaration lines rather than the raw file, because comments
-    // are the part of a connector definition that *should* grow with what it does — the boilerplate
-    // this epic exists to kill is the restated `select`/`rename`/`risk`/`idempotency`, and that is
-    // what this counts. One `[[patch.operations]]` block per operation would be north of 1,600.
+    // **The size claim, measured.** Direction is intentionally one reviewed value per stable
+    // operation identity; it therefore scales with the surface and is not selector boilerplate.
+    // Count the remaining declarations, where one `[[patch.operations]]` block per operation would
+    // still be north of 1,600 lines.
     let declarations = definition
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .filter(|line| !line.ends_with("= \"read\"") && !line.ends_with("= \"write\""))
         .count();
     assert!(
-        declarations < 200,
+        declarations < 400,
         "selecting {REACHABLE} operations took {declarations} declaration lines; the point of a \
          selector is that this number does not scale with the operation count"
     );

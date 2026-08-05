@@ -2,7 +2,7 @@ op babelforce-set-campaign-list(id: String, body: Any) -> Any
   description "Set a campaign's lead-list"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

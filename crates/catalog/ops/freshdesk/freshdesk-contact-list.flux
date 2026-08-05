@@ -2,7 +2,7 @@ op freshdesk-contact-list(phone: String, email: String, mobile: String, company_
   description "List and filter contacts, e.g. to resolve a caller before filing a ticket"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{domain}/api/v2"

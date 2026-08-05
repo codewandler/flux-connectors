@@ -2,7 +2,7 @@ op babelforce-call-list(page: Number, max: Number, agentId: String, time_start: 
   description "List and filter calls, in the reporting view."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://services.babelforce.com"

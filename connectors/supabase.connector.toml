@@ -12,6 +12,11 @@ module = "supabase.flux"
 operations = ["supabase-schema-describe", "supabase-rows-list", "supabase-auth-settings"]
 verify = "supabase-schema-describe"
 
+[operation_directions]
+supabase-auth-settings = "read"
+supabase-rows-list = "read"
+supabase-schema-describe = "read"
+
 [operation_semantic_effects]
 supabase-auth-settings = []
 supabase-rows-list = []

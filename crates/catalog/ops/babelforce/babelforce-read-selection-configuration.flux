@@ -1,7 +1,7 @@
 op babelforce-read-selection-configuration -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op babelforce-bulk-update-queues(body: Any) -> Any
   description "Bulk-update queues"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

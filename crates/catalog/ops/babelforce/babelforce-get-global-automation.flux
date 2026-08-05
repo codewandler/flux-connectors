@@ -2,7 +2,7 @@ op babelforce-get-global-automation(id: String) -> Any
   description "Get an event trigger"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

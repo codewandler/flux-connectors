@@ -12,6 +12,14 @@ module = "trello.flux"
 operations = ["trello-board-list", "trello-board-get", "trello-board-lists", "trello-list-cards", "trello-card-create", "trello-card-archive"]
 verify = "trello-board-list"
 
+[operation_directions]
+trello-board-get = "read"
+trello-board-list = "read"
+trello-board-lists = "read"
+trello-card-archive = "write"
+trello-card-create = "write"
+trello-list-cards = "read"
+
 [operation_semantic_effects]
 trello-board-get = []
 trello-board-list = []

@@ -2,7 +2,7 @@ op babelforce-start-recording(body: Any) -> Any
   description "Start recording a call"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

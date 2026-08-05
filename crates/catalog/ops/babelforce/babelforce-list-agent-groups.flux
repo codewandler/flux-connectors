@@ -2,7 +2,7 @@ op babelforce-list-agent-groups(page: Number, max: Number) -> Any
   description "List agent groups"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

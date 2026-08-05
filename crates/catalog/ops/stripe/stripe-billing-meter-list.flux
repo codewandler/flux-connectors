@@ -2,7 +2,7 @@ op stripe-billing-meter-list(limit: Number) -> Any
   description "List usage-billing meter definitions without creating, changing or deactivating one"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.stripe.com"

@@ -2,7 +2,7 @@ op babelforce-update-campaign(id: String, active: Bool, callRatio: Number, displ
   description "Update a campaign"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

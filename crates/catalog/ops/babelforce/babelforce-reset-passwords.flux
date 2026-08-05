@@ -2,7 +2,7 @@ op babelforce-reset-passwords(body: Any) -> Any
   description "Reset user passwords"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

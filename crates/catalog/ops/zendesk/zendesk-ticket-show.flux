@@ -2,7 +2,7 @@ op zendesk-ticket-show(ticket_id: Number) -> Any
   description "Show Ticket"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

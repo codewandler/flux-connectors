@@ -88,13 +88,22 @@ fn every_semantic_effect_is_a_flux_flow_effect() {
     }
 }
 
-/// Semantic effects travel beside the emitted host effect; they never replace or broaden it.
+/// Every operation carries one explicit vendor-state direction before the network carrier.
+///
+/// The order is canonical and load-bearing: Flux's consequence predicate treats `Network`
+/// without `Read` as consequential, while approval discovers mutations through `Write`.
 #[test]
-fn every_shipped_operation_keeps_its_network_host_effect() {
+fn every_shipped_operation_declares_read_or_write_before_network() {
     for operation in all() {
+        let read = operation
+            .flux
+            .contains("  effects [\"read\", \"network\"]\n");
+        let write = operation
+            .flux
+            .contains("  effects [\"write\", \"network\"]\n");
         assert!(
-            operation.flux.contains("  effects [\"network\"]\n"),
-            "`{}` no longer declares exactly the network host effect:\n{}",
+            read ^ write,
+            "`{}` must declare exactly one vendor-state direction before the network carrier:\n{}",
             operation.id,
             operation.flux
         );

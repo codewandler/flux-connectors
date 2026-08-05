@@ -2,7 +2,7 @@ op babelforce-update-outbound-lead(id: String, leadId: String, body: Any) -> Any
   description "Update a lead's meta-data"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

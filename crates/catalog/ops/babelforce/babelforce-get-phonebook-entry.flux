@@ -2,7 +2,7 @@ op babelforce-get-phonebook-entry(id: String) -> Any
   description "Get a phonebook entry"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

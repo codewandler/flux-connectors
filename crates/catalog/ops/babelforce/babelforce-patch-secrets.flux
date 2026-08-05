@@ -2,7 +2,7 @@ op babelforce-patch-secrets(prefix: String, body: Any) -> Any
   description "Appends values to an existing secret prefix. Only supported values are strings"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

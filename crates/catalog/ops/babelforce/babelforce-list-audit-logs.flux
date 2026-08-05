@@ -2,7 +2,7 @@ op babelforce-list-audit-logs(filters_dateCreated_start: Number, filters_dateCre
   description "Get a list of all audit logs"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

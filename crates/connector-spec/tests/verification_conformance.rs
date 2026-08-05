@@ -913,6 +913,7 @@ env = ["ACME_WEBHOOK_SECRET"]
 [[operations]]
 id = "acme-ping"
 method = "GET"
+direction = "read"
 path = "/ping"
 risk = "low"
 idempotency = "idempotent"

@@ -2,7 +2,7 @@ op github-commit-list(owner: String, repo: String, per_page: Number, page: Numbe
   description "List commits in a repository with bounded integer pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.github.com"

@@ -12,6 +12,11 @@ api_version = "v2"
 module = "babelforce-user.flux"
 operations = ["babelforce-user-me-get", "babelforce-list-accounts", "babelforce-reset-password"]
 
+[operation_directions]
+babelforce-list-accounts = "read"
+babelforce-reset-password = "write"
+babelforce-user-me-get = "read"
+
 [operation_semantic_effects]
 babelforce-list-accounts = []
 babelforce-reset-password = []

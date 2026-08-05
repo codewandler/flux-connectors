@@ -2,7 +2,7 @@ op babelforce-list-phonebook-entrys(page: Number, max: Number) -> Any
   description "List phonebook entries"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -142,10 +142,10 @@ fn the_schema_marks_the_mandatory_keys_required() {
         ("provider", &["id", "base_url"]),
         // No default for `scheme`: how a secret reaches the wire is not decided by silence.
         ("authMethod", &["name", "scheme"]),
-        // No default for `method`, `path`, `risk` or `idempotency`, for the same reason.
+        // No default for direction or the request/policy fields, for the same reason.
         (
             "operation",
-            &["id", "method", "path", "risk", "idempotency"],
+            &["id", "method", "direction", "path", "risk", "idempotency"],
         ),
         ("param", &["name", "schema"]),
         ("authRequirement", &["credentials"]),
@@ -263,6 +263,7 @@ base_url = "https://api.acme.test"
 [[operations]]
 id = "acme-thing-list"
 method = "GET"
+direction = "read"
 path = "/v1/things"
 risk = "low"
 idempotency = "idempotent"

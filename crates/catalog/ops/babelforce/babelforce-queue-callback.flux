@@ -2,7 +2,7 @@ op babelforce-queue-callback(queueId: String, body: Any) -> Any
   description "Queue a callback"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op asterisk-ari-bridges-destroy(bridgeId: String) -> Any
   description "Shut down a bridge."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{host}:8089/ari"

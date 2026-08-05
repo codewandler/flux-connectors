@@ -2,7 +2,7 @@ op babelforce-close-conversation(conversationId: String) -> Any
   description "Close a conversation"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

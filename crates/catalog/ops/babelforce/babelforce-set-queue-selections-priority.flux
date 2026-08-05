@@ -2,7 +2,7 @@ op babelforce-set-queue-selections-priority(queueId: String, body: List<Any>) ->
   description "Set selection priorities"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

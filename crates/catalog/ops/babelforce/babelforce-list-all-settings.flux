@@ -2,7 +2,7 @@ op babelforce-list-all-settings -> Any
   description "List all settings"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

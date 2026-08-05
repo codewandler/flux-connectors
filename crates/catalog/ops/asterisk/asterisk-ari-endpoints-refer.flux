@@ -2,7 +2,7 @@ op asterisk-ari-endpoints-refer(to: String, from: String, refer_to: String, to_s
   description "Refer an endpoint or technology URI to some technology URI or endpoint."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

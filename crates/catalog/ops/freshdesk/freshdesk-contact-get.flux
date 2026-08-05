@@ -2,7 +2,7 @@ op freshdesk-contact-get(id: String) -> Any
   description "Get one contact"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{domain}/api/v2"

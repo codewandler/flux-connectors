@@ -39,6 +39,7 @@ base_url = "https://api.acme.example"
 [[operations]]
 id = "acme-thing-get"
 method = "GET"
+direction = "read"
 path = "/v1/things"
 description = "List the things."
 risk = "low"

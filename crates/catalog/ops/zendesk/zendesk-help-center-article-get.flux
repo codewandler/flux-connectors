@@ -2,7 +2,7 @@ op zendesk-help-center-article-get(article_id: Number) -> Any
   description "Get one Help Center article by its numeric id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

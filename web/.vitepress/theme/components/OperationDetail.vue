@@ -115,6 +115,7 @@ const declaration = computed(() => (operation.value ? signature(operation.value)
            this source did not publish, wearing the costume of one it did. -->
       <span v-if="published(operation.method)" class="chip chip--method">{{ operation.method }}</span>
       <code v-if="published(operation.path)" class="chip chip--path">{{ operation.path }}</code>
+      <span class="chip">{{ operation.direction }}</span>
       <span class="chip">risk: {{ operation.risk }}</span>
       <span class="chip">{{ operation.idempotency }}</span>
       <a class="chip chip--link" :href="resolvePath(`/explorer#${provider!.id}`)">

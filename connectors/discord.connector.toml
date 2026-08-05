@@ -12,6 +12,14 @@ module = "discord.flux"
 operations = ["discord-current-user", "discord-guild-list", "discord-guild-get", "discord-guild-channels", "discord-channel-messages", "discord-message-create"]
 verify = "discord-current-user"
 
+[operation_directions]
+discord-channel-messages = "read"
+discord-current-user = "read"
+discord-guild-channels = "read"
+discord-guild-get = "read"
+discord-guild-list = "read"
+discord-message-create = "write"
+
 [operation_semantic_effects]
 discord-channel-messages = []
 discord-current-user = []

@@ -2,7 +2,7 @@ op babelforce-get-settings-for-ui-i18n -> Any
   description "Get i18n settings"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

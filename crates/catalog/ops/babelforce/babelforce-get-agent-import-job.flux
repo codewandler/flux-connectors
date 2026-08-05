@@ -2,7 +2,7 @@ op babelforce-get-agent-import-job(id: String) -> Any
   description "Get an agent-import job"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op babelforce-delete-integration-token(id: String, tokenId: String) -> Any
   description "Delete an integration token"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

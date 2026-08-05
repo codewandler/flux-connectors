@@ -2,7 +2,7 @@ op freshdesk-ticket-get(id: String) -> Any
   description "View one ticket"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{domain}/api/v2"

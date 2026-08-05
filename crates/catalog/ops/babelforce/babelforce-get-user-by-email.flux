@@ -2,7 +2,7 @@ op babelforce-get-user-by-email(email: String) -> Any
   description "Get a user by email"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

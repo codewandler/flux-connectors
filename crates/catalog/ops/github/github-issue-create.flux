@@ -2,7 +2,7 @@ op github-issue-create(owner: String, repo: String, title: String, body: String,
   description "Open a new issue on a repository. The issue is immediately visible to everyone who can see the repository and notifies its subscribers"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.github.com"

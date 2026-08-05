@@ -2,7 +2,7 @@ op babelforce-get-user(id: String) -> Any
   description "Get a user"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

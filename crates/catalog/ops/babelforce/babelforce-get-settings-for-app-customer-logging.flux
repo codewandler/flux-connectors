@@ -2,7 +2,7 @@ op babelforce-get-settings-for-app-customer-logging -> Any
   description "Get customer.logging settings"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op zendesk-incremental-ticket-event-list(start_time: Number) -> Any
   description "Incrementally export ticket audit events at or after a required Unix start time"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

@@ -498,6 +498,8 @@ struct OperationEntry {
     /// single API surface. This is the grouping a consumer wants once a provider is more than one
     /// API (C-49).
     service: String,
+    /// Whether this operation reads or writes vendor state.
+    direction: connector_spec::OperationDirection,
     /// What it does, in one line — the same text a model sees as the tool description.
     description: String,
     /// How much damage it can do. Serialized in flux's own vocabulary (`low`…`destructive`).
@@ -864,6 +866,7 @@ fn operation_entry(
         id: operation.id.clone(),
         provider: connector.id.clone(),
         service: operation.service.clone(),
+        direction: operation.direction,
         description: operation.description.clone(),
         risk: operation.risk,
         idempotency: operation.idempotency,
@@ -1042,6 +1045,7 @@ mod tests {
             id: "acme-thing-list".to_string(),
             service: connector_spec::DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
+            direction: connector_spec::OperationDirection::Read,
             path: "/v2/things".to_string(),
             description: "List things".to_string(),
             risk: Risk::Destructive,

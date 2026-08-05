@@ -26,6 +26,7 @@ description = "The Acme support API."
 [[operations]]
 id = "acme-ticket-show"
 method = "GET"
+direction = "read"
 path = "/v2/tickets/{ticket_id}"
 description = "Fetch one Acme ticket."
 risk = "low"
@@ -40,6 +41,7 @@ schema = { type = "integer" }
 [[operations]]
 id = "acme-ticket-audit"
 method = "GET"
+direction = "read"
 path = "/v2/tickets/{ticket_id}/audits"
 description = "Read one ticket's audit trail."
 risk = "low"

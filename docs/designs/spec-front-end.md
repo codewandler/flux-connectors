@@ -133,13 +133,13 @@ C-235 needs and cannot currently express.
 
 ### 4 · Risk and idempotency by selector, with silence refusing (C-414)
 
-Specs publish neither, so every one of 214 mutating operations needs both stated. Stating them
+Specs publish neither, so every authored write needs both stated. Stating them
 per-operation is 214 blocks; deriving them from the HTTP method is the failure mode this repo has
 already legislated against twice (`Risk` has no `Default`; C-186 made `Conditional` state its
 condition or not build).
 
 The resolution keeps the grain: a selector may state `risk` and `idempotency` for the set it matches,
-and **silence on a mutating method refuses the build** rather than defaulting to `low`. A default that
+and **silence on an authored write refuses the build** rather than defaulting to `low`. A default that
 flatters is worse than no default; a default that must be overridden to *lower* risk is safe. So an
 unstated DELETE does not compile, and a selector saying `risk = "destructive"` over 54 DELETEs is one
 reviewable line instead of 54.
@@ -291,6 +291,6 @@ generator emitting a verbose manifest produces something nobody can review.
 - **Curate babelforce to a few dozen operations and leave the SDK for the rest.** This is the status
   quo (9 of 163) and it is why the SDK exists. Partial coverage means every caller must know which
   half it is in.
-- **Derive `risk` from the HTTP method.** Rejected: 214 unverified claims, each of which a host reads
+- **Derive `risk` or direction from the HTTP method.** Rejected: unverified claims, each of which a host reads
   as a licence. See C-186 for the same argument made about `Conditional`.
 - **Tags as services.** Disproved by measurement — `Manager` covers 309 of 356.

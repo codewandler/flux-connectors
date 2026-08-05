@@ -105,8 +105,8 @@ use crate::{dotted_name, Error};
 /// single `op` declaration a catalogue rendering is, or when the resulting spec is one flux's own
 /// authority checker will not register. The last two cannot happen for a catalogue this repository
 /// generated — `crates/catalog/tests/embedded_operations.rs` is the gate for the parse, and every
-/// generated op declares `["network"]` alone — so they are reported as the corrupt-input cases they
-/// would be rather than unwrapped.
+/// generated op declares one directional effect followed by `network` — so they are reported as
+/// the corrupt-input cases they would be rather than unwrapped.
 pub fn project(operation: &catalog::Operation) -> Result<ToolSpec, Error> {
     let declaration = declaration_of(operation.id, operation.flux)?;
     project_declaration(operation.id, &declaration)
@@ -198,9 +198,9 @@ pub(crate) fn project_declaration(
 
     // The same check `try_register_from` will apply, applied here so the diagnostic names the
     // **catalogue operation** rather than only the tool name a host sees at startup. Unreachable
-    // for a declaration this repository emits — every generated op declares `["network"]` alone —
-    // and it stays that way by refusing rather than by inventing an access kind that would satisfy
-    // flux while claiming a capability the connector does not have.
+    // for a declaration this repository emits — every generated op declares one directional effect
+    // followed by `network` — and it stays that way by refusing rather than by inventing an access
+    // kind that would satisfy flux while claiming a capability the connector does not have.
     flux_runtime::authority_requirements_from_declaration(&spec, &[], &[]).map_err(|error| {
         Error::Unregistrable {
             operation: id.to_owned(),
@@ -298,7 +298,10 @@ mod tests {
         assert_eq!(spec.risk, declaration.meta.risk);
         assert_eq!(spec.idempotency, declaration.meta.idempotency);
         assert_eq!(spec.effects, declaration.meta.effects);
-        assert_eq!(spec.effects, vec![flux_spec::Effect::Network]);
+        assert_eq!(
+            spec.effects,
+            vec![flux_spec::Effect::Write, flux_spec::Effect::Network]
+        );
     }
 
     /// The declared parameters become a real JSON Schema, with their declared types. An empty
@@ -332,14 +335,14 @@ mod tests {
         assert_eq!(spec.group, None);
     }
 
-    /// `access` follows `effects`, and only `effects`. An operation declaring a network effect gets
-    /// network access because flux refuses the spec otherwise — and nothing else, because nothing
-    /// else was declared.
+    /// `access` follows carrier effects, and only carrier effects. Direction is policy metadata, not
+    /// a second resource capability: a read declaring `[Read, Network]` gets network access because
+    /// flux refuses the spec otherwise, and nothing else.
     #[test]
     fn access_carries_the_declared_effects_and_no_more() {
         let spec = project(operation("zendesk-ticket-show")).expect("projects");
 
-        assert_eq!(spec.effects, vec![Effect::Network]);
+        assert_eq!(spec.effects, vec![Effect::Read, Effect::Network]);
         assert_eq!(spec.access, vec![AccessKind::Network]);
     }
 

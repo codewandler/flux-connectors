@@ -2,7 +2,7 @@ op asterisk-ari-asterisk-get-global-var(variable: String) -> Any
   description "Get the value of a global variable."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

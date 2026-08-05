@@ -32,7 +32,7 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{AuthScheme, Connector, HttpMethod, Idempotency, Risk};
+use connector_spec::{AuthScheme, Connector, HttpMethod, Idempotency, OperationDirection, Risk};
 
 #[path = "../../connector-spec/tests/support/shipped_provider.rs"]
 mod shipped_provider;
@@ -370,8 +370,8 @@ fn no_jira_body_field_is_a_rich_text_document() {
 /// Write metadata says what each write changes and who sees it, and no write claims to be
 /// idempotent.
 ///
-/// The emitter already refuses the unsafe direction — a mutating method declaring `risk = "low"`, or
-/// a `POST` declaring itself idempotent. This pins the *positive* claim per operation, which the
+/// The emitter already refuses the unsafe direction — an authored write declaring `risk = "low"` or
+/// `idempotent`. This pins the *positive* claim per operation, which the
 /// emitter cannot check: that the three reads are reads, and that each of the three writes is
 /// recorded `high` because it is visible to a whole project and notifies its watchers.
 #[test]
@@ -379,7 +379,7 @@ fn every_jira_write_declares_what_it_changes_and_never_claims_idempotence() {
     let connector = load();
 
     for operation in &connector.operations {
-        let mutates = matches!(operation.method, HttpMethod::Post);
+        let mutates = operation.direction == OperationDirection::Write;
         if mutates {
             assert_ne!(
                 operation.risk,

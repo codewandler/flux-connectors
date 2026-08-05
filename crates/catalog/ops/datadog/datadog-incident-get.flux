@@ -2,7 +2,7 @@ op datadog-incident-get(incident_id: String) -> Any
   description "Get one incident by id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.datadoghq.com"

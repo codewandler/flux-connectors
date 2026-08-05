@@ -10,6 +10,14 @@ module = "pagerduty.flux"
 operations = ["pagerduty-incident-list", "pagerduty-incident-get", "pagerduty-service-list", "pagerduty-oncall-list", "pagerduty-incident-acknowledge", "pagerduty-incident-resolve"]
 verify = "pagerduty-service-list"
 
+[operation_directions]
+pagerduty-incident-acknowledge = "write"
+pagerduty-incident-get = "read"
+pagerduty-incident-list = "read"
+pagerduty-incident-resolve = "write"
+pagerduty-oncall-list = "read"
+pagerduty-service-list = "read"
+
 [operation_semantic_effects]
 pagerduty-incident-acknowledge = []
 pagerduty-incident-get = []

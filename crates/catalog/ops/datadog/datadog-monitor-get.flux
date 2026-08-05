@@ -2,7 +2,7 @@ op datadog-monitor-get(monitor_id: Number) -> Any
   description "Get one monitor by id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.datadoghq.com"

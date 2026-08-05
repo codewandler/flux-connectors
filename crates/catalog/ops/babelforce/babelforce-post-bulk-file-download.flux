@@ -2,7 +2,7 @@ op babelforce-post-bulk-file-download(body: Any) -> Any
   description "Download files as a ZIP"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

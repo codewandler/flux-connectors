@@ -2,7 +2,7 @@ op asterisk-ari-recordings-get-stored-file(recordingName: String) -> Any
   description "Get the file associated with the stored recording."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

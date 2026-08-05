@@ -11,6 +11,7 @@ base_url = "https://api.acme.test"
 [[operations]]
 id = "acme-action"
 method = "POST"
+direction = "write"
 path = "/action"
 description = "Perform the action."
 risk = "{risk}"

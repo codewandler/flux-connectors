@@ -2,7 +2,7 @@ op babelforce-list-queue-selections(queueId: String, page: Number, max: Number) 
   description "List a queue's selections"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

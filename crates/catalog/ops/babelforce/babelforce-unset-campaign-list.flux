@@ -2,7 +2,7 @@ op babelforce-unset-campaign-list(id: String) -> Any
   description "Remove a campaign's lead-list"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

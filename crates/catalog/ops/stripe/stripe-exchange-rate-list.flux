@@ -2,7 +2,7 @@ op stripe-exchange-rate-list(limit: Number) -> Any
   description "List current Stripe exchange rates without creating a conversion or moving funds"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.stripe.com"

@@ -2,7 +2,7 @@ op stripe-country-spec-list(limit: Number) -> Any
   description "List country-specific requirements, supported currencies and payment capabilities without changing an account"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.stripe.com"

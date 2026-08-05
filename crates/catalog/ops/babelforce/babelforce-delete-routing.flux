@@ -2,7 +2,7 @@ op babelforce-delete-routing(id: String) -> Any
   description "Delete Routing"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

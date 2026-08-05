@@ -6,7 +6,7 @@ op hubspot-contact-get(contact_id: Number) -> Any
   description "Read one contact by record id. Returns only HubSpot's default contact properties — name, email and record timestamps; a custom property needs a `properties` projection this connector cannot express yet. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.hubapi.com"
@@ -18,7 +18,7 @@ op hubspot-contact-create(email: String) -> Any
   description "Create a contact from an email address. HubSpot treats email as the contact's unique identifier and rejects a duplicate with 409. The new record is visible to everyone in the portal and can be enrolled by a workflow, which may send it marketing email. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.hubapi.com"
@@ -32,7 +32,7 @@ op hubspot-contact-update(contact_id: Number, firstname: String, lastname: Strin
   description "Overwrite a contact's first and last name. Both are written on every call — this operation replaces them rather than merging, so re-send the one you are not changing (read it first with hubspot-contact-get). The change is visible to everyone in the portal and can trigger a workflow. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.hubapi.com"
@@ -46,7 +46,7 @@ op hubspot-company-get(company_id: Number) -> Any
   description "Read one company by record id. Returns only HubSpot's default company properties — name, domain and record timestamps. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.hubapi.com"
@@ -58,7 +58,7 @@ op hubspot-deal-get(deal_id: Number) -> Any
   description "Read one deal by record id. Returns only HubSpot's default deal properties — name, amount, stage, pipeline and close date. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.hubapi.com"

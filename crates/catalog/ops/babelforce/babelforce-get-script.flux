@@ -1,7 +1,7 @@
 op babelforce-get-script(codeId: String, type: String, response_2: String) -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

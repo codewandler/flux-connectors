@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Connector operation direction is now an explicit reviewed safety fact** (C-516). Every one of
+  the 829 published operations states closed `read` or `write` direction independently of its HTTP
+  method. Generated Flux, manifests, embedded/public catalogues, intents and staging carry that
+  fact unchanged; spec-backed identities fail closed on missing, orphaned or conflicting review,
+  and Flux's canonical consequence predicate remains the sole admission authority for parallel
+  gather work.
+
 ## [0.20.0] — 2026-08-04
 
 ### Added

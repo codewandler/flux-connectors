@@ -92,12 +92,10 @@
 # Webflow publishes to every connected domain, which is the more complete of the two behaviours, not a
 # smaller one.
 #
-# `POST` is refused `idempotency = "idempotent"` by `check_write_metadata`
-# (`crates/connector-flux/src/op.rs`) regardless of vendor behaviour — the same method-shaped
-# refusal `providers/cloudflare.toml`'s cache purge and `providers/miro.toml`'s sticky-note update
-# record (C-186). Publishing the same staged state twice is, in effect, idempotent; the declaration
-# below is `non_idempotent` because the emitter allows nothing else on a `POST`, and that is the safe
-# direction of the error, not a claim this file is walking back.
+# This authored write is refused `idempotency = "idempotent"` by `check_write_metadata` because Flux
+# may serve an idempotent result without executing. Publishing the same staged state twice appears
+# replay-safe, but this operation remains conservatively `non_idempotent` until a vendor condition is
+# reviewed and stated for `conditional`.
 #
 # ---------------------------------------------------------------------------------------------
 # WHAT IS DELIBERATELY EXCLUDED, AND WHY
@@ -218,6 +216,7 @@ tags = ["cms"]
 [[operations]]
 id = "webflow-site-list"
 method = "GET"
+direction = "read"
 path = "/sites"
 description = "List the sites this token can see, with each site's id, display name, hosted subdomain and last-published time. The `id` returned here is what every other operation in this connector needs as `site_id`"
 risk = "low"
@@ -233,6 +232,7 @@ properties = { sites = { type = "array", items = { type = "object", required = [
 [[operations]]
 id = "webflow-collection-list"
 method = "GET"
+direction = "read"
 path = "/sites/{site_id}/collections"
 description = "List the CMS collections defined on a site, with each collection's id, display name and slug. Does not include a collection's fields — call webflow-collection-get for that. Returns Webflow's first page only; this connector declares no offset or limit parameter"
 risk = "low"
@@ -254,6 +254,7 @@ properties = { collections = { type = "array", items = { type = "object", requir
 [[operations]]
 id = "webflow-collection-get"
 method = "GET"
+direction = "read"
 path = "/collections/{collection_id}"
 # THE OPERATION THAT ANSWERS THE ARCHETYPE'S HAZARD. See the header comment: this is the runtime
 # discovery mechanism this connector ships in place of typing `fieldData`.
@@ -277,6 +278,7 @@ properties = { id = { type = "string" }, displayName = { type = "string" }, sing
 [[operations]]
 id = "webflow-collection-item-list"
 method = "GET"
+direction = "read"
 path = "/collections/{collection_id}/items"
 # THE FIRST HALF OF THE ARCHETYPE'S ANSWER ON THE READ SIDE. `fieldData` is declared as an open
 # `object` deliberately — see the header comment for why neither Notion's nor Miro's mechanism
@@ -301,6 +303,7 @@ properties = { items = { type = "array", items = { type = "object", required = [
 [[operations]]
 id = "webflow-collection-item-get"
 method = "GET"
+direction = "read"
 path = "/collections/{collection_id}/items/{item_id}"
 description = "Get one item from a collection. Its fieldData is a flat object keyed by that collection's own field slugs — call webflow-collection-get to discover them; this connector cannot type fieldData beyond that, because it is defined per-tenant, per-collection"
 risk = "low"
@@ -331,6 +334,7 @@ properties = { id = { type = "string" }, cmsLocaleId = { type = "string" }, last
 [[operations]]
 id = "webflow-site-publish"
 method = "POST"
+direction = "write"
 path = "/sites/{site_id}/publish"
 description = "Publish a site's currently staged changes to its live, public domains — every connected custom domain and the Webflow-hosted subdomain. This has immediate public effect: whatever is staged goes live for every visitor as soon as this call returns, with no separate confirmation step. Takes no body — Webflow's optional custom-domain selector is itself an array this connector cannot express (C-185), so this always publishes to every connected domain rather than a caller-chosen subset"
 # `high`, not `medium`: an externally-visible change, live for everyone, the instant the call
@@ -338,11 +342,8 @@ description = "Publish a site's currently staged changes to its live, public dom
 # `providers/launchdarkly.toml` gives its flag toggle, for the identical reason. Not `destructive`:
 # nothing is deleted, and publishing again supersedes it.
 risk = "high"
-# `POST` is refused `idempotency = "idempotent"` by `check_write_metadata` regardless of vendor
-# behaviour (C-186) — publishing the same staged state twice is, in effect, idempotent, but the
-# emitter allows nothing else on a `POST`. `non_idempotent` is the honest declaration this compiler
-# permits, not a claim this file is walking back; see `providers/cloudflare.toml`'s cache purge and
-# `providers/miro.toml`'s sticky-note update for the identical trade.
+# The authored write is refused `idempotent`; `non_idempotent` stays conservative until a reviewed
+# vendor condition can support `conditional`.
 idempotency = "non_idempotent"
 
 [[operations.params.path]]

@@ -27,7 +27,9 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{Approval, AuthScheme, Connector, Format, HttpMethod, Idempotency, Risk};
+use connector_spec::{
+    Approval, AuthScheme, Connector, Format, Idempotency, OperationDirection, Risk,
+};
 
 #[path = "../../connector-spec/tests/support/shipped_provider.rs"]
 mod shipped_provider;
@@ -366,19 +368,17 @@ fn the_config_surface_asks_for_the_origin_and_token_and_nothing_else() {
     );
 }
 
-/// Every mutating method in the curated set is a `POST`, and only `gitlab-issue-create` mutates —
-/// confirms the `OPERATIONS` table's risk/idempotency column against the actual HTTP verbs rather
-/// than trusting the table to describe itself correctly.
+/// Only `gitlab-issue-create` is authored as a write, independently of transport method.
 #[test]
 fn only_the_create_operation_mutates() {
     let connector = load();
     for operation in &connector.operations {
-        let mutates = !matches!(operation.method, HttpMethod::Get | HttpMethod::Head);
+        let mutates = operation.direction == OperationDirection::Write;
         let should_mutate = operation.id == "gitlab-issue-create";
         assert_eq!(
             mutates, should_mutate,
-            "operation `{}` uses {:?}, which disagrees with whether it should mutate",
-            operation.id, operation.method
+            "operation `{}` carries {:?}, which disagrees with whether it should mutate",
+            operation.id, operation.direction
         );
     }
 }

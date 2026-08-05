@@ -81,6 +81,7 @@ description = "Algolia Admin/Search API key, for the probe fixture only"
 [[operations]]
 id = "algolia-index-list"
 method = "GET"
+direction = "read"
 path = "/1/indexes"
 risk = "low"
 idempotency = "idempotent"

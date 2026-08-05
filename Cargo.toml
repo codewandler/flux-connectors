@@ -126,6 +126,7 @@ flux-lang = { package = "codewandler-flux-lang", version = "0.54" }
 # the frozen wire vocabulary a guest plugin compiles against, so `SPEC_LINE` is recorded beside
 # `ENGINE_LINE` rather than derived from it.
 flux-core = { package = "codewandler-flux-core", version = "0.54" }
+flux-flow = { package = "codewandler-flux-flow", version = "0.54" }
 flux-runtime = { package = "codewandler-flux-runtime", version = "0.54" }
 flux-spec = { package = "codewandler-flux-spec", version = "1.3" }
 # **The transport, and the only concrete `Egress` there is** (C-202). `flux-web` owns

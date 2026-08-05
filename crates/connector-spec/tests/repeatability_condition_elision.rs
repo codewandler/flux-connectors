@@ -30,6 +30,7 @@ const A_READ: &str = r#"
 [[operations]]
 id = "acme-thing-get"
 method = "GET"
+direction = "read"
 path = "/v1/things"
 description = "List things."
 risk = "low"
@@ -59,6 +60,7 @@ fn an_operation_stating_a_condition_does_carry_it_into_the_hash_domain() {
 [[operations]]
 id = "acme-cache-purge"
 method = "POST"
+direction = "write"
 path = "/cache/purge"
 description = "Empty the cache."
 risk = "high"

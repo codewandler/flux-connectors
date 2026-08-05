@@ -2,7 +2,7 @@ op babelforce-list-available-agent-statuses -> Any
   description "List available agent statuses"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

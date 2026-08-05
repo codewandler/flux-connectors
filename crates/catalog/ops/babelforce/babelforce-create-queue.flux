@@ -2,7 +2,7 @@ op babelforce-create-queue(body: Any) -> Any
   description "Create a queue"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

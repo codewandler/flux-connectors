@@ -2,7 +2,7 @@ op github-pull-get(owner: String, repo: String, pull_number: Number) -> Any
   description "Get one pull request by number, with its merge state, head and base refs and review counts"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.github.com"

@@ -2,7 +2,7 @@ op babelforce-integration-api-proxy-post(integrationId: String, uri: String, bod
   description "Proxy a POST to the provider API"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

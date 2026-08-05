@@ -6,7 +6,7 @@ op openai-models-list -> Any
   description "List the models available to this API key, with their ids and owners"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.openai.com"
@@ -18,7 +18,7 @@ op openai-model-get(model: String) -> Any
   description "Retrieve one model by id, with its ownership and permissions"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.openai.com"
@@ -30,7 +30,7 @@ op openai-chat-completion(model: String, messages: List<Any>, max_completion_tok
   description "Create a chat completion. Billed per input and output token, so the caller must state a token budget via max_completion_tokens"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.openai.com"
@@ -44,7 +44,7 @@ op openai-embeddings-create(model: String, input: Any) -> Any
   description "Create embedding vectors for one or more input texts. Billed per input token"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.openai.com"
@@ -58,7 +58,7 @@ op openai-response-get(response_id: String) -> Any
   description "Retrieve one stored model response by id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.openai.com"
@@ -70,7 +70,7 @@ op openai-response-input-item-list(response_id: String, limit: Number) -> Any
   description "List input items retained for one stored response with a bounded integer limit"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.openai.com"
@@ -82,7 +82,7 @@ op openai-file-list(limit: Number) -> Any
   description "List files available to this API key with a bounded integer limit"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.openai.com"
@@ -94,7 +94,7 @@ op openai-batch-list(limit: Number) -> Any
   description "List batch jobs available to this API key with a bounded integer limit"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.openai.com"

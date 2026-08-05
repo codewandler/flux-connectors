@@ -2,7 +2,7 @@ op asterisk-ari-asterisk-list-log-channels -> Any
   description "Gets Asterisk log channel information."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

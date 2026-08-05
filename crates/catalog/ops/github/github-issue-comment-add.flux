@@ -2,7 +2,7 @@ op github-issue-comment-add(owner: String, repo: String, issue_number: Number, b
   description "Add a comment to an issue or pull request. The comment is public to everyone who can see the repository and notifies its participants; GitHub has no private or internal comment here"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.github.com"

@@ -6,7 +6,7 @@ op freshdesk-test(per_page: Number) -> Any
   description "Verify credentials with a bounded contact read"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{domain}/api/v2"
@@ -18,7 +18,7 @@ op freshdesk-ticket-list(req_id: String, req_email: String, company_id: String, 
   description "List and filter tickets"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{domain}/api/v2"
@@ -30,7 +30,7 @@ op freshdesk-ticket-get(id: String) -> Any
   description "View one ticket"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{domain}/api/v2"
@@ -42,7 +42,7 @@ op freshdesk-ticket-create(phone: String, name: String, requester_id: Number, su
   description "Create a ticket. The requester must be identified either by requester_id, or by phone together with name — Freshdesk states this only in prose and its required flags do not capture it"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{domain}/api/v2"
@@ -55,8 +55,8 @@ op freshdesk-ticket-create(phone: String, name: String, requester_id: Number, su
 op freshdesk-ticket-update(id: Number, subject: String, description: String, status: Number, priority: Number, requester_id: Number, responder_id: Number, name: String, phone: String, email: String, type: String, email_config_id: Number, group_id: Number, product_id: Number, tags: List<String>, custom_fields: Any) -> Any
   description "Update a ticket's fields"
   risk "medium"
-  idempotency "idempotent"
-  effects ["network"]
+  idempotency "non_idempotent"
+  effects ["write", "network"]
   expose true
 
   base = "https://{domain}/api/v2"
@@ -70,7 +70,7 @@ op freshdesk-ticket-note-add(id: Number, body: String, private: Bool, incoming: 
   description "Add a note to a ticket; the note is private unless explicitly made public"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{domain}/api/v2"
@@ -84,7 +84,7 @@ op freshdesk-contact-list(phone: String, email: String, mobile: String, company_
   description "List and filter contacts, e.g. to resolve a caller before filing a ticket"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{domain}/api/v2"
@@ -96,7 +96,7 @@ op freshdesk-contact-get(id: String) -> Any
   description "Get one contact"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{domain}/api/v2"
@@ -108,7 +108,7 @@ op freshdesk-contact-create(name: String, email: String, phone: String) -> Any
   description "Create a contact"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{domain}/api/v2"

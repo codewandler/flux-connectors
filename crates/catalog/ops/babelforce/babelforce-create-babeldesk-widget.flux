@@ -2,7 +2,7 @@ op babelforce-create-babeldesk-widget(body: Any) -> Any
   description "Create BabeldeskWidget"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

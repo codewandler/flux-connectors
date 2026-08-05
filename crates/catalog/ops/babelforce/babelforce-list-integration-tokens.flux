@@ -2,7 +2,7 @@ op babelforce-list-integration-tokens(id: String) -> Any
   description "List integration tokens"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

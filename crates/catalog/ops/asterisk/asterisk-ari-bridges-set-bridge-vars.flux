@@ -2,7 +2,7 @@ op asterisk-ari-bridges-set-bridge-vars(bridgeId: String, variables: Any) -> Any
   description "Set the values of multiple bridge variables or functions."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

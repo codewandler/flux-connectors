@@ -7,7 +7,7 @@ op microsoft_graph-calendar-event-get(event_id: String) -> Any
   description "Get one calendar event: its subject, start and end, organizer, attendee list and cancellation state. Returned in UTC unless a `Prefer: outlook.timezone` header is sent, which this connector does not do. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://graph.microsoft.com"
@@ -19,7 +19,7 @@ op microsoft_graph-calendar-event-create(subject: String, start_date_time: Strin
   description "Create a single-instance event on the signed-in user's default calendar. No attendees can be declared yet (C-56), so nobody is invited and nobody is notified — the event appears only on the calendar it was created on. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://graph.microsoft.com"
@@ -33,7 +33,7 @@ op microsoft_graph-calendar-calendar-get -> Any
   description "Get the signed-in user's own default calendar: its name, colour and sharing/editing permissions. This is the calendar, not its events — use microsoft_graph-calendar-event-get for one of those. Takes no argument: `/me/calendar` always resolves to the token's own default calendar. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://graph.microsoft.com"
@@ -45,7 +45,7 @@ op microsoft_graph-calendar-category-list(_top: Number, _skip: Number) -> Any
   description "List the signed-in user's Outlook master categories with the Microsoft Graph MailboxSettings.Read permission"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://graph.microsoft.com"
@@ -57,7 +57,7 @@ op microsoft_graph-calendar-time-zone-list(_top: Number, _skip: Number) -> Any
   description "List the mailbox server's supported time zones with the Microsoft Graph MailboxSettings.Read permission"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://graph.microsoft.com"
@@ -69,7 +69,7 @@ op microsoft_graph-calendar-language-list(_top: Number, _skip: Number) -> Any
   description "List the mailbox server's supported languages and locales with the Microsoft Graph MailboxSettings.Read permission"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://graph.microsoft.com"

@@ -6,7 +6,7 @@
 op babelforce-change-agent-lock(lockState: String) -> Any
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -17,7 +17,7 @@ op babelforce-change-agent-lock(lockState: String) -> Any
 op babelforce-agent-action-on-task(taskId: String, agentAction: String, reason: String) -> Any
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -30,7 +30,7 @@ op babelforce-agent-action-on-task(taskId: String, agentAction: String, reason: 
 op babelforce-tasks(filter: String, page: Number, page_size: Number) -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -41,7 +41,7 @@ op babelforce-tasks(filter: String, page: Number, page_size: Number) -> Any
 op babelforce-submit-task(actions: Any, body: Any, id: String, queue_id: String, scheduled_at: String, selection_settings: Any, task_completion: Any, type: String) -> Any
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -54,7 +54,7 @@ op babelforce-submit-task(actions: Any, body: Any, id: String, queue_id: String,
 op babelforce-testing(actions: Any, input: Any) -> Any
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -68,7 +68,7 @@ op babelforce-list-secret-prefixes -> Any
   description "Retrieves a list of secret prefixes"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -80,7 +80,7 @@ op babelforce-list-secret-keys(prefix: String) -> Any
   description "Retrieves a list of secret keys"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -92,7 +92,7 @@ op babelforce-create-secrets(prefix: String, body: Any) -> Any
   description "Creates a map of secrets. Only supported values are strings"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -106,7 +106,7 @@ op babelforce-patch-secrets(prefix: String, body: Any) -> Any
   description "Appends values to an existing secret prefix. Only supported values are strings"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -120,7 +120,7 @@ op babelforce-delete-secret-keys(prefix: String, body: List<String>) -> Any
   description "Delete a list of secrets"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -133,7 +133,7 @@ op babelforce-delete-secret-keys(prefix: String, body: List<String>) -> Any
 op babelforce-read-selection-configuration -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -144,7 +144,7 @@ op babelforce-read-selection-configuration -> Any
 op babelforce-create-selection-configuration(accept_timeout: Number, complete_timeout: Number, expire_in: Number, reschedule_delay: Number, selection_engine: String) -> Any
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -157,7 +157,7 @@ op babelforce-create-selection-configuration(accept_timeout: Number, complete_ti
 op babelforce-update-selection-configuration(accept_timeout: Number, complete_timeout: Number, expire_in: Number, reschedule_delay: Number, selection_engine: String) -> Any
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -170,7 +170,7 @@ op babelforce-update-selection-configuration(accept_timeout: Number, complete_ti
 op babelforce-delete-selection-configuration -> Any
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -181,7 +181,7 @@ op babelforce-delete-selection-configuration -> Any
 op babelforce-list(filter: String, type: String, details: String, page_size: Number, page: Number, context: Bool) -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -192,7 +192,7 @@ op babelforce-list(filter: String, type: String, details: String, page_size: Num
 op babelforce-agent-interaction-duration(agentId: String) -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -203,7 +203,7 @@ op babelforce-agent-interaction-duration(agentId: String) -> Any
 op babelforce-agent-interactions(agentId: String) -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -214,7 +214,7 @@ op babelforce-agent-interactions(agentId: String) -> Any
 op babelforce-task-journal(taskId: String) -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -225,7 +225,7 @@ op babelforce-task-journal(taskId: String) -> Any
 op babelforce-list-scripts(type: String, filter: String, page: Number, page_size: Number) -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -236,7 +236,7 @@ op babelforce-list-scripts(type: String, filter: String, page: Number, page_size
 op babelforce-submit-script(type: String, file: String, metadata: Any) -> Any
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -249,7 +249,7 @@ op babelforce-submit-script(type: String, file: String, metadata: Any) -> Any
 op babelforce-get-script(codeId: String, type: String, response_2: String) -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -260,7 +260,7 @@ op babelforce-get-script(codeId: String, type: String, response_2: String) -> An
 op babelforce-update-script(codeId: String, type: String, file: String, metadata: Any) -> Any
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -273,7 +273,7 @@ op babelforce-update-script(codeId: String, type: String, file: String, metadata
 op babelforce-delete-script(codeId: String, type: String) -> Any
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -284,7 +284,7 @@ op babelforce-delete-script(codeId: String, type: String) -> Any
 op babelforce-submit-task-template(template: String, style: String, body: Any) -> Any
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -297,7 +297,7 @@ op babelforce-submit-task-template(template: String, style: String, body: Any) -
 op babelforce-task-usage(type: String, start: String, end: String, rate: String) -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -308,7 +308,7 @@ op babelforce-task-usage(type: String, start: String, end: String, rate: String)
 op babelforce-task-usage-types(start: String, end: String) -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -319,7 +319,7 @@ op babelforce-task-usage-types(start: String, end: String) -> Any
 op babelforce-task(taskId: String) -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -330,7 +330,7 @@ op babelforce-task(taskId: String) -> Any
 op babelforce-update-task(taskId: String, body: Any) -> Any
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -344,7 +344,7 @@ op babelforce-manager-interrupt-on-task(taskId: String, interruptTo: String, rea
   description "Interrupts execution of a task by requesting that the task is moved to an end state."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -358,7 +358,7 @@ op babelforce-change-task-state(taskId: String, taskState: String) -> Any
   description "this endpoint is deprecated, use /api/v3/tasks/{taskId}/interrupt/{interruptTo} instead."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

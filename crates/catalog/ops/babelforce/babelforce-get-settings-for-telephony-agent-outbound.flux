@@ -2,7 +2,7 @@ op babelforce-get-settings-for-telephony-agent-outbound -> Any
   description "Get agent.outbound settings"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op babelforce-write-log(category: String, level: String, message: String, seq: N
   description "Write a log entry"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

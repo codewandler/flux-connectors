@@ -2,7 +2,7 @@ op asterisk-ari-channels-rtpstatistics(channelId: String) -> Any
   description "RTP stats on a channel."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

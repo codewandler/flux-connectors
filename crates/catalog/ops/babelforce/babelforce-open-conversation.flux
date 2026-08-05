@@ -2,7 +2,7 @@ op babelforce-open-conversation(conversationId: String) -> Any
   description "Reopen a conversation"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

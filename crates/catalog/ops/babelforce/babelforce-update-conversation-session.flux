@@ -2,7 +2,7 @@ op babelforce-update-conversation-session(conversationId: String, body: Any) -> 
   description "Set a conversation's session variables"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

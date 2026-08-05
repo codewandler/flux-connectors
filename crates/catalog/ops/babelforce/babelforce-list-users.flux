@@ -2,7 +2,7 @@ op babelforce-list-users(email: String) -> Any
   description "List users"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

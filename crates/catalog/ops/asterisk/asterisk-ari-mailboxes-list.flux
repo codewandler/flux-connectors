@@ -2,7 +2,7 @@ op asterisk-ari-mailboxes-list -> Any
   description "List all mailboxes."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{host}:8089/ari"

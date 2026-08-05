@@ -2,7 +2,7 @@ op babelforce-list-outbound-leads(page: Number, max: Number, status: String, lis
   description "List outbound leads"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

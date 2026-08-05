@@ -2,7 +2,7 @@ op mailchimp-audience-member-get(list_id: String, subscriber_hash: String) -> An
   description "Get one contact in an audience, including its subscription status and opt-in record. The contact is addressed by a hash of its own address, not by the address — see `subscriber_hash`. Returns personal data"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{dc}.api.mailchimp.com/3.0"

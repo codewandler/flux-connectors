@@ -22,6 +22,7 @@ description = "fixture"
 [[operations]]
 id = "twilio-recording-get"
 method = "GET"
+direction = "read"
 path = "/Accounts/{AccountSid}/Recordings/{Sid}.json"
 description = "fixture"
 risk = "low"

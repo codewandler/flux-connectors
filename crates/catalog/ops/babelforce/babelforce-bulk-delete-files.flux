@@ -2,7 +2,7 @@ op babelforce-bulk-delete-files(body: Any) -> Any
   description "Bulk-delete files"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op asterisk-ari-channels-progress(channelId: String) -> Any
   description "Indicate progress on a channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

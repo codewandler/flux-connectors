@@ -2,7 +2,7 @@ op microsoft_graph-calendar-time-zone-list(_top: Number, _skip: Number) -> Any
   description "List the mailbox server's supported time zones with the Microsoft Graph MailboxSettings.Read permission"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://graph.microsoft.com"

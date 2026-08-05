@@ -2,7 +2,7 @@ op freshdesk-ticket-create(phone: String, name: String, requester_id: Number, su
   description "Create a ticket. The requester must be identified either by requester_id, or by phone together with name — Freshdesk states this only in prose and its required flags do not capture it"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{domain}/api/v2"

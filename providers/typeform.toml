@@ -174,6 +174,7 @@ tags = ["forms"]
 [[operations]]
 id = "typeform-user-me"
 method = "GET"
+direction = "read"
 path = "/me"
 description = "Get the Typeform account this access token authenticates as: its account id, display alias, own account email and interface language. Confirms the token resolves. Takes no parameters"
 risk = "low"
@@ -199,6 +200,7 @@ code_pointer = "/code"
 [[operations]]
 id = "typeform-form-list"
 method = "GET"
+direction = "read"
 path = "/forms"
 description = "List the forms in the authenticated account, most recently updated forms sorting available. Returns each form's id, title and public/private status but not its questions — use typeform-form-get for a form's fields"
 risk = "low"
@@ -242,6 +244,7 @@ code_pointer = "/code"
 [[operations]]
 id = "typeform-form-get"
 method = "GET"
+direction = "read"
 path = "/forms/{form_id}"
 description = "Get one form's own definition: its title, language, rendering type and questions (fields), plus its welcome and thank-you screens. Does not return any response data — use typeform-response-list for that"
 risk = "low"
@@ -271,6 +274,7 @@ code_pointer = "/code"
 [[operations]]
 id = "typeform-response-list"
 method = "GET"
+direction = "read"
 path = "/forms/{form_id}/responses"
 description = "List one form's responses, newest first by default. Paginate with `before`/`after`, each naming the `token` of a response already retrieved, to page toward older or newer responses respectively; `page_size` alone returns only the first page. Each response's `answers` holds whatever that respondent typed or selected — this connector never inspects or filters on answer content"
 risk = "low"
@@ -351,13 +355,14 @@ code_pointer = "/code"
 [[operations]]
 id = "typeform-response-delete"
 method = "DELETE"
+direction = "write"
 path = "/forms/{form_id}/responses"
 description = "Permanently delete one or more of a form's responses by their own token. There is no undelete: once deleted, a response's answers are gone. Deletion is asynchronous — a successful call confirms the request was registered, not that the responses are already gone"
 # Irreversible and permanent, with no vendor-side recovery path. This is exactly the "deletes or
 # otherwise irreversible" tier (`crates/connector-spec/src/ir.rs`'s own doc comment on `Risk::Destructive`).
 risk = "destructive"
-# `DELETE` is an idempotent method under RFC 9110 §9.2.2, and `check_write_metadata` would accept
-# `idempotent` here, but Typeform documents no guarantee about repeating a delete once a named token
+# Although DELETE is idempotent in RFC transport semantics, `check_write_metadata` refuses
+# `idempotent` on this authored write. Typeform also documents no guarantee after a named token
 # is already gone, and deletion is itself asynchronous — a retry issued while the first request is
 # still being processed is not verifiably a no-op. `non_idempotent` is the honest declaration, the
 # same call `providers/airtable.toml`'s `airtable-record-delete` and `providers/zoom.toml`'s

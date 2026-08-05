@@ -2,7 +2,7 @@ op asterisk-ari-mailboxes-update(mailboxName: String, oldMessages: Number, newMe
   description "Change the state of a mailbox. (Note - implicitly creates the mailbox)."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

@@ -2,7 +2,7 @@ op babelforce-delete-dashboard(id: String) -> Any
   description "Delete a dashboard"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op zendesk-ticket-recent-list -> Any
   description "List the account's most recently created or updated tickets"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

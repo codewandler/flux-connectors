@@ -2,7 +2,7 @@ op babelforce-get-settings-for-app-integrations -> Any
   description "Get integrations settings"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

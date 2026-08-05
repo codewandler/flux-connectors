@@ -2,7 +2,7 @@ op babelforce-get-server-time -> Any
   description "Get the current server time and default timezone"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op freshdesk-ticket-list(req_id: String, req_email: String, company_id: String, 
   description "List and filter tickets"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{domain}/api/v2"

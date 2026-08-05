@@ -10,6 +10,12 @@ module = "datadog.flux"
 operations = ["datadog-monitor-list", "datadog-monitor-get", "datadog-incident-list", "datadog-incident-get"]
 verify = "datadog-monitor-list"
 
+[operation_directions]
+datadog-incident-get = "read"
+datadog-incident-list = "read"
+datadog-monitor-get = "read"
+datadog-monitor-list = "read"
+
 [operation_semantic_effects]
 datadog-incident-get = []
 datadog-incident-list = []

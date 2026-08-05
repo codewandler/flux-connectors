@@ -1,7 +1,7 @@
 op babelforce-create-selection-configuration(accept_timeout: Number, complete_timeout: Number, expire_in: Number, reschedule_delay: Number, selection_engine: String) -> Any
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

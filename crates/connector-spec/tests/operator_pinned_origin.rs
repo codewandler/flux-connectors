@@ -14,6 +14,7 @@ base_url = "{{origin}}/api/v4"
 [[operations]]
 id = "acme-ping"
 method = "GET"
+direction = "read"
 path = "/ping"
 risk = "low"
 idempotency = "idempotent"

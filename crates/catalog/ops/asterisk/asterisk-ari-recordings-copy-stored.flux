@@ -2,7 +2,7 @@ op asterisk-ari-recordings-copy-stored(recordingName: String, destinationRecordi
   description "Copy a stored recording."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

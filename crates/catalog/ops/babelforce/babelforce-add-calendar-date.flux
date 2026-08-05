@@ -2,7 +2,7 @@ op babelforce-add-calendar-date(id: String, body: Any) -> Any
   description "Add a date to a calendar"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

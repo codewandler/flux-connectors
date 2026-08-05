@@ -2,7 +2,7 @@ op babelforce-bulk-agent-action(bulkAction: String, body: Any) -> Any
   description "Bulk enable or disable agents"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

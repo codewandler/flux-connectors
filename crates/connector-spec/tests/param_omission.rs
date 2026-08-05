@@ -90,6 +90,7 @@ fn query(connector: &Connector, id: &str) -> Vec<String> {
 const SELECT_CALL_LIST: &str = "
 [[patch.operations]]
 select = \"listReportingCalls\"
+direction = \"read\"
 rename = \"babelforce-call-list\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -149,6 +150,7 @@ fn the_curated_argument_list_comes_back_when_the_patch_names_what_to_drop() {
         "
 [[patch.operations]]
 select = \"listReportingCalls\"
+direction = \"read\"
 rename = \"babelforce-call-list\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -179,6 +181,7 @@ fn omitting_a_parameter_changes_only_the_parameters() {
         "
 [[patch.operations]]
 select = \"listReportingCalls\"
+direction = \"read\"
 rename = \"babelforce-call-list\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -210,6 +213,7 @@ fn omitting_a_required_parameter_is_refused() {
         "
 [[patch.operations]]
 select = \"exportAgents\"
+direction = \"read\"
 rename = \"babelforce-agent-export\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -229,6 +233,7 @@ fn omitting_a_path_parameter_is_refused() {
         "
 [[patch.operations]]
 select = \"executeAction\"
+direction = \"write\"
 rename = \"babelforce-action-execute\"
 risk = \"high\"
 idempotency = \"non_idempotent\"
@@ -249,6 +254,7 @@ fn omitting_a_parameter_the_document_does_not_declare_is_refused() {
         "
 [[patch.operations]]
 select = \"listReportingCalls\"
+direction = \"read\"
 rename = \"babelforce-call-list\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -268,6 +274,7 @@ fn omitting_a_parameter_from_the_wrong_position_is_refused() {
         "
 [[patch.operations]]
 select = \"listReportingCalls\"
+direction = \"read\"
 rename = \"babelforce-call-list\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -292,6 +299,7 @@ fn a_correction_is_applied_before_the_omission_that_depends_on_it() {
         "
 [[patch.operations]]
 select = \"exportAgents\"
+direction = \"read\"
 rename = \"babelforce-agent-export\"
 risk = \"low\"
 idempotency = \"idempotent\"

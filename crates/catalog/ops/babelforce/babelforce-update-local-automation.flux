@@ -2,7 +2,7 @@ op babelforce-update-local-automation(applicationId: String, id: String, body: A
   description "Update an application action"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

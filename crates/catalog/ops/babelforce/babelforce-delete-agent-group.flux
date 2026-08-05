@@ -2,7 +2,7 @@ op babelforce-delete-agent-group(id: String) -> Any
   description "Delete an agent group"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

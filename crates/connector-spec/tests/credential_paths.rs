@@ -575,6 +575,7 @@ description = "The token"
 [[operations]]
 id = "acme-ping"
 method = "GET"
+direction = "read"
 path = "/ping"
 description = "Ping"
 risk = "low"

@@ -2,7 +2,7 @@ op babelforce-update-settings-for-telephony-agent-wrapup(body: Any) -> Any
   description "Update agent.wrapup settings"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

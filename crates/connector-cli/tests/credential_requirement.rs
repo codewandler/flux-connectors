@@ -44,6 +44,7 @@ env = ["ACME_API_TOKEN"]
 [[operations]]
 id = "acme-ping"
 method = "GET"
+direction = "read"
 path = "/v2/ping"
 description = "Check that the Acme API is reachable."
 risk = "low"

@@ -251,6 +251,7 @@ changes with its value would force every consumer to write a discriminated union
 | `provider` | string | The owning `Provider.id`. |
 | `service` | string | The owning `Service.name` — exactly one, `default` for a single-surface provider. This is the grouping a consumer wants once a provider is more than one API. |
 | `description` | string | The same text a model sees as the tool description. |
+| `direction` | string | Connector-authored vendor-state direction: `read` \| `write`. Never inferred from `method`. |
 | `risk` | string | `low` \| `medium` \| `high` \| `destructive` — flux's own vocabulary. |
 | `idempotency` | string | `idempotent` \| `non_idempotent` \| `conditional`. |
 | `semantic_effects` | array\<string\> | Flux policy meaning (`money`, `delete`, `send_external`, …), distinct from host-resource effects. Always present; empty means none declared. |

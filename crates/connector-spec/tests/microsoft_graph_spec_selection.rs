@@ -20,35 +20,35 @@ const DOCUMENTS: [(&str, &str); 2] = [
 const EXISTING_FLUX: [(&str, &str); 8] = [
     (
         "microsoft_graph-calendar-calendar-get.flux",
-        "412213d36d8e0f5dee58e59c0aaa4c41d9c9db0e15f7030271444080f0f65285",
+        "27ab8552d714d155901ec6c4ca9837c778d2b1a0e3fe7a7d89904d775346bde3",
     ),
     (
         "microsoft_graph-calendar-event-create.flux",
-        "8eb5af5bd1c98df7023fd6cd65cfde4a8500e4260c97dc868c77fdd74116f56c",
+        "dbfda6839794f9f32214570fe65833f72dc6bb4677b0997fea16a5f1c2ca23fd",
     ),
     (
         "microsoft_graph-calendar-event-get.flux",
-        "4c9b9e030a7ca1c1e221a420a378f66989da4ed0796e9c59640a65371ba7838f",
+        "1470e3c875807b4a93b2d2dda3ed6882c12767e5c557ffd9c5f6ae587671004d",
     ),
     (
         "microsoft_graph-files-item-get.flux",
-        "60bf6766f88e44762c82ded7867a482338a3bd6507de3ad04428b1f7e6b526d8",
+        "1127af2657e70b8cc337ef01d7d1d28ee71c55eab6a602ae63fe272e787fd386",
     ),
     (
         "microsoft_graph-files-item-update.flux",
-        "0373a662f297d0ef379f020df88471ba02a4d7d0f667724f53270b4c8c78f245",
+        "9e28c9f340e11a70172ba89b83a1bdcc1b3e783ba0c7bd3a0c495e7aff9cb1ba",
     ),
     (
         "microsoft_graph-mail-folder-list.flux",
-        "e42ea239a7c0d085512e0c027aa80f81aacd452a5f286854f40ba8d3d90216d7",
+        "a569f15b8cda8406e0d85c8bad816c39334a0a0b307f388fec7a756c1082fd9a",
     ),
     (
         "microsoft_graph-mail-message-get.flux",
-        "b010a7d1c9eddf59b961ec28467475681965b8b5c41e2f561e9035c05cc7dc3e",
+        "521ea27022e750b785e1acd9772fc9be1d228e99918e3b9d756f5c02b760764c",
     ),
     (
         "microsoft_graph-mail-message-reply.flux",
-        "a604176356b9e320748d299e92261e81ae36f7e24f7380da0be0b1ecc2a0ac51",
+        "9e3623eda31a5629c4bdba361a60e6b69326e09f3200bb3a61efd9c6ae88c8f3",
     ),
 ];
 

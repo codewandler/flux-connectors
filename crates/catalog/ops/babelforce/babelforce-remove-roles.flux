@@ -2,7 +2,7 @@ op babelforce-remove-roles(body: Any) -> Any
   description "Remove roles from users"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

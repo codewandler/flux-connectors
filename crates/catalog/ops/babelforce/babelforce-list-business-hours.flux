@@ -2,7 +2,7 @@ op babelforce-list-business-hours(page: Number, max: Number) -> Any
   description "List business-hours profiles"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

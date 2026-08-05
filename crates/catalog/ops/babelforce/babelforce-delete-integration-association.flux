@@ -2,7 +2,7 @@ op babelforce-delete-integration-association(integrationId: String, associationI
   description "Remove an integration association"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

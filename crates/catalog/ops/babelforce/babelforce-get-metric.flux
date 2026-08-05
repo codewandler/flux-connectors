@@ -2,7 +2,7 @@ op babelforce-get-metric(id: String) -> Any
   description "Query a metric"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

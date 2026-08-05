@@ -12,6 +12,10 @@ api_version = "v3"
 module = "google-drive.flux"
 operations = ["google-drive-file-get", "google-drive-file-update"]
 
+[operation_directions]
+google-drive-file-get = "read"
+google-drive-file-update = "write"
+
 [operation_semantic_effects]
 google-drive-file-get = []
 google-drive-file-update = []

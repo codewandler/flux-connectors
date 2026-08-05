@@ -11,6 +11,12 @@ api_version = "0"
 module = "sentry.flux"
 operations = ["sentry-issue-get", "sentry-issue-update", "sentry-project-get", "sentry-issue-event-latest"]
 
+[operation_directions]
+sentry-issue-event-latest = "read"
+sentry-issue-get = "read"
+sentry-issue-update = "write"
+sentry-project-get = "read"
+
 [operation_semantic_effects]
 sentry-issue-event-latest = []
 sentry-issue-get = []

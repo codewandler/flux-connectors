@@ -2,7 +2,7 @@ op asterisk-ari-bridges-get(bridgeId: String) -> Any
   description "Get bridge details."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

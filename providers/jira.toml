@@ -245,6 +245,7 @@ tags = ["issue-tracking", "project-management"]
 [[operations]]
 id = "jira-issue-get"
 method = "GET"
+direction = "read"
 path = "/rest/api/2/issue/{issueIdOrKey}"
 description = "Read one Jira issue by key (`PROJ-123`) or numeric id — summary, description, status, assignee, reporter and every other configured field. Returns Jira's full default field set, including custom fields, because narrowing it needs the `fields` query parameter this connector cannot encode. Text fields are wiki markup, not rich content"
 risk = "low"
@@ -292,6 +293,7 @@ properties = { id = { type = "string", description = "The issue's numeric id, **
 [[operations]]
 id = "jira-issue-create"
 method = "POST"
+direction = "write"
 path = "/rest/api/2/issue"
 description = "Create a Jira issue in a project. Visible to everyone with access to the project and notifies its watchers. Only project, summary and issue type are set: a description cannot be sent yet (see the connector's notes), so file the detail as a comment afterwards. Returns the new issue's id, key and self URL"
 # A new issue appears on a shared board, notifies watchers, and can trigger project automation. It
@@ -349,6 +351,7 @@ properties = { id = { type = "string", description = "The new issue's numeric id
 [[operations]]
 id = "jira-issue-comment-list"
 method = "GET"
+direction = "read"
 path = "/rest/api/2/issue/{issueIdOrKey}/comment"
 description = "Read the comments on a Jira issue, oldest first. Returns Jira's first default-sized page only: paging needs the `startAt` and `maxResults` query parameters this connector cannot encode, so an issue with a long discussion is truncated. Comment bodies are wiki markup"
 risk = "low"
@@ -375,6 +378,7 @@ properties = { comments = { type = "array", description = "The comments, oldest 
 [[operations]]
 id = "jira-issue-comment-add"
 method = "POST"
+direction = "write"
 path = "/rest/api/2/issue/{issueIdOrKey}/comment"
 description = "Add a comment to a Jira issue. The comment is visible to everyone who can see the issue — including customers on a service-management portal — and notifies its watchers; restricting it to a project role or group is not supported yet. The body is Jira wiki markup (`*bold*`, `{code}`), not Markdown and not rich content"
 # A comment is read by people, notifies them, and cannot be un-seen. Matches
@@ -416,6 +420,7 @@ properties = { id = { type = "string", description = "The new comment's id, as a
 [[operations]]
 id = "jira-issue-transitions-list"
 method = "GET"
+direction = "read"
 path = "/rest/api/2/issue/{issueIdOrKey}/transitions"
 description = "List the workflow transitions available on a Jira issue right now, with the id and target status of each. Call this before `jira-issue-transition`: transition ids are per-workflow, not global, and only the transitions valid from the issue's current status are returned"
 risk = "low"
@@ -448,6 +453,7 @@ properties = { transitions = { type = "array", description = "The transitions av
 [[operations]]
 id = "jira-issue-transition"
 method = "POST"
+direction = "write"
 path = "/rest/api/2/issue/{issueIdOrKey}/transitions"
 description = "Move a Jira issue through a workflow transition — the way an issue is closed, reopened or advanced. Get the transition id from `jira-issue-transitions-list` first; ids are per-workflow and only transitions valid from the current status are accepted. The status change is visible on every board showing the issue, notifies watchers, and may fire project automation. Answers `204` with an empty body on success"
 # A workflow change is the most visible edit here: it moves the issue on shared boards, notifies
@@ -456,7 +462,7 @@ description = "Move a Jira issue through a workflow transition — the way an is
 risk = "high"
 # Repeating the call does not re-apply the transition — Jira rejects it, because the transition is no
 # longer available from the new status — but that is the vendor refusing a duplicate rather than the
-# call being idempotent, and the emitter refuses `idempotent` on a `POST` regardless.
+# call being idempotent; the emitter also refuses `idempotent` on this authored write.
 idempotency = "non_idempotent"
 
 [[operations.params.path]]

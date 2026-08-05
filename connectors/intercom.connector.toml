@@ -9,6 +9,13 @@ base_url = "https://{host}"
 module = "intercom.flux"
 operations = ["intercom-contact-get", "intercom-contact-create", "intercom-conversation-get", "intercom-conversation-reply", "intercom-contact-note-create"]
 
+[operation_directions]
+intercom-contact-create = "write"
+intercom-contact-get = "read"
+intercom-contact-note-create = "write"
+intercom-conversation-get = "read"
+intercom-conversation-reply = "write"
+
 [operation_semantic_effects]
 intercom-contact-create = []
 intercom-contact-get = []

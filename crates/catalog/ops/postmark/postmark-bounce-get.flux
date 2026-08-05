@@ -2,7 +2,7 @@ op postmark-bounce-get(bounce_id: Number) -> Any
   description "Get one recorded bounce by id. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/Message`, its error code at `/ErrorCode` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.postmarkapp.com"

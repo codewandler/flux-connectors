@@ -2,7 +2,7 @@ op babelforce-session-get(id: String) -> Any
   description "Get a session's variables"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://services.babelforce.com"

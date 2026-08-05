@@ -2,7 +2,7 @@ op babelforce-list-campaign-attempts(id: String, number: String) -> Any
   description "List campaign call attempts"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

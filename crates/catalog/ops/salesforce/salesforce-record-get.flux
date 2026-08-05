@@ -2,7 +2,7 @@ op salesforce-record-get(sobject_type: String, id: String) -> Any
   description "Read one SObject record by id. Returns every field of the record; narrowing to a subset needs the fields query parameter, which this connector cannot encode safely (see the provider file's header) so it is not offered"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{instance}.my.salesforce.com"

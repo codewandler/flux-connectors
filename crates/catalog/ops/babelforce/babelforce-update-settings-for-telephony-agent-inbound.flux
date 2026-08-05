@@ -2,7 +2,7 @@ op babelforce-update-settings-for-telephony-agent-inbound(body: Any) -> Any
   description "Update agent.inbound settings"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op pagerduty-service-list(limit: Number, offset: Number) -> Any
   description "List the services this key can see. A service is what incidents are opened against and what an escalation policy is attached to, so this is how to discover the ids and names behind an incident's `service` reference. Also this connector's connection test"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.pagerduty.com"

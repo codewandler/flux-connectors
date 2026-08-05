@@ -43,6 +43,7 @@ api_version = "v1"
 [[operations]]
 id = "acme-thing-list"
 method = "GET"
+direction = "read"
 path = "/v1/things"
 description = "List the things."
 risk = "low"

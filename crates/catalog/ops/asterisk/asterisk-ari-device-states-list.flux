@@ -2,7 +2,7 @@ op asterisk-ari-device-states-list -> Any
   description "List all ARI controlled device states."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{host}:8089/ari"

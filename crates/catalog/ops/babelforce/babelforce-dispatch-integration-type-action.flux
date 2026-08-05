@@ -2,7 +2,7 @@ op babelforce-dispatch-integration-type-action(type: String, id: String, action:
   description "Dispatch a type-scoped action"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

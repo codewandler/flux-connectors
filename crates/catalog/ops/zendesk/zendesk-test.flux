@@ -2,7 +2,7 @@ op zendesk-test -> Any
   description "Show Self"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

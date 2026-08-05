@@ -2,7 +2,7 @@ op babelforce-echo -> Any
   description "Echo the request method and body back"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -130,6 +130,7 @@ description = "A fixture standing in for SendGrid's mail-send envelope"
 [[operations]]
 id = "acme-mail-send"
 method = "POST"
+direction = "write"
 path = "/v3/mail/send"
 description = "A synthetic stand-in for SendGrid's mail-send envelope"
 risk = "medium"

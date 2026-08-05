@@ -2,7 +2,7 @@ op zendesk-help-center-article-list(start_time: Number) -> Any
   description "List Help Center articles, optionally limited to articles updated since a Unix timestamp"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

@@ -73,6 +73,11 @@ rand.workspace = true
 urlencoding.workspace = true
 
 [dev-dependencies]
+# C-516's compatibility gate executes Flux Flow's public canonical gather admission from the host
+# graph. The transport-free connector pack must not acquire the flow engine's HTTP-capable test
+# closure merely to prove this compatibility.
+flux-flow.workspace = true
+
 # A loopback vendor to assert the request against. The point of the whole crate is that a real
 # request leaves it, and a test that asserts against a stub would be asserting the stub.
 axum = { workspace = true, features = ["http1", "json", "tokio"] }

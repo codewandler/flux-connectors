@@ -2,7 +2,7 @@ op babelforce-get-service-number(id: String) -> Any
   description "Get a number"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

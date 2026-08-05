@@ -90,6 +90,7 @@ fn operation_block(operation: &str, service: Option<&str>) -> String {
          id = \"{operation}\"\n\
          {service}\
          method = \"GET\"\n\
+         direction = \"read\"\n\
          path = \"/v1/things/{{thing_id}}\"\n\
          description = \"Fetch one thing.\"\n\
          risk = \"low\"\n\

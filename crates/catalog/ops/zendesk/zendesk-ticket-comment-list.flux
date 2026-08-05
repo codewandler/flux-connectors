@@ -2,7 +2,7 @@ op zendesk-ticket-comment-list(ticket_id: Number, include_inline_images: Bool, p
   description "List Comments"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

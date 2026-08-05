@@ -6,7 +6,7 @@ op sendgrid-template-list(generations: String, page_size: Number) -> Any
   description "List transactional templates (name, id, generation, and each template's versions). Also this connector's `verify` — a bounded read that runs unattended"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.sendgrid.com"
@@ -18,7 +18,7 @@ op sendgrid-template-get(template_id: String) -> Any
   description "Get one transactional template by id, including every version's subject and content"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.sendgrid.com"
@@ -30,7 +30,7 @@ op sendgrid-suppression-bounce-list(start_time: Number, end_time: Number) -> Any
   description "List addresses that have bounced and are suppressed from receiving further mail. Each entry is personal data about a third party — read it only for what the calling flow needs"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.sendgrid.com"
@@ -42,7 +42,7 @@ op sendgrid-email-validate(email: String, source: String) -> Any
   description "Check whether an email address is well-formed and likely deliverable, without sending it any mail. Requires SendGrid's Email Address Validation add-on to be enabled on the account. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.sendgrid.com"

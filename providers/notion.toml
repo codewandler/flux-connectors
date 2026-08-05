@@ -57,21 +57,20 @@
 # says so, because a model told it "gets a page" would otherwise reasonably report the page as empty.
 #
 # ---------------------------------------------------------------------------------------------
-# TWO OF NOTION'S THREE READS ARE `POST`, SO THEY MUST PRESENT TO FLUX'S APPROVAL GATE AS WRITES.
+# TWO READ-SHAPED OPERATIONS REMAIN CONSERVATIVELY AUTHORED AS WRITES PENDING INDIVIDUAL REVIEW.
 # ---------------------------------------------------------------------------------------------
 #
-# `check_write_metadata` (`crates/connector-flux/src/op.rs`) refuses `risk = "low"` on any
-# state-changing method and refuses `idempotency = "idempotent"` on `POST`/`PATCH`. It is right to:
-# it sees an HTTP method, and it cannot see that Notion routes a *query* through `POST` because the
-# filter payload is too big for a URL.
+# `check_write_metadata` (`crates/connector-flux/src/op.rs`) reads authored direction, never method.
+# C-516 preserved the existing conservative safety posture for these two operations rather than
+# silently upgrading them during a mechanical catalogue migration. Their `POST` transport supplied
+# no evidence for that decision and cannot change it on a later spec refresh.
 #
 # The consequence is that `notion-database-query` and `notion-search` — both pure reads that change
 # nothing — are declared `risk = "medium"` and `idempotency = "non_idempotent"`, and flux's approval
 # gate will prompt for them as though they wrote something. **This is a real loss of fidelity and it
 # is recorded here rather than absorbed silently.** The direction is the safe one: it over-prompts,
 # never under-prompts, so no operation is waved through on a claim this file could not back. Do
-# **not** "fix" it by declaring `low` — the refusal is loud and correct, and the honest resolution
-# would be a spec-level way to say "this POST is a read", which no story has designed.
+# **not** change them to `read` without an operation-level semantic review.
 #
 # ---------------------------------------------------------------------------------------------
 # SCHEMA GAP: no query parameter, so all pagination is excluded (C-30).
@@ -264,6 +263,7 @@ tags = ["knowledge-base"]
 [[operations]]
 id = "notion-user-me"
 method = "GET"
+direction = "read"
 path = "/v1/users/me"
 description = "Get the bot user this integration authenticates as, confirming the token resolves and naming the workspace it belongs to. Takes no parameters"
 risk = "low"
@@ -282,6 +282,7 @@ code_pointer = "/code"
 [[operations]]
 id = "notion-page-get"
 method = "GET"
+direction = "read"
 path = "/v1/pages/{page_id}"
 # THE DESCRIPTION SAYS "PROPERTIES, NOT CONTENT" BECAUSE A MODEL WILL OTHERWISE REPORT THE PAGE AS
 # EMPTY. See the block-model section of the header comment: a page's text lives in a separate block
@@ -306,13 +307,13 @@ message_pointer = "/message"
 code_pointer = "/code"
 
 # ---------------------------------------------------------------------------------------------
-# The two POST reads. Both change nothing and both are declared as writes — see the header comment
-# for why `check_write_metadata` requires that and why it is the safe direction.
+# Two read-shaped operations conservatively authored as writes — see the header comment.
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
 id = "notion-database-query"
 method = "POST"
+direction = "write"
 path = "/v1/databases/{database_id}/query"
 # WHY THIS OPERATION HAS NO BODY FIELDS AT ALL, and why it is still worth shipping.
 #
@@ -324,13 +325,12 @@ path = "/v1/databases/{database_id}/query"
 #
 # Sending no body at all is also what keeps this correct under C-56: an empty request body is exactly
 # what Notion expects for an unfiltered query, whereas `{"filter": null}` is a 400.
-description = "Query a database and return its first page of entries (up to 100), unfiltered and in the database's default order. Each entry is a page, and its `properties` are keyed by that database's own column names. Notion routes this read through POST, so it is declared as a write"
+description = "Query a database and return its first page of entries (up to 100), unfiltered and in the database's default order. Each entry is a page, and its `properties` are keyed by that database's own column names. Direction remains conservatively authored as write pending individual review; POST is transport only and supplied no evidence"
 # `medium`, not `low`, and not because this operation changes anything — it changes nothing at all.
-# `check_write_metadata` refuses `low` on a POST and cannot see that this one is a read. Over-prompting
-# is the safe direction; see the header comment.
+# The authored write direction keeps the conservative approval posture; see the header comment.
 risk = "medium"
-# `non_idempotent` for the same reason: the emitter refuses `idempotent` on a POST. Repeating this
-# call is in fact perfectly safe.
+# The authored write direction refuses `idempotent`; repeating this call appears safe, but changing
+# the direction belongs to the same individual semantic review.
 idempotency = "non_idempotent"
 
 [[operations.params.path]]
@@ -352,8 +352,9 @@ code_pointer = "/code"
 [[operations]]
 id = "notion-search"
 method = "POST"
+direction = "write"
 path = "/v1/search"
-description = "Search the pages and databases shared with this integration by title, returning the first page of matches (up to 100). Notion matches on title only — it does not search page text. Notion routes this read through POST, so it is declared as a write"
+description = "Search the pages and databases shared with this integration by title, returning the first page of matches (up to 100). Notion matches on title only — it does not search page text. Direction remains conservatively authored as write pending individual review; POST is transport only and supplied no evidence"
 # The same over-declaration as `notion-database-query`, for the same reason.
 risk = "medium"
 idempotency = "non_idempotent"
@@ -384,6 +385,7 @@ code_pointer = "/code"
 [[operations]]
 id = "notion-page-create"
 method = "POST"
+direction = "write"
 path = "/v1/pages"
 # WHY THIS CREATES A PAGE UNDER A *PAGE*, NEVER UNDER A DATABASE.
 #

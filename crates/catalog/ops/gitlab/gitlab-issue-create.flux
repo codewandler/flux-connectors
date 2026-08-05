@@ -2,7 +2,7 @@ op gitlab-issue-create(project_id: Number, title: String, description: String, l
   description "Open a new issue on a project. Visible immediately to everyone with access to the project (the whole world, if the project is public) and notifies its watchers"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "{origin}/api/v4"

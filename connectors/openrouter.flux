@@ -6,7 +6,7 @@ op openrouter-models-list -> Any
   description "List every model OpenRouter routes to, with its context length, modalities and per-token pricing"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://openrouter.ai"
@@ -18,7 +18,7 @@ op openrouter-model-endpoints-list(author: String, slug: String) -> Any
   description "List the upstream provider endpoints serving one model, with each one's pricing, context length and quantization"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://openrouter.ai"
@@ -30,7 +30,7 @@ op openrouter-chat-completion(model: String, messages: List<Any>, max_completion
   description "Create a chat completion through OpenRouter, routed to the named model. Billed per input and output token, so the caller must state a token budget via max_completion_tokens"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://openrouter.ai"
@@ -44,7 +44,7 @@ op openrouter-credits-get -> Any
   description "Read the account's total purchased credits and total usage, in credit units"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://openrouter.ai"

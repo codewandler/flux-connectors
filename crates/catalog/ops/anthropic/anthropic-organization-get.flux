@@ -2,7 +2,7 @@ op anthropic-organization-get -> Any
   description "Get the organization this Admin API key belongs to. Takes no parameters; useful for confirming which organization a key resolves to. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.anthropic.com"

@@ -2,7 +2,7 @@ op babelforce-flag-recording(id: String) -> Any
   description "Flag a recording"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

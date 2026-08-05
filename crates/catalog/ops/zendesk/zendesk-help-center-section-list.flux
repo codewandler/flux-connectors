@@ -2,7 +2,7 @@ op zendesk-help-center-section-list -> Any
   description "List Help Center sections across all categories"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

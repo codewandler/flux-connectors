@@ -313,6 +313,7 @@ tags = ["ai"]
 [[operations]]
 id = "openrouter-models-list"
 method = "GET"
+direction = "read"
 path = "/api/v1/models"
 description = "List every model OpenRouter routes to, with its context length, modalities and per-token pricing"
 risk = "low"
@@ -349,6 +350,7 @@ properties = { data = { type = "array", description = "One entry per model, each
 [[operations]]
 id = "openrouter-model-endpoints-list"
 method = "GET"
+direction = "read"
 path = "/api/v1/models/{author}/{slug}/endpoints"
 description = "List the upstream provider endpoints serving one model, with each one's pricing, context length and quantization"
 risk = "low"
@@ -399,8 +401,8 @@ properties = { data = { type = "object", description = "The model, with an `endp
 #
 # `POST`, billed per input and output token, and therefore `risk = "medium"` and
 # `idempotency = "non_idempotent"`. Neither value is decoration: flux's approval gate reads `risk`, so
-# a cost-bearing call declaring `low` would be waved through unattended, and a `POST` declaring itself
-# `idempotent` would make a `retry` around it turn one charge into three. `connector-flux`'s
+# a cost-bearing call declaring `low` would be waved through unattended, and an authored write
+# declaring `idempotent` could be skipped or retried unsafely. `connector-flux`'s
 # `check_write_metadata` refuses both mistakes outright.
 #
 # `medium` rather than `high`, following C-51: nothing is created, updated or deleted at the vendor,
@@ -415,6 +417,7 @@ properties = { data = { type = "object", description = "The model, with an `endp
 [[operations]]
 id = "openrouter-chat-completion"
 method = "POST"
+direction = "write"
 path = "/api/v1/chat/completions"
 description = "Create a chat completion through OpenRouter, routed to the named model. Billed per input and output token, so the caller must state a token budget via max_completion_tokens"
 risk = "medium"
@@ -478,6 +481,7 @@ properties = { id = { type = "string", description = "The generation's id, which
 [[operations]]
 id = "openrouter-credits-get"
 method = "GET"
+direction = "read"
 path = "/api/v1/credits"
 description = "Read the account's total purchased credits and total usage, in credit units"
 risk = "low"

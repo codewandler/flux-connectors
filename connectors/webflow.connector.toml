@@ -12,6 +12,14 @@ module = "webflow.flux"
 operations = ["webflow-site-list", "webflow-collection-list", "webflow-collection-get", "webflow-collection-item-list", "webflow-collection-item-get", "webflow-site-publish"]
 verify = "webflow-site-list"
 
+[operation_directions]
+webflow-collection-get = "read"
+webflow-collection-item-get = "read"
+webflow-collection-item-list = "read"
+webflow-collection-list = "read"
+webflow-site-list = "read"
+webflow-site-publish = "write"
+
 [operation_semantic_effects]
 webflow-collection-get = []
 webflow-collection-item-get = []

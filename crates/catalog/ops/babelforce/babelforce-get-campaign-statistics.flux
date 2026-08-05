@@ -2,7 +2,7 @@ op babelforce-get-campaign-statistics(id: String, from: Number, to: Number) -> A
   description "Get campaign statistics"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

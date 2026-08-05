@@ -6,7 +6,7 @@ op launchdarkly-project-list(limit: Number, offset: Number) -> Any
   description "List every project in the LaunchDarkly account. A project is the top-level grouping that owns environments and feature flags"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://app.launchdarkly.com/api/v2"
@@ -18,7 +18,7 @@ op launchdarkly-environment-list(project_key: String, limit: Number, offset: Num
   description "List the environments (e.g. production, staging) that belong to one project"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://app.launchdarkly.com/api/v2"
@@ -30,7 +30,7 @@ op launchdarkly-flag-list(project_key: String, env: String, limit: Number, offse
   description "List the feature flags defined in one project"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://app.launchdarkly.com/api/v2"
@@ -42,7 +42,7 @@ op launchdarkly-flag-get(project_key: String, feature_flag_key: String, env: Str
   description "Get one feature flag's full definition, including its current on/off state and targeting per environment"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://app.launchdarkly.com/api/v2"
@@ -54,7 +54,7 @@ op launchdarkly-flag-toggle(project_key: String, feature_flag_key: String, body:
   description "Turn a feature flag on or off in one environment. This is a live production change: every SDK instance currently evaluating this flag in this environment — web, mobile and backend alike — switches to the other branch as soon as this call returns, for every real user it serves. It is reversible by toggling back, but it is not a private or staged edit"
   risk "high"
   idempotency "conditional"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://app.launchdarkly.com/api/v2"

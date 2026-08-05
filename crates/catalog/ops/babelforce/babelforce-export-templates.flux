@@ -2,7 +2,7 @@ op babelforce-export-templates(type: String) -> Any
   description "Export configuration templates by type"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

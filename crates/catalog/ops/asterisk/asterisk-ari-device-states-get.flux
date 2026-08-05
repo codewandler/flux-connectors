@@ -2,7 +2,7 @@ op asterisk-ari-device-states-get(deviceName: String) -> Any
   description "Retrieve the current state of a device."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

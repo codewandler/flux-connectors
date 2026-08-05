@@ -55,19 +55,19 @@ const SELECTED: [SelectedOperation; 4] = [
 const ORIGINAL_FLUX: [(&str, &str); 4] = [
     (
         "openai-chat-completion",
-        "065939ba98cffd414a33aa81f37a116accc38de345deaf2cfd4cdce00bd38cc2",
+        "7a1bb7ce50d457c4c2a758a0cf6b1f9af1ed559fcec5378054794efc644301ba",
     ),
     (
         "openai-embeddings-create",
-        "61664039f947dee160ee6a3023c47268f110b530ffc5ab105de23166de897b08",
+        "1a593c975eaa14c1e974f381a5970b20ad354625d2e54ae7a522af317c2081b6",
     ),
     (
         "openai-model-get",
-        "c6ea0961053a40761d3df145d9af7bdf89cd42878cae019a0b65a64f5498fa89",
+        "a2f4bd9f09c3d95fee8c574ec9921ff5d8366de11b8855b13fb15ce797267130",
     ),
     (
         "openai-models-list",
-        "909d028a27dc466a4d1f2b121188e733979333ff6db6f7a11b996636f843e2a1",
+        "e41a013e728c2d49c1508ea9ffcb5816ce177a747e5c394e42d6addced4a892b",
     ),
 ];
 

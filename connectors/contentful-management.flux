@@ -7,7 +7,7 @@ op contentful-entry-create(content_type_id: String, body: Any) -> Any
   description "Create a new entry from a content type's field values. Contentful assigns the entry's id. The entry is created as a draft — it is not visible through the Delivery API until contentful-entry-publish publishes it"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.contentful.com/spaces/{space_id}/environments/{environment_id}"
@@ -20,8 +20,8 @@ op contentful-entry-create(content_type_id: String, body: Any) -> Any
 op contentful-entry-publish(entry_id: String, version: Number) -> Any
   description "Publish a draft entry, making it visible through the Delivery API. Sends no body"
   risk "high"
-  idempotency "idempotent"
-  effects ["network"]
+  idempotency "non_idempotent"
+  effects ["write", "network"]
   expose true
 
   base = "https://api.contentful.com/spaces/{space_id}/environments/{environment_id}"

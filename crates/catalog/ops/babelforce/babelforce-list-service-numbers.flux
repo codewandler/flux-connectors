@@ -2,7 +2,7 @@ op babelforce-list-service-numbers(page: Number, max: Number) -> Any
   description "List numbers"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

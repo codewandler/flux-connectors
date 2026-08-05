@@ -2,7 +2,7 @@ op babelforce-unflag-recording(id: String) -> Any
   description "Unflag a recording"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

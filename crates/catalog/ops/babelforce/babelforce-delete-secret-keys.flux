@@ -2,7 +2,7 @@ op babelforce-delete-secret-keys(prefix: String, body: List<String>) -> Any
   description "Delete a list of secrets"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

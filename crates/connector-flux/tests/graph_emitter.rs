@@ -23,7 +23,8 @@ use std::collections::BTreeMap;
 use connector_flux::emit_graph;
 use connector_spec::{
     Compare, Condition, Connector, Edge, EventDecl, Graph, GraphNode, HttpMethod, Idempotency,
-    NodeKind, Operation, Param, ParamSet, Port, PortRef, Provenance, Risk, DEFAULT_SERVICE,
+    NodeKind, Operation, OperationDirection, Param, ParamSet, Port, PortRef, Provenance, Risk,
+    DEFAULT_SERVICE,
 };
 use serde_json::json;
 
@@ -44,6 +45,7 @@ fn param(name: &str, schema: serde_json::Value) -> Param {
 fn operation(
     id: &str,
     method: HttpMethod,
+    direction: OperationDirection,
     risk: Risk,
     idempotency: Idempotency,
     params: ParamSet,
@@ -52,6 +54,7 @@ fn operation(
         id: id.to_string(),
         service: DEFAULT_SERVICE.to_string(),
         method,
+        direction,
         path: "/v1/things".to_string(),
         description: format!("The {id} operation."),
         risk,
@@ -86,6 +89,7 @@ fn vendor() -> Connector {
             operation(
                 "vendor-thing-get",
                 HttpMethod::Get,
+                OperationDirection::Read,
                 Risk::Low,
                 Idempotency::Idempotent,
                 ParamSet {
@@ -96,6 +100,7 @@ fn vendor() -> Connector {
             operation(
                 "vendor-thing-search",
                 HttpMethod::Get,
+                OperationDirection::Read,
                 Risk::Low,
                 Idempotency::Idempotent,
                 ParamSet {
@@ -106,6 +111,7 @@ fn vendor() -> Connector {
             operation(
                 "vendor-thing-note",
                 HttpMethod::Post,
+                OperationDirection::Write,
                 Risk::Medium,
                 Idempotency::NonIdempotent,
                 ParamSet {
@@ -116,8 +122,9 @@ fn vendor() -> Connector {
             operation(
                 "vendor-thing-delete",
                 HttpMethod::Delete,
+                OperationDirection::Write,
                 Risk::Destructive,
-                Idempotency::Idempotent,
+                Idempotency::NonIdempotent,
                 ParamSet {
                     path: vec![param("id", json!({"type": "string"}))],
                     ..ParamSet::default()
@@ -126,6 +133,7 @@ fn vendor() -> Connector {
             operation(
                 "vendor-message-post",
                 HttpMethod::Post,
+                OperationDirection::Write,
                 Risk::Medium,
                 Idempotency::NonIdempotent,
                 ParamSet {

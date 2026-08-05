@@ -53,13 +53,8 @@
 //! 4. **The `data.<field>` envelope is declarable**
 //!    (`a_response_schema_can_describe_the_data_envelope`).
 //!
-//! And two are not, both on the safety axes:
-//!
-//! 5. **Every operation is forced to `risk >= medium` and `non_idempotent`, reads included**
-//!    (`a_graphql_read_cannot_declare_itself_low_risk`, `..._idempotent`). `check_write_metadata`
-//!    derives write-ness from the verb, and under GraphQL the verb is always `POST`. This one is
-//!    *conservative* — a read over-stated, never a write under-stated — and would not on its own
-//!    have withdrawn the connector.
+//! C-516 closes the former safety-axis gap: GraphQL reads are explicitly authored `read`, `low`, and
+//! `idempotent` despite POST transport. The remaining blocker is response/error semantics:
 //! 6. **A failed call arrives as HTTP 200 and nothing here can say so.** [C-57]'s exact case:
 //!    Linear answers a validation error, a permission denial and an expired key alike with `200`, a
 //!    `null` `data` and an `errors` array, and this repository's success signal is the transport's.
@@ -112,10 +107,11 @@ binds = "credential.linear.api_key"
 [[operations]]
 id = "linear-viewer"
 method = "POST"
+direction = "read"
 path = "/graphql"
 description = "Read the user this key belongs to"
-risk = "medium"
-idempotency = "non_idempotent"
+risk = "low"
+idempotency = "idempotent"
 
 [[operations.params.body]]
 name = "query"
@@ -144,10 +140,11 @@ properties = { data = { type = "object", properties = { viewer = { type = "objec
 [[operations]]
 id = "linear-issue-get"
 method = "POST"
+direction = "read"
 path = "/graphql"
 description = "Read one issue by id"
-risk = "medium"
-idempotency = "non_idempotent"
+risk = "low"
+idempotency = "idempotent"
 
 [[operations.params.body]]
 name = "query"
@@ -325,45 +322,22 @@ fn a_response_schema_can_describe_the_data_envelope() {
 // The two safety axes that do not work. Conservative, and not on their own disqualifying.
 // -------------------------------------------------------------------------------------------
 
-/// **A GraphQL read may not declare `risk = "low"`.** `check_write_metadata` derives write-ness from
-/// the HTTP verb, and under GraphQL the verb is `POST` for everything — so the rule that keeps a
-/// REST write out of an auto-approving gate also catches every GraphQL read.
-///
-/// The rule is not wrong and should not be weakened; its *premise*, that the verb distinguishes a
-/// read from a write, is a REST premise GraphQL does not satisfy. The effect is a risk floor of
-/// `medium` for a whole connector — conservative, since it over-states a read rather than
-/// under-stating a write.
+/// A GraphQL query carries authored read metadata despite POST transport.
 #[test]
-fn a_graphql_read_cannot_declare_itself_low_risk() {
+fn a_graphql_read_can_declare_itself_low_risk() {
     let connector = linear();
-    let mut read = op(&connector, "linear-viewer").clone();
-    read.risk = Risk::Low;
-    let error = emit_operation(&connector, &read).expect_err("a POST declared `low` is refused");
-    assert!(
-        error
-            .to_string()
-            .contains("may not declare `risk = \"low\"`"),
-        "refused for the wrong reason: {error}"
-    );
+    let read = op(&connector, "linear-viewer");
+    assert_eq!(read.risk, Risk::Low);
+    emit_operation(&connector, read).expect("authored read metadata emits");
 }
 
-/// **A GraphQL read may not declare itself idempotent**, with the sharper consequence: `idempotency`
-/// is what tells flux whether a `retry` around the call is sound. A GraphQL *query* is idempotent
-/// and no operation can say so, so across a GraphQL connector the field carries no authored
-/// information — every value is `non_idempotent` because every other value is unreachable.
+/// Idempotency follows the same authored direction, not GraphQL's shared POST endpoint.
 #[test]
-fn a_graphql_read_cannot_declare_itself_idempotent() {
+fn a_graphql_read_can_declare_itself_idempotent() {
     let connector = linear();
-    let mut read = op(&connector, "linear-viewer").clone();
-    read.idempotency = Idempotency::Idempotent;
-    let error =
-        emit_operation(&connector, &read).expect_err("a POST declared idempotent is refused");
-    assert!(
-        error
-            .to_string()
-            .contains("may not declare `idempotency = \"idempotent\"`"),
-        "refused for the wrong reason: {error}"
-    );
+    let read = op(&connector, "linear-viewer");
+    assert_eq!(read.idempotency, Idempotency::Idempotent);
+    emit_operation(&connector, read).expect("authored read metadata emits");
 }
 
 /// **Declaring the vendor's error envelope emits a claim that is false for a GraphQL vendor.**

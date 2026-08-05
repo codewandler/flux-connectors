@@ -10,6 +10,14 @@ module = "front.flux"
 operations = ["front-verify", "front-conversation-list", "front-conversation-get", "front-conversation-message-list", "front-conversation-reply", "front-conversation-tag-add"]
 verify = "front-verify"
 
+[operation_directions]
+front-conversation-get = "read"
+front-conversation-list = "read"
+front-conversation-message-list = "read"
+front-conversation-reply = "write"
+front-conversation-tag-add = "write"
+front-verify = "read"
+
 [operation_semantic_effects]
 front-conversation-get = []
 front-conversation-list = []

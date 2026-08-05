@@ -2,7 +2,7 @@ op zendesk-ticket-search(query: String, page: Number, per_page: Number) -> Any
   description "Search Zendesk tickets with Zendesk search syntax."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://example.zendesk.com"

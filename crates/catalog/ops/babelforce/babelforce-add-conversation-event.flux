@@ -2,7 +2,7 @@ op babelforce-add-conversation-event(conversationId: String, body: Any) -> Any
   description "Add a custom event to a conversation"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

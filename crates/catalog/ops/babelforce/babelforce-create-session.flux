@@ -2,7 +2,7 @@ op babelforce-create-session -> Any
   description "Create a session"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

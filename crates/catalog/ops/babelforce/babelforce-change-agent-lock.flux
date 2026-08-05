@@ -1,7 +1,7 @@
 op babelforce-change-agent-lock(lockState: String) -> Any
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

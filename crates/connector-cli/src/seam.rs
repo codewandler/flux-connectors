@@ -492,6 +492,8 @@ fn manifest(connector: &Connector, service: &str) -> Result<String> {
         api_version: Option<&'a str>,
         module: String,
         operations: Vec<&'a str>,
+        /// Every operation's connector-authored vendor-state direction.
+        operation_directions: BTreeMap<&'a str, &'static str>,
         /// Every operation's semantic effects, including an explicit empty list. Kept beside the
         /// existing operation list so adding the policy axis does not reshape that public field.
         operation_semantic_effects: BTreeMap<&'a str, Vec<&'static str>>,
@@ -543,6 +545,10 @@ fn manifest(connector: &Connector, service: &str) -> Result<String> {
         operations: connector
             .operations_of(service)
             .map(|operation| operation.id.as_str())
+            .collect(),
+        operation_directions: connector
+            .operations_of(service)
+            .map(|operation| (operation.id.as_str(), operation.direction.word()))
             .collect(),
         operation_semantic_effects: connector
             .operations_of(service)
@@ -886,6 +892,7 @@ base_url = "https://api.acme.example"
 [[operations]]
 id = "acme-ticket-show"
 method = "GET"
+direction = "read"
 path = "/v2/tickets/{ticket_id}"
 description = "Fetch one Acme ticket."
 risk = "low"
@@ -920,6 +927,7 @@ api_version = "2023-09-30"
 id = "aws-object-get"
 service = "s3"
 method = "GET"
+direction = "read"
 path = "/objects/{key}"
 description = "Fetch one object."
 risk = "low"
@@ -934,6 +942,7 @@ schema = { type = "string" }
 id = "aws-model-invoke"
 service = "bedrock-runtime"
 method = "POST"
+direction = "write"
 path = "/model/{model_id}/invoke"
 description = "Invoke a model."
 risk = "medium"
@@ -1008,6 +1017,7 @@ binds = "endpoint.region"
 id = "aws-object-get"
 service = "s3"
 method = "GET"
+direction = "read"
 path = "/objects/{key}"
 description = "Fetch one object."
 risk = "low"
@@ -1022,6 +1032,7 @@ schema = { type = "string" }
 id = "aws-model-invoke"
 service = "bedrock-runtime"
 method = "POST"
+direction = "write"
 path = "/model/{model_id}/invoke"
 description = "Invoke a model."
 risk = "medium"
@@ -1062,6 +1073,9 @@ base_url = "https://api.acme.example"
 
 [spec]
 path = "specs/acme/v1.json"
+
+[patch.directions.default]
+showTicket = "read"
 
 [[patch.operations]]
 select = "showTicket"
@@ -1175,6 +1189,18 @@ idempotency = "idempotent"
                 .as_array()
                 .expect("the operation carries a semantic-effect array"),
             &[toml::Value::String("read".to_string())]
+        );
+    }
+
+    #[test]
+    fn the_manifest_publishes_every_operations_authored_direction() {
+        let artifacts = emit(&load(&inputs(HAND_AUTHORED)).unwrap()).unwrap();
+        let manifest: toml::Value =
+            toml::from_str(&default_unit(&artifacts).manifest).expect("the manifest is TOML");
+
+        assert_eq!(
+            manifest["operation_directions"]["acme-ticket-show"],
+            toml::Value::String("read".to_string())
         );
     }
 

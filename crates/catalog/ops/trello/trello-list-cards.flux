@@ -2,7 +2,7 @@ op trello-list-cards(id: String) -> Any
   description "List the open cards in one list, in board order. Archived cards are not returned"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.trello.com/1"

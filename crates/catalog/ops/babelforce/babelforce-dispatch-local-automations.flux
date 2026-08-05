@@ -2,7 +2,7 @@ op babelforce-dispatch-local-automations(id: String, position: String, async: Bo
   description "Dispatch an application's automations"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

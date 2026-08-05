@@ -2,7 +2,7 @@ op babelforce-get-push-token -> Any
   description "Get the current user's push token"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op babelforce-get-agents-for-queue-selection(queueId: String, callId: String) ->
   description "Preview a selection's agents"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op babelforce-bulk-delete-integrations(body: Any) -> Any
   description "Bulk-delete integrations"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

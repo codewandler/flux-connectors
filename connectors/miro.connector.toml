@@ -12,6 +12,14 @@ module = "miro.flux"
 operations = ["miro-board-list", "miro-board-item-list", "miro-board-item-get", "miro-sticky-note-create", "miro-sticky-note-update", "miro-sticky-note-delete"]
 verify = "miro-board-list"
 
+[operation_directions]
+miro-board-item-get = "read"
+miro-board-item-list = "read"
+miro-board-list = "read"
+miro-sticky-note-create = "write"
+miro-sticky-note-delete = "write"
+miro-sticky-note-update = "write"
+
 [operation_semantic_effects]
 miro-board-item-get = []
 miro-board-item-list = []

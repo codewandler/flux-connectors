@@ -12,6 +12,14 @@ module = "dropbox.flux"
 operations = ["dropbox-user-me", "dropbox-folder-list", "dropbox-metadata-get", "dropbox-search", "dropbox-folder-create", "dropbox-temporary-link-get"]
 verify = "dropbox-user-me"
 
+[operation_directions]
+dropbox-folder-create = "write"
+dropbox-folder-list = "write"
+dropbox-metadata-get = "write"
+dropbox-search = "write"
+dropbox-temporary-link-get = "write"
+dropbox-user-me = "read"
+
 [operation_semantic_effects]
 dropbox-folder-create = []
 dropbox-folder-list = []

@@ -2,7 +2,7 @@ op twilio-recording-get(Sid: String, IncludeSoftDeleted: Bool) -> Any
   description "Fetch one recording's metadata from the configured Twilio account"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"

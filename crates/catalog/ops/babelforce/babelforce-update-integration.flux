@@ -2,7 +2,7 @@ op babelforce-update-integration(id: String, body: Any) -> Any
   description "Update an integration"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

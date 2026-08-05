@@ -8,7 +8,7 @@
 //!
 //! # The two rules that are one rule
 //!
-//! [`scaffolding_the_manager_documents_reads_produces_a_provider_that_loads`] is the round trip:
+//! [`scaffolding_a_mixed_get_set_carries_exact_reviewed_direction_and_loads`] is the round trip:
 //! generated text in, a compiled connector out, no hand-editing in between.
 //! [`a_mutating_selector_emits_a_hole_the_loader_refuses`] is its inverse and is the more important
 //! of the two — a scaffold that silently declared 54 DELETEs `low` would pass the first test and
@@ -61,6 +61,58 @@ paths:
                 properties:
                   deleted: { type: boolean }
 "#;
+
+/// Two transport-adversarial operations whose direction has already been reviewed: a mutating GET
+/// and a read-only POST. Scaffold must carry those facts, not reverse them back to method classes.
+const REVIEWED_DOCUMENT: &str = r#"openapi: "3.0.3"
+info:
+  title: The Acme widget API
+  version: "1.4.0"
+servers:
+  - url: https://api.acme.example
+paths:
+  /v1/widgets/flush:
+    get:
+      operationId: flushWidgets
+      summary: Flush queued widget work.
+      responses:
+        "200": { description: ok }
+  /v1/widgets/lookup:
+    post:
+      operationId: lookupWidgets
+      summary: Look up widgets without changing them.
+      responses:
+        "200": { description: ok }
+"#;
+
+fn reviewed_provider() -> String {
+    format!(
+        r#"id = "acme"
+vendor = "Acme"
+base_url = "https://api.acme.example"
+
+[[spec]]
+path = "specs/acme/v1.yaml"
+sha256 = "{}"
+
+[patch.naming]
+rule = "kebab"
+
+[[patch.operations]]
+select = "flushWidgets"
+direction = "write"
+risk = "high"
+idempotency = "non_idempotent"
+
+[[patch.operations]]
+select = "lookupWidgets"
+direction = "read"
+risk = "low"
+idempotency = "idempotent"
+"#,
+        connector_spec::sha256_hex(REVIEWED_DOCUMENT.as_bytes())
+    )
+}
 
 /// The repository root, derived from this crate's manifest directory so the test is independent of
 /// the working directory a runner happens to use.
@@ -137,7 +189,7 @@ fn load(provider: &str, toml: &str) -> connector_spec::Result<connector_spec::Lo
 /// a scaffold of the writes is *supposed* not to load until a human has stated `risk`, which is
 /// [`a_mutating_selector_emits_a_hole_the_loader_refuses`]'s subject.
 #[test]
-fn scaffolding_the_manager_documents_reads_produces_a_provider_that_loads() {
+fn scaffolding_a_mixed_get_set_carries_exact_reviewed_direction_and_loads() {
     let toml = scaffold(&["babelforce", "--select", "manager:/api/v2:GET"])
         .expect("scaffold runs against the vendored babelforce documents");
 
@@ -160,6 +212,12 @@ fn scaffolding_the_manager_documents_reads_produces_a_provider_that_loads() {
             .all(|operation| operation.method == connector_spec::HttpMethod::Get),
         "a `GET`-only selector published a non-GET operation"
     );
+    let flush = loaded
+        .connector
+        .operation("babelforce-flush-dialer")
+        .expect("the reviewed mutating GET remains selected");
+    assert_eq!(flush.direction, connector_spec::OperationDirection::Write);
+    assert_eq!(flush.method, connector_spec::HttpMethod::Get);
 }
 
 /// Acceptance: "**Everything the document cannot state is emitted as a hole, not a guess.** `risk`
@@ -180,15 +238,19 @@ fn a_document_nobody_has_claimed_emits_a_hole_the_loader_refuses() {
     let toml = scaffold_in(fixture.root(), &["acme"]).expect("scaffold runs with no provider file");
 
     assert!(
-        toml.contains("TODO(risk, idempotency)"),
-        "a selector over an unclaimed DELETE emitted no `TODO`:\n{toml}"
+        toml.contains("TODO(direction)"),
+        "a selector over unclaimed operations emitted no direction `TODO`:\n{toml}"
     );
     // Declarations only: the `TODO` above deliberately quotes the menu of legal values, and a
     // comment is not a claim.
     let claims: Vec<&str> = toml
         .lines()
         .map(str::trim)
-        .filter(|line| line.starts_with("risk = ") || line.starts_with("idempotency = "))
+        .filter(|line| {
+            line.starts_with("direction = ")
+                || line.starts_with("risk = ")
+                || line.starts_with("idempotency = ")
+        })
         .collect();
     assert!(
         claims.is_empty(),
@@ -205,9 +267,73 @@ fn a_document_nobody_has_claimed_emits_a_hole_the_loader_refuses() {
         .expect_err("an unclaimed DELETE must not compile")
         .to_string();
     assert!(
-        error.contains("risk") && error.contains("idempotency"),
+        error.contains("direction"),
         "the refusal does not name the fields a human has to state: {error}"
     );
+}
+
+#[test]
+fn scaffold_carries_reviewed_mutating_get_and_read_post_without_method_inference() {
+    let fixture = Fixture::new("scaffold-reviewed-direction");
+    fixture.write("specs/acme/v1.yaml", REVIEWED_DOCUMENT);
+    fixture.write("providers/acme.toml", &reviewed_provider());
+
+    let toml = scaffold_in(fixture.root(), &["acme"]).expect("scaffold reads reviewed truth");
+    assert!(!toml.contains("TODO(direction"), "{toml}");
+
+    let get_selector = toml
+        .split("[[patch.select]]")
+        .find(|selector| selector.contains("methods = [\"GET\","))
+        .expect("a GET selector");
+    assert!(!get_selector.contains("direction = "), "{get_selector}");
+
+    let post_selector = toml
+        .split("[[patch.select]]")
+        .find(|selector| selector.contains("methods = [\"POST\","))
+        .expect("a POST selector");
+    assert!(!post_selector.contains("direction = "), "{post_selector}");
+    let direction_map = toml
+        .split("[patch.directions.default]")
+        .nth(1)
+        .and_then(|rest| rest.split("\n\n").next())
+        .expect("a stable identity-keyed direction map");
+    assert!(
+        direction_map.contains("\"flushWidgets\" = \"write\""),
+        "{direction_map}"
+    );
+    assert!(
+        direction_map.contains("\"lookupWidgets\" = \"read\""),
+        "{direction_map}"
+    );
+
+    let cache = [connector_spec::SpecDocument {
+        path: "specs/acme/v1.yaml",
+        document: REVIEWED_DOCUMENT,
+    }];
+    let loaded = connector_spec::provider::load_with_spec("scaffolded/acme.toml", &toml, &cache)
+        .unwrap_or_else(|error| panic!("reviewed scaffold does not load: {error}\n{toml}"));
+    let flush_id = loaded
+        .connector
+        .provenance
+        .operation_specs
+        .iter()
+        .find(|(_, source)| source.operation_id == "flushWidgets")
+        .map(|(id, _)| id)
+        .expect("the stable flushWidgets identity remains published");
+    let lookup_id = loaded
+        .connector
+        .provenance
+        .operation_specs
+        .iter()
+        .find(|(_, source)| source.operation_id == "lookupWidgets")
+        .map(|(id, _)| id)
+        .expect("the stable lookupWidgets identity remains published");
+    let flush = loaded.connector.operation(flush_id).unwrap();
+    let lookup = loaded.connector.operation(lookup_id).unwrap();
+    assert_eq!(flush.method, connector_spec::HttpMethod::Get);
+    assert_eq!(flush.direction, connector_spec::OperationDirection::Write);
+    assert_eq!(lookup.method, connector_spec::HttpMethod::Post);
+    assert_eq!(lookup.direction, connector_spec::OperationDirection::Read);
 }
 
 /// The same rule where it is hardest to hold: **one** unclaimed operation among nine that a human
@@ -234,7 +360,7 @@ fn one_unclaimed_operation_makes_the_selector_a_hole_and_loses_no_reviewed_claim
         "the selector claimed a `risk` over a set holding an operation nobody has claimed:\n{selector}"
     );
     assert!(
-        toml.contains("TODO(risk, idempotency)"),
+        toml.contains("TODO(direction)"),
         "no `TODO` names the gap:\n{toml}"
     );
     assert_eq!(

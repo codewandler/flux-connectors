@@ -2,7 +2,7 @@ op zendesk-ticket-search(query: String) -> Any
   description "List Search Results"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

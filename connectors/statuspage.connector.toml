@@ -12,6 +12,13 @@ module = "statuspage.flux"
 operations = ["statuspage-incident-list", "statuspage-incident-get", "statuspage-incident-create", "statuspage-incident-update", "statuspage-component-list"]
 verify = "statuspage-component-list"
 
+[operation_directions]
+statuspage-component-list = "read"
+statuspage-incident-create = "write"
+statuspage-incident-get = "read"
+statuspage-incident-list = "read"
+statuspage-incident-update = "write"
+
 [operation_semantic_effects]
 statuspage-component-list = []
 statuspage-incident-create = []

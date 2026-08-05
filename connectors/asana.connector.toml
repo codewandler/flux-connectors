@@ -11,6 +11,13 @@ api_version = "1.0"
 module = "asana.flux"
 operations = ["asana-task-get", "asana-task-create", "asana-task-update", "asana-task-story-add", "asana-project-get"]
 
+[operation_directions]
+asana-project-get = "read"
+asana-task-create = "write"
+asana-task-get = "read"
+asana-task-story-add = "write"
+asana-task-update = "write"
+
 [operation_semantic_effects]
 asana-project-get = []
 asana-task-create = []

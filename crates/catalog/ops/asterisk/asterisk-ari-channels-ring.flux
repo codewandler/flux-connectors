@@ -2,7 +2,7 @@ op asterisk-ari-channels-ring(channelId: String) -> Any
   description "Indicate ringing to a channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

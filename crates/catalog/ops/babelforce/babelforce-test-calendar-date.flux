@@ -2,7 +2,7 @@ op babelforce-test-calendar-date(date: String) -> Any
   description "Test whether a date is a holiday"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

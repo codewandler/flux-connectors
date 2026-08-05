@@ -2,7 +2,7 @@ op asterisk-ari-asterisk-delete-object(configClass: String, objectType: String, 
   description "Delete a dynamic configuration object."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

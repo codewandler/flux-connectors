@@ -2,7 +2,7 @@ op babelforce-download-phonebook-entries -> Any
   description "Download phonebook entries (CSV)"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

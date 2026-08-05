@@ -2,7 +2,7 @@ op babelforce-delete-sms(id: String) -> Any
   description "Delete an SMS"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

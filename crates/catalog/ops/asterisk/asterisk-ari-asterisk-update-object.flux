@@ -2,7 +2,7 @@ op asterisk-ari-asterisk-update-object(configClass: String, objectType: String, 
   description "Create or update a dynamic configuration object."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

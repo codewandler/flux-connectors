@@ -2,7 +2,7 @@ op trello-board-lists(id: String) -> Any
   description "List the open lists (columns) on a board, left to right. Each carries the `id` trello-list-cards and trello-card-create take"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.trello.com/1"

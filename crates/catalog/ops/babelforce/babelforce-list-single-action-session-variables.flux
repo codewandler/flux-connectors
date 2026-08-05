@@ -2,7 +2,7 @@ op babelforce-list-single-action-session-variables(provider: String, actionName:
   description "List an action's session variables"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

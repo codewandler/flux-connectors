@@ -2,7 +2,7 @@ op asterisk-ari-bridges-get-bridge-var(bridgeId: String, variable: String) -> An
   description "Get the value of a bridge variable or function."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

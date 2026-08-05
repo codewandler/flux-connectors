@@ -2,7 +2,7 @@ op babelforce-get-local-automation(applicationId: String, id: String) -> Any
   description "Get an application action"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

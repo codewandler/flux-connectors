@@ -147,6 +147,7 @@ tags = ["observability"]
 [[operations]]
 id = "datadog-monitor-list"
 method = "GET"
+direction = "read"
 path = "/api/v1/monitor"
 description = "List every monitor visible to this API key. Also this connector's `verify` — a bounded read that runs unattended, needing no argument"
 risk = "low"
@@ -171,6 +172,7 @@ items = { type = "object", required = [
 [[operations]]
 id = "datadog-monitor-get"
 method = "GET"
+direction = "read"
 path = "/api/v1/monitor/{monitor_id}"
 description = "Get one monitor by id"
 risk = "low"
@@ -204,6 +206,7 @@ properties = { id = { type = "integer", description = "Datadog's numeric id for 
 [[operations]]
 id = "datadog-incident-list"
 method = "GET"
+direction = "read"
 path = "/api/v2/incidents"
 description = "List the organization's incidents"
 risk = "low"
@@ -214,6 +217,7 @@ idempotency = "idempotent"
 [[operations]]
 id = "datadog-incident-get"
 method = "GET"
+direction = "read"
 path = "/api/v2/incidents/{incident_id}"
 description = "Get one incident by id"
 risk = "low"
