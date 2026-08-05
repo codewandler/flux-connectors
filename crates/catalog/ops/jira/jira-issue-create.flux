@@ -2,7 +2,7 @@ op jira-issue-create(project_key: String, summary: String, issue_type: String) -
   description "Create a Jira issue in a project. Visible to everyone with access to the project and notifies its watchers. Only project, summary and issue type are set: a description cannot be sent yet (see the connector's notes), so file the detail as a comment afterwards. Returns the new issue's id, key and self URL"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{site}.atlassian.net"

@@ -2,7 +2,7 @@ op zendesk-organization-show(organization_id: Number) -> Any
   description "Get one Zendesk organization by numeric id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

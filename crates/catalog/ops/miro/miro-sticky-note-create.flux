@@ -2,7 +2,7 @@ op miro-sticky-note-create(board_id: String, content: String) -> Any
   description "Create a sticky note on a board. Miro does not deduplicate: creating the same content twice makes two sticky notes, so this is not idempotent. The created note, with its assigned id, is in the response"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.miro.com/v2"

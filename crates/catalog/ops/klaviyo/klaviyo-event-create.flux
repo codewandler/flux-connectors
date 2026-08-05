@@ -2,7 +2,7 @@ op klaviyo-event-create(metric_name: String, profile_email: String, properties: 
   description "Post an event about a customer — a purchase, a page view, anything the account measures. THIS CAN CAUSE A MESSAGE TO BE SENT: an event triggers any Klaviyo flow built on its metric, so an email or SMS may reach the named profile immediately. Klaviyo creates the metric and the profile on first use if they do not exist. Answers 202 Accepted with no body: the event is queued, not confirmed. Pass unique_id to make a retry safe — Klaviyo records only the first event with a given unique_id for the same profile and metric"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://a.klaviyo.com/api"

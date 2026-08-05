@@ -2,7 +2,7 @@ op intercom-contact-note-create(contact_id: String, body: String, admin_id: Stri
   description "Add an internal note to a contact, visible to teammates in the workspace and never to the contact. Adding the same note twice adds two notes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{host}"

@@ -2,7 +2,7 @@ op gitlab-merge-request-list(project_id: Number, state: String, page: Number, pe
   description "List merge requests in a project, optionally filtered by state, newest activity first"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "{origin}/api/v4"

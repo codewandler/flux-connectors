@@ -122,7 +122,7 @@ op zendesk-ticket-update(ticket_id: Number, ticket: Any) -> Any
   description "Update Ticket"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

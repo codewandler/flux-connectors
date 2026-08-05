@@ -2,7 +2,7 @@ op babelforce-get-calendar(id: String) -> Any
   description "Get a calendar"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

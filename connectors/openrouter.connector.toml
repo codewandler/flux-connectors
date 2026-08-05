@@ -11,6 +11,12 @@ api_version = "v1"
 module = "openrouter.flux"
 operations = ["openrouter-models-list", "openrouter-model-endpoints-list", "openrouter-chat-completion", "openrouter-credits-get"]
 
+[operation_directions]
+openrouter-chat-completion = "write"
+openrouter-credits-get = "read"
+openrouter-model-endpoints-list = "read"
+openrouter-models-list = "read"
+
 [operation_semantic_effects]
 openrouter-chat-completion = []
 openrouter-credits-get = []

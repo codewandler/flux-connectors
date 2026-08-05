@@ -814,6 +814,14 @@
           "$ref": "#/$defs/naming",
           "description": "How an `operationId` becomes an op id, declared once, with pinned exceptions."
         },
+        "directions": {
+          "type": "object",
+          "description": "Reviewed vendor-state direction keyed first by stable service and then by exact vendor operationId. Unlike a selector, membership cannot change when an upstream method, path, name or description changes.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": { "$ref": "#/$defs/operationDirection" }
+          }
+        },
         "operations": {
           "type": "array",
           "description": "One entry per operation selected from the spec by name.",
@@ -844,7 +852,7 @@
         },
         "risk": {
           "$ref": "#/$defs/risk",
-          "description": "The risk every matched operation carries. Silence on a mutating method REFUSES THE BUILD: no OpenAPI document publishes risk, and a default that flatters would turn unmade decisions into claims a host reads as a licence. A matched operation whose method changes nothing takes `low` — not a flattering default but the only value a read can have, which is the asymmetry this key rests on."
+          "description": "The risk every matched operation carries. Silence on an authored write REFUSES THE BUILD: no OpenAPI document publishes risk, and a default that flatters would turn unmade decisions into claims a host reads as a licence. A matched authored read takes `low` — not a flattering default but the only value a read can have, which is the asymmetry this key rests on. Direction comes only from the stable identity map, never from this selector's HTTP-method membership."
         },
         "idempotency": {
           "$ref": "#/$defs/idempotency",
@@ -893,6 +901,11 @@
       "description": "An HTTP method."
     },
 
+    "operationDirection": {
+      "enum": ["read", "write"],
+      "description": "Whether the operation only observes vendor state or may change it. Required connector truth, independent of HTTP method."
+    },
+
     "semanticEffect": {
       "enum": ["pure", "read", "model", "network", "write_file", "write_db", "send_external", "delete", "money", "human_visible"],
       "description": "A non-deprecated flux_spec::FlowEffect tag. Unknown values are refused; `pure` is part of the shared vocabulary but invalid on an HTTP connector operation."
@@ -925,6 +938,10 @@
         "description": {
           "type": "string",
           "description": "Replaces the spec's summary as the model-facing tool description."
+        },
+        "direction": {
+          "$ref": "#/$defs/operationDirection",
+          "description": "States the reviewed vendor-state direction for this selected operation. When the stable identity map also states it, the two values must agree or loading is refused."
         },
         "risk": {
           "$ref": "#/$defs/risk",
@@ -1197,7 +1214,7 @@
       "title": "One operation",
       "description": "A single HTTP call, and everything a Flux `op` declaration needs to wrap it.",
       "additionalProperties": false,
-      "required": ["id", "method", "path", "risk", "idempotency"],
+      "required": ["id", "method", "direction", "path", "risk", "idempotency"],
       "properties": {
         "id": {
           "type": "string",
@@ -1210,6 +1227,10 @@
         "method": {
           "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
           "description": "The HTTP method."
+        },
+        "direction": {
+          "$ref": "#/$defs/operationDirection",
+          "description": "Whether this operation only observes vendor state or may change it. Mandatory and never inferred from method, name, description, risk, idempotency, semantic effects, exposure or authorization."
         },
         "path": {
           "type": "string",
@@ -1236,7 +1257,7 @@
         "repeatable_because": {
           "type": "string",
           "minLength": 24,
-          "description": "The condition under which repeating this write is safe. Required whenever a state-changing method (POST, PUT, PATCH, DELETE) declares `idempotency = \"conditional\"`, and refused anywhere else.\n\n`conditional` is flux's escape hatch for a write that really is replay-safe — flux's own wording is \"genuinely safe to repeat under STATED conditions\" — and this is where the condition is stated. Say what the vendor does on a repeat: that the body carries a target state rather than a delta, that an idempotency key deduplicates, that a second call returns the first result. Not the conclusion (\"it is idempotent\"), the mechanism.\n\nRefused in three cases, each a different mistake: on GET, HEAD or OPTIONS, which change nothing and so have no repeat hazard to condition; beside an `idempotency` that is not `conditional`, where the prose contradicts its own field; and when it is shorter than 24 characters after trimming, because an escape hatch that costs nothing is a deleted guard rather than a qualified one.\n\nIt does NOT permit `idempotency = \"idempotent\"` on a POST or PATCH; that stays refused unconditionally. `idempotent` licenses flux's op cache to serve a stored result INSTEAD of running the call, which is a stronger claim than \"repeating is safe\".\n\nPublished in `web/public/catalog.json` beside the claim it licenses, so a reader auditing a retry-safety claim on a write can see what it rests on."
+          "description": "The condition under which repeating this write is safe. Required whenever an authored write declares `idempotency = \"conditional\"`, and refused anywhere else. Authored direction is independent of HTTP method.\n\n`conditional` is flux's escape hatch for a write that really is replay-safe — flux's own wording is \"genuinely safe to repeat under STATED conditions\" — and this is where the condition is stated. Say what the vendor does on a repeat: that the body carries a target state rather than a delta, that an idempotency key deduplicates, that a second call returns the first result. Not the conclusion (\"it is idempotent\"), the mechanism.\n\nRefused in three cases, each a different mistake: on an authored read, which has no repeat hazard to condition; beside an `idempotency` that is not `conditional`, where the prose contradicts its own field; and when it is shorter than 24 characters after trimming, because an escape hatch that costs nothing is a deleted guard rather than a qualified one.\n\nIt does NOT permit `idempotency = \"idempotent\"` on an authored write; that stays refused unconditionally. `idempotent` licenses flux's op cache to serve a stored result INSTEAD of running the call, which is a stronger claim than \"repeating is safe\".\n\nPublished in `web/public/catalog.json` beside the claim it licenses, so a reader auditing a retry-safety claim on a write can see what it rests on."
         },
         "expose": {
           "type": "boolean",

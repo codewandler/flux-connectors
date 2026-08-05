@@ -11,6 +11,12 @@ api_version = "v1"
 module = "slack.flux"
 operations = ["slack-chat-post-message", "slack-conversations-history", "slack-users-info", "slack-reactions-add"]
 
+[operation_directions]
+slack-chat-post-message = "write"
+slack-conversations-history = "write"
+slack-reactions-add = "write"
+slack-users-info = "write"
+
 [operation_semantic_effects]
 slack-chat-post-message = []
 slack-conversations-history = []

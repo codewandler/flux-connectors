@@ -6,7 +6,7 @@ op algolia-index-list -> Any
   description "List the indices in this Algolia application, with each index's record count and size. This is the call that discovers the index names every other operation here takes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{app_id}.algolia.net"
@@ -19,7 +19,7 @@ op algolia-index-search(index_name: String, query: String, hits_per_page: Number
   description "Search one index and return the matching records. Algolia ranks results by its own configured relevance, so the order is the index's, not this connector's; `hits_per_page` and `page` walk the result set, and `filters` narrows it with Algolia's filter syntax over the index's own attributes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{app_id}.algolia.net"
@@ -32,7 +32,7 @@ op algolia-object-get(index_name: String, object_id: String) -> Any
   description "Read one record from an index by its object id. Returns the stored record as it is; its attributes are this index's own content model, so nothing here can name them. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{app_id}.algolia.net"
@@ -45,7 +45,7 @@ op algolia-object-save(index_name: String, object_id: String, body: Any) -> Any
   description "Save one record at a known object id, creating it if it does not exist and REPLACING it wholesale if it does. This is not a partial update: attributes absent from the body are removed from the stored record. Algolia applies the write asynchronously, so the response's `taskID` is an acknowledgement of acceptance rather than of visibility, and a search run immediately afterwards may still return the old record. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message` in the response body."
   risk "high"
   idempotency "conditional"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{app_id}.algolia.net"
@@ -60,7 +60,7 @@ op algolia-object-delete(index_name: String, object_id: String) -> Any
   description "Delete one record from an index by its object id. The record is gone with no undo route in the API — restoring it means re-indexing it from the source of truth. Algolia applies the delete asynchronously, so the `taskID` acknowledges acceptance rather than visibility. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message` in the response body."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{app_id}.algolia.net"

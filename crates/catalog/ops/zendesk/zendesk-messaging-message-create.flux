@@ -2,7 +2,7 @@ op zendesk-messaging-message-create(conversationId: String, author: Any, content
   description "Post Message"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"

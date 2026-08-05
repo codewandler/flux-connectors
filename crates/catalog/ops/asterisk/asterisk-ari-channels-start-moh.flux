@@ -2,7 +2,7 @@ op asterisk-ari-channels-start-moh(channelId: String, mohClass: String) -> Any
   description "Play music on hold to a channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

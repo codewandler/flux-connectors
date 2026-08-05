@@ -2,7 +2,7 @@ op jira-issue-get(issue_key: String) -> Any
   description "Read one Jira issue by key (`PROJ-123`) or numeric id — summary, description, status, assignee, reporter and every other configured field. Returns Jira's full default field set, including custom fields, because narrowing it needs the `fields` query parameter this connector cannot encode. Text fields are wiki markup, not rich content"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{site}.atlassian.net"

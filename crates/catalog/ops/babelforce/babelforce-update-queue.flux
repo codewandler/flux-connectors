@@ -2,7 +2,7 @@ op babelforce-update-queue(id: String, body: Any) -> Any
   description "Update a queue"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

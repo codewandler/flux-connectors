@@ -2,7 +2,7 @@ op babelforce-list-dashboards(page: Number, max: Number, q: String, uuid: String
   description "List dashboards"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

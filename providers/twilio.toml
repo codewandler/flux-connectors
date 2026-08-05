@@ -88,6 +88,7 @@ sha256 = "2ab609f9daeddae92f339c6c8d646dae9058f8f11baa53fab12e98fd3f37700d"
 # opaque PageToken. AccountSid is operator-pinned by the existing `account_sid` config field below.
 [[patch.operations]]
 select = "ListRecording"
+direction = "read"
 rename = "twilio-recording-list"
 description = "List recordings for the configured Twilio account with bounded pagination"
 risk = "low"
@@ -104,6 +105,7 @@ omit.query = [
 
 [[patch.operations]]
 select = "FetchRecording"
+direction = "read"
 rename = "twilio-recording-get"
 description = "Fetch one recording's metadata from the configured Twilio account"
 risk = "low"
@@ -112,6 +114,7 @@ omit.path = ["AccountSid"]
 
 [[patch.operations]]
 select = "ListUsageRecord"
+direction = "read"
 rename = "twilio-usage-record-list"
 description = "List usage records for the configured Twilio account with bounded pagination"
 risk = "low"
@@ -121,6 +124,7 @@ omit.query = ["Category", "StartDate", "EndDate", "PageToken"]
 
 [[patch.operations]]
 select = "ListConference"
+direction = "read"
 rename = "twilio-conference-list"
 description = "List conferences for the configured Twilio account with bounded pagination"
 risk = "low"
@@ -236,6 +240,7 @@ tags = ["telephony", "messaging"]
 [[operations]]
 id = "twilio-account-get"
 method = "GET"
+direction = "read"
 path = "/Accounts/{account_sid}.json"
 description = "Verify credentials by fetching the authenticated Twilio account"
 risk = "low"
@@ -265,6 +270,7 @@ properties = { sid = { type = "string", description = "The account's own SID —
 [[operations]]
 id = "twilio-message-list"
 method = "GET"
+direction = "read"
 path = "/Accounts/{account_sid}/Messages.json"
 description = "List messages sent from or received by this account"
 risk = "low"
@@ -317,6 +323,7 @@ properties = { messages = { type = "array", description = "This page's messages,
 [[operations]]
 id = "twilio-message-get"
 method = "GET"
+direction = "read"
 path = "/Accounts/{account_sid}/Messages/{message_sid}.json"
 description = "Fetch one message"
 risk = "low"
@@ -346,6 +353,7 @@ properties = { sid = { type = "string" }, account_sid = { type = "string" }, mes
 [[operations]]
 id = "twilio-call-list"
 method = "GET"
+direction = "read"
 path = "/Accounts/{account_sid}/Calls.json"
 description = "List calls made from or received by this account"
 risk = "low"
@@ -396,6 +404,7 @@ properties = { calls = { type = "array", items = { type = "object", required = [
 [[operations]]
 id = "twilio-call-get"
 method = "GET"
+direction = "read"
 path = "/Accounts/{account_sid}/Calls/{call_sid}.json"
 description = "Fetch one call"
 risk = "low"

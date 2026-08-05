@@ -116,6 +116,29 @@ pub enum HttpMethod {
     Options,
 }
 
+/// Whether executing an operation reads vendor state or may change it.
+///
+/// This is connector truth, not HTTP syntax. A vendor may expose a mutating `GET` or a proven
+/// read over `POST`; neither [`HttpMethod`] nor any other metadata field supplies a default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OperationDirection {
+    /// The operation only observes vendor state.
+    Read,
+    /// The operation may change vendor state.
+    Write,
+}
+
+impl OperationDirection {
+    /// The stable spelling published by manifests and catalogues.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Self::Read => "read",
+            Self::Write => "write",
+        }
+    }
+}
+
 /// How much damage an operation can do, in flux's own vocabulary (`flux_spec::Risk`).
 ///
 /// There is deliberately **no `Default`**. flux's approval gate reads this, so letting the field be
@@ -171,8 +194,8 @@ pub enum Idempotency {
     /// `NonIdempotent` with a comment saying the opposite. A condition the caller supplies is one
     /// kind of stated condition; it was never the only kind.
     ///
-    /// The condition itself is [`Operation::repeatable_because`], and stating it is mandatory on a
-    /// mutating method — flux says *stated* conditions, and a condition recorded nowhere is not one.
+    /// The condition itself is [`Operation::repeatable_because`], and stating it is mandatory on an
+    /// authored write — flux says *stated* conditions, and a condition recorded nowhere is not one.
     Conditional,
 }
 
@@ -1123,6 +1146,9 @@ pub struct Operation {
     pub service: String,
     /// The HTTP method.
     pub method: HttpMethod,
+    /// Whether the operation reads or may change vendor state. Required and never inferred from
+    /// [`Self::method`], its name, risk, idempotency, semantic effects, or exposure.
+    pub direction: OperationDirection,
     /// The path template, relative to the connector's base URL (`/v2/calls/{call_id}`).
     pub path: String,
     /// What the operation does, in one line. Reaches the model as the tool description.
@@ -1136,7 +1162,7 @@ pub struct Operation {
     /// touches. Empty means no semantic consequence has been declared.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub semantic_effects: Vec<SemanticEffect>,
-    /// **The condition under which repeating this write is safe** — mandatory on a mutating method
+    /// **The condition under which repeating this write is safe** — mandatory on an authored write
     /// declaring [`Idempotency::Conditional`], and meaningless anywhere else.
     ///
     /// flux's I3 (`flux_spec::coherence`) says a mutating operation that really is replay-safe
@@ -1148,7 +1174,7 @@ pub struct Operation {
     ///
     /// This field is that condition, and stating it is the whole cost of the claim:
     ///
-    /// - **Silence refuses.** A mutating operation declaring `Conditional` without one does not
+    /// - **Silence refuses.** An authored write declaring `Conditional` without one does not
     ///   build. That is a rule this repository did not have before C-186 and is a tightening, not a
     ///   loosening — the escape hatch was already wide open and unguarded.
     /// - **The condition must be one.** Blank, whitespace, or shorter than
@@ -1156,11 +1182,11 @@ pub struct Operation {
     ///   anything is a deleted guard wearing the guard's clothes. What no compiler can check is
     ///   whether the sentence is *true* — that is what publishing it into
     ///   `web/public/catalog.json`, beside the claim it licenses, is for.
-    /// - **It is refused where it means nothing.** On a non-mutating method there is no repeat
+    /// - **It is refused where it means nothing.** On an authored read there is no repeat
     ///   hazard to condition; and on an operation not declaring `Conditional` the prose asserts what
     ///   its own field denies, which is C-186's defect arriving backwards.
     ///
-    /// It deliberately does **not** unlock [`Idempotency::Idempotent`] on a `POST` or `PATCH`. The
+    /// It deliberately does **not** unlock [`Idempotency::Idempotent`] on an authored write. The
     /// first landing of C-186 made it do exactly that, and it was wrong for a reason worth keeping
     /// here: `Idempotent` licenses flux's op cache to serve a stored result *instead of executing*,
     /// so "safe to repeat" and "safe to skip" are different claims and only the second is what that

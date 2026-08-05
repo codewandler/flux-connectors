@@ -2,7 +2,7 @@ op asterisk-ari-recordings-stop(recordingName: String) -> Any
   description "Stop a live recording and store it."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

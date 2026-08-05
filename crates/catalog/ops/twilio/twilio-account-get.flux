@@ -2,7 +2,7 @@ op twilio-account-get(account_sid: String) -> Any
   description "Verify credentials by fetching the authenticated Twilio account"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"

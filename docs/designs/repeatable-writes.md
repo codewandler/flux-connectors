@@ -9,9 +9,9 @@
 
 ## The defect, stated precisely
 
-`check_write_metadata` refuses `idempotency = "idempotent"` on `POST` and `PATCH` **by method,
-regardless of endpoint semantics**. RFC 9110 §9.2.2 makes neither method idempotent, and most `POST`s
-create something — so the rule is right, and remains right, nearly every time.
+Before C-516, `check_write_metadata` refused `idempotency = "idempotent"` on `POST` and `PATCH` by
+method. C-516 replaces that transport heuristic with authored vendor-state direction: every authored
+write is refused `idempotent`, regardless of method, because Flux may skip consequence-bearing work.
 
 Three shipped operations are nonetheless safe to repeat by their **vendors'** behaviour:
 
@@ -62,7 +62,7 @@ refills from origin between calls, so a stored result is stale by construction.
 
 ### Two facts that settled it
 
-**1. `Conditional` was always permitted here, on every method, with nothing asked of it.** Measured:
+**1. `Conditional` was always permitted here, with nothing asked of it.** Measured:
 a `POST` declaring `idempotency = "conditional"` and nothing else emitted cleanly at the merge base.
 So the story's premise — that a repeatable `POST` could not be declared — was **false**. All three
 connectors could have shipped the honest value from day one.
@@ -82,9 +82,9 @@ refusal message, that put three connectors outside a value always meant for them
 The mechanism — field, loader guard, emitter guard, artifact — is unchanged from the first landing.
 What changed is which claim it licenses, and the direction of the change:
 
-- **`idempotent` on `POST`/`PATCH` is refused unconditionally**, exactly as before C-186. No escape.
+- **`idempotent` on an authored write is refused unconditionally.** No transport-shaped escape.
   The first landing weakened this; the rework restores it.
-- **`conditional` on a *mutating* method now requires a stated condition.** This is a **tightening**
+- **`conditional` on an authored write requires a stated condition.** This is a **tightening**
   of a rule that did not exist: the value was previously free. flux's wording is "safe to repeat under
   **stated** conditions", and nothing was making anyone state them.
 - The three connectors declare `conditional` with their conditions stated.
@@ -95,22 +95,21 @@ What changed is which claim it licenses, and the direction of the change:
 
 ## The rules
 
-| method | `risk = "low"` | `idempotent` | `conditional` | `repeatable_because` |
+| authored direction | `risk = "low"` | `idempotent` | `conditional` | `repeatable_because` |
 |---|---|---|---|---|
-| `GET`, `HEAD`, `OPTIONS` | permitted | permitted | permitted | **refused** |
-| `PUT`, `DELETE` | refused | permitted (RFC 9110 §9.2.2) | permitted **with a stated condition** | required for `conditional` |
-| `POST`, `PATCH` | refused | **refused** | permitted **with a stated condition** | required for `conditional` |
+| `read` | permitted | permitted | permitted | **refused** |
+| `write` | refused | **refused** | permitted **with a stated condition** | required for `conditional` |
 
 `repeatable_because` is refused three ways, each a distinct mistake, each with a golden-file snapshot
 under `crates/connector-spec/tests/golden/`:
 
 | written | refused because | fixture |
 |---|---|---|
-| on a non-mutating method | nothing about a read repeats harmfully, so the field would spread as decoration until no reviewer read any of them | `repeatability-condition-on-a-get` |
+| on an authored read | nothing about a read repeats harmfully, so the field would spread as decoration until no reviewer read any of them | `repeatability-condition-on-a-get` |
 | beside an `idempotency` that is not `conditional` | prose asserting what its own field denies — C-186's defect, backwards | `repeatability-condition-without-the-claim` |
 | shorter than 24 characters after trimming | an escape hatch that costs nothing is a deleted guard wearing the guard's clothes | `repeatability-condition-says-nothing` |
 
-and a mutating `conditional` **without** one is refused (`conditional-write-states-no-condition`).
+and an authored `conditional` write **without** one is refused (`conditional-write-states-no-condition`).
 
 **On the 24-character floor.** A floor on *effort*, not truth, calibrated rather than invented: it is
 the length of `"purging twice is a no-op"`, the shortest honest reason anyone on this story wrote.
@@ -150,54 +149,32 @@ cost of zero artifact churn.
 
 ## Conformance to flux, measured
 
-`crates/connector-pack/tests/metadata_coherence.rs` runs `flux_spec::coherence::metadata_violations`
-over the shipped catalogue projected through `connector_pack::project`. Measured 2026-08-01 across 299
-operations:
+The original C-186 measurement exposed the conflict that C-516 resolves. Re-measured during C-516
+across the current 829 operations:
 
-| | base `7cf45c1` | first landing | this design |
-|---|---|---|---|
-| I3 violations, `POST`/`PATCH` | 0 | 3 | **0** |
-| I3 violations, `PUT` | 9 | 9 | 9 |
-| I3 violations, reads | 192 | 192 | 192 |
+| | before explicit direction | C-516 |
+|---|---|---|
+| authored directions | absent | **829 / 829** |
+| direction/effect mismatches | not expressible | **0** |
+| authored writes declaring `idempotent` | 9 | **0** |
 
-The test asserts the first row. The other two are real findings and neither is C-186's:
-
-- **192 reads trip a rule aimed at writes.** Every operation emits `effects ["network"]` with no
-  `Effect::Read`, and `is_consequence_bearing` reads `[Network]` without `Read` as consequence-bearing.
-  Fixing it means emitting `Effect::Read` for non-mutating methods, which moves every artifact in the
-  catalogue.
-- **Nine `PUT`s claim `Idempotent`, and this repository permits them deliberately.** RFC 9110 §9.2.2
-  makes `PUT` idempotent, so `check_write_metadata` allows it. flux's I3 ignores the method entirely.
-  **The two rules are in genuine conflict, not in error**: replaying a `PUT` is safe, whereas
-  *skipping* one in favour of a cached result is not — and `Idempotent` licenses the second. Resolving
-  it is a decision about whose vocabulary wins across eight providers. The nine are
-  `babelforce-agent-status-update`, `babelforce-call-session-set`, `babelforce-session-update`,
-  `contentful-entry-publish`, `freshdesk-ticket-update`, `mailchimp-audience-member-upsert`,
-  `pagerduty-incident-acknowledge`, `pagerduty-incident-resolve`, `trello-card-archive`.
-
-The conformance test is quantified over `POST`/`PATCH` — a **principled boundary rather than a list of
-ids**, being exactly where this repository and flux already agree — so a new connector cannot falsify
-it by existing. The nine are pinned separately by count, two-way, so the population cannot grow while
-everyone believes it is "the known nine".
+The C-516 conformance proof is quantified over the whole catalogue. Every operation emits exactly one
+direction effect beside `network`; every authored write is consequence-bearing and refuses
+`idempotent`; the compatibility test executes Flux Flow's public canonical static gather admission.
+HTTP method is deliberately absent from those predicates.
 
 ## Is any of this reachable today?
 
-**No, and it is worth saying so precisely.** In flux 0.41 the only runtime consumer of
-`Idempotency::Idempotent` is the op cache, which also requires every effect to be `Read`, `Risk::Low`,
-approval-insensitive and non-destructive. All three operations fail on effects and risk regardless, so
-the first landing was not a live hazard. `flux-flow`'s `gather_safe`, which flux's docs name as an
-idempotency consumer, is not in this workspace's `Cargo.lock` at all.
-
-So this is a question of **honesty of declaration, not of exploitability** — but the first landing did
-remove one of four conditions on a pre-approval path, and "three other conditions still hold" is a
-fragile thing to leave load-bearing in a published crate.
+**Yes.** Flux Flow's static gather admission consumes effects, risk and idempotency. Connector
+direction supplies only the authored read/write effect and staging hint; Flux's canonical predicate
+continues to own the remaining admission criteria.
 
 ## Semver
 
 `connector-spec` publishes as `codewandler-connector-spec`, live on crates.io since 2026-07-31.
 
 - **A downstream provider-file author: additive with one narrow tightening.** The loader accepts a new
-  optional key. The one file that loaded before and does not now is a mutating `conditional` with no
+  optional key. The one file that loaded before and does not now is an authored `conditional` write with no
   stated condition — deliberate, and the whole point.
 - **A downstream Rust consumer: breaking.** `Operation` is public and **not** `#[non_exhaustive]`, so
   adding a public field breaks struct-literal construction and exhaustive destructuring. Pre-1.0 that
@@ -216,9 +193,7 @@ is its own change, cheapest in the same 0.8.0.
 
 ## What this does not fix
 
-`risk` carries the same method-shaped heuristic with no escape at all. `notion-database-query` and
-`notion-search` are `POST` **reads** forced to `medium`; [C-110](../stories/C-110-provider-linear.md)
-measured the whole-connector version, where a GraphQL vendor's every operation is a `POST` and four
-pure reads were forced to `risk >= medium`. That is a real and recurring shape — and `risk` gates
-flux's *approval* path, so relaxing it is a safety change deserving its own story and its own evidence,
-not a second clause in a change about retries.
+Risk follows authored direction rather than method. Some historically conservative operations such
+as `notion-database-query` and `notion-search` remain authored writes pending individual semantic
+review; their `POST` transport is neither evidence for nor against that declaration. Re-reviewing
+those individual operations is separate connector curation, not part of this schema migration.

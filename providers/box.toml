@@ -186,6 +186,7 @@ tags = ["storage"]
 [[operations]]
 id = "box-user-me"
 method = "GET"
+direction = "read"
 path = "/2.0/users/me"
 description = "Get the user this access token authenticates as, confirming the token resolves and naming the account it belongs to. Takes no parameters"
 risk = "low"
@@ -204,6 +205,7 @@ code_pointer = "/code"
 [[operations]]
 id = "box-folder-get"
 method = "GET"
+direction = "read"
 path = "/2.0/folders/{folder_id}"
 description = "Get one folder's metadata: name, size, timestamps and parent. Does not return its contents — use box-folder-items-list for that"
 risk = "low"
@@ -228,6 +230,7 @@ code_pointer = "/code"
 [[operations]]
 id = "box-folder-items-list"
 method = "GET"
+direction = "read"
 path = "/2.0/folders/{folder_id}/items"
 description = "List the files and folders directly inside a folder, first page only (Box's own default page size). Each entry is a mini item representation — its type, id and name — not the full metadata box-file-get or box-folder-get returns"
 risk = "low"
@@ -252,6 +255,7 @@ code_pointer = "/code"
 [[operations]]
 id = "box-file-get"
 method = "GET"
+direction = "read"
 path = "/2.0/files/{file_id}"
 description = "Get one file's metadata: name, size, timestamps and parent folder. This does NOT return the file's content — Box serves file content from a signed, time-limited URL reached only through a 302 redirect this connector does not follow, so file content is out of scope entirely"
 risk = "low"
@@ -278,6 +282,7 @@ code_pointer = "/code"
 [[operations]]
 id = "box-folder-create"
 method = "POST"
+direction = "write"
 path = "/2.0/folders"
 description = "Create a new, empty folder as a child of an existing folder. Naming a folder that already exists under the same parent answers 409 conflict rather than creating a duplicate"
 # `medium`, not `high`. A new folder is visible to everyone with access to its parent and is
@@ -286,7 +291,7 @@ description = "Create a new, empty folder as a child of an existing folder. Nami
 risk = "medium"
 # Posting twice with the same name conflicts (409) rather than duplicating, but that is a vendor
 # behaviour this file cannot assert as a property of the request, and `check_write_metadata`
-# (`crates/connector-flux/src/op.rs`) refuses `idempotent` on any POST regardless. `non_idempotent`
+# (`crates/connector-flux/src/op.rs`) refuses `idempotent` on any authored write. `non_idempotent`
 # is the honest declaration either way.
 idempotency = "non_idempotent"
 
@@ -318,13 +323,14 @@ code_pointer = "/code"
 [[operations]]
 id = "box-file-copy"
 method = "POST"
+direction = "write"
 path = "/2.0/files/{file_id}/copy"
 description = "Copy an existing file into a different folder, keeping its original name. Each call creates a new, independent file — copying the same file twice produces two copies, not one"
 # `medium`, not `high`, for the same reason as box-folder-create: limited blast radius, attributed,
 # and trivial to remove. It creates one new object and changes nothing about the source file.
 risk = "medium"
 # Every call creates a new copy; there is no idempotency key on this endpoint. `check_write_metadata`
-# also refuses `idempotent` on a POST regardless.
+# also refuses `idempotent` on an authored write.
 idempotency = "non_idempotent"
 
 [[operations.params.path]]

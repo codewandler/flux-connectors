@@ -2,7 +2,7 @@ op babelforce-refresh-integration-token(id: String, tokenId: String) -> Any
   description "Refresh an integration token"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

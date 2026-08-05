@@ -2,7 +2,7 @@ op babelforce-get-settings-for-app-agent-status -> Any
   description "Get agent.status settings"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

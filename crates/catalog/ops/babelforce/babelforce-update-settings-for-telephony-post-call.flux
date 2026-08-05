@@ -2,7 +2,7 @@ op babelforce-update-settings-for-telephony-post-call(body: Any) -> Any
   description "Update post-call settings"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

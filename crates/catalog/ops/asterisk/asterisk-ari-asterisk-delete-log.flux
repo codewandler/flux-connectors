@@ -2,7 +2,7 @@ op asterisk-ari-asterisk-delete-log(logChannelName: String) -> Any
   description "Deletes a log channel."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

@@ -71,8 +71,7 @@
 # as a substitutable placeholder rather than as an argument.
 #
 # ---------------------------------------------------------------------------------------------
-# THE TWO DECLARATIONS THIS CONNECTOR IS ACTUALLY FOR: A DESTRUCTIVE DELETE AND AN IDEMPOTENT PURGE
-# THE COMPILER WILL NOT LET BE DECLARED IDEMPOTENT.
+# THE TWO DECLARATIONS THIS CONNECTOR IS ACTUALLY FOR: A DESTRUCTIVE DELETE AND A REPEATABLE PURGE.
 # ---------------------------------------------------------------------------------------------
 #
 # `cloudflare-dns-record-delete` is `risk = "destructive"` for the ordinary reason: the record is gone
@@ -86,23 +85,12 @@
 # `cloudflare-cache-purge` is the harder one, and it is **genuinely idempotent by vendor behaviour**:
 # firing `purge_everything: true` twice empties the same already-empty cache the second time, so
 # repeating it changes nothing beyond the first call. That is exactly what C-169 asked this file to
-# get right — and when C-169 landed, getting it right meant running into
-# `crates/connector-flux/src/op.rs`'s `check_write_metadata`, which refused
-# `idempotency = "idempotent"` on any `POST` or `PATCH` outright. Cloudflare's purge is a `POST`, so
-# this file shipped `non_idempotent` next to a paragraph explaining that it was idempotent — and the
-# paragraph is not what a host reads. The field travels to flux's `ToolSpec`; a host deciding whether
-# a retry is safe reads the field and declined a retry that was always safe.
+# get right. Flux's `Idempotent` is stronger than safe replay because it licenses serving a cached
+# result instead of executing, so the operation uses `Conditional` and states the vendor condition.
 #
 # **C-186 closed that, and the way it closed it is the part worth knowing before editing this
-# file.** The method rule is unchanged where an author says nothing: a `POST` still may not claim
-# `idempotent`, because most `POST`s create something and a `retry` around one that does is unsound.
-# What is new is `idempotent_because`, which unlocks the claim in exchange for stating the vendor
-# behaviour that backs it — and the reason is published into `web/public/catalog.json` beside the
-# claim, so a reader auditing a method-defying retry-safety declaration can see what it rests on.
-# The declaration below is now the true one. `providers/notion.toml` records a related trade for its
-# two `POST` reads (`notion-database-query`, `notion-search`), forced `medium`/`non_idempotent` by
-# the same method-shaped heuristic; the `risk` half of that heuristic has no escape and is still
-# open.
+# file.** Every authored write refuses `Idempotent`, regardless of HTTP method. `Conditional` is the
+# honest replay-safe declaration and `repeatable_because` publishes the vendor behaviour beside it.
 #
 # `risk = "high"` on the purge, not `medium` and not `destructive`. Not `destructive`: nothing is
 # deleted or unrecoverable — the edge cache repopulates from origin on the next request, exactly as
@@ -261,6 +249,7 @@ tags = ["infrastructure"]
 [[operations]]
 id = "cloudflare-zone-list"
 method = "GET"
+direction = "read"
 path = "/zones"
 description = "List the zones (domains) this API token can see, with each zone's id, name, status and assigned Cloudflare name servers. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). The zone `id` returned here is the value an operator pins as this connection's `zone_id`; every other operation in this connector is already scoped to that one zone and does not take it as an argument"
 risk = "low"
@@ -280,6 +269,7 @@ code_pointer = "/errors/0/code"
 [[operations]]
 id = "cloudflare-dns-record-list"
 method = "GET"
+direction = "read"
 path = "/zones/{zone_id}/dns_records"
 description = "List the DNS records in a zone: each record's id, type, name, content, TTL and whether it is proxied through Cloudflare. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note)"
 risk = "low"
@@ -299,6 +289,7 @@ code_pointer = "/errors/0/code"
 [[operations]]
 id = "cloudflare-dns-record-create"
 method = "POST"
+direction = "write"
 path = "/zones/{zone_id}/dns_records"
 description = "Create a DNS record in a zone. Cloudflare does not deduplicate: creating the same name/type/content pair twice makes two records, so this is not idempotent. The created record, with its assigned id, is in the response"
 risk = "medium"
@@ -341,6 +332,7 @@ code_pointer = "/errors/0/code"
 [[operations]]
 id = "cloudflare-dns-record-delete"
 method = "DELETE"
+direction = "write"
 path = "/zones/{zone_id}/dns_records/{dns_record_id}"
 description = "Delete one DNS record. There is no API route back: Cloudflare's dashboard \"recently deleted\" surface is a retention-window UI feature, not an endpoint, so a flux run cannot undo this. Responds with just the deleted record's id"
 # See the header comment. The only tier that makes flux's approval gate stop for this.
@@ -371,13 +363,12 @@ code_pointer = "/errors/0/code"
 [[operations]]
 id = "cloudflare-cache-purge"
 method = "POST"
+direction = "write"
 path = "/zones/{zone_id}/purge_cache"
 description = "Purge every cached asset for a zone, immediately, for every visitor worldwide. There is no partial or selective purge in this connector (see its header note) — every call empties the whole zone's edge cache. Repeating it changes nothing further, but each call can spike load on the origin as the cache refills, so it should not be called more often than a real cache-affecting change warrants"
-# Genuinely idempotent by Cloudflare's own behaviour, and now declarable as such (C-186). `POST` is
-# not an idempotent method under RFC 9110 §9.2.2 and `check_write_metadata` still refuses the claim
-# on one by default — `idempotent_because` is what buys it, and what a reviewer reads beside it in
-# `web/public/catalog.json`. This operation shipped `non_idempotent` before C-186, contradicting the
-# header comment above it; that contradiction is what the story was filed for.
+# Safely repeatable by Cloudflare's behaviour and therefore `conditional`, not `idempotent`: Flux
+# must execute a new purge rather than serve a cached result. The stated condition is published in
+# `web/public/catalog.json`.
 idempotency = "conditional"
 repeatable_because = "`purge_everything` names a target state rather than applying a delta, so a repeat leaves the zone exactly where the first call left it — purging an already-empty edge cache is a no-op. Conditional rather than idempotent because the cache refills from origin between calls, so a stored result must never be served in place of running it"
 # Not `destructive` (nothing is deleted or unrecoverable; the cache refills from origin) and not

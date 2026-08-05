@@ -6,7 +6,7 @@ op github-repo-get(owner: String, repo: String) -> Any
   description "Get one repository's metadata, including its default branch, visibility and permissions"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.github.com"
@@ -19,7 +19,7 @@ op github-issue-get(owner: String, repo: String, issue_number: Number) -> Any
   description "Get one issue by number. GitHub treats a pull request as an issue, so a PR number returns that PR's issue view; use github-pull-get for its merge and review state"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.github.com"
@@ -32,7 +32,7 @@ op github-pull-get(owner: String, repo: String, pull_number: Number) -> Any
   description "Get one pull request by number, with its merge state, head and base refs and review counts"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.github.com"
@@ -45,7 +45,7 @@ op github-issue-create(owner: String, repo: String, title: String, body: String,
   description "Open a new issue on a repository. The issue is immediately visible to everyone who can see the repository and notifies its subscribers"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.github.com"
@@ -60,7 +60,7 @@ op github-issue-comment-add(owner: String, repo: String, issue_number: Number, b
   description "Add a comment to an issue or pull request. The comment is public to everyone who can see the repository and notifies its participants; GitHub has no private or internal comment here"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.github.com"
@@ -75,7 +75,7 @@ op github-issue-list(owner: String, repo: String, per_page: Number, page: Number
   description "List a repository's issues and pull requests with bounded integer pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.github.com"
@@ -88,7 +88,7 @@ op github-pull-files-list(owner: String, repo: String, pull_number: Number, per_
   description "List the files changed by one pull request with bounded integer pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.github.com"
@@ -101,7 +101,7 @@ op github-workflow-run-list(owner: String, repo: String, per_page: Number, page:
   description "List a repository's GitHub Actions workflow runs with bounded integer pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.github.com"
@@ -114,7 +114,7 @@ op github-commit-list(owner: String, repo: String, per_page: Number, page: Numbe
   description "List commits in a repository with bounded integer pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.github.com"

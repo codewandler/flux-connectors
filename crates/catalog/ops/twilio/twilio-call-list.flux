@@ -2,7 +2,7 @@ op twilio-call-list(account_sid: String, status: String, page: Number, page_size
   description "List calls made from or received by this account"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"

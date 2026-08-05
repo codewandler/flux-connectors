@@ -2,7 +2,7 @@ op asterisk-ari-bridges-create(type: String, bridgeId: String, name: String, var
   description "Create a new bridge."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{host}:8089/ari"

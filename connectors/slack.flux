@@ -6,7 +6,7 @@ op slack-chat-post-message(channel: String, text: String, thread_ts: String) -> 
   description "Post a message to a Slack channel, visible to everyone in it. Slack answers HTTP 200 even on failure: check `ok` in the response body before treating the message as sent. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://slack.com"
@@ -20,7 +20,7 @@ op slack-conversations-history(channel: String, limit: Number, oldest: String, l
   description "Read recent messages from a Slack channel, newest first. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `channel_not_found` appears at `error`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://slack.com"
@@ -34,7 +34,7 @@ op slack-users-info(user: String, include_locale: Bool) -> Any
   description "Look up one Slack user by id — display name, real name, time zone and whether they are a bot. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `user_not_found` appears at `error`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://slack.com"
@@ -48,7 +48,7 @@ op slack-reactions-add(channel: String, timestamp: String, name: String) -> Any
   description "Add an emoji reaction to a message, visible to everyone in the channel. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `already_reacted` appears at `error`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://slack.com"

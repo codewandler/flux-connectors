@@ -12,6 +12,14 @@ module = "confluence.flux"
 operations = ["confluence-space-list", "confluence-space-get", "confluence-space-pages", "confluence-page-get", "confluence-page-create", "confluence-comment-add"]
 verify = "confluence-space-list"
 
+[operation_directions]
+confluence-comment-add = "write"
+confluence-page-create = "write"
+confluence-page-get = "read"
+confluence-space-get = "read"
+confluence-space-list = "read"
+confluence-space-pages = "read"
+
 [operation_semantic_effects]
 confluence-comment-add = []
 confluence-page-create = []

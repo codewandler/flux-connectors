@@ -2,7 +2,7 @@ op asterisk-ari-asterisk-get-module(moduleName: String) -> Any
   description "Get Asterisk module information."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

@@ -71,10 +71,8 @@
 #   shapes).
 # - `sendgrid-email-validate` — the Email Address Validation API. It is a `POST` — the caller supplies
 #   the address to check in the request body — but it mutates no SendGrid resource, so it is declared
-#   `risk = "medium"` / `idempotency = "non_idempotent"` rather than `low`/`idempotent`, the same
-#   over-prompting Notion's own POST reads accept (`providers/notion.toml`): `check_write_metadata`
-#   sees the HTTP method, not the vendor's semantics, and the safe direction is to over-prompt, never
-#   to under-prompt on a claim this file cannot back.
+#   `risk = "medium"` / `idempotency = "non_idempotent"` because it remains conservatively authored
+#   as a write pending individual semantic review. POST is transport only and supplied no evidence.
 #
 # **No recipient address, no validated address, and no example value shaped like a real one appears
 # anywhere in this file** — not in an example, not in a description, not in a response_schema literal.
@@ -171,6 +169,7 @@ tags = ["email"]
 [[operations]]
 id = "sendgrid-template-list"
 method = "GET"
+direction = "read"
 path = "/v3/templates"
 description = "List transactional templates (name, id, generation, and each template's versions). Also this connector's `verify` — a bounded read that runs unattended"
 risk = "low"
@@ -198,6 +197,7 @@ properties = { result = { type = "array", description = "The matching templates"
 [[operations]]
 id = "sendgrid-template-get"
 method = "GET"
+direction = "read"
 path = "/v3/templates/{template_id}"
 description = "Get one transactional template by id, including every version's subject and content"
 risk = "low"
@@ -219,6 +219,7 @@ properties = { id = { type = "string" }, name = { type = "string" }, generation 
 [[operations]]
 id = "sendgrid-suppression-bounce-list"
 method = "GET"
+direction = "read"
 path = "/v3/suppression/bounces"
 description = "List addresses that have bounced and are suppressed from receiving further mail. Each entry is personal data about a third party — read it only for what the calling flow needs"
 risk = "low"
@@ -248,15 +249,14 @@ items = { type = "object", required = ["email", "created", "reason", "status"], 
 [[operations]]
 id = "sendgrid-email-validate"
 method = "POST"
+direction = "write"
 path = "/v3/validations/email"
 description = "Check whether an email address is well-formed and likely deliverable, without sending it any mail. Requires SendGrid's Email Address Validation add-on to be enabled on the account"
 # A POST, but it mutates no SendGrid resource — it consumes a validation credit and returns a
 # verdict, and nothing about the account or any list changes. `risk = "medium"` /
 # `idempotency = "non_idempotent"` rather than the `low`/`idempotent` a genuine read would carry,
-# because `check_write_metadata` refuses `low` on any state-changing method regardless of what it
-# actually changes (`crates/connector-flux/src/op.rs`). The direction is the safe one — an operator
-# is over-prompted for a call that cannot hurt anything, never under-prompted for one that can — and
-# `providers/notion.toml` already accepts the identical trade for its own POST reads.
+# because its direction remains conservatively authored as write pending individual semantic review.
+# `check_write_metadata` reads that direction, not POST; a method-only change cannot reclassify it.
 risk = "medium"
 idempotency = "non_idempotent"
 

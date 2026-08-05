@@ -56,36 +56,36 @@ const EXPANSION_DEFERRED: [(&str, &str); 4] = [
 const ORIGINAL_FLUX: [(&str, &str); 8] = [
     (
         "stripe-balance-get",
-        "8aa021012daa4a8b769971349c0fc32243ee9d79fd49262347323863e547d4c9",
+        "515ef0dfff41c259612bc4ec64a082af44f6c6a7ff0c6af1a5d89caa227dff08",
     ),
     (
         "stripe-charge-get",
-        "437bc81655909aae320492ec4f86b2904ea38fcd3a7bfd36d22f513186116d86",
+        "62e3368499d60abdb77aa37514f3ed28aaba56da49b93397f65f916e075bc7df",
     ),
     (
         "stripe-charge-refund-create",
-        "cff7fc446cbca6d6847012af000ebf8f820c106a3212d40bc9af2c9ab0064cb1",
+        "cf68e1299922fb2236c00c9b4941563fa7dc370252a7a6dfd4a9c83ecf48b9da",
     ),
     (
         "stripe-customer-get",
-        "4b6b2cc2595c26400bc1eb21c54b9e1a8dacbcdc6328c90dae3f1f9817ad4b76",
+        "78aedcd6cd10c298048cded0ceb62dadfc516a2e82af3b842ff02f2738b0d2e5",
     ),
     (
         "stripe-payment-intent-cancel",
-        "48b5090c48f8316befe576b62375f44e1ce702e20087d6bfb2f9c44ae2a0f290",
+        "de53461bd7a23d68809d88a512860224008bf2d0bc652bb198d2796d2d96d6c3",
     ),
     (
         "stripe-payment-intent-capture",
         // C-155 raises capture to destructive because it now declares the `money` semantic effect.
-        "5b06259e1bb1f2e4b85c34009f5d3b4618308857e30870d92ec0479e7c3bef27",
+        "fd7a84ed34fa7df588eb2f2f90436aa4e940a0dd3412813ab7c4b85a25ba0b71",
     ),
     (
         "stripe-payment-intent-get",
-        "c395f7eb33782f26e7dc7a58f1b2357fedbb8ed4befd51f91fbbc4a248e2c60a",
+        "7f59f659a707045a75696b26d520e59d8fa325a6cce6915b500759fecfc3000d",
     ),
     (
         "stripe-refund-get",
-        "520942e8c3df9c6fdccc250d4d4e24c148cc60794bde8550bb4cbe3c8a21124e",
+        "5710c0232a6c17c40a9082d3de81b0ecacf107b56a7744f644e02f7ed97f13be",
     ),
 ];
 

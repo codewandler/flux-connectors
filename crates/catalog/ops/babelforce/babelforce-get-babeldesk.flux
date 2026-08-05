@@ -2,7 +2,7 @@ op babelforce-get-babeldesk(id: String) -> Any
   description "Get Babeldesk"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -216,6 +216,7 @@ tags = ["support"]
 [[operations]]
 id = "front-verify"
 method = "GET"
+direction = "read"
 path = "/conversations"
 description = "List one conversation, confirming the token resolves and carries at least read access. Takes no parameters other than the page bound"
 risk = "low"
@@ -242,6 +243,7 @@ code_pointer = "/_error/status"
 [[operations]]
 id = "front-conversation-list"
 method = "GET"
+direction = "read"
 path = "/conversations"
 description = "List the company's conversations in reverse chronological order (most recently updated first), first page only — this connector cannot follow Front's next-page link (see providers/front.toml's header comment). Front's structured search filter (`q`) is not accepted here: it is a bracket-notation object this pipeline cannot encode as a query string"
 risk = "low"
@@ -266,6 +268,7 @@ code_pointer = "/_error/status"
 [[operations]]
 id = "front-conversation-get"
 method = "GET"
+direction = "read"
 path = "/conversations/{conversation_id}"
 description = "Get one conversation's metadata: subject, status, assignee, recipient and tags. Does not return its messages — use front-conversation-message-list for those"
 risk = "low"
@@ -290,6 +293,7 @@ code_pointer = "/_error/status"
 [[operations]]
 id = "front-conversation-message-list"
 method = "GET"
+direction = "read"
 path = "/conversations/{conversation_id}/messages"
 description = "List the messages in a conversation in reverse chronological order (newest first), first page only — this connector cannot follow Front's next-page link (see providers/front.toml's header comment). Each message's `body`/`text` is the actual correspondence exchanged on this conversation"
 risk = "low"
@@ -322,6 +326,7 @@ code_pointer = "/_error/status"
 [[operations]]
 id = "front-conversation-reply"
 method = "POST"
+direction = "write"
 path = "/conversations/{conversation_id}/messages"
 description = "Reply to a conversation, using its own existing recipients, channel and sender identity — this connector cannot override any of those (see providers/front.toml's header comment). Front queues delivery: the response is an acknowledgement, not the sent message, and is not visible to the recipient until Front actually delivers it"
 # `high`, not `medium`. Unlike an internal write (a Box folder, a Notion page, a Slack message in a
@@ -330,7 +335,7 @@ description = "Reply to a conversation, using its own existing recipients, chann
 # wider because the recipient need not be inside any workspace this operator controls.
 risk = "high"
 # Front documents no idempotency key on this endpoint, and `check_write_metadata`
-# (`crates/connector-flux/src/op.rs`) refuses `idempotent` on any POST regardless. Posting the same
+# (`crates/connector-flux/src/op.rs`) refuses `idempotent` on any authored write. Posting the same
 # body twice sends two messages.
 idempotency = "non_idempotent"
 
@@ -360,16 +365,16 @@ code_pointer = "/_error/status"
 [[operations]]
 id = "front-conversation-tag-add"
 method = "POST"
+direction = "write"
 path = "/conversations/{conversation_id}/tags"
 description = "Apply one or more existing tags to a conversation. Applying a tag the conversation already carries changes nothing — Front does not duplicate it. Answers 204 with an empty body on success"
 # `medium`, not `high`. A tag is visible only to the team, notifies nobody, and is trivially removed —
 # the same limited-blast-radius reasoning `box-folder-create` carries. Not `low`: `check_write_metadata`
-# refuses `low` on any state-changing method.
+# refuses `low` on any authored write.
 risk = "medium"
 # Front's own behaviour is idempotent (re-applying an existing tag is a no-op), but
-# `check_write_metadata` refuses `idempotent` on any POST regardless of what the vendor actually does
-# — the same over-declaration `providers/notion.toml` records of its two POST reads. `non_idempotent`
-# is the honest spelling this pipeline can make, even though repeating this call is in fact safe.
+# `check_write_metadata` refuses `idempotent` on any authored write. This operation could instead
+# declare `conditional` with a stated vendor condition; retaining `non_idempotent` is conservative.
 idempotency = "non_idempotent"
 
 [[operations.params.path]]

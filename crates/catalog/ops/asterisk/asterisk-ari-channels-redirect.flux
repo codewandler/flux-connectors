@@ -2,7 +2,7 @@ op asterisk-ari-channels-redirect(channelId: String, endpoint: String) -> Any
   description "Redirect the channel to a different location."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

@@ -2,7 +2,7 @@ op babelforce-list-babeldesk-widgets(page: Number, max: Number) -> Any
   description "Get a List of all BabeldeskWidgets"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

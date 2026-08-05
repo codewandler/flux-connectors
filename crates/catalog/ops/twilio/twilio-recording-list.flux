@@ -2,7 +2,7 @@ op twilio-recording-list(IncludeSoftDeleted: Bool, PageSize: Number, Page: Numbe
   description "List recordings for the configured Twilio account with bounded pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.twilio.com/2010-04-01"

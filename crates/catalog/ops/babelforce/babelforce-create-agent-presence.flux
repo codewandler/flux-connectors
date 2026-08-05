@@ -2,7 +2,7 @@ op babelforce-create-agent-presence(body: Any) -> Any
   description "Create a busy presence"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

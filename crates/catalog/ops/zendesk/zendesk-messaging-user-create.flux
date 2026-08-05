@@ -2,7 +2,7 @@ op zendesk-messaging-user-create(externalId: String) -> Any
   description "Create a Zendesk Messaging user with one required external id"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"

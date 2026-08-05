@@ -26,6 +26,15 @@ idempotency = "idempotent"
 authh = []
 "#;
 
+/// A complete operation except for the vendor-state direction C-516 makes mandatory.
+const OPERATION_WITHOUT_DIRECTION: &str = r#"
+id = "zendesk.ticket.show"
+method = "GET"
+path = "/api/v2/tickets/{ticket_id}.json"
+risk = "low"
+idempotency = "idempotent"
+"#;
+
 /// A credential whose `env` key is misspelled.
 const CREDENTIAL_WITH_TYPOED_ENV: &str = r#"
 name = "zendesk.api_token"
@@ -47,6 +56,21 @@ fn a_typoed_operation_auth_key_is_rejected() {
     assert!(
         error.to_string().contains("authh"),
         "the error must name the offending key so the author can find it, got: {error}"
+    );
+}
+
+/// HTTP method is transport syntax, not proof of whether vendor state changes. Omitting the
+/// reviewed direction must therefore fail at the IR boundary before any artifact can be emitted.
+#[test]
+fn an_operation_must_declare_its_vendor_state_direction() {
+    let parsed = toml::from_str::<Operation>(OPERATION_WITHOUT_DIRECTION);
+
+    let error = parsed.expect_err(
+        "an operation with no `direction` must be rejected rather than classified from its method",
+    );
+    assert!(
+        error.to_string().contains("direction"),
+        "the error must name the missing field, got: {error}"
     );
 }
 
@@ -107,6 +131,7 @@ base_url = "https://z.test"
 [[operations]]
 id = "z.list"
 method = "GET"
+direction = "read"
 path = "/x"
 risk = "low"
 idempotency = "idempotent"
@@ -127,6 +152,7 @@ base_url = "https://z.test"
 [[operations]]
 id = "z.list"
 method = "GET"
+direction = "read"
 path = "/x"
 risk = "low"
 idempotency = "idempotent"
@@ -167,6 +193,7 @@ user_env = ["ZENDESK_USER"]
 [[operations]]
 id = "zendesk.ticket.show"
 method = "GET"
+direction = "read"
 path = "/api/v2/tickets/{ticket_id}.json"
 risk = "low"
 idempotency = "idempotent"

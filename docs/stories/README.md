@@ -32,9 +32,6 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 - [C-402 — Decide whether a whole-host template needs an operator allowlist](C-402-whole-host-template-allowlist.md) · Bridge · DECIDED 2026-08-01, refined by C-508: the connector declares a closed host bound or an explicit operator-pinned self-managed-origin policy; the loader REFUSES a whole-host template declaring neither
 - [C-477 — Align runtime API versions with vendored provider contracts](C-477-pin-runtime-api-version-contracts.md) · Connector · compatibility follow-up — GitHub can send its dated API version; Stripe needs an explicit account-version decision
 
-### All Integrations Connectors
-- [C-516 — Connector operation direction is explicit at the ToolSpec seam](C-516-explicit-operation-direction.md) · Bridge · C-528 safety prerequisite — all 829 generated operations currently expose only Network, so reads cannot be certified for concurrent gather and writes are invisible to Effect::Write-based approval
-
 ### Anthropic Managed Agents — the first vendor that declares both transports and its own event set
 _The `channel-bindings` and `inbound-events` epics built a model for the reverse call direction —_
 - [C-444 — Decide: may a connector create and run a Managed Agents session?](C-444-decide-managed-agents-charter.md) · Spec · DECISION, not a task — the fourth shape of C-123's question. Management plane is ordinary SaaS; the SESSION plane runs an agent loop and bills inference, and flux has flux-agent/flux-orchestrate of its own. Nothing in the epic's session half may start before this
@@ -495,6 +492,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-509 — Persist connector secrets owner-only on every Flux platform](C-509-portable-owner-only-secret-store.md) · Bridge · Milestone 1 blocker — Exchange X-127 cannot support Windows or ship a complete local composition while connector-secrets 0.19 exposes its durable store only on Unix
 - [C-510 — Adopt the Decision 0006 datasource vocabulary](C-510-adopt-the-decision-0006-datasource-vocabulary.md) · Bridge · Decision 0006 defines the family's one datasource concept — a declared read-only record surface — and places vendor-data Datasource Definitions here. This reconciles C-137…C-140 onto the indexed DatasourceBackend they always needed and charters the [[datasources]] IR surface before Milestone 5 deletes the plugin channel
 - [C-515 — Publish recoverable prepared secret transactions](C-515-recoverable-prepared-secret-transactions.md) · Bridge · Released in v0.20.0; five native hosts and the immutable Exchange registry-adoption checkpoint are verified
+- [C-516 — Connector operation direction is explicit at the ToolSpec seam](C-516-explicit-operation-direction.md) · Bridge · 829 operations now carry reviewed read/write direction; stable spec identities fail closed and Flux remains the sole gather-admission authority
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

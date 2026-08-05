@@ -192,6 +192,7 @@ tags = ["marketing"]
 [[operations]]
 id = "mailchimp-ping"
 method = "GET"
+direction = "read"
 path = "/ping"
 description = "Check that the API is reachable and the credential works. Takes no argument and returns no account data — Mailchimp calls it a health check that returns nothing account-specific. Also this connector's `verify`: it is the one call that proves both halves of the configuration at once, because a wrong key and a wrong datacentre label both fail it"
 risk = "low"
@@ -218,6 +219,7 @@ properties = { health_status = { type = "string", description = "Mailchimp's fix
 [[operations]]
 id = "mailchimp-audience-list"
 method = "GET"
+direction = "read"
 path = "/lists"
 description = "List the audiences in the account, with the id every contact operation takes. Returns Mailchimp's default first page only — this connector declares no paging parameters, so compare the number of entries against `total_items` before treating the result as complete"
 risk = "low"
@@ -233,6 +235,7 @@ properties = { lists = { type = "array", description = "The audiences on this pa
 [[operations]]
 id = "mailchimp-audience-get"
 method = "GET"
+direction = "read"
 path = "/lists/{list_id}"
 description = "Get one audience by id, with its settings and current member counts"
 risk = "low"
@@ -265,6 +268,7 @@ properties = { id = { type = "string", description = "The audience id" }, web_id
 [[operations]]
 id = "mailchimp-audience-member-list"
 method = "GET"
+direction = "read"
 path = "/lists/{list_id}/members"
 description = "List the contacts in an audience, subscribed and unsubscribed alike. Returns Mailchimp's default first page only — this connector declares no paging or status filter, so compare the number of entries against `total_items` before treating the result as complete. Every entry is personal data"
 risk = "low"
@@ -286,6 +290,7 @@ properties = { members = { type = "array", description = "The contacts on this p
 [[operations]]
 id = "mailchimp-audience-member-get"
 method = "GET"
+direction = "read"
 path = "/lists/{list_id}/members/{subscriber_hash}"
 description = "Get one contact in an audience, including its subscription status and opt-in record. The contact is addressed by a hash of its own address, not by the address — see `subscriber_hash`. Returns personal data"
 risk = "low"
@@ -332,10 +337,11 @@ properties = { id = { type = "string", description = "The MD5 hash of the lowerc
 [[operations]]
 id = "mailchimp-audience-member-upsert"
 method = "PUT"
+direction = "write"
 path = "/lists/{list_id}/members/{subscriber_hash}"
 description = "Add a contact to an audience, or update the one already there. Creating with `status_if_new = \"pending\"` makes Mailchimp send its own opt-in confirmation and record the consent; creating with \"subscribed\" asserts that the account already holds that consent and sends nothing. Setting `status` on an existing contact changes whether they receive mail. This writes personal data about a third party and is not undone by calling it again"
 risk = "high"
-idempotency = "idempotent"
+idempotency = "non_idempotent"
 
 [[operations.params.path]]
 name = "list_id"
@@ -383,6 +389,7 @@ properties = { id = { type = "string", description = "The MD5 hash of the lowerc
 [[operations]]
 id = "mailchimp-campaign-list"
 method = "GET"
+direction = "read"
 path = "/campaigns"
 description = "List the campaigns in the account — drafts, scheduled, sending and sent alike. Returns Mailchimp's default first page only, and this connector declares no status or date filter, so compare the number of entries against `total_items` before treating the result as complete"
 risk = "low"

@@ -2,7 +2,7 @@ op babelforce-clear-setting(scope: String, key: String) -> Any
   description "Reset a setting"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

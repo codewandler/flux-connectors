@@ -143,6 +143,16 @@ fn request_and_permission_subject_share_the_approved_origin_and_effective_port()
         "https://gitlab.company.example:8443/api/v4/projects/7/issues"
     );
     assert_eq!(operation.permission_subjects(&params), [request.url]);
+    let intents = operation.intents(&params);
+    assert_eq!(intents.intents.len(), 1);
+    assert_eq!(
+        intents.intents[0].target,
+        flux_spec::IntentTarget::Url {
+            url: "https://gitlab.company.example:8443/api/v4/projects/7/issues".to_owned(),
+        },
+        "the approved destination must reach the intent byte-for-byte; direction changes only \
+         behavior and role"
+    );
     assert!(
         operation.spec().input_schema["properties"]
             .get("origin")

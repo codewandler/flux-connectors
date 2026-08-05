@@ -6,7 +6,7 @@ op bitbucket-repository-list -> Any
   description "List the repositories in this connection's workspace, with each one's slug, name, description, main branch and privacy. Takes no argument at all: the workspace is pinned when the connection is made, so this reads exactly the workspace the operator chose and no other. Returns Bitbucket's first page only; this connector declares no page or filter parameters, and the response's `next` field carries the URL of the following page. The `slug` returned here is what every other operation in this connector takes as `repo_slug`. Also this connector's `verify`: a bounded read that runs unattended and needs nothing beyond the token and the pinned workspace. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.bitbucket.org/2.0"
@@ -19,7 +19,7 @@ op bitbucket-repository-get(repo_slug: String) -> Any
   description "Read one repository in this connection's workspace by its slug, with its main branch, privacy, project and size. Use it to confirm a repository exists and to learn its default branch before opening a pull request against it. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.bitbucket.org/2.0"
@@ -32,7 +32,7 @@ op bitbucket-pull-request-list(repo_slug: String) -> Any
   description "List the open pull requests on one repository in this connection's workspace, newest activity first. Returns OPEN pull requests only — that is Bitbucket's default and this connector declares no `state` parameter to change it (see its header note), so merged and declined pull requests are not returned. Returns Bitbucket's first page only; the response's `next` field carries the URL of the following page. Each value's `id` is what bitbucket-pull-request-get, -comment and -approve take. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.bitbucket.org/2.0"
@@ -45,7 +45,7 @@ op bitbucket-pull-request-get(repo_slug: String, pull_request_id: Number) -> Any
   description "Read one pull request by its number, including its description, its source and destination branches, its current state and who is participating. Reads a merged or declined pull request too, unlike bitbucket-pull-request-list. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.bitbucket.org/2.0"
@@ -58,7 +58,7 @@ op bitbucket-pull-request-create(repo_slug: String, title: String, source_branch
   description "Open a pull request from one branch to another in a repository of this connection's workspace. Both branches must already exist and be pushed. Bitbucket does not deduplicate: opening the same source-to-destination pull request twice creates two of them, and notifies the repository's watchers twice. The created pull request, with its assigned `id`, is in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.bitbucket.org/2.0"
@@ -73,7 +73,7 @@ op bitbucket-pull-request-comment(repo_slug: String, pull_request_id: Number, bo
   description "Add a top-level comment to a pull request. The comment is attributed to the account the token belongs to and notifies everyone participating; Bitbucket sends no un-notification, so a comment posted in error can be deleted but not un-seen. This posts a general comment on the pull request, never an inline comment on a line of the diff. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.bitbucket.org/2.0"
@@ -88,7 +88,7 @@ op bitbucket-pull-request-approve(repo_slug: String, pull_request_id: Number) ->
   description "Approve a pull request as the account this connection's token belongs to. This records a review that a human may not have performed, and in a repository with an approval merge check it can release a merge that gate was configured to hold — treat it as an assertion about a review, not as a bookmark. Bitbucket answers a repeat approval with 409 rather than approving twice. Sends no body: the approver is the token's own account. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.bitbucket.org/2.0"

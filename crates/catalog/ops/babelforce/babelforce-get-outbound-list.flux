@@ -2,7 +2,7 @@ op babelforce-get-outbound-list(id: String) -> Any
   description "Get a lead-list"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

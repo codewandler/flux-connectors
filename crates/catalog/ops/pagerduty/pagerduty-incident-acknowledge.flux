@@ -1,8 +1,8 @@
 op pagerduty-incident-acknowledge(id: String, from_email: String) -> Any
   description "Acknowledge one incident, on behalf of a named PagerDuty user. This stops the escalation clock and tells the rotation that somebody is working the incident; it does not close it. PagerDuty refuses the change if the incident is already resolved, and answers that as data rather than as a failure"
   risk "medium"
-  idempotency "idempotent"
-  effects ["network"]
+  idempotency "non_idempotent"
+  effects ["write", "network"]
   expose true
 
   base = "https://api.pagerduty.com"

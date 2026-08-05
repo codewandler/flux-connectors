@@ -2,7 +2,7 @@ op clickup-space-folder-list(space_id: String, archived: Bool) -> Any
   description "List a space's folders. Each folder's own lists are nested inline in the response — read a folder's `lists` field for the list ids clickup-list-task-list and clickup-task-create take, rather than looking for a separate folder-to-list operation"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.clickup.com/api/v2"

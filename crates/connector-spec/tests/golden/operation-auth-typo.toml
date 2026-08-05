@@ -13,6 +13,7 @@ env = ["ZENDESK_API_TOKEN"]
 [[operations]]
 id = "zendesk.status"
 method = "GET"
+direction = "read"
 path = "/status.json"
 risk = "low"
 idempotency = "idempotent"

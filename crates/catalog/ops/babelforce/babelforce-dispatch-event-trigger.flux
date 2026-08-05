@@ -2,7 +2,7 @@ op babelforce-dispatch-event-trigger(eventTriggerId: String, timeout: Number, si
   description "Dispatch an event trigger"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

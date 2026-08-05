@@ -311,6 +311,13 @@ fn entry(connector: &Connector, operation: &Operation, host: &str) -> String {
         string(&operation.service)
     ));
     out.push_str(&format!(
+        "        direction: crate::OperationDirection::{},\n",
+        match operation.direction {
+            connector_spec::OperationDirection::Read => "Read",
+            connector_spec::OperationDirection::Write => "Write",
+        }
+    ));
+    out.push_str(&format!(
         "        description: {},\n",
         string(&operation.description)
     ));
@@ -905,6 +912,7 @@ mod tests {
             id: id.to_string(),
             service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
+            direction: connector_spec::OperationDirection::Read,
             path: "/v2/things".to_string(),
             description: "Do a thing".to_string(),
             risk: Risk::Low,

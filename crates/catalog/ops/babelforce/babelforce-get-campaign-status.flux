@@ -2,7 +2,7 @@ op babelforce-get-campaign-status(id: String) -> Any
   description "Get a campaign's status"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

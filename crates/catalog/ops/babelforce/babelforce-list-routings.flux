@@ -2,7 +2,7 @@ op babelforce-list-routings(page: Number, max: Number) -> Any
   description "Get a List of all Routings"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

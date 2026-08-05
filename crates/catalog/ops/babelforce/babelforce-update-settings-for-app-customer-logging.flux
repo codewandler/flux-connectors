@@ -2,7 +2,7 @@ op babelforce-update-settings-for-app-customer-logging(body: Any) -> Any
   description "Update customer.logging settings"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

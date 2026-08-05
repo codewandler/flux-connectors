@@ -2,7 +2,7 @@ op babelforce-agent-get(id: String) -> Any
   description "Get an agent"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op babelforce-create-campaign(active: Bool, callRatio: Number, displayNumber: St
   description "Create a campaign"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

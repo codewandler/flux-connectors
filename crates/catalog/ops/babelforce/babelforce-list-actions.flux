@@ -2,7 +2,7 @@ op babelforce-list-actions(type: String) -> Any
   description "List available actions"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op babelforce-delete-file(id: String) -> Any
   description "Delete a file"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

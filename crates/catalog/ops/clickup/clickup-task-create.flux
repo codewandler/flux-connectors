@@ -2,7 +2,7 @@ op clickup-task-create(list_id: String, name: String, description: String, statu
   description "Create a task in a list. Created with `notify_all` left at its default (false), so nobody is emailed by this call"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.clickup.com/api/v2"

@@ -2,7 +2,7 @@ op zendesk-view-ticket-list(view_id: String) -> Any
   description "List tickets from one numeric or built-in Zendesk view"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

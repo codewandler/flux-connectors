@@ -189,6 +189,11 @@ fn every_shipped_operation_carries_its_metadata_and_its_flux() {
                 "operation `{}` is missing its risk/idempotency",
                 declared.id
             );
+            assert!(
+                matches!(entry["direction"].as_str(), Some("read" | "write")),
+                "operation `{}` publishes no closed vendor-state direction",
+                declared.id
+            );
             let semantic_effects = entry["semantic_effects"].as_array().unwrap_or_else(|| {
                 panic!(
                     "operation `{}` carries a `semantic_effects` array, `[]` when it has none",
@@ -428,6 +433,7 @@ binds = "credential.acme.signing_secret"
 [[operations]]
 id = "acme-thing-get"
 method = "GET"
+direction = "read"
 path = "/v1/things/{{thing_id}}"
 description = "Fetch one thing."
 risk = "low"
@@ -441,6 +447,7 @@ schema = {{ type = "integer" }}
 [[operations]]
 id = "acme-reply"
 method = "POST"
+direction = "write"
 path = "/v1/reply"
 description = "Answer a delivery."
 risk = "medium"
@@ -637,6 +644,7 @@ binds = "oauth.client_secret"
 [[operations]]
 id = "acme-ping"
 method = "GET"
+direction = "read"
 path = "/ping"
 description = "Verify the Acme connection."
 risk = "low"
@@ -679,6 +687,7 @@ binds = "credential.acme.token"
 [[operations]]
 id = "acme-ping"
 method = "GET"
+direction = "read"
 path = "/ping"
 description = "Verify the Acme connection."
 risk = "low"
@@ -904,6 +913,7 @@ description = "The fixture webhook signing secret."
 [[operations]]
 id = "acme-thing-get"
 method = "GET"
+direction = "read"
 path = "/v1/things/{thing_id}"
 description = "Fetch one thing."
 risk = "low"

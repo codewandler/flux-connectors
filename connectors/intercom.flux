@@ -6,7 +6,7 @@ op intercom-contact-get(contact_id: String) -> Any
   description "Get one Intercom contact by id — its role, email, name, custom attributes, tags and the companies it belongs to. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{host}"
@@ -18,7 +18,7 @@ op intercom-contact-create(role: String, email: String) -> Any
   description "Create an email-identified Intercom contact. A contact created here is visible to every teammate in the workspace and is counted against its contact quota; creating one twice creates two contacts unless the workspace deduplicates on email. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{host}"
@@ -32,7 +32,7 @@ op intercom-conversation-get(conversation_id: String) -> Any
   description "Get one conversation by id, with its state, the contacts on it and its message parts in Intercom's default rendering. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{host}"
@@ -44,7 +44,7 @@ op intercom-conversation-reply(conversation_id: String, message_type: String, ad
   description "Reply to a conversation as an admin. With message_type `comment` the reply is delivered to the end user by email or in-app message and cannot be un-sent; with `note` it is an internal comment only teammates see. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{host}"
@@ -59,7 +59,7 @@ op intercom-contact-note-create(contact_id: String, body: String, admin_id: Stri
   description "Add an internal note to a contact, visible to teammates in the workspace and never to the contact. Adding the same note twice adds two notes. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message`, its error code at `/errors/0/code` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{host}"

@@ -264,8 +264,8 @@ description = "Zoom server-to-server OAuth access token, sent as a bearer. Minte
 #
 # `idempotency` is `non_idempotent`. Zoom documents no idempotency key and no idempotency guarantee
 # on the endpoint, so `idempotent` would be a claim with nothing behind it — and here it would be a
-# claim flux acts on, because `connector-flux`'s `check_write_metadata` permits `idempotent` on a
-# `DELETE` (it is an idempotent *method* under RFC 9110 §9.2.2). A retried cancellation whose first
+# claim flux acts on. `connector-flux`'s `check_write_metadata` refuses it on this authored write,
+# independently of DELETE transport semantics. A retried cancellation whose first
 # attempt already notified the registrants is not a no-op to the people who received the email. The
 # direction is fail-closed: flux forgoes a safe retry rather than replaying a write.
 # ---------------------------------------------------------------------------------------------
@@ -283,6 +283,7 @@ tags = ["video-conferencing", "scheduling"]
 [[operations]]
 id = "zoom-meeting-delete"
 method = "DELETE"
+direction = "write"
 # The two flags that decide whether Zoom emails the host and the registrants about the cancellation —
 # `schedule_for_reminder` and `cancel_meeting_reminder` — are query parameters, which C-30 excludes.
 # So whether anyone is told is Zoom's default rather than this connector's choice, and a caller who
@@ -293,8 +294,8 @@ description = "Cancel a meeting. It is gone — Zoom offers no undelete, and the
 # Irreversible, and visible: the entry disappears from the host's schedule and the join URL stops
 # working for everyone who was given it.
 risk = "destructive"
-# `DELETE` is an idempotent method under RFC 9110 §9.2.2, and `check_write_metadata` would accept
-# `idempotent` here — which is exactly why this says otherwise. Zoom documents no idempotency
+# DELETE is idempotent in RFC transport semantics, but `check_write_metadata` refuses `idempotent`
+# on this authored write. Zoom documents no idempotency
 # guarantee, the second call answers `3001 Meeting does not exist` rather than succeeding, and a retry
 # around a cancellation that already notified people is not a no-op to the people who were notified.
 idempotency = "non_idempotent"
@@ -321,6 +322,7 @@ code_pointer = "/code"
 [[operations]]
 id = "zoom-user-get"
 method = "GET"
+direction = "read"
 path = "/v2/users/{user_id}"
 description = "Get one user — their id, email, name, timezone, licence type and personal meeting id. This is how `me` is resolved to the id a meeting is created under"
 risk = "low"

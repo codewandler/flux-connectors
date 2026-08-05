@@ -31,6 +31,7 @@ env = ["ACME_TOKEN"]
 [[operations]]
 id = "acme-thing-show"
 method = "GET"
+direction = "read"
 path = "/things/{{id}}"
 risk = "low"
 idempotency = "idempotent"
@@ -43,6 +44,7 @@ schema = {{ type = "string" }}
 [[operations]]
 id = "acme-notify"
 method = "POST"
+direction = "write"
 path = "/notify"
 risk = "medium"
 idempotency = "non_idempotent"

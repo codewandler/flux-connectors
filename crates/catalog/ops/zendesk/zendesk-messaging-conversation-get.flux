@@ -2,7 +2,7 @@ op zendesk-messaging-conversation-get(conversationId: String) -> Any
   description "Get one conversation by id; this bounded read is the Messaging service's diagnostic operation"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"

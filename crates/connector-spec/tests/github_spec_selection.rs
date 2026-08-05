@@ -13,23 +13,23 @@ mod shipped_provider;
 const ORIGINAL_FLUX: [(&str, &str); 5] = [
     (
         "github-issue-comment-add",
-        "b9e8d697628f0ac1b39ae6057d51d2e1b9e1f3a3e475ef90fc6a0d32897f8156",
+        "6969b58893a080709aa1156e6960f51e8975c41d8d8a707fde91b9625c4ef477",
     ),
     (
         "github-issue-create",
-        "d196b03b41d4ebf5b7a833f9f2b00e93b94cba0ed35c001bd298222269015a00",
+        "c5b70072239b1294fd848493fb6bfe4f7cf8b3b902ed6eca1c26348b7850557a",
     ),
     (
         "github-issue-get",
-        "47b2a8dc8932ca5af3109e8e70bc739d77e2614d43ec7417666530fccea4eb69",
+        "f7d82d967f76e40a38aa22f9d873a8d5bf4e7adf5c515694a9ec4e73b5093a7c",
     ),
     (
         "github-pull-get",
-        "b6ed8367268345da6400ad8b6696ff155c82c608ee129108bffbca50bd216402",
+        "f452b010aa9e9805bf1373a7ef3d0b03b471b2e1207dba41824dd37b359246e1",
     ),
     (
         "github-repo-get",
-        "be3c3669255f3caa7e1131a7fee9c0c42407e24cdcacc2b8f78b64d8fbc21183",
+        "8ba138bd9e2a05ad12dbc3cb2ca6601cbb43b009913a77d8dac6fc987db21680",
     ),
 ];
 

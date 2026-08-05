@@ -2,7 +2,7 @@ op asterisk-ari-channels-continue-in-dialplan(channelId: String, context: String
   description "Exit application; continue execution in the dialplan."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

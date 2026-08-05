@@ -2,7 +2,7 @@ op freshdesk-ticket-note-add(id: Number, body: String, private: Bool, incoming: 
   description "Add a note to a ticket; the note is private unless explicitly made public"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://example.freshdesk.com/api/v2"

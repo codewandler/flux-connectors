@@ -13,6 +13,7 @@ base_url = "https://api.acme.example"
 [[operations]]
 id = "acme-payment-capture"
 method = "POST"
+direction = "write"
 path = "/v1/payments/capture"
 description = "Capture an authorized payment."
 risk = "high"

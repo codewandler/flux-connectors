@@ -2,7 +2,7 @@ op babelforce-update-settings-for-app-integrations(body: Any) -> Any
   description "Update integrations settings"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

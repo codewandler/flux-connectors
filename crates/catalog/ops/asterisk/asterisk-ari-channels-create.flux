@@ -2,7 +2,7 @@ op asterisk-ari-channels-create(endpoint: String, app: String, appArgs: String, 
   description "Create channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

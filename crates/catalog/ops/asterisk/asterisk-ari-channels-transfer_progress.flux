@@ -2,7 +2,7 @@ op asterisk-ari-channels-transfer_progress(channelId: String, states: String) ->
   description "Inform the channel about the progress of the attended/blind transfer."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

@@ -2,7 +2,7 @@ op babelforce-list-global-queue-selections(sort: String, order: String, includeM
   description "List all queue selections"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

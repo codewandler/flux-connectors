@@ -11,6 +11,11 @@ module = "contentful-delivery.flux"
 operations = ["contentful-entry-get", "contentful-entries-list", "contentful-asset-get"]
 verify = "contentful-entries-list"
 
+[operation_directions]
+contentful-asset-get = "read"
+contentful-entries-list = "read"
+contentful-entry-get = "read"
+
 [operation_semantic_effects]
 contentful-asset-get = []
 contentful-entries-list = []

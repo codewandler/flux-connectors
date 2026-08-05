@@ -16,8 +16,8 @@
 //!    generated here asserts on the response — see
 //!    [`a_non_2xx_response_is_data_not_an_op_failure`]. The response is bound and returned whole.
 //! 5. **A write may not carry a read's metadata.** flux's approval gate reads `risk` and
-//!    `idempotency`, so the emitter refuses a state-changing method that declares `risk = "low"`, or
-//!    a `POST`/`PATCH` that claims to be idempotent.
+//!    `idempotency`, so the emitter refuses an authored write that declares `risk = "low"` or
+//!    claims to be idempotent, independent of its HTTP method.
 //!
 //! # A note on the fixture ids
 //!
@@ -102,6 +102,7 @@ fn zendesk_comment_list() -> Connector {
             id: "zendesk-ticket-comment-list".to_string(),
             service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
+            direction: connector_spec::OperationDirection::Read,
             path: "/api/v2/tickets/{ticket_id}/comments.json".to_string(),
             description: "List one Zendesk ticket's comments.".to_string(),
             risk: Risk::Low,
@@ -154,6 +155,7 @@ fn zendesk_ticket_search() -> Connector {
             id: "zendesk-ticket-search".to_string(),
             service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
+            direction: connector_spec::OperationDirection::Read,
             path: "/api/v2/search.json".to_string(),
             description: "Search Zendesk tickets with Zendesk search syntax.".to_string(),
             risk: Risk::Low,
@@ -208,6 +210,7 @@ fn babelforce_call_list() -> Connector {
             id: "babelforce-call-list".to_string(),
             service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
+            direction: connector_spec::OperationDirection::Read,
             path: "/api/v2/calls/reporting".to_string(),
             description: "List and filter calls, in the reporting view.".to_string(),
             risk: Risk::Low,
@@ -264,6 +267,7 @@ fn zendesk_test() -> Connector {
             id: "zendesk-test".to_string(),
             service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
+            direction: connector_spec::OperationDirection::Read,
             path: "/api/v2/users/me.json".to_string(),
             description: "Verify Zendesk credentials by fetching the authenticated user."
                 .to_string(),
@@ -295,6 +299,7 @@ fn freshdesk_note_add() -> Connector {
             id: "freshdesk-ticket-note-add".to_string(),
             service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Post,
+            direction: connector_spec::OperationDirection::Write,
             path: "/tickets/{id}/notes".to_string(),
             description:
                 "Add a note to a ticket; the note is private unless explicitly made public"
@@ -363,6 +368,7 @@ fn zendesk_ticket_show() -> Connector {
             id: "zendesk-ticket-show".to_string(),
             service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
+            direction: connector_spec::OperationDirection::Read,
             path: "/api/v2/tickets/{ticket_id}.json".to_string(),
             description: "Show one ticket".to_string(),
             risk: Risk::Low,
@@ -539,7 +545,7 @@ fn emitted_op_reloads_with_its_metadata_intact() {
     );
     assert_eq!(
         serde_json::to_value(&op.meta.effects).unwrap(),
-        json!(["network"])
+        json!(["read", "network"])
     );
     assert!(op.meta.expose, "`expose true` is what makes it an LLM tool");
     assert_eq!(
@@ -556,6 +562,7 @@ fn risk_and_idempotency_are_taken_from_the_ir_not_assumed() {
     connector.operations[0].risk = Risk::Destructive;
     connector.operations[0].idempotency = Idempotency::NonIdempotent;
     connector.operations[0].method = HttpMethod::Delete;
+    connector.operations[0].direction = connector_spec::OperationDirection::Write;
 
     let emitted = emit_only_operation(&connector);
     assert!(
@@ -685,6 +692,7 @@ fn headered_operation() -> Connector {
             id: "vendor-thing-create".to_string(),
             service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Post,
+            direction: connector_spec::OperationDirection::Write,
             path: "/v1/things".to_string(),
             description: "Create a thing.".to_string(),
             risk: Risk::High,
@@ -885,22 +893,43 @@ fn a_write_may_not_claim_a_reads_risk() {
     }
 }
 
-/// POST and PATCH are not idempotent methods, so an op that claims they are would make a `retry`
-/// around the call unsound — one charge becomes three.
+/// A write may not claim Flux can serve a cached result instead of executing it, whatever request
+/// method carries it.
 #[test]
-fn a_post_may_not_claim_to_be_idempotent() {
-    for method in [HttpMethod::Post, HttpMethod::Patch] {
+fn a_write_may_not_claim_to_be_idempotent_for_any_method() {
+    for method in [
+        HttpMethod::Get,
+        HttpMethod::Post,
+        HttpMethod::Put,
+        HttpMethod::Patch,
+        HttpMethod::Delete,
+    ] {
         let mut connector = freshdesk_note_add();
         connector.operations[0].method = method;
         connector.operations[0].idempotency = Idempotency::Idempotent;
 
         let err = emit_operation(&connector, &connector.operations[0])
-            .expect_err("an idempotent POST/PATCH must be refused");
+            .expect_err("an idempotent write must be refused");
         assert!(
             err.to_string().contains("idempoten"),
             "the refusal must name the field, got: {err}"
         );
     }
+}
+
+#[test]
+fn changing_only_the_http_method_does_not_promote_or_demote_direction() {
+    let mut read = zendesk_comment_list();
+    read.operations[0].method = HttpMethod::Post;
+    let read_flux = emit_only_operation(&read);
+    assert!(read_flux.contains("method: \"POST\""));
+    assert!(read_flux.contains("effects [\"read\", \"network\"]"));
+
+    let mut write = freshdesk_note_add();
+    write.operations[0].method = HttpMethod::Get;
+    let write_flux = emit_only_operation(&write);
+    assert!(write_flux.contains("method: \"GET\""));
+    assert!(write_flux.contains("effects [\"write\", \"network\"]"));
 }
 
 /// `providers/zendesk.toml` pins `ticket.safe_update` to `true` with a JSON Schema `const`, because
@@ -986,6 +1015,7 @@ fn zendesk_comment_add() -> Connector {
             id: "zendesk-ticket-comment-add".to_string(),
             service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Put,
+            direction: connector_spec::OperationDirection::Write,
             path: "/api/v2/tickets/{ticket_id}.json".to_string(),
             description:
                 "Add a comment to a ticket; the comment is an internal note unless public is \
@@ -1065,10 +1095,11 @@ fn babelforce_session_set() -> Connector {
             id: "babelforce-call-session-set".to_string(),
             service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Put,
+            direction: connector_spec::OperationDirection::Write,
             path: "/api/v2/calls/{id}/session/set".to_string(),
             description: "Set session variables on a live call.".to_string(),
             risk: Risk::Medium,
-            idempotency: Idempotency::Idempotent,
+            idempotency: Idempotency::NonIdempotent,
             semantic_effects: Vec::new(),
             repeatable_because: None,
             expose: true,

@@ -12,6 +12,13 @@ module = "notion.flux"
 operations = ["notion-user-me", "notion-page-get", "notion-database-query", "notion-search", "notion-page-create"]
 verify = "notion-user-me"
 
+[operation_directions]
+notion-database-query = "write"
+notion-page-create = "write"
+notion-page-get = "read"
+notion-search = "write"
+notion-user-me = "read"
+
 [operation_semantic_effects]
 notion-database-query = []
 notion-page-create = []

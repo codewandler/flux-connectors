@@ -35,6 +35,7 @@ user_suffix = "/token"
 [[operations]]
 id = "zendesk.ticket.show"
 method = "GET"
+direction = "read"
 path = "/api/v2/tickets/{ticket_id}.json"
 description = "Show one ticket"
 risk = "low"

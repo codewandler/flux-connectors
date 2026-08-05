@@ -2,7 +2,7 @@ op babelforce-list-business-hour-ranges(id: String) -> Any
   description "List a profile's time ranges"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

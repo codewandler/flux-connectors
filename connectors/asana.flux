@@ -6,7 +6,7 @@ op asana-task-get(task_gid: String) -> Any
   description "Get one task — its name, notes, assignee, due date, completion state and the projects it belongs to. The task is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://app.asana.com"
@@ -18,7 +18,7 @@ op asana-task-create(name: String, workspace: String) -> Any
   description "Create a task in a workspace. It is created unassigned and in no project, so nobody is notified; move it or assign it in Asana afterwards. The created task is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://app.asana.com"
@@ -32,7 +32,7 @@ op asana-task-update(task_gid: String, completed: Bool) -> Any
   description "Mark a task complete or incomplete. Asana's update is sparse: only completion changes, and every other field of the task is left as it was. The updated task is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://app.asana.com"
@@ -46,7 +46,7 @@ op asana-task-story-add(task_gid: String, text: String) -> Any
   description "Add a comment to a task. Asana calls a comment a story. It is attributed to the token's owner, notifies every follower of the task by email and in-app, and cannot be un-sent. The created story is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://app.asana.com"
@@ -60,7 +60,7 @@ op asana-project-get(project_gid: String) -> Any
   description "Get one project — its name, notes, owner, team, current status and whether it is archived. The project is under `data` in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/errors/0/message` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://app.asana.com"

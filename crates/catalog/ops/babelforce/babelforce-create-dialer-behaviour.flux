@@ -2,7 +2,7 @@ op babelforce-create-dialer-behaviour(body: Any) -> Any
   description "Create a dialer behaviour"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

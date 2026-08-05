@@ -2,7 +2,7 @@ op babelforce-get-settings-for-app-conversations -> Any
   description "Get conversations settings"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -179,6 +179,25 @@ impl CredentialRequirement {
     }
 }
 
+/// The connector-authored vendor-state direction of an operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OperationDirection {
+    /// The operation observes vendor state without changing it.
+    Read,
+    /// The operation changes vendor state.
+    Write,
+}
+
+impl OperationDirection {
+    /// The provider/public spelling shared by every artifact.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Read => "read",
+            Self::Write => "write",
+        }
+    }
+}
+
 /// One operation: its Flux source, and what a caller needs in order to decide whether to use it.
 ///
 /// `#[non_exhaustive]` because C-37 adds the global address to this struct and C-10 adds the
@@ -218,6 +237,9 @@ pub struct Operation {
     /// `web/public/catalog.json` had carried the service all along; this is the embedded catalogue
     /// catching up, which is why every provider's generated table moved when it landed.
     pub service: &'static str,
+    /// Whether this operation reads or writes vendor state. Authored in the connector declaration;
+    /// never inferred from its HTTP method or any policy metadata.
+    pub direction: OperationDirection,
     /// What the operation does, in one line — the same text the model sees as the tool description.
     pub description: &'static str,
     /// How much damage it can do.

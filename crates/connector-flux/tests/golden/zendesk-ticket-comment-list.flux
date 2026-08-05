@@ -2,7 +2,7 @@ op zendesk-ticket-comment-list(ticket_id: Number, page: Number, per_page: Number
   description "List one Zendesk ticket's comments."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://example.zendesk.com"

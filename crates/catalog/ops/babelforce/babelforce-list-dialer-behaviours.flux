@@ -2,7 +2,7 @@ op babelforce-list-dialer-behaviours(page: Number, max: Number) -> Any
   description "List dialer behaviours"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

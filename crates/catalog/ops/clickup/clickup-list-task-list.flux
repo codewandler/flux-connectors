@@ -2,7 +2,7 @@ op clickup-list-task-list(list_id: String, archived: Bool, page: Number, order_b
   description "List tasks in a list, most recently created first by default"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.clickup.com/api/v2"

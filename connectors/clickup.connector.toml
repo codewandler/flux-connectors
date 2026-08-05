@@ -12,6 +12,14 @@ module = "clickup.flux"
 operations = ["clickup-team-list", "clickup-space-folder-list", "clickup-list-task-list", "clickup-task-get", "clickup-task-create", "clickup-task-update"]
 verify = "clickup-team-list"
 
+[operation_directions]
+clickup-list-task-list = "read"
+clickup-space-folder-list = "read"
+clickup-task-create = "write"
+clickup-task-get = "read"
+clickup-task-update = "write"
+clickup-team-list = "read"
+
 [operation_semantic_effects]
 clickup-list-task-list = []
 clickup-space-folder-list = []

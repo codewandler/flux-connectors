@@ -11,6 +11,12 @@ api_version = "v0"
 module = "airtable.flux"
 operations = ["airtable-record-get", "airtable-record-create", "airtable-record-update", "airtable-record-delete"]
 
+[operation_directions]
+airtable-record-create = "write"
+airtable-record-delete = "write"
+airtable-record-get = "read"
+airtable-record-update = "write"
+
 [operation_semantic_effects]
 airtable-record-create = []
 airtable-record-delete = []

@@ -2,7 +2,7 @@ op openai-embeddings-create(model: String, input: Any) -> Any
   description "Create embedding vectors for one or more input texts. Billed per input token"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.openai.com"

@@ -7,7 +7,7 @@ op babelforce-get-task-schedules(page: Number, page_size: Number) -> Any
   description "List cron scheduled tasks"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -19,7 +19,7 @@ op babelforce-submit-task-schedule(cron: String, name: String, task: Any, templa
   description "Schedule new task"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -33,7 +33,7 @@ op babelforce-get-task-schedule(taskScheduleName: String) -> Any
   description "Get cron schedule task by name"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -45,7 +45,7 @@ op babelforce-delete-schedule-task(taskScheduleName: String) -> Any
   description "Delete scheduled task"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -6,7 +6,7 @@ op miro-board-list -> Any
   description "List the boards this access token can see, with each board's id, name and description. Returns Miro's first page only; this connector declares no cursor or limit parameter (see the connector's header note). The board `id` returned here is what every other operation in this connector needs as `board_id`"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.miro.com/v2"
@@ -18,7 +18,7 @@ op miro-board-item-list(board_id: String) -> Any
   description "List the items on a board, of any type (sticky note, shape, text or frame). Each item's shape depends on its `type`: sticky notes and text carry `data.content`, shapes carry `data.content` and `data.shape`, frames carry `data.title`. Returns Miro's first page only; this connector declares no cursor or limit parameter (see the connector's header note)"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.miro.com/v2"
@@ -30,7 +30,7 @@ op miro-board-item-get(board_id: String, item_id: String) -> Any
   description "Get one item from a board, of any type (sticky note, shape, text or frame). Its shape depends on its `type` — see miro-board-item-list's description for what each carries"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.miro.com/v2"
@@ -42,7 +42,7 @@ op miro-sticky-note-create(board_id: String, content: String) -> Any
   description "Create a sticky note on a board. Miro does not deduplicate: creating the same content twice makes two sticky notes, so this is not idempotent. The created note, with its assigned id, is in the response"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.miro.com/v2"
@@ -56,7 +56,7 @@ op miro-sticky-note-update(board_id: String, item_id: String, content: String) -
   description "Update a sticky note's text content. The content sent replaces what was there, so setting the same content twice ends in the same state. The updated note is in the response"
   risk "medium"
   idempotency "conditional"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.miro.com/v2"
@@ -70,7 +70,7 @@ op miro-sticky-note-delete(board_id: String, item_id: String) -> Any
   description "Delete one sticky note. There is no undo route in the API. Responds with no content"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.miro.com/v2"

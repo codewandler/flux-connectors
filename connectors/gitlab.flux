@@ -6,7 +6,7 @@ op gitlab-user-get -> Any
   description "Get the currently authenticated user. Takes no parameters; used as the verify read to prove a token resolves"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "{origin}/api/v4"
@@ -18,7 +18,7 @@ op gitlab-issue-list(project_id: Number, state: String, page: Number, per_page: 
   description "List issues in a project, optionally filtered by state, newest activity first"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "{origin}/api/v4"
@@ -30,7 +30,7 @@ op gitlab-issue-get(project_id: Number, issue_iid: Number) -> Any
   description "Get one issue by its project-scoped number (iid), not its global id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "{origin}/api/v4"
@@ -42,7 +42,7 @@ op gitlab-issue-create(project_id: Number, title: String, description: String, l
   description "Open a new issue on a project. Visible immediately to everyone with access to the project (the whole world, if the project is public) and notifies its watchers"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "{origin}/api/v4"
@@ -56,7 +56,7 @@ op gitlab-merge-request-list(project_id: Number, state: String, page: Number, pe
   description "List merge requests in a project, optionally filtered by state, newest activity first"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "{origin}/api/v4"
@@ -68,7 +68,7 @@ op gitlab-pipeline-get(project_id: Number, pipeline_id: Number) -> Any
   description "Get one CI/CD pipeline's status and timing by its id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "{origin}/api/v4"
@@ -80,7 +80,7 @@ op gitlab-branch-list(project_id: Number, page: Number, per_page: Number) -> Any
   description "List a project's repository branches"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "{origin}/api/v4"

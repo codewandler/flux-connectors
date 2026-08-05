@@ -2,7 +2,7 @@ op babelforce-get-latest-conversation-event(conversationId: String) -> Any
   description "Get a conversation's latest event"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

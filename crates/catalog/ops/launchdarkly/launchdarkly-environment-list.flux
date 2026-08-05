@@ -2,7 +2,7 @@ op launchdarkly-environment-list(project_key: String, limit: Number, offset: Num
   description "List the environments (e.g. production, staging) that belong to one project"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://app.launchdarkly.com/api/v2"

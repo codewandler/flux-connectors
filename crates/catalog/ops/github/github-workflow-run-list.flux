@@ -2,7 +2,7 @@ op github-workflow-run-list(owner: String, repo: String, per_page: Number, page:
   description "List a repository's GitHub Actions workflow runs with bounded integer pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.github.com"

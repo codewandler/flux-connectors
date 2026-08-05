@@ -2,7 +2,7 @@ op babelforce-get-settings-for-retention-periods -> Any
   description "Get periods settings"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

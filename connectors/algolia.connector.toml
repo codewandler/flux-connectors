@@ -12,6 +12,13 @@ module = "algolia.flux"
 operations = ["algolia-index-list", "algolia-index-search", "algolia-object-get", "algolia-object-save", "algolia-object-delete"]
 verify = "algolia-index-list"
 
+[operation_directions]
+algolia-index-list = "read"
+algolia-index-search = "read"
+algolia-object-delete = "write"
+algolia-object-get = "read"
+algolia-object-save = "write"
+
 [operation_semantic_effects]
 algolia-index-list = []
 algolia-index-search = []

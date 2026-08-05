@@ -2,7 +2,7 @@ op asterisk-ari-channels-dial(channelId: String, caller: String, timeout: Number
   description "Dial a created channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

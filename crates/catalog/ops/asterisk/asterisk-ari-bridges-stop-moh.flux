@@ -2,7 +2,7 @@ op asterisk-ari-bridges-stop-moh(bridgeId: String) -> Any
   description "Stop playing music on hold to a bridge."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

@@ -2,7 +2,7 @@ op asterisk-ari-endpoints-send-message-to-endpoint(tech: String, resource: Strin
   description "Send a message to some endpoint in a technology."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

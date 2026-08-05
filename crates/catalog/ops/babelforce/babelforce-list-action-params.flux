@@ -2,7 +2,7 @@ op babelforce-list-action-params(providerName: String, providerActionName: Strin
   description "List an action's parameters"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

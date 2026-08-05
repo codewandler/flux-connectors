@@ -127,10 +127,10 @@ pub use inbound::{
 };
 pub use ir::{
     constrains_nothing, credential_handle_schema, response_location_exists, BodyEncoding,
-    Connector, ErrorEnvelope, HttpMethod, Idempotency, JsonSchema, Operation, OperationSpecSource,
-    Pagination, Param, ParamSet, ProducedCredential, Provenance, Quirks, RateLimit, Risk, Role,
-    Runtime, SemanticEffect, Service, Tag, CREDENTIAL_HANDLE_FIELD, FREE_FORM_BODY,
-    MIN_REPEATABILITY_CONDITION,
+    Connector, ErrorEnvelope, HttpMethod, Idempotency, JsonSchema, Operation, OperationDirection,
+    OperationSpecSource, Pagination, Param, ParamSet, ProducedCredential, Provenance, Quirks,
+    RateLimit, Risk, Role, Runtime, SemanticEffect, Service, Tag, CREDENTIAL_HANDLE_FIELD,
+    FREE_FORM_BODY, MIN_REPEATABILITY_CONDITION,
 };
 pub use lock::{sha256_hex, LockEntry, LockSpec, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION};
 pub use openapi::{Diagnostic, Ingested, Server, ServerVariable, SpecOperation};

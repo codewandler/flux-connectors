@@ -2,7 +2,7 @@ op freshdesk-test(per_page: Number) -> Any
   description "Verify credentials with a bounded contact read"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{domain}/api/v2"

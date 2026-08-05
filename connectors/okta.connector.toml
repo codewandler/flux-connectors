@@ -12,6 +12,13 @@ module = "okta.flux"
 operations = ["okta-user-list", "okta-user-get", "okta-group-list", "okta-user-group-list", "okta-user-deactivate"]
 verify = "okta-user-list"
 
+[operation_directions]
+okta-group-list = "read"
+okta-user-deactivate = "write"
+okta-user-get = "read"
+okta-user-group-list = "read"
+okta-user-list = "read"
+
 [operation_semantic_effects]
 okta-group-list = []
 okta-user-deactivate = []

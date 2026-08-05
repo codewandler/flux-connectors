@@ -70,6 +70,48 @@ sha256 = "338adeada0fc0e95bf1cea37320698e5a283fab9f48f496c28ab3bbac9ad0f88"
 # `filter_events`. Until Flux gains the structured query encoding C-28 specifies, publishing any of
 # them would let a caller assemble an ambiguous or injectable URL. Every omission is named, so an
 # upstream rename fails rather than quietly bringing the argument back.
+[patch.directions.default]
+"IncrementalOrganizationExport" = "read"
+"IncrementalTicketEvents" = "read"
+"IncrementalTicketExportTime" = "read"
+"IncrementalUserExportTime" = "read"
+"ListAuditsForTicket" = "read"
+"ListCustomObjects" = "read"
+"ListCustomStatuses" = "read"
+"ListGroups" = "read"
+"ListRecentTickets" = "read"
+"ListSearchResults" = "read"
+"ListTicketComments" = "read"
+"ListTicketFields" = "read"
+"ListTicketForms" = "read"
+"ListTicketsFromView" = "read"
+"ShowCurrentUser" = "read"
+"ShowOrganization" = "read"
+"ShowTicket" = "read"
+"ShowUser" = "read"
+"UpdateTicket" = "write"
+
+[patch.directions.help-center]
+"CreateArticleBySection" = "write"
+"ListArticlesIncremental" = "read"
+"ListArticlesNoLocale" = "read"
+"ListCategoriesNoLocale" = "read"
+"ListSectionsNoLocale" = "read"
+"ListTranslations" = "read"
+"ShowArticleNoLocale" = "read"
+
+[patch.directions.messaging]
+"CreateConversation" = "write"
+"CreateUser" = "write"
+"GetConversation" = "read"
+"GetUser" = "read"
+"ListMessages" = "read"
+"ListParticipants" = "read"
+"PostMessage" = "write"
+"UpdateConversation" = "write"
+"UpdateUser" = "write"
+
+
 [[patch.operations]]
 select = "ListAuditsForTicket"
 service = "default"

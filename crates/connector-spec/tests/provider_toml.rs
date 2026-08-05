@@ -28,6 +28,7 @@ description = "Zendesk API token; the user half is the agent email with Zendesk'
 [[operations]]
 id = "zendesk.test"
 method = "GET"
+direction = "read"
 path = "/api/v2/users/me.json"
 description = "Verify credentials by fetching the authenticated user"
 risk = "low"
@@ -36,6 +37,7 @@ idempotency = "idempotent"
 [[operations]]
 id = "zendesk.ticket.show"
 method = "GET"
+direction = "read"
 path = "/api/v2/tickets/{ticket_id}.json"
 description = "Show one ticket"
 risk = "low"
@@ -50,6 +52,7 @@ schema = { type = "integer", format = "uint64", minimum = 1 }
 [[operations]]
 id = "zendesk.ticket.search"
 method = "GET"
+direction = "read"
 path = "/api/v2/search.json"
 description = "Search tickets with Zendesk search syntax"
 risk = "low"
@@ -73,6 +76,7 @@ bucket = "zendesk.search"
 [[operations]]
 id = "zendesk.status"
 method = "GET"
+direction = "read"
 path = "/status.json"
 description = "Public status endpoint — no credential at all"
 risk = "low"
@@ -170,6 +174,7 @@ env = ["BABELFORCE_ACCESS_TOKEN"]
 
 [[patch.operations]]
 select = "listAgents"
+direction = "read"
 rename = "babelforce.agent.list"
 description = "List and filter agents"
 risk = "low"
@@ -180,6 +185,7 @@ page = {{ page_param = "page", size_param = "max", page_size = 100, max_pages = 
 
 [[patch.operations]]
 select = "hangupCall"
+direction = "write"
 rename = "babelforce.call.hangup"
 description = "Hang up a live call"
 risk = "destructive"
@@ -447,6 +453,7 @@ fn a_file_may_point_at_a_spec_and_still_declare_operations_inline() {
 [[operations]]
 id = \"babelforce.health\"
 method = \"GET\"
+direction = \"read\"
 path = \"/health\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -495,6 +502,7 @@ env = ["BABELFORCE_ACCESS_TOKEN"]
 [[operations]]
 id = "babelforce.call.list"
 method = "GET"
+direction = "read"
 path = "/api/v2/calls/reporting"
 risk = "low"
 idempotency = "idempotent"

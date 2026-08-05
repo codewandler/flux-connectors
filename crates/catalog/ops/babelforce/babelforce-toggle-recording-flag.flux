@@ -2,7 +2,7 @@ op babelforce-toggle-recording-flag(id: String) -> Any
   description "Toggle a recording's flag"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

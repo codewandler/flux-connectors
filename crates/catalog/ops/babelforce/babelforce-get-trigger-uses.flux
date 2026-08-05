@@ -2,7 +2,7 @@ op babelforce-get-trigger-uses(id: String) -> Any
   description "List a trigger's references"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

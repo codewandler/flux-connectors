@@ -2,7 +2,7 @@ op babelforce-get-api-status -> Any
   description "Get the API status"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

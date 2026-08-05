@@ -2,7 +2,7 @@ op babelforce-bulk-update-integrations(items: List<Any>) -> Any
   description "Bulk-update integrations"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

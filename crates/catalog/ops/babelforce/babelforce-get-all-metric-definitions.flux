@@ -2,7 +2,7 @@ op babelforce-get-all-metric-definitions -> Any
   description "List all metric definitions"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

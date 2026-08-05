@@ -2,7 +2,7 @@ op salesforce-record-update(sobject_type: String, id: String, body: Any) -> Any
   description "Update one or more fields on an existing SObject record. Only the supplied fields change; fields left out are untouched. Answers 204 with no body on success"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{instance}.my.salesforce.com"

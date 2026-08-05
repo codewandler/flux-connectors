@@ -16,6 +16,7 @@ env = []
 [[operations]]
 id = "zendesk.ticket.show"
 method = "GET"
+direction = "read"
 path = "api/v2/tickets/{ticket_id}.json"
 risk = "low"
 idempotency = "idempotent"

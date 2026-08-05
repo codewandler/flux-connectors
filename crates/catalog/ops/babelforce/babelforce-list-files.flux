@@ -2,7 +2,7 @@ op babelforce-list-files(page: Number, max: Number, sort: String, order: String,
   description "List files"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

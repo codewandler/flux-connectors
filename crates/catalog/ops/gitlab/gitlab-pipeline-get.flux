@@ -2,7 +2,7 @@ op gitlab-pipeline-get(project_id: Number, pipeline_id: Number) -> Any
   description "Get one CI/CD pipeline's status and timing by its id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "{origin}/api/v4"

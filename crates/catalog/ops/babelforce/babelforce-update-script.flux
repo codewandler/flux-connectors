@@ -1,7 +1,7 @@
 op babelforce-update-script(codeId: String, type: String, file: String, metadata: Any) -> Any
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

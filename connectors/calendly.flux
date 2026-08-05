@@ -6,7 +6,7 @@ op calendly-user-me -> Any
   description "Get the authenticated user: their own resource URI, name, scheduling slug, account email and current organization. The URI in the response is the value later operations expect as their `user` query parameter"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.calendly.com"
@@ -18,7 +18,7 @@ op calendly-event-type-list(user: String, count: Number) -> Any
   description "List event types owned by a user — the bookable meeting templates (name, duration, scheduling link). Takes the user's own URI, not a bare id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.calendly.com"
@@ -30,7 +30,7 @@ op calendly-scheduled-event-list(user: String, status: String, count: Number) ->
   description "List a user's scheduled events (past and upcoming bookings). Takes the user's own URI, not a bare id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.calendly.com"
@@ -42,7 +42,7 @@ op calendly-scheduled-event-get(uuid: String) -> Any
   description "Get one scheduled event by id. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/title` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.calendly.com"
@@ -54,7 +54,7 @@ op calendly-invitee-list(uuid: String, status: String, count: Number) -> Any
   description "List a scheduled event's invitees. Each invitee is personal data about a named third party — their name, email and any answers they gave to the event type's custom questions. Read it only for what the calling flow needs and do not persist or repeat it beyond that. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/title` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.calendly.com"

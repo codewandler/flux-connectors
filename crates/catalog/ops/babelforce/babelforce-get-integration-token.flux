@@ -2,7 +2,7 @@ op babelforce-get-integration-token(id: String, tokenId: String) -> Any
   description "Get an integration token"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

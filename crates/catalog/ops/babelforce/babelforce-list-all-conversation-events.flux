@@ -2,7 +2,7 @@ op babelforce-list-all-conversation-events(page: Number, max: Number) -> Any
   description "List events across all conversations"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

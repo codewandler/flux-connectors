@@ -70,6 +70,7 @@ fn operation(id: &str, service: &str) -> String {
 id = "{id}"
 service = "{service}"
 method = "GET"
+direction = "read"
 path = "/v1/things"
 description = "Fetch things."
 risk = "low"

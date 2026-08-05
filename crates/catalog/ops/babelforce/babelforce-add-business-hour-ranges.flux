@@ -2,7 +2,7 @@ op babelforce-add-business-hour-ranges(id: String, body: Any) -> Any
   description "Set a profile's time ranges"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

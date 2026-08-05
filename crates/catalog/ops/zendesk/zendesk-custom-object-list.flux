@@ -2,7 +2,7 @@ op zendesk-custom-object-list(include_ui_path: Bool) -> Any
   description "List custom-object definitions, optionally including each definition's UI path"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

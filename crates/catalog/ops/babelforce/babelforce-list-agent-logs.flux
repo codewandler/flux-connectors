@@ -2,7 +2,7 @@ op babelforce-list-agent-logs(id: String, page: Number, max: Number, filters_fro
   description "List an agent's activity logs"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

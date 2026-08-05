@@ -237,6 +237,7 @@ tags = ["crm"]
 [[operations]]
 id = "hubspot-contact-get"
 method = "GET"
+direction = "read"
 path = "/crm/v3/objects/contacts/{contact_id}"
 description = "Read one contact by record id. Returns only HubSpot's default contact properties — name, email and record timestamps; a custom property needs a `properties` projection this connector cannot express yet"
 risk = "low"
@@ -312,13 +313,14 @@ code_pointer = "/category"
 # so `conditional` would be a claim with nothing behind it: unlike zendesk's `updated_stamp` there is
 # no optimistic-concurrency token to condition on, and a replayed update is last-write-wins. A replay
 # is also observable in its own right — each write appends an entry to the property's history. (The
-# emitter refuses `idempotent` on a `POST` or `PATCH` regardless, and refuses `risk = "low"` on any
-# state-changing method — `check_write_metadata`.)
+# emitter refuses `idempotent` or `risk = "low"` on any authored write —
+# `check_write_metadata`.)
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
 id = "hubspot-contact-create"
 method = "POST"
+direction = "write"
 path = "/crm/v3/objects/contacts"
 description = "Create a contact from an email address. HubSpot treats email as the contact's unique identifier and rejects a duplicate with 409. The new record is visible to everyone in the portal and can be enrolled by a workflow, which may send it marketing email"
 risk = "high"
@@ -360,6 +362,7 @@ code_pointer = "/category"
 [[operations]]
 id = "hubspot-contact-update"
 method = "PATCH"
+direction = "write"
 path = "/crm/v3/objects/contacts/{contact_id}"
 description = "Overwrite a contact's first and last name. Both are written on every call — this operation replaces them rather than merging, so re-send the one you are not changing (read it first with hubspot-contact-get). The change is visible to everyone in the portal and can trigger a workflow"
 risk = "high"
@@ -415,6 +418,7 @@ code_pointer = "/category"
 [[operations]]
 id = "hubspot-company-get"
 method = "GET"
+direction = "read"
 path = "/crm/v3/objects/companies/{company_id}"
 description = "Read one company by record id. Returns only HubSpot's default company properties — name, domain and record timestamps"
 risk = "low"
@@ -444,6 +448,7 @@ code_pointer = "/category"
 [[operations]]
 id = "hubspot-deal-get"
 method = "GET"
+direction = "read"
 path = "/crm/v3/objects/deals/{deal_id}"
 description = "Read one deal by record id. Returns only HubSpot's default deal properties — name, amount, stage, pipeline and close date"
 risk = "low"

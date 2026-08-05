@@ -11,6 +11,14 @@ api_version = "2"
 module = "jira.flux"
 operations = ["jira-issue-get", "jira-issue-create", "jira-issue-comment-list", "jira-issue-comment-add", "jira-issue-transitions-list", "jira-issue-transition"]
 
+[operation_directions]
+jira-issue-comment-add = "write"
+jira-issue-comment-list = "read"
+jira-issue-create = "write"
+jira-issue-get = "read"
+jira-issue-transition = "write"
+jira-issue-transitions-list = "read"
+
 [operation_semantic_effects]
 jira-issue-comment-add = []
 jira-issue-comment-list = []

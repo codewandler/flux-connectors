@@ -2,7 +2,7 @@ op babelforce-update-settings-for-audit-default(body: Any) -> Any
   description "Update default settings"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

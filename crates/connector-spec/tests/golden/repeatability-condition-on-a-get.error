@@ -1,2 +1,2 @@
 providers/repeatability-condition-on-a-get.toml is not a valid connector definition:
-  - operation "acme-thing-get" is a GET and declares `repeatable_because`, but a method that changes nothing has no repeat hazard to put a condition on. The field exists only to state the condition behind `idempotency = "conditional"` on a write; remove it
+  - operation "acme-thing-get" is an authored read and declares `repeatable_because`, but a read has no repeat hazard to put a condition on. The field exists only to state the condition behind `idempotency = "conditional"` on a write; remove it

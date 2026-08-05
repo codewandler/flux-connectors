@@ -2,7 +2,7 @@ op gitlab-issue-get(project_id: Number, issue_iid: Number) -> Any
   description "Get one issue by its project-scoped number (iid), not its global id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "{origin}/api/v4"

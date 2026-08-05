@@ -12,6 +12,17 @@ api_version = "v2"
 module = "zendesk-messaging.flux"
 operations = ["zendesk-messaging-conversation-create", "zendesk-messaging-conversation-get", "zendesk-messaging-conversation-update", "zendesk-messaging-participant-list", "zendesk-messaging-message-create", "zendesk-messaging-message-list", "zendesk-messaging-user-create", "zendesk-messaging-user-get", "zendesk-messaging-user-update"]
 
+[operation_directions]
+zendesk-messaging-conversation-create = "write"
+zendesk-messaging-conversation-get = "read"
+zendesk-messaging-conversation-update = "write"
+zendesk-messaging-message-create = "write"
+zendesk-messaging-message-list = "read"
+zendesk-messaging-participant-list = "read"
+zendesk-messaging-user-create = "write"
+zendesk-messaging-user-get = "read"
+zendesk-messaging-user-update = "write"
+
 [operation_semantic_effects]
 zendesk-messaging-conversation-create = []
 zendesk-messaging-conversation-get = []

@@ -7,7 +7,7 @@ op google-gmail-message-get(user_id: String, message_id: String) -> Any
   description "Get one Gmail message by id, in Gmail's default `full` format: headers plus the parsed MIME structure, whose body parts are base64url-encoded. Needs the `gmail.readonly` scope (or `gmail.modify`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://gmail.googleapis.com"
@@ -19,7 +19,7 @@ op google-gmail-message-send(user_id: String, raw: String) -> Any
   description "Send a Gmail message, supplied as a complete base64url-encoded RFC 2822 message. It is delivered immediately from the token owner's mailbox and cannot be recalled. Needs the `gmail.send` scope. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://gmail.googleapis.com"
@@ -33,7 +33,7 @@ op google-gmail-labels-list(user_id: String) -> Any
   description "List every label in a mailbox — the system labels (`INBOX`, `SENT`, `SPAM`) and the user's own — as `{\"labels\": [...]}`. Needs the `gmail.readonly` scope (or `gmail.labels`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://gmail.googleapis.com"

@@ -213,6 +213,7 @@ tags = ["project-management"]
 [[operations]]
 id = "trello-board-list"
 method = "GET"
+direction = "read"
 path = "/members/me/boards"
 description = "List every board the token's own member can see, newest activity first. Takes no argument — `me` resolves to whoever the token belongs to. Also this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the credential pair"
 risk = "low"
@@ -232,6 +233,7 @@ items = { type = "object", required = [
 [[operations]]
 id = "trello-board-get"
 method = "GET"
+direction = "read"
 path = "/boards/{id}"
 description = "Get one board by id, with its settings and current state"
 risk = "low"
@@ -259,6 +261,7 @@ properties = { id = { type = "string", description = "The board's id" }, name = 
 [[operations]]
 id = "trello-board-lists"
 method = "GET"
+direction = "read"
 path = "/boards/{id}/lists"
 description = "List the open lists (columns) on a board, left to right. Each carries the `id` trello-list-cards and trello-card-create take"
 risk = "low"
@@ -281,6 +284,7 @@ schema = { type = "string", minLength = 1 }
 [[operations]]
 id = "trello-list-cards"
 method = "GET"
+direction = "read"
 path = "/lists/{id}/cards"
 description = "List the open cards in one list, in board order. Archived cards are not returned"
 risk = "low"
@@ -321,6 +325,7 @@ items = { type = "object", required = [
 [[operations]]
 id = "trello-card-create"
 method = "POST"
+direction = "write"
 path = "/cards"
 description = "Create a card at the bottom of a list. The card is created unassigned, with no due date and no labels; Trello notifies whoever watches the list"
 risk = "medium"
@@ -364,10 +369,11 @@ properties = { id = { type = "string", description = "The created card's id — 
 [[operations]]
 id = "trello-card-archive"
 method = "PUT"
+direction = "write"
 path = "/cards/{id}"
 description = "Archive a card, or restore an archived one. Archiving is reversible and destroys nothing: the card leaves its list and stays readable in the board's archive"
 risk = "medium"
-idempotency = "idempotent"
+idempotency = "non_idempotent"
 
 [[operations.params.path]]
 name = "id"

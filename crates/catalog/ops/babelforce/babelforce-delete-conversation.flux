@@ -2,7 +2,7 @@ op babelforce-delete-conversation(id: String) -> Any
   description "Delete a conversation"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

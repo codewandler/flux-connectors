@@ -2,7 +2,7 @@ op asterisk-ari-channels-record(channelId: String, name: String, format: String,
   description "Start a recording."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

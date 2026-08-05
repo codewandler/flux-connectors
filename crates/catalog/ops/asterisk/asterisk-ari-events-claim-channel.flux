@@ -2,7 +2,7 @@ op asterisk-ari-events-claim-channel(channelId: String, application: String) -> 
   description "Claim a broadcast channel for this application."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

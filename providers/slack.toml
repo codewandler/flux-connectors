@@ -91,15 +91,9 @@
 # `slack-conversations-history` entirely and bounded with `limit` instead; C-53 excludes cursor
 # paging pending C-30, and closing it needs the quirk to admit a body-carried cursor.
 #
-# SCHEMA GAP: a method-style read cannot declare read metadata. `connector-flux`'s
-# `check_write_metadata` derives "is this a write" from the HTTP method, so a `POST` is refused if it
-# declares `risk = "low"` or `idempotency = "idempotent"`. Both reads below are genuinely
-# low-risk and genuinely repeatable, and neither can say so: they are recorded `medium` /
-# `non_idempotent` because those are the weakest values the emitter accepts. The direction is
-# fail-closed — flux's approval gate over-prompts and forgoes a safe retry rather than waving a
-# write through — but the cost is real: on this provider `risk` no longer separates a read from a
-# write, which is why `slack-reactions-add` (a genuine write) and the two reads all sit at `medium`.
-# Closing it means deciding write-ness from something other than the verb.
+# DIRECTION REVIEW: two read-shaped operations below remain conservatively authored as writes
+# pending individual semantic review. `check_write_metadata` reads that authored direction and never
+# their shared POST transport. A method-only vendor refresh therefore cannot reclassify them.
 
 id = "slack"
 vendor = "Slack"
@@ -187,6 +181,7 @@ tags = ["messaging"]
 [[operations]]
 id = "slack-chat-post-message"
 method = "POST"
+direction = "write"
 path = "/api/chat.postMessage"
 description = "Post a message to a Slack channel, visible to everyone in it. Slack answers HTTP 200 even on failure: check `ok` in the response body before treating the message as sent"
 # A message in a shared channel is read by people, notifies them, and cannot be un-seen once posted.
@@ -242,12 +237,12 @@ message_pointer = "/error"
 [[operations]]
 id = "slack-conversations-history"
 method = "POST"
+direction = "write"
 path = "/api/conversations.history"
 description = "Read recent messages from a Slack channel, newest first. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `channel_not_found` appears at `error`"
-# A read, and recorded `medium` only because the emitter refuses `risk = "low"` on a POST. See the
-# method-style-read gap in the header comment; nothing about this operation changes state.
+# Read-shaped, but conservatively authored `write`; see the review note in the header.
 risk = "medium"
-# Likewise: a read is repeatable, but `idempotency = "idempotent"` is refused on a POST.
+# The authored write direction refuses `idempotent` pending that same review.
 idempotency = "non_idempotent"
 
 [[operations.params.body]]
@@ -302,6 +297,7 @@ message_pointer = "/error"
 [[operations]]
 id = "slack-users-info"
 method = "POST"
+direction = "write"
 path = "/api/users.info"
 description = "Look up one Slack user by id — display name, real name, time zone and whether they are a bot. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `user_not_found` appears at `error`"
 # A read. `medium` for the same reason as above, not because looking up a user is risky.
@@ -341,15 +337,16 @@ message_pointer = "/error"
 [[operations]]
 id = "slack-reactions-add"
 method = "POST"
+direction = "write"
 path = "/api/reactions.add"
 description = "Add an emoji reaction to a message, visible to everyone in the channel. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `already_reacted` appears at `error`"
 # A visible write to a shared workspace, but a small and trivially reversible one — an emoji next to
 # a message, attributable to the bot. `medium` rather than `high`; that it collides with the two
-# reads is the method-style-read gap in the header comment, not a claim that they are equivalent.
+# conservatively authored read-shaped operations is the review state, not shared transport semantics.
 risk = "medium"
 # Repeating it does not add a second reaction — Slack answers `already_reacted` — but that is the
-# vendor refusing the duplicate, not the call being idempotent, and the emitter refuses
-# `idempotent` on a POST regardless.
+# vendor refusing the duplicate, not the call being idempotent; the authored write direction refuses
+# `idempotent`.
 idempotency = "non_idempotent"
 
 [[operations.params.body]]

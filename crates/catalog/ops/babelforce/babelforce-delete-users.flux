@@ -2,7 +2,7 @@ op babelforce-delete-users(body: Any) -> Any
   description "Delete users by email"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

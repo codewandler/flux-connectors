@@ -6,7 +6,7 @@ op figma-user-me -> Any
   description "Get the authenticated user's id, email, display handle and avatar URL. Used to verify a token works before running anything else. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/err` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.figma.com"
@@ -18,7 +18,7 @@ op figma-file-get(file_key: String) -> Any
   description "Get a Figma file's document tree, components and styles by file key. Does not include comments or rendered images. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/err` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.figma.com"
@@ -30,7 +30,7 @@ op figma-file-nodes-get(file_key: String, ids: String) -> Any
   description "Get one or more specific nodes from a file by id, without walking the whole document tree. Use this to read a particular frame or layer instead of downloading the entire file. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/err` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.figma.com"
@@ -42,7 +42,7 @@ op figma-image-render-get(file_key: String, ids: String) -> Any
   description "Render one or more nodes to images and return download URLs for them. The URLs point at short-lived storage and expire — Figma does not guarantee they stay valid, so fetch or store the image promptly rather than caching the URL itself. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/err` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.figma.com"
@@ -54,7 +54,7 @@ op figma-project-files-list(project_id: Number) -> Any
   description "List the files in a project: each file's key, name, thumbnail and last-modified time. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/err` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.figma.com"
@@ -66,7 +66,7 @@ op figma-file-comments-list(file_key: String) -> Any
   description "List a file's comments: who wrote each one, when, its text, what it is attached to, and whether it has been resolved. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/err` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.figma.com"

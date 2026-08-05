@@ -2,7 +2,7 @@ op babelforce-list-trigger-conditions(id: String) -> Any
   description "List a trigger's conditions"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

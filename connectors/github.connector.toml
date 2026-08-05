@@ -9,6 +9,17 @@ base_url = "https://api.github.com"
 module = "github.flux"
 operations = ["github-repo-get", "github-issue-get", "github-pull-get", "github-issue-create", "github-issue-comment-add", "github-issue-list", "github-pull-files-list", "github-workflow-run-list", "github-commit-list"]
 
+[operation_directions]
+github-commit-list = "read"
+github-issue-comment-add = "write"
+github-issue-create = "write"
+github-issue-get = "read"
+github-issue-list = "read"
+github-pull-files-list = "read"
+github-pull-get = "read"
+github-repo-get = "read"
+github-workflow-run-list = "read"
+
 [operation_semantic_effects]
 github-commit-list = []
 github-issue-comment-add = []

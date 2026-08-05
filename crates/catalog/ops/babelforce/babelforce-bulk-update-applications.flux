@@ -2,7 +2,7 @@ op babelforce-bulk-update-applications(items: List<Any>) -> Any
   description "Update multiple applications"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

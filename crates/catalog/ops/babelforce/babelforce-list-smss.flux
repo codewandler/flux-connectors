@@ -2,7 +2,7 @@ op babelforce-list-smss(page: Number, max: Number) -> Any
   description "List SMS messages"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

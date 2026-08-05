@@ -103,31 +103,31 @@ const MESSAGING_OPERATIONS: [(&str, &str, HttpMethod, &str); 9] = [
 const HELP_CENTER_OPERATION_HASHES: [(&str, &str); 7] = [
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-article-create.flux",
-        "e3adcac4ed72f06d04001665206b9fd831f692059bf259c15656d29677d6cd54",
+        "8fbd63c007d2026bfa0d1426b3db49438d46a2166f620bc625785ffbbf98da12",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-article-get.flux",
-        "00248cff54d214e199be9e76a6b9509f6fbbd1561e416e3dfa3245de981f3841",
+        "eeaeb2aedb7ab36b3dd8f82f2d4a1319940c9b08420a039fb0a0c6b1a06f400e",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-article-incremental-list.flux",
-        "81937fb7abaa3e1c76fe49dd83f22c691417279da3cda8723c00db460ce266d2",
+        "e8cd4ace4ef9b76b26b3d27f38b8d84eee6dfa052698d2fc756e9b3070357679",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-article-list.flux",
-        "345308f0c4bf6096087fc0ffc6a34d29ca90248a4028d2cdf2769e5395d85a95",
+        "7d9cbaa7a183a48f1082bc06491a6f29435ff37921e59129ad77b833b031cfa3",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-category-list.flux",
-        "9ad6cc411ec63da741ee9f2bacdaa6a52ed1280161a5d566d0f8f7d3aa81087f",
+        "1a4a5a367c4f46c27448bdaf793df8af141f4d68f062d396bf894ecbc6e51bb9",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-section-list.flux",
-        "467263505558d010cd564573c34d15e62d434999b3364d9b401a2761eec6b7b3",
+        "8c9802c3e259b9ae7daa16c4dd6743d9f4e2028c7623bde7cb221e902f8245c6",
     ),
     (
         "crates/catalog/ops/zendesk/zendesk-help-center-translation-list.flux",
-        "3928cc18c7846b22b0c12dcba61ac203c7c7f61f989e2f7b55f9d0d043acb2b0",
+        "8e1906bf0049d34663bed04f1b86a4b2faf59c3218846ee840f6ba483506a2b7",
     ),
 ];
 

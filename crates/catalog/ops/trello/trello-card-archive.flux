@@ -1,8 +1,8 @@
 op trello-card-archive(id: String, closed: Bool) -> Any
   description "Archive a card, or restore an archived one. Archiving is reversible and destroys nothing: the card leaves its list and stays readable in the board's archive"
   risk "medium"
-  idempotency "idempotent"
-  effects ["network"]
+  idempotency "non_idempotent"
+  effects ["write", "network"]
   expose true
 
   base = "https://api.trello.com/1"

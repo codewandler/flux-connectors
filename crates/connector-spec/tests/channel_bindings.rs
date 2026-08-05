@@ -40,6 +40,7 @@ env = ["ACME_WEBHOOK_SECRET"]
 [[operations]]
 id = "acme-reply"
 method = "POST"
+direction = "write"
 path = "/reply"
 risk = "medium"
 idempotency = "non_idempotent"
@@ -736,7 +737,7 @@ fn a_duplicate_operation_id_is_reported_once_and_not_also_as_a_namespace_collisi
     let source = fixture(GOOD).replace(
         "[[events]]\nname = \"thing.created\"",
         "[[operations]]\nid = \"acme-reply\"\nmethod = \"GET\"\npath = \"/other\"\nrisk = \"medium\"\n\
-         idempotency = \"non_idempotent\"\n\n[[events]]\nname = \"thing.created\"",
+         direction = \"read\"\nidempotency = \"non_idempotent\"\n\n[[events]]\nname = \"thing.created\"",
     );
     let error = refuse(&source);
     assert_eq!(

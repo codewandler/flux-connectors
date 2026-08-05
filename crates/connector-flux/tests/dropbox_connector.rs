@@ -4,24 +4,17 @@
 //! Dropbox's API v2 is RPC wearing HTTP: `POST /2/files/list_folder` with a JSON body is how you
 //! *read* a folder. There is no `GET` anywhere in Dropbox's v2 surface — not one endpoint, not even
 //! the "who am I" call. That is the whole archetype this connector exists to exercise, and it forces
-//! two questions the loader and emitter answer differently than the HTTP-method-shaped intuition
-//! would suggest:
+//! the key counterexample to HTTP-method-shaped direction:
 //!
-//! 1. **Can a POST-shaped read be a `verify` operation?** Yes. `validate_verify`
+//! 1. **Can a read transported by POST be a `verify` operation?** Yes. `validate_verify`
 //!    (`crates/connector-spec/src/provider.rs`) checks the named operation's declared `risk`, never
 //!    its HTTP method — it refuses `high`/`destructive` and nothing else. Box and Notion both had a
 //!    genuine `GET` available and used it for `verify` instead of proving this; Dropbox has no `GET`
 //!    to fall back to, so this connector's `verify` is a `POST` and the loader accepts it, exactly
 //!    because the check never looked at the method.
-//! 2. **Is a POST ever declared idempotent?** Never, here. `check_write_metadata`
-//!    (`crates/connector-flux/src/op.rs`) unconditionally refuses `idempotency = "idempotent"` on a
-//!    `POST` or `PATCH`, regardless of what the operation actually does on the vendor's side. Since
-//!    Dropbox uses only `POST` — no `PUT`, no `DELETE`, the two methods the check *would* allow to
-//!    claim idempotency — every operation below is honestly declared `non_idempotent`, even
-//!    `dropbox-user-me` and `dropbox-folder-list`, which are pure reads that change nothing and are
-//!    in fact safe to retry. The declaration undersells the truth in the safe direction, and that
-//!    loss of fidelity is recorded in `providers/dropbox.toml` rather than "fixed" by lying about the
-//!    method.
+//! 2. **Can it be low-risk and idempotent?** Yes. `dropbox-user-me` is explicitly authored `read`,
+//!    `low`, and `idempotent`. The other read-shaped RPCs retain conservative authored write values
+//!    pending individual review; their shared method supplies no direction evidence.
 //!
 //! Content upload and download are deliberately absent: they live on a different host
 //! (`content.dropboxapi.com`) and carry their JSON argument in a `Dropbox-API-Arg` request *header*
@@ -30,7 +23,7 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{Connector, HttpMethod, Idempotency, Risk};
+use connector_spec::{Connector, HttpMethod, Idempotency, OperationDirection, Risk};
 
 #[path = "../../connector-spec/tests/support/shipped_provider.rs"]
 mod shipped_provider;
@@ -94,11 +87,9 @@ fn every_operation_is_a_post_including_the_reads() {
 
 /// **Hazard #1, answered: the `verify` operation is itself a POST, and the loader accepts it.**
 /// `validate_verify` checks declared `risk`, not HTTP method (`crates/connector-spec/src/
-/// provider.rs`), so a `medium`-risk POST is loader-legal as a "Test connection" button even though
-/// it is a write shape. Unlike `providers/box.toml` and `providers/notion.toml`, which both had a
-/// genuine GET on hand and used it, Dropbox offers no such escape hatch.
+/// provider.rs`), so a low-risk authored read remains loader-legal regardless of POST transport.
 #[test]
-fn the_verify_operation_is_a_post_read_declared_medium_risk() {
+fn the_verify_operation_is_an_authored_read_despite_post_transport() {
     let connector = dropbox();
 
     assert_eq!(
@@ -120,33 +111,24 @@ fn the_verify_operation_is_a_post_read_declared_medium_risk() {
     );
     assert_eq!(
         verify.risk,
-        Risk::Medium,
-        "`verify` cannot declare `low`: `check_write_metadata` refuses `low` on any POST regardless \
-         of what it actually does. `medium` is the honest ceiling a read forced through POST can \
-         reach, and the loader's `validate_verify` only refuses `high`/`destructive` — never the \
-         method — so this is still a legal, unattended connection test"
+        Risk::Low,
+        "an authored read may carry the low risk appropriate to an unattended connection test"
     );
+    assert_eq!(verify.direction, OperationDirection::Read);
+    assert_eq!(verify.idempotency, Idempotency::Idempotent);
 }
 
-/// **Hazard #2, answered: no Dropbox operation ever declares itself idempotent.**
-/// `check_write_metadata` refuses `idempotency = "idempotent"` on `POST`/`PATCH` unconditionally, and
-/// every operation here is a `POST` — so the honest declaration is `non_idempotent` across the board,
-/// even for `dropbox-user-me`, `dropbox-folder-list`, `dropbox-metadata-get` and `dropbox-search`,
-/// which are pure reads and genuinely safe to retry. The metadata undersells the truth in the safe
-/// direction rather than claiming idempotency the schema cannot honestly express for this method.
+/// The reviewed counterexample is read/idempotent; every conservatively authored write remains
+/// non-idempotent. HTTP method is the same for all of them and participates in neither assertion.
 #[test]
-fn no_dropbox_operation_declares_itself_idempotent() {
+fn direction_not_method_decides_dropbox_safety_metadata() {
     let connector = dropbox();
     for operation in &connector.operations {
-        assert_eq!(
-            operation.idempotency,
-            Idempotency::NonIdempotent,
-            "`{}` declares `{:?}`. Every Dropbox operation is a POST, and `check_write_metadata` \
-             refuses `idempotent` on any POST regardless of what it actually does — `non_idempotent` \
-             is the only honest declaration available here, for reads and writes alike",
-            operation.id,
-            operation.idempotency
-        );
+        let expected = match operation.direction {
+            OperationDirection::Read => Idempotency::Idempotent,
+            OperationDirection::Write => Idempotency::NonIdempotent,
+        };
+        assert_eq!(operation.idempotency, expected, "`{}`", operation.id);
     }
 }
 

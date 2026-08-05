@@ -25,24 +25,24 @@ type SelectedOperation = (
 const ORIGINAL_FLUX: [OriginalFlux; 5] = [
     (
         "twilio-account-get",
-        "eb5644b85ca45449a7f8eb58fc7a51805993abe07606746744567b0e7ba04858",
+        "e06f47b11aa9c11e74bd22d8210ee2c715e608fd2a47bd1d2e5c41fb999065b1",
     ),
     (
         "twilio-call-get",
-        "8f135e7b4787eaa1430d10ae6a0cfa35795580a54917b067ed424bd55d8069b1",
+        "070af6c41bab9c8bdfa8905f9a0d03752cf8a88808b7cb9ba9a68e81cdde3163",
     ),
     (
         "twilio-call-list",
         // C-30 moved query values from URL interpolation into `http.request(query: ...)`.
-        "f96095a213ff0fa1a0b46d0310cc1eab29b8d70f7ee8f36d807f8f112413fc8f",
+        "b723a2150a07df66d353b4e452bd28841dfa132ef33b7b84f054d5479a7a7a91",
     ),
     (
         "twilio-message-get",
-        "45debc8e5fac98fc7166d5218db7554ba69406c9c9badb8ffec2ec165973b4fd",
+        "2cba087910b0c12078470e6abc4ccee70c95af692df7d2ebb71e579d6c42d6a0",
     ),
     (
         "twilio-message-list",
-        "fcf1e33d180efe929418a0077f48f4d2581df183dcc9f62f3c2b0e688fd6f9f4",
+        "e7301d737b2b2c899fe428af36cb066a20e084299b9cd040fa8b2699dcaa8dd8",
     ),
 ];
 

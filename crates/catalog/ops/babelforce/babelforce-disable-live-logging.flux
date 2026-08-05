@@ -2,7 +2,7 @@ op babelforce-disable-live-logging -> Any
   description "Disable live logging"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

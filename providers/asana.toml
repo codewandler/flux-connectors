@@ -201,6 +201,7 @@ tags = ["project-management"]
 [[operations]]
 id = "asana-task-get"
 method = "GET"
+direction = "read"
 path = "/api/1.0/tasks/{task_gid}"
 description = "Get one task — its name, notes, assignee, due date, completion state and the projects it belongs to. The task is under `data` in the response"
 risk = "low"
@@ -243,6 +244,7 @@ message_pointer = "/errors/0/message"
 [[operations]]
 id = "asana-task-create"
 method = "POST"
+direction = "write"
 path = "/api/1.0/tasks"
 description = "Create a task in a workspace. It is created unassigned and in no project, so nobody is notified; move it or assign it in Asana afterwards. The created task is under `data` in the response"
 # A new object in a shared workspace, but a quiet one: with no `projects` and no `assignee` declarable
@@ -290,6 +292,7 @@ message_pointer = "/errors/0/message"
 [[operations]]
 id = "asana-task-update"
 method = "PUT"
+direction = "write"
 path = "/api/1.0/tasks/{task_gid}"
 # WHY THIS OPERATION SETS ONE FIELD, and why it is still `asana-task-update` rather than
 # `asana-task-complete-set`.
@@ -346,6 +349,7 @@ message_pointer = "/errors/0/message"
 [[operations]]
 id = "asana-task-story-add"
 method = "POST"
+direction = "write"
 path = "/api/1.0/tasks/{task_gid}/stories"
 # Asana calls a comment a *story*, and the endpoint is `/stories`, so the id follows the vendor's own
 # noun rather than renaming it to `comment`. A story is also what Asana calls a system event on a
@@ -387,6 +391,7 @@ message_pointer = "/errors/0/message"
 [[operations]]
 id = "asana-project-get"
 method = "GET"
+direction = "read"
 path = "/api/1.0/projects/{project_gid}"
 description = "Get one project — its name, notes, owner, team, current status and whether it is archived. The project is under `data` in the response"
 risk = "low"

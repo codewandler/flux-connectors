@@ -12,6 +12,10 @@ api_version = "v1.0"
 module = "microsoft_graph-files.flux"
 operations = ["microsoft_graph-files-item-get", "microsoft_graph-files-item-update"]
 
+[operation_directions]
+microsoft_graph-files-item-get = "read"
+microsoft_graph-files-item-update = "write"
+
 [operation_semantic_effects]
 microsoft_graph-files-item-get = []
 microsoft_graph-files-item-update = []

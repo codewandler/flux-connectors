@@ -2,7 +2,7 @@ op babelforce-update-routing(id: String, body: Any) -> Any
   description "Update Routing"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

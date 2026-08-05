@@ -12,6 +12,12 @@ module = "sendgrid.flux"
 operations = ["sendgrid-template-list", "sendgrid-template-get", "sendgrid-suppression-bounce-list", "sendgrid-email-validate"]
 verify = "sendgrid-template-list"
 
+[operation_directions]
+sendgrid-email-validate = "write"
+sendgrid-suppression-bounce-list = "read"
+sendgrid-template-get = "read"
+sendgrid-template-list = "read"
+
 [operation_semantic_effects]
 sendgrid-email-validate = []
 sendgrid-suppression-bounce-list = []

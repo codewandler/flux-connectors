@@ -2,7 +2,7 @@ op babelforce-get-campaign(id: String) -> Any
   description "Get a campaign"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

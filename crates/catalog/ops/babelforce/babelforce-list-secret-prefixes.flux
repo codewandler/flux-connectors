@@ -2,7 +2,7 @@ op babelforce-list-secret-prefixes -> Any
   description "Retrieves a list of secret prefixes"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -12,7 +12,8 @@ use std::collections::BTreeMap;
 
 use connector_spec::{
     AuthMethod, AuthRequirement, AuthScheme, BodyEncoding, Connector, HttpMethod, Idempotency,
-    OAuth2Spec, OAuthGrant, Operation, Param, ParamSet, Provenance, Quirks, Risk, DEFAULT_SERVICE,
+    OAuth2Spec, OAuthGrant, Operation, OperationDirection, Param, ParamSet, Provenance, Quirks,
+    Risk, DEFAULT_SERVICE,
 };
 use serde_json::json;
 
@@ -64,6 +65,7 @@ fn op(id: &str, auth: Option<Vec<AuthRequirement>>) -> Operation {
         id: id.into(),
         service: DEFAULT_SERVICE.into(),
         method: HttpMethod::Get,
+        direction: OperationDirection::Read,
         path: "/v2/calls".into(),
         description: "List calls".into(),
         risk: Risk::Low,
@@ -423,10 +425,11 @@ fn an_exposed_operation_serializes_exactly_as_it_did_before_the_field_existed() 
         "the field must default to exposed; a default that hides is a decision made by silence"
     );
 
-    // The encoding this operation had before `expose` existed, field for field.
+    // The required direction joins the stable encoding; `expose` remains omitted at its default.
     let expected = json!({
         "id": "acme.thing.list",
         "method": "GET",
+        "direction": "read",
         "path": "/v2/calls",
         "description": "List calls",
         "risk": "low",
@@ -498,6 +501,7 @@ env = ["OLLAMA_API_KEY"]
 [[operations]]
 id = "ollama.generate"
 method = "POST"
+direction = "write"
 path = "/api/generate"
 description = "Generate a completion"
 risk = "low"

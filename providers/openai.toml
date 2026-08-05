@@ -59,6 +59,7 @@ sha256 = "bf253f99bca25941f6b7a5ce0c4a0634b89677502067bfbadb82727690c596a6"
 # rendering cannot add a query pair; omit cursors, ordering, expansion and streaming controls.
 [[patch.operations]]
 select = "getResponse"
+direction = "read"
 rename = "openai-response-get"
 description = "Retrieve one stored model response by id"
 risk = "low"
@@ -67,6 +68,7 @@ omit.query = ["include", "stream", "starting_after", "include_obfuscation"]
 
 [[patch.operations]]
 select = "listInputItems"
+direction = "read"
 rename = "openai-response-input-item-list"
 description = "List input items retained for one stored response with a bounded integer limit"
 risk = "low"
@@ -75,6 +77,7 @@ omit.query = ["order", "after", "include"]
 
 [[patch.operations]]
 select = "listFiles"
+direction = "read"
 rename = "openai-file-list"
 description = "List files available to this API key with a bounded integer limit"
 risk = "low"
@@ -83,6 +86,7 @@ omit.query = ["purpose", "order", "after"]
 
 [[patch.operations]]
 select = "listBatches"
+direction = "read"
 rename = "openai-batch-list"
 description = "List batch jobs available to this API key with a bounded integer limit"
 risk = "low"
@@ -144,6 +148,7 @@ tags = ["ai"]
 [[operations]]
 id = "openai-models-list"
 method = "GET"
+direction = "read"
 path = "/v1/models"
 description = "List the models available to this API key, with their ids and owners"
 risk = "low"
@@ -178,6 +183,7 @@ properties = { object = { const = "list" }, data = { type = "array", description
 [[operations]]
 id = "openai-model-get"
 method = "GET"
+direction = "read"
 path = "/v1/models/{model}"
 description = "Retrieve one model by id, with its ownership and permissions"
 risk = "low"
@@ -210,8 +216,8 @@ properties = { id = { type = "string", description = "The model id, echoed back"
 #
 # Both are `POST`, both are billed per token, and both are therefore `risk = "medium"` and
 # `idempotency = "non_idempotent"`. Neither value is decoration: flux's approval gate reads `risk`,
-# so a cost-bearing call declaring `low` would be waved through unattended, and a `POST` declaring
-# itself `idempotent` would make a `retry` around it turn one charge into three.
+# so a cost-bearing call declaring `low` would be waved through unattended, and an authored write
+# declaring `idempotent` could be skipped or retried unsafely.
 # `connector-flux`'s `check_write_metadata` refuses both mistakes outright, which is why no shipped
 # provider can regress into them quietly.
 #
@@ -251,6 +257,7 @@ properties = { id = { type = "string", description = "The model id, echoed back"
 [[operations]]
 id = "openai-chat-completion"
 method = "POST"
+direction = "write"
 path = "/v1/chat/completions"
 description = "Create a chat completion. Billed per input and output token, so the caller must state a token budget via max_completion_tokens"
 risk = "medium"
@@ -312,6 +319,7 @@ properties = { id = { type = "string", description = "The completion's id, `chat
 [[operations]]
 id = "openai-embeddings-create"
 method = "POST"
+direction = "write"
 path = "/v1/embeddings"
 description = "Create embedding vectors for one or more input texts. Billed per input token"
 risk = "medium"

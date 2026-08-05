@@ -2,7 +2,7 @@ op babelforce-get-task-schedules(page: Number, page_size: Number) -> Any
   description "List cron scheduled tasks"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

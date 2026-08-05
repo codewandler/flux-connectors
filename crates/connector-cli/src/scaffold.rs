@@ -14,10 +14,10 @@
 //! writing, and `tests/scaffold.rs::scaffold_writes_no_file` holds that.
 //!
 //! **What nobody has claimed comes out as a hole, not a guess.** No OpenAPI document publishes
-//! `risk` or `idempotency`, so where this helper cannot read a claim off an operation the connector
-//! *already publishes*, it states neither and leaves a `TODO` — and C-414's refusal on a silent
-//! mutating method is what makes that a build failure rather than a comment. A scaffold that
-//! silently declared 54 DELETEs `low` would have saved nobody work; it would have manufactured 54
+//! direction, `risk` or `idempotency`, so where this helper cannot read the complete claim off an
+//! operation the connector *already publishes*, it states none of them and leaves a `TODO` — and
+//! the loader's required direction makes that a build failure rather than a comment. A scaffold
+//! that silently called every GET a read or declared 54 DELETEs `low` would have manufactured
 //! unreviewed safety claims. See [`Claim`].
 //!
 //! **What it could not carry is reported, per operation and by count.** A dropped operation that
@@ -48,21 +48,19 @@ use serde::Serialize;
 
 use connector_spec::{
     AuthMethod, AuthRequirement, ChannelBinding, ConfigField, Connector, EventDecl, Graph,
-    HttpMethod, Idempotency, Ingested, Operation, ParamPosition, Risk, Runtime, Service,
-    SpecOperation, SpecSource, DEFAULT_SERVICE,
+    HttpMethod, Idempotency, Ingested, Operation, OperationDirection, ParamPosition, Risk, Runtime,
+    Service, SpecOperation, SpecSource, DEFAULT_SERVICE,
 };
 
 use crate::seam::{self, ProviderInputs, SpecInput};
 use crate::workspace::Workspace;
 
-/// The methods that change nothing, and therefore carry no damage claim to get wrong.
-///
-/// C-414 answers silence on these with `low`/`idempotent` — not a flattering default but the only
-/// values a read can have — which is why a selector over them needs no `TODO`.
+/// Conventionally read-shaped methods. This class structures review output; it supplies no
+/// direction or safety metadata.
 const READ_METHODS: &[HttpMethod] = &[HttpMethod::Get, HttpMethod::Head, HttpMethod::Options];
 
-/// The methods that write. One selector, one damage claim: the reads and the deletes under one
-/// prefix are not one claim, which is why these are three classes and not one.
+/// Conventionally write-shaped methods. One selector makes a compact review set, but the emitted
+/// direction still comes only from already published connector truth.
 const WRITE_METHODS: &[HttpMethod] = &[HttpMethod::Post, HttpMethod::Put, HttpMethod::Patch];
 
 /// The methods that destroy.
@@ -692,8 +690,8 @@ fn path_has_prefix(path: &str, prefix: Option<&str>) -> bool {
 /// a value, and the only way to reach [`Claim::Stated`] is for every matched operation to be one a
 /// human already published a claim for, with all of them agreeing.
 enum Claim {
-    /// Every matched operation changes nothing, so C-414 answers the silence with `low`/`idempotent`
-    /// and there is no hole. The selector states nothing and the file loads.
+    /// Every matched operation has read-shaped transport, so the existing C-414 risk/idempotency
+    /// rule applies. Direction is emitted separately by stable operation identity.
     ReadOnly,
     /// Every matched operation is already published with these values, and they all agree. One line
     /// instead of 54, restating a claim a human made rather than making one.
@@ -704,8 +702,7 @@ enum Claim {
 }
 
 impl Claim {
-    /// The `(risk, idempotency)` a matched operation ends up with when its own block says nothing —
-    /// the selector's statement, or C-414's answer to silence on a read.
+    /// The `(risk, idempotency)` a matched operation ends up with when its own block says nothing.
     ///
     /// This is what makes a `[[patch.operations]]` block hold the *exceptions and only the
     /// exceptions*: a block restating what the selector already gives is 391 blocks nobody reads.
@@ -1216,6 +1213,7 @@ impl Plan {
         self.write_specs(&mut out)?;
         self.write_declarations(&mut out)?;
         self.write_naming(&mut out, &naming);
+        self.write_directions(&mut out);
         self.write_selectors(&mut out);
         write_blocks(&mut out, &blocks);
         write_notes(&mut out, &notes);
@@ -1416,6 +1414,74 @@ impl Plan {
         out.push('\n');
     }
 
+    fn write_directions(&self, out: &mut String) {
+        let mut reviewed = BTreeMap::<String, BTreeMap<String, OperationDirection>>::new();
+        let mut holes = BTreeMap::<String, BTreeSet<String>>::new();
+
+        for selection in &self.selections {
+            let document = &self.documents[selection.document];
+            for operation in self.matched(selection) {
+                match self.published(document, operation) {
+                    Some(published) => {
+                        let previous = reviewed
+                            .entry(document.service.clone())
+                            .or_default()
+                            .insert(operation.operation_id.clone(), published.direction);
+                        assert!(
+                            previous.is_none_or(|previous| previous == published.direction),
+                            "one stable operation identity cannot carry two reviewed directions"
+                        );
+                    }
+                    None => {
+                        holes
+                            .entry(document.service.clone())
+                            .or_default()
+                            .insert(operation.operation_id.clone());
+                    }
+                }
+            }
+        }
+
+        rule(out);
+        let _ = writeln!(
+            out,
+            "\
+# Direction — connector truth keyed by stable service and vendor `operationId` (C-516).
+#
+# These values are copied only from operations the current connector already publishes. Method,
+# path, name, description, risk and idempotency do not choose a value or a grouping membership."
+        );
+        rule(out);
+
+        for document in &self.documents {
+            if let Some(missing) = holes.get(&document.service) {
+                let names = list(missing.iter().cloned());
+                for line in wrap_comment(&format!(
+                    "TODO(direction): state `read` or `write` under \
+                     `[patch.directions.{}]` for {} unreviewed operation(s): {names}. The key is \
+                     omitted so the loader refuses rather than inferring from HTTP method",
+                    document.service,
+                    missing.len()
+                )) {
+                    let _ = writeln!(out, "{line}");
+                }
+            }
+            let Some(directions) = reviewed.get(&document.service) else {
+                continue;
+            };
+            let _ = writeln!(out, "\n[patch.directions.{}]", document.service);
+            for (operation_id, direction) in directions {
+                let _ = writeln!(
+                    out,
+                    "{} = {}",
+                    quote(operation_id),
+                    quote(direction_word(*direction))
+                );
+            }
+        }
+        out.push('\n');
+    }
+
     fn write_selectors(&self, out: &mut String) {
         rule(out);
         let _ = writeln!(
@@ -1423,10 +1489,8 @@ impl Plan {
             "\
 # Selection — {} statement(s) (C-411, C-414).
 #
-# Split by method class rather than by resource, because what a selector *states* is a damage claim:
-# one line over the DELETEs is reviewable, and the same line over the reads beside them would be a
-# lie. Reads state nothing — a method that changes nothing has no damage claim to get wrong, and
-# takes `low`/`idempotent`, the only values a read can have.
+# Split by method class rather than by resource to make similarly transported operations compact to
+# review. Direction is never emitted here; it is carried separately by stable operation identity.
 #
 # A prefix matches on whole segments, so `/api/v2/agents` reaches `/api/v2/agents/{{id}}` and never
 # `/api/v2/agentsummary`.",
@@ -1463,8 +1527,7 @@ impl Plan {
 #
 # {unclaimed} of the {} operations this selector matches carry no claim anybody has made — no
 # OpenAPI document publishes `risk` or `idempotency`, and this connector does not publish these
-# operations today. Deriving them from the HTTP method is what C-414 exists to refuse, so the two
-# keys are left out and the loader names every unclaimed operation.
+# operations today. The keys are left out and the loader names every unclaimed operation.
 #
 #   risk = \"low\" | \"medium\" | \"high\" | \"destructive\"
 #   idempotency = \"idempotent\" | \"non_idempotent\" | \"conditional\"
@@ -2027,6 +2090,10 @@ fn risk_word(risk: Risk) -> &'static str {
         Risk::High => "high",
         Risk::Destructive => "destructive",
     }
+}
+
+fn direction_word(direction: OperationDirection) -> &'static str {
+    direction.word()
 }
 
 fn idempotency_word(idempotency: Idempotency) -> &'static str {

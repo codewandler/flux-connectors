@@ -2,7 +2,7 @@ op babelforce-get-business-hour(id: String) -> Any
   description "Get a business-hours profile"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

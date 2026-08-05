@@ -2,7 +2,7 @@ op babelforce-integration-api-proxy-get(integrationId: String, uri: String) -> A
   description "Proxy a request to the provider API"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

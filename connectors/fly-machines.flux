@@ -7,7 +7,7 @@ op fly-regions-list -> Any
   description "List Fly's available regions and identify the nearest one; also verifies the configured access token. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.machines.dev/v1"
@@ -19,7 +19,7 @@ op fly-machines-list(app_name: String) -> Any
   description "List every Machine in one Fly app, without optional state filters or lease details. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.machines.dev/v1"
@@ -31,7 +31,7 @@ op fly-machine-get(app_name: String, machine_id: String) -> Any
   description "Get one Fly Machine's current configuration, state, region, addresses and recent events. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.machines.dev/v1"
@@ -43,7 +43,7 @@ op fly-machine-events-list(app_name: String, machine_id: String) -> Any
   description "List the recorded lifecycle events for one Fly Machine; this is history, not a durable event subscription. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.machines.dev/v1"
@@ -55,7 +55,7 @@ op fly-machine-create(app_name: String, image: String) -> Any
   description "Create and launch a Fly Machine from one image using Fly's generated name and region placement; this begins billable compute. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.machines.dev/v1"
@@ -69,7 +69,7 @@ op fly-machine-start(app_name: String, machine_id: String) -> Any
   description "Start a stopped Fly Machine, restoring service and beginning billable compute. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.machines.dev/v1"
@@ -81,7 +81,7 @@ op fly-machine-stop(app_name: String, machine_id: String) -> Any
   description "Stop a running Fly Machine using the API's default signal and timeout, interrupting its service. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.machines.dev/v1"
@@ -93,7 +93,7 @@ op fly-machine-restart(app_name: String, machine_id: String) -> Any
   description "Restart a Fly Machine using the API's default signal and timeout, causing a service interruption. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.machines.dev/v1"
@@ -105,7 +105,7 @@ op fly-machine-delete(app_name: String, machine_id: String) -> Any
   description "Permanently delete a stopped Fly Machine. Forced deletion is intentionally unavailable, so a running Machine is refused instead of killed implicitly. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error`, its error code at `/status` in the response body."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.machines.dev/v1"

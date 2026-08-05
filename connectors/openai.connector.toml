@@ -11,6 +11,16 @@ api_version = "v1"
 module = "openai.flux"
 operations = ["openai-models-list", "openai-model-get", "openai-chat-completion", "openai-embeddings-create", "openai-response-get", "openai-response-input-item-list", "openai-file-list", "openai-batch-list"]
 
+[operation_directions]
+openai-batch-list = "read"
+openai-chat-completion = "write"
+openai-embeddings-create = "write"
+openai-file-list = "read"
+openai-model-get = "read"
+openai-models-list = "read"
+openai-response-get = "read"
+openai-response-input-item-list = "read"
+
 [operation_semantic_effects]
 openai-batch-list = []
 openai-chat-completion = []

@@ -10,6 +10,12 @@ module = "resend.flux"
 operations = ["resend-email-send", "resend-email-get", "resend-domain-list", "resend-domain-get"]
 verify = "resend-domain-list"
 
+[operation_directions]
+resend-domain-get = "read"
+resend-domain-list = "read"
+resend-email-get = "read"
+resend-email-send = "write"
+
 [operation_semantic_effects]
 resend-domain-get = []
 resend-domain-list = []

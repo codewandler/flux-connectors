@@ -2,7 +2,7 @@ op babelforce-export-agents(format: String) -> Any
   description "Export agents as CSV"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

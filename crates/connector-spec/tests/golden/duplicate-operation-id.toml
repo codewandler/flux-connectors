@@ -9,6 +9,7 @@ base_url = "https://acme.zendesk.com"
 [[operations]]
 id = "zendesk.ticket.update"
 method = "PUT"
+direction = "write"
 path = "/api/v2/tickets/{ticket_id}.json"
 risk = "medium"
 idempotency = "non_idempotent"
@@ -22,6 +23,7 @@ schema = { type = "integer" }
 [[operations]]
 id = "zendesk.ticket.update"
 method = "PUT"
+direction = "write"
 path = "/api/v2/tickets/{ticket_id}.json"
 risk = "medium"
 idempotency = "non_idempotent"

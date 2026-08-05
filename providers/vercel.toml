@@ -158,6 +158,7 @@ tags = ["infrastructure", "developer-tools"]
 [[operations]]
 id = "vercel-projects-list"
 method = "GET"
+direction = "read"
 path = "/v10/projects"
 description = "List the projects of the team this connector is installed for. The team is pinned at install time and is not a parameter, so every call returns that team's projects and no other account's"
 risk = "low"
@@ -174,6 +175,7 @@ idempotency = "idempotent"
 [[operations]]
 id = "vercel-project-get"
 method = "GET"
+direction = "read"
 path = "/v9/projects/{idOrName}"
 description = "Get one project of the team this connector is installed for, by its id or name. A project belonging to any other account is a 404 here: the team is pinned at install time and is not a parameter"
 risk = "low"
@@ -195,6 +197,7 @@ properties = { id = { type = "string", description = "The project's own id (prj_
 [[operations]]
 id = "vercel-deployments-list"
 method = "GET"
+direction = "read"
 path = "/v7/deployments"
 description = "List the deployments of the team this connector is installed for, newest first, optionally filtered to one project. The team is pinned at install time and is not a parameter, so every call returns that team's deployments and no other account's"
 risk = "low"
@@ -216,6 +219,7 @@ properties = { deployments = { type = "array", items = { type = "object", requir
 [[operations]]
 id = "vercel-deployment-get"
 method = "GET"
+direction = "read"
 path = "/v13/deployments/{idOrUrl}"
 description = "Get one deployment of the team this connector is installed for, by its id or its unique hostname. A deployment belonging to any other account fails here: the team is pinned at install time and is not a parameter"
 risk = "low"
@@ -241,6 +245,7 @@ properties = { id = { type = "string", description = "The deployment's unique id
 [[operations]]
 id = "vercel-deployment-cancel"
 method = "PATCH"
+direction = "write"
 path = "/v12/deployments/{id}/cancel"
 description = "Cancel a deployment of the team this connector is installed for, stopping it before it completes; refused with 400 if it already finished (READY, ERROR or CANCELED). The team is pinned at install time and is not a parameter, so this cannot reach a deployment of another account"
 risk = "high"

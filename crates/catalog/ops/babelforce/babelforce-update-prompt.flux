@@ -2,7 +2,7 @@ op babelforce-update-prompt(id: String, body: Any) -> Any
   description "Update a prompt"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

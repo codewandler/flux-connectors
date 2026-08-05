@@ -6,7 +6,7 @@ op supabase-schema-describe -> Any
   description "Describe the tables, views and columns this project's data API exposes, as an OpenAPI 2.0 document. Takes no argument. Call this first to discover the table names supabase-rows-list takes and what columns each one has — the document reflects only what the anon role may see, so a table absent from it is a table this key cannot read. Also this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the project ref and the key"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{project_ref}.supabase.co"
@@ -18,7 +18,7 @@ op supabase-rows-list(table: String, limit: Number) -> Any
   description "Read rows from one table or view in this project. Returns a JSON array of row objects with every column the anon role may read; the columns are the project's own, so call supabase-schema-describe first to learn them. Row-level security decides which rows come back — an empty array means the policies matched nothing, not that the table is empty. This connector cannot filter, project or sort: pass `limit` to bound the read and do the rest in the flow"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{project_ref}.supabase.co"
@@ -30,7 +30,7 @@ op supabase-auth-settings -> Any
   description "Read which sign-in methods this project has enabled, and whether self-service sign-up is open. Takes no argument and returns configuration only — no user data and no identities. Use it to decide whether a flow can offer a given provider before it tries"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{project_ref}.supabase.co"

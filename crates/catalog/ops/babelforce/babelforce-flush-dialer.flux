@@ -1,8 +1,8 @@
 op babelforce-flush-dialer(id: String, all: Bool) -> Any
   description "Flush dialer tasks"
-  risk "low"
-  idempotency "idempotent"
-  effects ["network"]
+  risk "high"
+  idempotency "non_idempotent"
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

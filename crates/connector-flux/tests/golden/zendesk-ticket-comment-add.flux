@@ -2,7 +2,7 @@ op zendesk-ticket-comment-add(ticket_id: Number, updated_stamp: String, body: St
   description "Add a comment to a ticket; the comment is an internal note unless public is explicitly true"
   risk "medium"
   idempotency "conditional"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://example.zendesk.com"

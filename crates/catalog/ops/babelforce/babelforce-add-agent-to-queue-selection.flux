@@ -2,7 +2,7 @@ op babelforce-add-agent-to-queue-selection(queueId: String, selectionId: String,
   description "Add an agent to a selection"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -51,6 +51,7 @@ description = "A hand-authored fixture connector."
 [[operations]]
 id = "acme-thing-get"
 method = "GET"
+direction = "read"
 path = "/v1/things"
 description = "List the things."
 risk = "low"

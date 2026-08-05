@@ -159,6 +159,7 @@ sha256 = "3b3d858f1a02a2ac0116cc10a296a7d374fe7c9d8b4a68a5419712e0bb3fbf41"
 
 [[patch.operations]]
 select = "GetCountrySpecs"
+direction = "read"
 rename = "stripe-country-spec-list"
 description = "List country-specific requirements, supported currencies and payment capabilities without changing an account"
 risk = "low"
@@ -167,6 +168,7 @@ omit.query = ["ending_before", "expand", "starting_after"]
 
 [[patch.operations]]
 select = "GetEvents"
+direction = "read"
 rename = "stripe-event-list"
 description = "List Stripe account events for operational visibility without replaying or changing an event"
 risk = "low"
@@ -183,6 +185,7 @@ omit.query = [
 
 [[patch.operations]]
 select = "GetExchangeRates"
+direction = "read"
 rename = "stripe-exchange-rate-list"
 description = "List current Stripe exchange rates without creating a conversion or moving funds"
 risk = "low"
@@ -191,6 +194,7 @@ omit.query = ["ending_before", "expand", "starting_after"]
 
 [[patch.operations]]
 select = "GetBillingMeters"
+direction = "read"
 rename = "stripe-billing-meter-list"
 description = "List usage-billing meter definitions without creating, changing or deactivating one"
 risk = "low"
@@ -272,6 +276,7 @@ tags = ["payments"]
 [[operations]]
 id = "stripe-balance-get"
 method = "GET"
+direction = "read"
 path = "/v1/balance"
 description = "Get the account's current balance — what is available to pay out and what is still pending, per currency. Takes no parameters, and reports the balance of whichever mode the key belongs to: a test key returns the test balance"
 risk = "low"
@@ -294,6 +299,7 @@ code_pointer = "/error/code"
 [[operations]]
 id = "stripe-customer-get"
 method = "GET"
+direction = "read"
 path = "/v1/customers/{customer}"
 # Said on the contract a model reads, because `risk` cannot say it: this response is personal data.
 # `Risk` grades what a call *changes*, so it has no axis for what a read *discloses*, and a read of a
@@ -323,6 +329,7 @@ code_pointer = "/error/code"
 [[operations]]
 id = "stripe-charge-get"
 method = "GET"
+direction = "read"
 path = "/v1/charges/{charge}"
 description = "Get one charge by id: amount, currency, whether it was captured, whether it was refunded and how much of it, the card's last four digits and brand, and the failure or decline reason if it did not succeed. `amount` is in the currency's smallest unit — 1000 is ten dollars, and also ten thousand yen"
 risk = "low"
@@ -352,6 +359,7 @@ code_pointer = "/error/code"
 [[operations]]
 id = "stripe-payment-intent-get"
 method = "GET"
+direction = "read"
 path = "/v1/payment_intents/{payment_intent}"
 description = "Get one payment intent by id — the modern shape of a payment, covering the whole lifecycle from creation to capture. Its `status` is what says where the payment stands; `requires_capture` means the money is authorized but not yet taken"
 risk = "low"
@@ -389,6 +397,7 @@ code_pointer = "/error/code"
 [[operations]]
 id = "stripe-refund-get"
 method = "GET"
+direction = "read"
 path = "/v1/refunds/{refund}"
 description = "Get one refund by id: its amount, the charge it belongs to, its reason and its status. A refund that reports `pending` has not reached the customer's bank yet, and one that reports `failed` means the money came back — the customer was not paid"
 risk = "low"
@@ -465,6 +474,7 @@ code_pointer = "/error/code"
 [[operations]]
 id = "stripe-payment-intent-capture"
 method = "POST"
+direction = "write"
 path = "/v1/payment_intents/{payment_intent}/capture"
 description = "Capture an authorized payment intent, charging the customer the **full** authorized amount. Only a payment intent in `requires_capture` can be captured; a partial capture needs an `amount` this connector cannot send. Stripe answers 402 with an `error.code` such as `card_declined` when the capture is refused, and that arrives as data rather than as a failure"
 risk = "destructive"
@@ -499,6 +509,7 @@ code_pointer = "/error/code"
 [[operations]]
 id = "stripe-payment-intent-cancel"
 method = "POST"
+direction = "write"
 path = "/v1/payment_intents/{payment_intent}/cancel"
 description = "Cancel a payment intent, releasing any authorization hold on the customer's card. This cannot be undone — a canceled intent is final, and collecting the payment afterwards means creating a new one. An intent that has already succeeded cannot be canceled; refund it instead"
 risk = "high"
@@ -549,6 +560,7 @@ code_pointer = "/error/code"
 [[operations]]
 id = "stripe-charge-refund-create"
 method = "POST"
+direction = "write"
 path = "/v1/charges/{charge}/refunds"
 description = "Refund a charge **in full** and irreversibly: the entire un-refunded amount goes back to the customer's original payment method, usually within five to ten business days. A partial refund needs an `amount` this connector cannot send. Stripe's fee on the original charge is not returned. There is no way to undo a refund — collecting the money again means charging the customer again"
 risk = "destructive"

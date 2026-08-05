@@ -2,7 +2,7 @@ op openrouter-models-list -> Any
   description "List every model OpenRouter routes to, with its context length, modalities and per-token pricing"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://openrouter.ai"

@@ -2,7 +2,7 @@ op babelforce-list-campaign-leads(id: String) -> Any
   description "List a campaign's leads"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

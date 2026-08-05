@@ -2,7 +2,7 @@ op asterisk-ari-device-states-update(deviceName: String, deviceState: String) ->
   description "Change the state of a device controlled by ARI. (Note - implicitly creates the device state)."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

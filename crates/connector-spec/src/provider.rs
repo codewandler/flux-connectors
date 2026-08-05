@@ -60,8 +60,8 @@ use crate::inbound::{
 use crate::lock::sha256_hex;
 use crate::{
     response_location_exists, AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod,
-    Idempotency, JsonSchema, Operation, OperationSpecSource, Param, ParamSet, Provenance, Quirks,
-    Risk, Role, Runtime, SemanticEffect, Service, Tag, DEFAULT_SERVICE,
+    Idempotency, JsonSchema, Operation, OperationDirection, OperationSpecSource, Param, ParamSet,
+    Provenance, Quirks, Risk, Role, Runtime, SemanticEffect, Service, Tag, DEFAULT_SERVICE,
     MIN_REPEATABILITY_CONDITION,
 };
 
@@ -253,6 +253,13 @@ pub struct Patch {
     /// How an `operationId` becomes an op id, declared once — C-412.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub naming: Option<Naming>,
+    /// Reviewed direction keyed by stable spec identity: service, then vendor `operationId`.
+    ///
+    /// Unlike a selector this map cannot change membership when an upstream method, path, name or
+    /// description changes. Quoted operation ids are ordinary TOML keys:
+    /// `[patch.directions.manager]` followed by `flushDialer = "write"`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub directions: BTreeMap<String, BTreeMap<String, OperationDirection>>,
     /// The operations selected one at a time, each with its corrections.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub operations: Vec<OperationPatch>,
@@ -261,7 +268,10 @@ pub struct Patch {
 impl Patch {
     /// Whether the file carries no patches at all.
     pub fn is_empty(&self) -> bool {
-        self.select.is_empty() && self.naming.is_none() && self.operations.is_empty()
+        self.select.is_empty()
+            && self.naming.is_none()
+            && self.directions.is_empty()
+            && self.operations.is_empty()
     }
 
     /// How to spell the block an author would go and edit, for a refusal about a patch set with no
@@ -271,7 +281,9 @@ impl Patch {
     /// `[[patch.operations]]` sends someone who only wrote a selector looking for a block they never
     /// authored.
     fn declared(&self) -> &'static str {
-        if !self.operations.is_empty() {
+        if !self.directions.is_empty() {
+            "[patch.directions]"
+        } else if !self.operations.is_empty() {
             "[[patch.operations]]"
         } else if !self.select.is_empty() {
             "[[patch.select]]"
@@ -345,7 +357,7 @@ pub struct OperationSelector {
     pub methods: Vec<HttpMethod>,
     /// The [`Risk`] every matched operation carries — C-414.
     ///
-    /// **Silence on a mutating method refuses the build.** See [`Self::idempotency`] for the whole
+    /// **Silence on an authored write refuses the build.** See [`Self::idempotency`] for the whole
     /// rule, which is one rule for both fields.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub risk: Option<Risk>,
@@ -359,11 +371,11 @@ pub struct OperationSelector {
     /// condition or not build), because a default that *flatters* turns 214 unmade decisions into
     /// 214 claims a host reads as a licence.
     ///
-    /// So: a matched operation whose method is `POST`, `PUT`, `PATCH` or `DELETE` and about which
-    /// neither this selector nor a `[[patch.operations]]` block says anything is **refused, by
-    /// name**. A matched operation whose method changes nothing takes `low` and `idempotent` — not
-    /// a flattering default but the only values a read can have, and the direction is conservative
-    /// either way, since a default that must be overridden to *lower* risk is safe.
+    /// So: a matched operation whose identity-stable direction is `write` and about which neither
+    /// this selector nor a `[[patch.operations]]` block says anything is **refused, by name**. A
+    /// matched operation authored as `read` takes `low` and `idempotent` — not a method-derived
+    /// direction or a flattering write default, but the only absent safety values a reviewed read
+    /// can receive without widening its authority.
     ///
     /// The asymmetry belongs to **selection**, which is a statement about a set that may mix
     /// methods. A `[[patch.operations]]` block is a statement about one operation, and it still
@@ -648,6 +660,10 @@ pub struct OperationPatch {
     /// Replaces the spec's `summary`/`description` as the model-facing tool description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// States vendor-state direction on this exact stable operation identity. If the directions map
+    /// also states it, the two values must agree or loading refuses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<OperationDirection>,
     /// Overrides the risk the spec implies. Specs do not carry risk, so in practice this is where
     /// risk is *stated*, not overridden.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1330,6 +1346,7 @@ fn publish(
     if let Some(naming) = patch.naming.as_ref() {
         check_pins(naming, ingested, problems);
     }
+    check_directions(&patch.directions, ingested, problems);
     let naming = patch.naming.as_ref();
 
     // **2 · select.** What every selector states about every operation it matched, merged — and a
@@ -1420,6 +1437,7 @@ fn publish(
         }
 
         let stated = matched.get(&(document.service.as_str(), select));
+        let reviewed_direction = direction_for(patch, &document.service, select);
         if let Some(reason) = block.defer.as_deref() {
             let mut incompatible = Vec::new();
             if block.rename.is_some() {
@@ -1477,10 +1495,13 @@ fn publish(
         if let Some((operation, claim)) = compose(
             document,
             spec,
-            Some(block),
-            stated.is_some(),
-            stated.unwrap_or(&Stated::EMPTY),
-            naming,
+            ComposeOverlay {
+                patch: Some(block),
+                reviewed_direction,
+                selected: stated.is_some(),
+                stated: stated.unwrap_or(&Stated::EMPTY),
+                naming,
+            },
             &mut ComposeContext { config, problems },
         ) {
             offer(
@@ -1507,13 +1528,17 @@ fn publish(
             let Some(stated) = matched.get(&key) else {
                 continue;
             };
+            let reviewed_direction = direction_for(patch, &document.service, &spec.operation_id);
             if let Some((operation, claim)) = compose(
                 document,
                 spec,
-                None,
-                true,
-                stated,
-                naming,
+                ComposeOverlay {
+                    patch: None,
+                    reviewed_direction,
+                    selected: true,
+                    stated,
+                    naming,
+                },
                 &mut ComposeContext { config, problems },
             ) {
                 offer(
@@ -1530,6 +1555,48 @@ fn publish(
     }
 
     (published, operation_specs)
+}
+
+fn direction_for(patch: &Patch, service: &str, operation_id: &str) -> Option<OperationDirection> {
+    patch
+        .directions
+        .get(service)
+        .and_then(|directions| directions.get(operation_id))
+        .copied()
+}
+
+fn check_directions(
+    directions: &BTreeMap<String, BTreeMap<String, OperationDirection>>,
+    ingested: &[IngestedDocument],
+    problems: &mut Vec<String>,
+) {
+    for (service, operations) in directions {
+        let Some(document) = ingested
+            .iter()
+            .find(|document| &document.service == service)
+        else {
+            problems.push(format!(
+                "`[patch.directions.{service}]` names no ingested service. Direction is keyed by \
+                 stable service and vendor `operationId`; available services: {}",
+                ingested
+                    .iter()
+                    .map(|document| document.service.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+            continue;
+        };
+        for operation_id in operations.keys() {
+            if document.ingested.operation(operation_id).is_none() {
+                problems.push(format!(
+                    "`[patch.directions.{service}]` names no `operationId` {operation_id:?} in {}. \
+                     A renamed or removed upstream operation must be reviewed rather than silently \
+                     losing its direction",
+                    document.path
+                ));
+            }
+        }
+    }
 }
 
 /// The exact pin that produced one ingested document.
@@ -1579,6 +1646,15 @@ struct Stated {
 struct ComposeContext<'a> {
     config: &'a [ConfigField],
     problems: &'a mut Vec<String>,
+}
+
+/// The identity-stable and selector-authored declarations applied to one operation.
+struct ComposeOverlay<'a> {
+    patch: Option<&'a OperationPatch>,
+    reviewed_direction: Option<OperationDirection>,
+    selected: bool,
+    stated: &'a Stated,
+    naming: Option<&'a Naming>,
 }
 
 impl Stated {
@@ -1724,12 +1800,16 @@ fn offer(
 fn compose(
     document: &IngestedDocument,
     spec: &crate::openapi::SpecOperation,
-    patch: Option<&OperationPatch>,
-    selected: bool,
-    stated: &Stated,
-    naming: Option<&Naming>,
+    overlay: ComposeOverlay<'_>,
     context: &mut ComposeContext<'_>,
 ) -> Option<(Operation, Claim)> {
+    let ComposeOverlay {
+        patch,
+        reviewed_direction,
+        selected,
+        stated,
+        naming,
+    } = overlay;
     let config = context.config;
     let problems = &mut *context.problems;
     let select = spec.operation_id.as_str();
@@ -1783,7 +1863,35 @@ fn compose(
         },
     };
 
-    // **Risk and idempotency: the block, then the selector, then the method.** See
+    // **Direction: stable identity only.** An exact operation block and the service/operationId map
+    // are both immune to method/path/name rematching. A selector cannot state direction.
+    let exact_direction = patch.and_then(|patch| patch.direction);
+    if let (Some(exact), Some(reviewed)) = (exact_direction, reviewed_direction) {
+        if exact != reviewed {
+            problems.push(format!(
+                "{select:?} has conflicting identity-stable directions: its \
+                 `[[patch.operations]]` block says {:?}, while \
+                 `[patch.directions.{}]` says {:?}",
+                exact.word(),
+                document.service,
+                reviewed.word()
+            ));
+            return None;
+        }
+    }
+    let direction = exact_direction.or(reviewed_direction);
+    let Some(direction) = direction else {
+        problems.push(format!(
+            "{select:?} states no `direction`. HTTP method, operation name, description, risk, \
+             idempotency, semantic effects and exposure cannot prove whether vendor state changes \
+             — state it under `[patch.directions.{}]` keyed by this vendor `operationId`, or on its \
+             exact `[[patch.operations]]` block",
+            document.service
+        ));
+        return None;
+    };
+
+    // **Risk and idempotency: the block, then the selector, then authored direction.** See
     // [`OperationSelector::idempotency`] for why the last step exists on a read and refuses on a
     // write, and why that asymmetry is the safe direction rather than a convenience.
     let risk = patch
@@ -1792,16 +1900,12 @@ fn compose(
     let idempotency = patch
         .and_then(|patch| patch.idempotency)
         .or(stated.idempotency.as_ref().map(|(value, _)| *value));
-    let mutating = matches!(
-        spec.method,
-        HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch | HttpMethod::Delete
-    );
+    let mutating = direction == OperationDirection::Write;
 
     let (risk, idempotency) = match (risk, idempotency) {
         (Some(risk), Some(idempotency)) => (risk, idempotency),
         // A read a selector matched takes the two values a read cannot have wrong. This is the
-        // only default in the whole overlay, and it is available only to a method that changes
-        // nothing — see the type docs.
+        // only default in the whole overlay, and it is available only to an authored read.
         (risk, idempotency) if !mutating && selected => (
             risk.unwrap_or(Risk::Low),
             idempotency.unwrap_or(Idempotency::Idempotent),
@@ -1814,11 +1918,11 @@ fn compose(
             };
             problems.push(if selected {
                 format!(
-                    "{select:?} is a {} and states no {missing}. No OpenAPI document publishes \
-                     either, and silence about damage on a method that changes something is \
+                    "{select:?} is an authored {} and states no {missing}. No OpenAPI document \
+                     publishes either, and silence about damage on a write is \
                      refused rather than defaulted to `low` — state it on the `[[patch.select]]` \
                      that matched this operation, or on a `[[patch.operations]]` block for it",
-                    method_word(spec.method)
+                    direction.word()
                 )
             } else {
                 format!(
@@ -1864,6 +1968,7 @@ fn compose(
         // load error and a single-document one the only shape that worked.
         service: document.service.clone(),
         method: spec.method,
+        direction,
         path: spec.path.clone(),
         description: patch
             .and_then(|patch| patch.description.clone())
@@ -3298,18 +3403,13 @@ fn validate_verify(connector: &Connector, problems: &mut Vec<String>) {
         None => problems.push(format!(
             "`verify` names operation {verify:?}, which no `[[operations]]` block declares"
         )),
-        // A "Test connection" button that could create a ticket is a button nobody dares press. The
-        // check is on declared risk rather than on the HTTP method, because this provider's own
-        // metadata is the thing a host will reason about.
-        Some(operation) if operation.risk == Risk::High || operation.risk == Risk::Destructive => {
+        // A "Test connection" button that could change vendor state is a button nobody dares press.
+        // Direction is connector truth; neither method nor risk may stand in for it.
+        Some(operation) if operation.direction == OperationDirection::Write => {
             problems.push(format!(
-                "`verify` names operation {verify:?}, which declares `risk = \"{}\"`. A \
+                "`verify` names operation {verify:?}, which declares `direction = \"write\"`. A \
                  connection test runs unattended whenever someone opens a settings page, so it must \
-                 be a read a user would not mind being repeated",
-                match operation.risk {
-                    Risk::High => "high",
-                    _ => "destructive",
-                }
+                 be a read a user would not mind being repeated"
             ));
         }
         Some(_) => {}
@@ -5325,9 +5425,9 @@ fn validate_semantic_effects(operation: &Operation, problems: &mut Vec<String>) 
 ///
 /// Four refusals, each a different author mistake:
 ///
-/// - **a mutating `conditional` with no condition** — the claim without the thing that makes it
+/// - **an authored `conditional` write with no condition** — the claim without the thing that makes it
 ///   checkable, and the reason this validator exists;
-/// - **a condition on a non-mutating method** — there is no repeat hazard to condition, so the
+/// - **a condition on an authored read** — there is no repeat hazard to condition, so the
 ///   field would spread as cargo-culted decoration until no reviewer read any of them;
 /// - **a condition on an operation not declaring `conditional`** — prose asserting what its own
 ///   field denies, which is precisely the drift this story removes, arriving from the other side;
@@ -5339,10 +5439,7 @@ fn validate_semantic_effects(operation: &Operation, problems: &mut Vec<String>) 
 /// and `check_write_metadata` is the one an IR assembled in memory cannot walk past.
 fn validate_repeatability_condition(operation: &Operation, problems: &mut Vec<String>) {
     let id = operation.id.as_str();
-    let mutating = matches!(
-        operation.method,
-        HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch | HttpMethod::Delete
-    );
+    let mutating = operation.direction == OperationDirection::Write;
 
     if !operation.states_repeatability_condition() {
         if mutating && operation.idempotency == Idempotency::Conditional {
@@ -5359,10 +5456,10 @@ fn validate_repeatability_condition(operation: &Operation, problems: &mut Vec<St
 
     if !mutating {
         problems.push(format!(
-            "operation {id:?} is a {} and declares `repeatable_because`, but a method that changes \
-             nothing has no repeat hazard to put a condition on. The field exists only to state the \
+            "operation {id:?} is an authored {} and declares `repeatable_because`, but a read has \
+             no repeat hazard to put a condition on. The field exists only to state the \
              condition behind `idempotency = \"conditional\"` on a write; remove it",
-            method_word(operation.method)
+            operation.direction.word()
         ));
         return;
     }

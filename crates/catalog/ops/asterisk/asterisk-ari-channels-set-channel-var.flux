@@ -2,7 +2,7 @@ op asterisk-ari-channels-set-channel-var(channelId: String, variable: String, va
   description "Set the value of a channel variable or function."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

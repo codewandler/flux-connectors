@@ -10,6 +10,13 @@ module = "salesforce.flux"
 operations = ["salesforce-whoami", "salesforce-record-get", "salesforce-record-create", "salesforce-record-update", "salesforce-sobject-describe"]
 verify = "salesforce-whoami"
 
+[operation_directions]
+salesforce-record-create = "write"
+salesforce-record-get = "read"
+salesforce-record-update = "write"
+salesforce-sobject-describe = "read"
+salesforce-whoami = "read"
+
 [operation_semantic_effects]
 salesforce-record-create = []
 salesforce-record-get = []

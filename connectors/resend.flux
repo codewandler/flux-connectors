@@ -6,7 +6,7 @@ op resend-email-send(from: String, to: Any, subject: String, html: String) -> An
   description "Send one email immediately. Delivered within seconds and cannot be recalled once accepted. The sending domain must already be verified on this account — resend-domain-list names the ones that are"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.resend.com"
@@ -20,7 +20,7 @@ op resend-email-get(email_id: String) -> Any
   description "Read one sent message and its current delivery state. This is how a flow learns whether a send bounced, was delivered, or is still queued"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.resend.com"
@@ -32,7 +32,7 @@ op resend-domain-list -> Any
   description "List every sending domain on this account with its verification status. Also this connector's `verify` — a bounded read that runs unattended and needs nothing configured beyond the credential"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.resend.com"
@@ -44,7 +44,7 @@ op resend-domain-get(domain_id: String) -> Any
   description "Read one sending domain, including the DNS records it needs and the status of each. This is the diagnostic for a domain that will not verify, and therefore for a send refused with an invalid-from error"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.resend.com"

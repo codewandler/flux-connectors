@@ -92,6 +92,12 @@ service = "manager"
 path = "specs/acme/user-2026-06-25.json"
 service = "user"
 
+[patch.directions.manager]
+getUser = "read"
+
+[patch.directions.user]
+getUser = "read"
+
 [[patch.operations]]
 service = "manager"
 select = "getUser"

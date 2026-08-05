@@ -2,7 +2,7 @@ op asterisk-ari-recordings-unpause(recordingName: String) -> Any
   description "Unpause a live recording."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

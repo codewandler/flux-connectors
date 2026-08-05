@@ -267,6 +267,7 @@ tags = ["database"]
 [[operations]]
 id = "airtable-record-get"
 method = "GET"
+direction = "read"
 path = "/v0/{baseId}/{tableIdOrName}/{recordId}"
 description = "Read one record from a table — its cell values are under `fields` in the response, keyed by column name. Returns every column the token can see, in Airtable's default JSON cell format: narrowing or reformatting them needs the `fields[]` and `cellFormat` query parameters this connector cannot encode"
 risk = "low"
@@ -331,6 +332,7 @@ code_pointer = "/error/type"
 [[operations]]
 id = "airtable-record-create"
 method = "POST"
+direction = "write"
 path = "/v0/{baseId}/{tableIdOrName}"
 description = "Create one record in a table. Cell values are supplied under `fields`, keyed by column name, and must already be in the exact JSON form each column expects — Airtable's `typecast` coercion cannot be requested yet (see the connector's notes). The created record, with its `rec…` id, is in the response"
 risk = "medium"
@@ -374,6 +376,7 @@ code_pointer = "/error/type"
 [[operations]]
 id = "airtable-record-update"
 method = "PATCH"
+direction = "write"
 path = "/v0/{baseId}/{tableIdOrName}/{recordId}"
 # WHY `PATCH` AND NOT `PUT`, and why that is the whole reason this connector can ship an update at all.
 #
@@ -435,6 +438,7 @@ code_pointer = "/error/type"
 [[operations]]
 id = "airtable-record-delete"
 method = "DELETE"
+direction = "write"
 path = "/v0/{baseId}/{tableIdOrName}/{recordId}"
 description = "Delete one record and every cell value in it. There is no API route back: Airtable's trash and revision history are UI features on a retention window, not endpoints, so a flux run cannot undo this. Responds `{\"id\": …, \"deleted\": true}`"
 # See the note above the writes. The only tier that makes flux's approval gate stop for this.

@@ -2,7 +2,7 @@ op freshdesk-contact-create(name: String, email: String, phone: String) -> Any
   description "Create a contact"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{domain}/api/v2"

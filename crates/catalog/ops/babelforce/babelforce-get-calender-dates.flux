@@ -2,7 +2,7 @@ op babelforce-get-calender-dates(id: String) -> Any
   description "List a calendar's dates"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

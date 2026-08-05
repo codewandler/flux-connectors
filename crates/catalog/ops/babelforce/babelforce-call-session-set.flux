@@ -1,8 +1,8 @@
 op babelforce-call-session-set(id: String, variables: Any) -> Any
   description "Set session variables on a live call. Pass them as the `variables` map; babelforce applies only keys beginning `app.` and silently ignores the rest, and states that rule only in prose"
   risk "medium"
-  idempotency "idempotent"
-  effects ["network"]
+  idempotency "non_idempotent"
+  effects ["write", "network"]
   expose true
 
   base = "https://services.babelforce.com"

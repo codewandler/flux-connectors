@@ -78,8 +78,8 @@ teaching the components a second port for operational state — doubles the port
 forbidden to know about.
 
 **The obstacle, named up front, and it is worse than the emitter's location.**
-`catalog::Operation` (`crates/catalog/src/lib.rs:138`) carries exactly `id, provider, service,
-description, risk, idempotency, credentials, hosts, flux` — **no `method`, no `path`, no
+`catalog::Operation` carries `id, provider, service, direction, description, risk, idempotency,
+semantic_effects, credentials, hosts, flux` — **no `method`, no `path`, no
 `parameters`, no schemas, no `status`** — and `catalog::Provider` has no `services`. The host
 therefore cannot synthesise the catalogue shape at all, whatever it is willing to link. On top of
 that, `catalog.json`'s shape is emitted by `crates/connector-cli/src/site.rs`, a **compiler crate**. `connectors-api` depends on `catalog`, not

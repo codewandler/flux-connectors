@@ -2,7 +2,7 @@ op babelforce-manager-interrupt-on-task(taskId: String, interruptTo: String, rea
   description "Interrupts execution of a task by requesting that the task is moved to an end state."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

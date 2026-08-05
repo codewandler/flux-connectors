@@ -2,7 +2,7 @@ op babelforce-get-business-hour-range(id: String, rangeId: String) -> Any
   description "Get a time range"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

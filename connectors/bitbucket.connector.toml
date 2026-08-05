@@ -12,6 +12,15 @@ module = "bitbucket.flux"
 operations = ["bitbucket-repository-list", "bitbucket-repository-get", "bitbucket-pull-request-list", "bitbucket-pull-request-get", "bitbucket-pull-request-create", "bitbucket-pull-request-comment", "bitbucket-pull-request-approve"]
 verify = "bitbucket-repository-list"
 
+[operation_directions]
+bitbucket-pull-request-approve = "write"
+bitbucket-pull-request-comment = "write"
+bitbucket-pull-request-create = "write"
+bitbucket-pull-request-get = "read"
+bitbucket-pull-request-list = "read"
+bitbucket-repository-get = "read"
+bitbucket-repository-list = "read"
+
 [operation_semantic_effects]
 bitbucket-pull-request-approve = []
 bitbucket-pull-request-comment = []

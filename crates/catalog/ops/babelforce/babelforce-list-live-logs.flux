@@ -2,7 +2,7 @@ op babelforce-list-live-logs(filters_level: String) -> Any
   description "List live logs"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

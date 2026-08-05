@@ -7,7 +7,7 @@ op google-calendar-event-get(calendar_id: String, event_id: String) -> Any
   description "Get one calendar event: its summary, start and end, organizer, attendee list and status. Needs the `calendar.events.readonly` scope (or `calendar.readonly`). A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://www.googleapis.com"
@@ -19,7 +19,7 @@ op google-calendar-event-insert(calendar_id: String, summary: String, start_time
   description "Create a timed event on a calendar. No attendees can be declared yet, so nobody is invited and no notification is sent; invite people in Calendar afterwards. Needs the `calendar.events` scope. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://www.googleapis.com"
@@ -33,7 +33,7 @@ op google-calendar-calendar-get(calendar_id: String) -> Any
   description "Get one calendar's own metadata — its summary, description, location and time zone. This is the calendar, not its events: use `google-calendar-event-get` for one of those. Needs the `calendar.readonly` scope. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/status` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://www.googleapis.com"

@@ -2,7 +2,7 @@ op babelforce-get-agent-presence(presenceName: String) -> Any
   description "Get a presence"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

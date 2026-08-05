@@ -2,7 +2,7 @@ op babelforce-get-agent-status(id: String) -> Any
   description "Get an agent's status"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

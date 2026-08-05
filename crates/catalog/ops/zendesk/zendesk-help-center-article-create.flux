@@ -2,7 +2,7 @@ op zendesk-help-center-article-create(section_id: Number, article: Any) -> Any
   description "Publish a new externally visible Help Center article in one numeric section"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

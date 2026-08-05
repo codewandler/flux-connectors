@@ -2,7 +2,7 @@ op babelforce-list-queue-triggers(queueId: String) -> Any
   description "List a queue's triggers"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

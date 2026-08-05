@@ -2,7 +2,7 @@ op babelforce-list-dialer-simple-reporting-calls(page: Number, max: Number) -> A
   description "List dialer reporting calls"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

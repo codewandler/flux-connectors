@@ -6,7 +6,7 @@ op sentry-issue-get(organization_id_or_slug: String, issue_id: String) -> Any
   description "Get one issue — its title, culprit, level, status, assignee, first and last seen timestamps and event counts. An issue is Sentry's group of like events, not a single occurrence; use `sentry-issue-event-latest` for the stack trace. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://sentry.io"
@@ -18,7 +18,7 @@ op sentry-issue-update(organization_id_or_slug: String, issue_id: String, status
   description "Change an issue's triage state: resolve it, ignore it, or return it to unresolved. This is the state the whole organization triages against — a resolved issue leaves the unresolved queue, and an ignored one stops alerting until it recurs on Sentry's terms. Recorded in the issue's activity feed under the token's owner. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://sentry.io"
@@ -32,7 +32,7 @@ op sentry-project-get(organization_id_or_slug: String, project_id_or_slug: Strin
   description "Get one project — its name, slug, platform, teams, DSN-bearing client keys' status and whether it is currently accepting events. This is the project an issue belongs to, so it is how a triage flow finds out which service is broken. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://sentry.io"
@@ -44,7 +44,7 @@ op sentry-issue-event-latest(organization_id_or_slug: String, issue_id: String) 
   description "Get the most recent event of an issue — the actual occurrence, with its stack trace, breadcrumbs, request context and tags. This is what makes an issue diagnosable rather than merely countable; the event list itself is excluded because it pages with an opaque cursor. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://sentry.io"

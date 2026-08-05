@@ -2,7 +2,7 @@ op github-pull-files-list(owner: String, repo: String, pull_number: Number, per_
   description "List the files changed by one pull request with bounded integer pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.github.com"

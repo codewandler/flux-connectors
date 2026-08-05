@@ -13,6 +13,10 @@ module = "anthropic-models.flux"
 operations = ["anthropic-models-list", "anthropic-model-get"]
 verify = "anthropic-models-list"
 
+[operation_directions]
+anthropic-model-get = "read"
+anthropic-models-list = "read"
+
 [operation_semantic_effects]
 anthropic-model-get = []
 anthropic-models-list = []

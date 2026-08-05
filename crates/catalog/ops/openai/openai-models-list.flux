@@ -2,7 +2,7 @@ op openai-models-list -> Any
   description "List the models available to this API key, with their ids and owners"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.openai.com"

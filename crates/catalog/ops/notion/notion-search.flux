@@ -1,8 +1,8 @@
 op notion-search(query: String) -> Any
-  description "Search the pages and databases shared with this integration by title, returning the first page of matches (up to 100). Notion matches on title only — it does not search page text. Notion routes this read through POST, so it is declared as a write. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body."
+  description "Search the pages and databases shared with this integration by title, returning the first page of matches (up to 100). Notion matches on title only — it does not search page text. Direction remains conservatively authored as write pending individual review; POST is transport only and supplied no evidence. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/code` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.notion.com"

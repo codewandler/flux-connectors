@@ -10,6 +10,13 @@ module = "typeform.flux"
 operations = ["typeform-user-me", "typeform-form-list", "typeform-form-get", "typeform-response-list", "typeform-response-delete"]
 verify = "typeform-user-me"
 
+[operation_directions]
+typeform-form-get = "read"
+typeform-form-list = "read"
+typeform-response-delete = "write"
+typeform-response-list = "read"
+typeform-user-me = "read"
+
 [operation_semantic_effects]
 typeform-form-get = []
 typeform-form-list = []

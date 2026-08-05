@@ -2,7 +2,7 @@ op asterisk-ari-channels-originate(endpoint: String, extension: String, context:
   description "Create a new channel (originate)."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{host}:8089/ari"

@@ -2,7 +2,7 @@ op babelforce-list-trigger-operators -> Any
   description "List condition operators"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

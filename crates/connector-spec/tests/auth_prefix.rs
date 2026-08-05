@@ -46,6 +46,7 @@ env = ["OKTA_API_TOKEN"]
 [[operations]]
 id = "okta-user-list"
 method = "GET"
+direction = "read"
 path = "/api/v1/users"
 risk = "low"
 idempotency = "idempotent"

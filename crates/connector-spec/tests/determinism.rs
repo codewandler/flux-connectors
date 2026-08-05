@@ -6,8 +6,8 @@
 //! the IR's *value*, not of the order any collection happened to be built in.
 
 use connector_spec::{
-    AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod, Idempotency, Operation, Param,
-    ParamSet, Provenance, Quirks, Risk, DEFAULT_SERVICE,
+    AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod, Idempotency, Operation,
+    OperationDirection, Param, ParamSet, Provenance, Quirks, Risk, DEFAULT_SERVICE,
 };
 use serde_json::json;
 
@@ -60,6 +60,7 @@ fn connector(reversed: bool) -> Connector {
             id: "b.call.list".into(),
             service: DEFAULT_SERVICE.into(),
             method: HttpMethod::Get,
+            direction: OperationDirection::Read,
             path: "/v2/calls".into(),
             description: "List calls".into(),
             risk: Risk::Low,

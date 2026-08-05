@@ -193,6 +193,7 @@ tags = ["e-signature"]
 [[operations]]
 id = "docusign-verify"
 method = "GET"
+direction = "read"
 path = "/folders"
 description = "List the account's own top-level folders — Draft, Sent Items, Inbox, and any custom ones. Takes no parameters and succeeds for any account with API access, which is what makes it the connection check for a settings page's Test Connection button"
 risk = "low"
@@ -213,6 +214,7 @@ code_pointer = "/errorCode"
 [[operations]]
 id = "docusign-envelope-list"
 method = "GET"
+direction = "read"
 path = "/envelopes"
 description = "List envelopes whose status changed on or after a given date. DocuSign requires a from_date (or an explicit envelope_ids/transaction_ids list, which this operation does not offer) on every call to this resource — omitting it is a 400 from the vendor, not a limitation of this connector"
 risk = "low"
@@ -240,6 +242,7 @@ code_pointer = "/errorCode"
 [[operations]]
 id = "docusign-envelope-get"
 method = "GET"
+direction = "read"
 path = "/envelopes/{envelope_id}"
 description = "Get one envelope's own status and metadata. No recipient or document detail — see docusign-envelope-recipients-get for who is on it"
 risk = "low"
@@ -265,6 +268,7 @@ code_pointer = "/errorCode"
 [[operations]]
 id = "docusign-envelope-recipients-get"
 method = "GET"
+direction = "read"
 path = "/envelopes/{envelope_id}/recipients"
 description = "Get every recipient on an envelope and their signing status. Recipient name and email are personal data — see this operation's own response_schema before logging, displaying or forwarding it"
 risk = "low"
@@ -290,6 +294,7 @@ code_pointer = "/errorCode"
 [[operations]]
 id = "docusign-envelope-create-from-template"
 method = "POST"
+direction = "write"
 path = "/envelopes"
 description = "Create an envelope from an existing template. When status is sent, DocuSign dispatches it immediately to every named recipient — a real, legally binding signature request to a real person. Use status created to save it as an editable draft that notifies nobody instead"
 risk = "high"
@@ -329,6 +334,7 @@ code_pointer = "/errorCode"
 [[operations]]
 id = "docusign-envelope-void"
 method = "PUT"
+direction = "write"
 path = "/envelopes/{envelope_id}"
 description = "Void an envelope: cancel it permanently. Every recipient who has not yet finished signing is immediately locked out, and no further signing action is possible on this envelope id. Irreversible"
 risk = "destructive"
@@ -338,13 +344,8 @@ risk = "destructive"
 # 200 rather than an error naming the envelope as already voided or already completed. No write here
 # is marked idempotent on a claim it cannot back, so this stays the conservative, safe-to-under-claim
 # answer rather than the aggressive one.
-#
-# This operation is a `PUT`, not a `POST` or `PATCH`, so C-186's method-based idempotent-refusal
-# (`check_write_metadata`, `crates/connector-flux/src/op.rs:594-604`) is never in tension with this
-# declaration either way — confirmed by reading the check directly rather than assuming it applies.
-# Nothing in this connector needs C-186 to land: there is no `PATCH` operation here, and the one
-# `POST` (docusign-envelope-create-from-template) is genuinely non-idempotent with no honest claim to
-# make that the emitter refuses.
+# `check_write_metadata` refuses `idempotent` on every authored write. This declaration also has no
+# reviewed repeatability condition that would support `conditional`, so it remains conservative.
 idempotency = "non_idempotent"
 
 [[operations.params.path]]

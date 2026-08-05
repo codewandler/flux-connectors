@@ -2,7 +2,7 @@ op asterisk-ari-endpoints-list-by-tech(tech: String) -> Any
   description "List available endoints for a given endpoint technology."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

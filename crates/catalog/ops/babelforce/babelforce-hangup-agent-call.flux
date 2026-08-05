@@ -2,7 +2,7 @@ op babelforce-hangup-agent-call(id: String) -> Any
   description "Hang up an agent's call"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

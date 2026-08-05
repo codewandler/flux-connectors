@@ -35,7 +35,7 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{AuthScheme, Connector, HttpMethod};
+use connector_spec::{AuthScheme, Connector, OperationDirection};
 
 #[path = "../../connector-spec/tests/support/shipped_provider.rs"]
 mod shipped_provider;
@@ -351,17 +351,14 @@ fn no_shopify_operation_declares_an_optional_body_field() {
 }
 
 /// **The write is a write.** `risk` and `idempotency` are what flux's approval gate reads, so a
-/// mutating method must not carry a read's metadata — and the one write here has no
+/// authored write must not carry a read's metadata — and the one write here has no
 /// optimistic-concurrency token to make a replay safe.
 #[test]
 fn the_product_update_is_the_only_write_and_declares_itself_as_one() {
     let connector = load();
 
     for operation in &connector.operations {
-        let mutating = matches!(
-            operation.method,
-            HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch | HttpMethod::Delete
-        );
+        let mutating = operation.direction == OperationDirection::Write;
         if !mutating {
             assert!(
                 operation.params.body.is_empty(),

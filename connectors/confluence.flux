@@ -6,7 +6,7 @@ op confluence-space-list -> Any
   description "List the spaces on the Confluence site, with the id, key and name of each. Takes no argument, and is this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the credential. Returns only Confluence's first page of 25 spaces — paging needs the `cursor` and `limit` query parameters this connector cannot send, so a site with more spaces is truncated with no further signal than a `_links.next` this connector cannot follow"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{site}.atlassian.net/wiki"
@@ -18,7 +18,7 @@ op confluence-space-get(id: String) -> Any
   description "Get one space by its id, with its key, name, status and home page id. Addressed by the numeric space `id` from `confluence-space-list`, not by the space key that appears in a Confluence URL"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{site}.atlassian.net/wiki"
@@ -30,7 +30,7 @@ op confluence-space-pages(id: String) -> Any
   description "List the pages in one space, with the id, title, parent and version of each — the way to discover what a space contains and to resolve a page title to the id the other operations take. **Page bodies are not returned**: the content of each page is empty here, because selecting a body format needs a query parameter this connector cannot send. Returns only Confluence's first page of 25 results; a larger space is truncated"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{site}.atlassian.net/wiki"
@@ -42,7 +42,7 @@ op confluence-page-get(id: String) -> Any
   description "Read one page's metadata by id — title, space, parent, author, creation time, current version number and the link to open it in Confluence. **The page body is not returned**: selecting a content format needs a query parameter this connector cannot send, so the `body` field comes back empty regardless of whether the page has content. Use this to resolve a page id to its title and URL, not to read what the page says"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{site}.atlassian.net/wiki"
@@ -54,7 +54,7 @@ op confluence-page-create(space_id: String, title: String, body: String) -> Any
   description "Publish a new page in a space. The page is created live and visible to everyone who can see the space, is indexed for search, and notifies the space's watchers. It is created at the top level of the space unless the space's own structure places it otherwise, with no labels and no restrictions. Returns the new page's id, title and links. The content is sent as Confluence storage format — XHTML-like markup, e.g. `<p>text</p>` — not Markdown and not wiki markup"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{site}.atlassian.net/wiki"
@@ -70,7 +70,7 @@ op confluence-comment-add(page_id: String, body: String) -> Any
   description "Add a footer comment to a page — the comment thread at the bottom, not an inline annotation on selected text. The comment is visible to everyone who can see the page and notifies its watchers; it cannot be restricted to a subset of them. The content is sent as Confluence storage format (`<p>text</p>`), not Markdown. Note the page is named in the body rather than in the path, and that this connector cannot read a page's existing comments back"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{site}.atlassian.net/wiki"

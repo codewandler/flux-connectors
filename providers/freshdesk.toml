@@ -161,6 +161,7 @@ tags = ["support"]
 [[operations]]
 id = "freshdesk-test"
 method = "GET"
+direction = "read"
 path = "/contacts"
 description = "Verify credentials with a bounded contact read"
 risk = "low"
@@ -188,6 +189,7 @@ items = { type = "object", properties = { id = { type = "integer" }, name = { ty
 [[operations]]
 id = "freshdesk-ticket-list"
 method = "GET"
+direction = "read"
 path = "/tickets"
 description = "List and filter tickets"
 risk = "low"
@@ -242,6 +244,7 @@ items = { type = "object", properties = { id = { type = "integer" }, subject = {
 [[operations]]
 id = "freshdesk-ticket-get"
 method = "GET"
+direction = "read"
 path = "/tickets/{id}"
 description = "View one ticket"
 risk = "low"
@@ -266,6 +269,7 @@ properties = { id = { type = "integer" }, subject = { type = "string" }, descrip
 [[operations]]
 id = "freshdesk-ticket-create"
 method = "POST"
+direction = "write"
 path = "/tickets"
 description = "Create a ticket. The requester must be identified either by requester_id, or by phone together with name — Freshdesk states this only in prose and its required flags do not capture it"
 risk = "medium"
@@ -393,10 +397,11 @@ properties = { id = { type = "integer", description = "The new ticket's id — t
 [[operations]]
 id = "freshdesk-ticket-update"
 method = "PUT"
+direction = "write"
 path = "/tickets/{id}"
 description = "Update a ticket's fields"
 risk = "medium"
-idempotency = "idempotent"
+idempotency = "non_idempotent"
 
 # §6.4: the source does **not** mark `id` required (`yml:218-223`), defaulting it to a call-context
 # variable instead. Omitted, that produces `PUT /tickets/` — a silent mis-request. Recorded
@@ -512,6 +517,7 @@ properties = { id = { type = "integer" }, subject = { type = "string" }, descrip
 [[operations]]
 id = "freshdesk-ticket-note-add"
 method = "POST"
+direction = "write"
 path = "/tickets/{id}/notes"
 description = "Add a note to a ticket; the note is private unless explicitly made public"
 risk = "medium"
@@ -571,6 +577,7 @@ properties = { id = { type = "integer", description = "The note's own id, distin
 [[operations]]
 id = "freshdesk-contact-list"
 method = "GET"
+direction = "read"
 path = "/contacts"
 description = "List and filter contacts, e.g. to resolve a caller before filing a ticket"
 risk = "low"
@@ -624,6 +631,7 @@ items = { type = "object", properties = { id = { type = "integer", description =
 [[operations]]
 id = "freshdesk-contact-get"
 method = "GET"
+direction = "read"
 path = "/contacts/{id}"
 description = "Get one contact"
 risk = "low"
@@ -651,6 +659,7 @@ properties = { id = { type = "integer" }, name = { type = "string" }, email = { 
 [[operations]]
 id = "freshdesk-contact-create"
 method = "POST"
+direction = "write"
 path = "/contacts"
 description = "Create a contact"
 risk = "medium"

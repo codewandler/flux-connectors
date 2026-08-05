@@ -33,7 +33,9 @@
 use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
-use connector_spec::{Binding, Connector, HttpMethod, Idempotency, Level, Position, Risk};
+use connector_spec::{
+    Binding, Connector, HttpMethod, Idempotency, Level, OperationDirection, Position, Risk,
+};
 
 #[path = "../../connector-spec/tests/support/shipped_provider.rs"]
 mod shipped_provider;
@@ -368,19 +370,19 @@ fn approving_a_pull_request_is_high_risk_and_not_claimed_idempotent() {
 }
 
 /// Every operation declares `risk` and `idempotency`, no read is a write and no write is a read, and
-/// the emitted module carries all three metadata facets a host reads — including the derived
-/// `effects ["network"]`, which is the only effect anything here has.
+/// the emitted module carries all three metadata facets a host reads — including the authored
+/// direction followed by the derived network effect.
 #[test]
 fn every_operation_declares_its_safety_metadata_and_emits_it() {
     let connector = bitbucket();
 
     for operation in &connector.operations {
         let flux = emit(&connector, &operation.id);
-        assert!(
-            flux.contains(r#"effects ["network"]"#),
-            "`{}` must carry the network effect:\n{flux}",
-            operation.id
-        );
+        let effects = match operation.direction {
+            OperationDirection::Read => r#"effects ["read", "network"]"#,
+            OperationDirection::Write => r#"effects ["write", "network"]"#,
+        };
+        assert!(flux.contains(effects), "`{}`: {flux}", operation.id);
         assert!(
             flux.contains(&format!(r#"risk "{}""#, risk_word(operation.risk))),
             "`{}` must carry its declared risk:\n{flux}",
@@ -392,14 +394,14 @@ fn every_operation_declares_its_safety_metadata_and_emits_it() {
             operation.id
         );
 
-        match operation.method {
-            HttpMethod::Get => assert_eq!(
+        match operation.direction {
+            OperationDirection::Read => assert_eq!(
                 operation.risk,
                 Risk::Low,
                 "`{}` is a read; a read that is not `low` is either mis-declared or is not a read",
                 operation.id
             ),
-            _ => assert_ne!(
+            OperationDirection::Write => assert_ne!(
                 operation.risk,
                 Risk::Low,
                 "`{}` writes and must not be declared `low`",

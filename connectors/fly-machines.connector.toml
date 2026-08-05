@@ -13,6 +13,17 @@ module = "fly-machines.flux"
 operations = ["fly-regions-list", "fly-machines-list", "fly-machine-get", "fly-machine-events-list", "fly-machine-create", "fly-machine-start", "fly-machine-stop", "fly-machine-restart", "fly-machine-delete"]
 verify = "fly-regions-list"
 
+[operation_directions]
+fly-machine-create = "write"
+fly-machine-delete = "write"
+fly-machine-events-list = "read"
+fly-machine-get = "read"
+fly-machine-restart = "write"
+fly-machine-start = "write"
+fly-machine-stop = "write"
+fly-machines-list = "read"
+fly-regions-list = "read"
+
 [operation_semantic_effects]
 fly-machine-create = []
 fly-machine-delete = []

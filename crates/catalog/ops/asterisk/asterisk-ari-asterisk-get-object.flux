@@ -2,7 +2,7 @@ op asterisk-ari-asterisk-get-object(configClass: String, objectType: String, id:
   description "Retrieve a dynamic configuration object."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

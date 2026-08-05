@@ -2,7 +2,7 @@ op calendly-scheduled-event-list(user: String, status: String, count: Number) ->
   description "List a user's scheduled events (past and upcoming bookings). Takes the user's own URI, not a bare id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.calendly.com"

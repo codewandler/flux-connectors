@@ -2,7 +2,7 @@ op babelforce-user-me-get -> Any
   description "Get the current User"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -137,6 +137,7 @@ tags = ["scheduling"]
 [[operations]]
 id = "calendly-user-me"
 method = "GET"
+direction = "read"
 path = "/users/me"
 description = "Get the authenticated user: their own resource URI, name, scheduling slug, account email and current organization. The URI in the response is the value later operations expect as their `user` query parameter"
 risk = "low"
@@ -152,6 +153,7 @@ properties = { resource = { type = "object", required = ["uri", "name"], propert
 [[operations]]
 id = "calendly-event-type-list"
 method = "GET"
+direction = "read"
 path = "/event_types"
 description = "List event types owned by a user — the bookable meeting templates (name, duration, scheduling link). Takes the user's own URI, not a bare id"
 risk = "low"
@@ -183,6 +185,7 @@ properties = { collection = { type = "array", description = "The user's event ty
 [[operations]]
 id = "calendly-scheduled-event-list"
 method = "GET"
+direction = "read"
 path = "/scheduled_events"
 description = "List a user's scheduled events (past and upcoming bookings). Takes the user's own URI, not a bare id"
 risk = "low"
@@ -218,6 +221,7 @@ properties = { collection = { type = "array", items = { type = "object", require
 [[operations]]
 id = "calendly-scheduled-event-get"
 method = "GET"
+direction = "read"
 path = "/scheduled_events/{uuid}"
 description = "Get one scheduled event by id"
 risk = "low"
@@ -247,6 +251,7 @@ code_pointer = "/title"
 [[operations]]
 id = "calendly-invitee-list"
 method = "GET"
+direction = "read"
 path = "/scheduled_events/{uuid}/invitees"
 description = "List a scheduled event's invitees. Each invitee is personal data about a named third party — their name, email and any answers they gave to the event type's custom questions. Read it only for what the calling flow needs and do not persist or repeat it beyond that"
 risk = "low"

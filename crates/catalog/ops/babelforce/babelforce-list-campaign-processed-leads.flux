@@ -2,7 +2,7 @@ op babelforce-list-campaign-processed-leads(id: String) -> Any
   description "List processed campaign leads"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -6,7 +6,7 @@ op okta-user-list(limit: Number) -> Any
   description "List users in the Okta org. Returns a JSON array of user objects, most recently created first. Without a filter this is the org's active user population, so use `limit` to bound it — see okta-user-get to read one user by id or login"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{domain}/api/v1"
@@ -18,7 +18,7 @@ op okta-user-get(user_id: String) -> Any
   description "Get one user's full record, including their lifecycle status and profile attributes. Accepts the user's Okta id or their login, so a caller holding an email address does not need to list first"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{domain}/api/v1"
@@ -30,7 +30,7 @@ op okta-group-list(limit: Number) -> Any
   description "List groups in the Okta org. Returns a JSON array of group objects. A group is how Okta grants application access in bulk, so this is the set a membership question is asked against"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{domain}/api/v1"
@@ -42,7 +42,7 @@ op okta-user-group-list(user_id: String, limit: Number) -> Any
   description "List the groups one user is a member of. This is the direct answer to \"what access does this person have\", because Okta grants application assignments through group membership"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{domain}/api/v1"
@@ -54,7 +54,7 @@ op okta-user-deactivate(user_id: String, send_email: Bool) -> Any
   description "Deactivate a user, moving them to DEPROVISIONED. This takes effect immediately: Okta ends the person's active sessions, revokes their tokens and grants, and removes their access to every application the org assigns through Okta. They cannot sign in afterwards. An administrator can reactivate the account later, but that is a separate operation this connector does not offer, and it does not restore the sessions or tokens this call destroyed"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{domain}/api/v1"

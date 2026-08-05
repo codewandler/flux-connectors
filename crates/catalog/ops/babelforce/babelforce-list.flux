@@ -1,7 +1,7 @@
 op babelforce-list(filter: String, type: String, details: String, page_size: Number, page: Number, context: Bool) -> Any
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

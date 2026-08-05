@@ -2,7 +2,7 @@ op resend-email-send(from: String, to: Any, subject: String, html: String) -> An
   description "Send one email immediately. Delivered within seconds and cannot be recalled once accepted. The sending domain must already be verified on this account — resend-domain-list names the ones that are"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.resend.com"

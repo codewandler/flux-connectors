@@ -2,7 +2,7 @@ op babelforce-list-tags-by-category(category: String) -> Any
   description "List tags filtered by category"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

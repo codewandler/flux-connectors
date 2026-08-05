@@ -6,7 +6,7 @@ op salesforce-whoami -> Any
   description "Get the authenticated user and org for the current access token — the identity check for a settings page's Test Connection button. Takes no parameters"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{instance}.my.salesforce.com"
@@ -18,7 +18,7 @@ op salesforce-record-get(sobject_type: String, id: String) -> Any
   description "Read one SObject record by id. Returns every field of the record; narrowing to a subset needs the fields query parameter, which this connector cannot encode safely (see the provider file's header) so it is not offered"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{instance}.my.salesforce.com"
@@ -30,7 +30,7 @@ op salesforce-record-create(sobject_type: String, body: Any) -> Any
   description "Create one SObject record. Which fields are required depends on the SObject type and the org's own validation rules and page layouts — check with salesforce-sobject-describe first"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{instance}.my.salesforce.com"
@@ -44,7 +44,7 @@ op salesforce-record-update(sobject_type: String, id: String, body: Any) -> Any
   description "Update one or more fields on an existing SObject record. Only the supplied fields change; fields left out are untouched. Answers 204 with no body on success"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{instance}.my.salesforce.com"
@@ -58,7 +58,7 @@ op salesforce-sobject-describe(sobject_type: String) -> Any
   description "Describe an SObject's schema: its label, whether it is custom, its create/update/delete/query permissions, and every field's name, type and constraints. The reference for what salesforce-record-create and salesforce-record-update may send"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{instance}.my.salesforce.com"

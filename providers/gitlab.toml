@@ -130,6 +130,7 @@ tags = ["source-control", "issue-tracking"]
 [[operations]]
 id = "gitlab-user-get"
 method = "GET"
+direction = "read"
 path = "/user"
 description = "Get the currently authenticated user. Takes no parameters; used as the verify read to prove a token resolves"
 risk = "low"
@@ -145,6 +146,7 @@ properties = { id = { type = "integer", description = "The user's global id" }, 
 [[operations]]
 id = "gitlab-issue-list"
 method = "GET"
+direction = "read"
 path = "/projects/{project_id}/issues"
 description = "List issues in a project, optionally filtered by state, newest activity first"
 risk = "low"
@@ -184,6 +186,7 @@ items = { type = "object", required = ["id", "iid", "project_id", "title", "stat
 [[operations]]
 id = "gitlab-issue-get"
 method = "GET"
+direction = "read"
 path = "/projects/{project_id}/issues/{issue_iid}"
 description = "Get one issue by its project-scoped number (iid), not its global id"
 risk = "low"
@@ -217,6 +220,7 @@ properties = { id = { type = "integer", description = "The issue's global id" },
 [[operations]]
 id = "gitlab-issue-create"
 method = "POST"
+direction = "write"
 path = "/projects/{project_id}/issues"
 description = "Open a new issue on a project. Visible immediately to everyone with access to the project (the whole world, if the project is public) and notifies its watchers"
 risk = "high"
@@ -256,6 +260,7 @@ properties = { id = { type = "integer", description = "The new issue's global id
 [[operations]]
 id = "gitlab-merge-request-list"
 method = "GET"
+direction = "read"
 path = "/projects/{project_id}/merge_requests"
 description = "List merge requests in a project, optionally filtered by state, newest activity first"
 risk = "low"
@@ -295,6 +300,7 @@ items = { type = "object", required = ["id", "iid", "project_id", "title", "stat
 [[operations]]
 id = "gitlab-pipeline-get"
 method = "GET"
+direction = "read"
 path = "/projects/{project_id}/pipelines/{pipeline_id}"
 description = "Get one CI/CD pipeline's status and timing by its id"
 risk = "low"
@@ -322,6 +328,7 @@ properties = { id = { type = "integer", description = "The pipeline's own id, wh
 [[operations]]
 id = "gitlab-branch-list"
 method = "GET"
+direction = "read"
 path = "/projects/{project_id}/repository/branches"
 description = "List a project's repository branches"
 risk = "low"

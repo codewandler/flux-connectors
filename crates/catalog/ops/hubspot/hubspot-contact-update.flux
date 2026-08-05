@@ -2,7 +2,7 @@ op hubspot-contact-update(contact_id: Number, firstname: String, lastname: Strin
   description "Overwrite a contact's first and last name. Both are written on every call — this operation replaces them rather than merging, so re-send the one you are not changing (read it first with hubspot-contact-get). The change is visible to everyone in the portal and can trigger a workflow. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/message`, its error code at `/category` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.hubapi.com"

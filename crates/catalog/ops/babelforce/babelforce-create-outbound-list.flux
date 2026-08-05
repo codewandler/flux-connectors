@@ -2,7 +2,7 @@ op babelforce-create-outbound-list(body: Any) -> Any
   description "Create a lead-list"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

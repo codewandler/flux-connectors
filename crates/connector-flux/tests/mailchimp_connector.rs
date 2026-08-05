@@ -98,7 +98,7 @@ const OPERATIONS: &[(&str, HttpMethod, Risk, Idempotency)] = &[
         "mailchimp-audience-member-upsert",
         HttpMethod::Put,
         Risk::High,
-        Idempotency::Idempotent,
+        Idempotency::NonIdempotent,
     ),
     (
         "mailchimp-campaign-list",

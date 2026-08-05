@@ -2,7 +2,7 @@ op babelforce-create-application(body: Any) -> Any
   description "Create an application"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

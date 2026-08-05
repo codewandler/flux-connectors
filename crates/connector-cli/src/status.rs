@@ -384,6 +384,7 @@ mod tests {
             id: id.to_string(),
             service: connector_spec::DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
+            direction: connector_spec::OperationDirection::Read,
             path: "/v2/things".to_string(),
             description: "Do a thing".to_string(),
             risk: Risk::Low,

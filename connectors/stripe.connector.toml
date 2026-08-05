@@ -12,6 +12,20 @@ module = "stripe.flux"
 operations = ["stripe-balance-get", "stripe-customer-get", "stripe-charge-get", "stripe-payment-intent-get", "stripe-refund-get", "stripe-payment-intent-capture", "stripe-payment-intent-cancel", "stripe-charge-refund-create", "stripe-country-spec-list", "stripe-event-list", "stripe-exchange-rate-list", "stripe-billing-meter-list"]
 verify = "stripe-balance-get"
 
+[operation_directions]
+stripe-balance-get = "read"
+stripe-billing-meter-list = "read"
+stripe-charge-get = "read"
+stripe-charge-refund-create = "write"
+stripe-country-spec-list = "read"
+stripe-customer-get = "read"
+stripe-event-list = "read"
+stripe-exchange-rate-list = "read"
+stripe-payment-intent-cancel = "write"
+stripe-payment-intent-capture = "write"
+stripe-payment-intent-get = "read"
+stripe-refund-get = "read"
+
 [operation_semantic_effects]
 stripe-balance-get = []
 stripe-billing-meter-list = []

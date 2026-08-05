@@ -2,7 +2,7 @@ op openrouter-credits-get -> Any
   description "Read the account's total purchased credits and total usage, in credit units"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://openrouter.ai"

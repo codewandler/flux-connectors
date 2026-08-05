@@ -2,7 +2,7 @@ op babelforce-execute-action(actionType: String, actionName: String, body: Any) 
   description "Execute an action"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

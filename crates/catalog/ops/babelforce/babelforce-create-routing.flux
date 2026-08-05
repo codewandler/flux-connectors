@@ -2,7 +2,7 @@ op babelforce-create-routing(body: Any) -> Any
   description "Create Routing"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

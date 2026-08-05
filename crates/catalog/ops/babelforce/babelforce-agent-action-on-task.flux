@@ -1,7 +1,7 @@
 op babelforce-agent-action-on-task(taskId: String, agentAction: String, reason: String) -> Any
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

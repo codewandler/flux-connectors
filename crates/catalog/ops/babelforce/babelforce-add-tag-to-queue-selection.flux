@@ -2,7 +2,7 @@ op babelforce-add-tag-to-queue-selection(queueId: String, selectionId: String, b
   description "Add a tag to a selection"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

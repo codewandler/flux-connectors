@@ -7,6 +7,7 @@ base_url = "https://api.babelforce.com"
 [[operations]]
 id = "babelforce.session.update"
 method = "PUT"
+direction = "write"
 path = "/v2/sessions/{id}"
 risk = "medium"
 idempotency = "idempotent"

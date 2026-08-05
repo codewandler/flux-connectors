@@ -6,7 +6,7 @@ op statuspage-incident-list -> Any
   description "List this status page's incidents, most recent first — both unresolved and already-resolved ones. Returns Statuspage's own first page of results; this connector declares no paging parameters, so a page with a long incident history is not enumerated exhaustively here. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.statuspage.io/v1/pages/{page_id}"
@@ -18,7 +18,7 @@ op statuspage-incident-get(incident_id: String) -> Any
   description "Get one incident on this status page, including every update posted to it so far. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.statuspage.io/v1/pages/{page_id}"
@@ -30,7 +30,7 @@ op statuspage-incident-create(name: String, status: String, body: String, delive
   description "Open a new incident on this status page. It is public the moment this call returns — anyone loading the page sees it, and with deliver_notifications true Statuspage emails and texts every subscriber the page has. The incident itself is reversible (resolve it, or delete it), but a notification that has been sent cannot be recalled, so treat deliver_notifications as the irreversible half of this call. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.statuspage.io/v1/pages/{page_id}"
@@ -44,7 +44,7 @@ op statuspage-incident-update(incident_id: String, status: String, body: String,
   description "Post an update to an existing incident on this status page, moving it to a new lifecycle stage and adding a publicly visible message. The update appears on the page immediately, and with deliver_notifications true Statuspage emails and texts every subscriber. The incident's status can be moved again afterwards, but a notification that has been sent cannot be recalled. Does not rename the incident — this operation cannot change its title. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.statuspage.io/v1/pages/{page_id}"
@@ -58,7 +58,7 @@ op statuspage-component-list -> Any
   description "List the components this status page publishes — the individual services whose operational state the page shows. Takes no parameter at all and succeeds for any page the API key can administer, which is what makes it the connection check for a settings page's Test Connection button. Returns Statuspage's own first page of results; this connector declares no paging parameters. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.statuspage.io/v1/pages/{page_id}"

@@ -2,7 +2,7 @@ op klaviyo-profile-create(email: String, phone_number: String, external_id: Stri
   description "Create a customer profile. At least one identifier is required — email, phone number or external id — and Klaviyo answers 409 Conflict if a profile with that identifier already exists, so this creates and never updates. The created profile can be marketed to only once it is subscribed, which this connector does not do"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://a.klaviyo.com/api"

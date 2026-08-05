@@ -12,6 +12,15 @@ module = "gitlab.flux"
 operations = ["gitlab-user-get", "gitlab-issue-list", "gitlab-issue-get", "gitlab-issue-create", "gitlab-merge-request-list", "gitlab-pipeline-get", "gitlab-branch-list"]
 verify = "gitlab-user-get"
 
+[operation_directions]
+gitlab-branch-list = "read"
+gitlab-issue-create = "write"
+gitlab-issue-get = "read"
+gitlab-issue-list = "read"
+gitlab-merge-request-list = "read"
+gitlab-pipeline-get = "read"
+gitlab-user-get = "read"
+
 [operation_semantic_effects]
 gitlab-branch-list = []
 gitlab-issue-create = []

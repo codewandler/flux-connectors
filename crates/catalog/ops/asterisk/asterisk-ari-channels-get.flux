@@ -2,7 +2,7 @@ op asterisk-ari-channels-get(channelId: String) -> Any
   description "Channel details."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

@@ -6,7 +6,7 @@ op pagerduty-incident-list(limit: Number, offset: Number) -> Any
   description "List the incidents this key can see, across every service it has access to. Returns one page; read `more` to learn whether another page exists, and page by adding `limit` to `offset`. No status, service, team or time filter is offered by this connector — see pagerduty-incident-get to inspect one incident in full"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.pagerduty.com"
@@ -19,7 +19,7 @@ op pagerduty-incident-get(id: String) -> Any
   description "Fetch one incident in full, including its current status, urgency, service, assignments and acknowledgements. Read this before acknowledging or resolving, because PagerDuty refuses a status change that does not follow from the incident's current status"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.pagerduty.com"
@@ -32,7 +32,7 @@ op pagerduty-service-list(limit: Number, offset: Number) -> Any
   description "List the services this key can see. A service is what incidents are opened against and what an escalation policy is attached to, so this is how to discover the ids and names behind an incident's `service` reference. Also this connector's connection test"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.pagerduty.com"
@@ -45,7 +45,7 @@ op pagerduty-oncall-list(limit: Number, offset: Number) -> Any
   description "List who is currently on call, as one entry per escalation policy, escalation level and user. An entry with no `schedule` is a user attached directly to an escalation level rather than through a rotation. Time filtering is not offered by this connector, so this answers `who is on call now`"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.pagerduty.com"
@@ -57,8 +57,8 @@ op pagerduty-oncall-list(limit: Number, offset: Number) -> Any
 op pagerduty-incident-acknowledge(id: String, from_email: String) -> Any
   description "Acknowledge one incident, on behalf of a named PagerDuty user. This stops the escalation clock and tells the rotation that somebody is working the incident; it does not close it. PagerDuty refuses the change if the incident is already resolved, and answers that as data rather than as a failure"
   risk "medium"
-  idempotency "idempotent"
-  effects ["network"]
+  idempotency "non_idempotent"
+  effects ["write", "network"]
   expose true
 
   base = "https://api.pagerduty.com"
@@ -74,8 +74,8 @@ op pagerduty-incident-acknowledge(id: String, from_email: String) -> Any
 op pagerduty-incident-resolve(id: String, from_email: String) -> Any
   description "Resolve one incident, on behalf of a named PagerDuty user. This closes it: it leaves the open-incident view and notifications stop. If the underlying condition is still live, the next alert opens a brand-new incident rather than reopening this one, so resolve only what is actually fixed"
   risk "high"
-  idempotency "idempotent"
-  effects ["network"]
+  idempotency "non_idempotent"
+  effects ["write", "network"]
   expose true
 
   base = "https://api.pagerduty.com"

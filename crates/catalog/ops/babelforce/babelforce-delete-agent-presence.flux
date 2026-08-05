@@ -2,7 +2,7 @@ op babelforce-delete-agent-presence(presenceName: String) -> Any
   description "Delete a presence"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

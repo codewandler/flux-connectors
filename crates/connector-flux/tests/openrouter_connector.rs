@@ -42,7 +42,7 @@
 
 use std::path::{Path, PathBuf};
 
-use connector_spec::{AuthScheme, Connector, HttpMethod, Idempotency, Risk};
+use connector_spec::{AuthScheme, Connector, Idempotency, OperationDirection, Risk};
 
 use connector_flux::emit_operation;
 
@@ -410,7 +410,7 @@ fn no_openrouter_operation_declares_a_header_parameter() {
 /// **An operation an LLM can call that spends money is not `low` risk**, and no write claims an
 /// idempotency OpenRouter does not document.
 ///
-/// `connector-flux`'s `check_write_metadata` already refuses both for any state-changing method, so
+/// `connector-flux`'s `check_write_metadata` already refuses both for any authored write, so
 /// this is not the emitter's gate restated: it is the *reason* stated where a reader looking at
 /// OpenRouter will find it. Inference is billed per token and `risk` is what flux's approval gate
 /// reads before letting a model run the call unattended.
@@ -423,10 +423,7 @@ fn the_cost_bearing_operation_declares_what_it_costs() {
     let connector = load();
 
     for operation in &connector.operations {
-        let mutates = matches!(
-            operation.method,
-            HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch | HttpMethod::Delete
-        );
+        let mutates = operation.direction == OperationDirection::Write;
         if !mutates {
             continue;
         }

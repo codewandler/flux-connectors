@@ -269,23 +269,29 @@ fn every_tool_declares_the_host_it_reaches() {
     );
 }
 
-/// The other half of the gate: `http.request` raises `NetworkFetch` at `:126`, and the inner call
-/// never consults it, so the projected Tool must raise it itself.
+/// The other half of the gate: the inner `http.request` never gets to contribute its intent through
+/// `Executor::dispatch`, so the projected Tool must raise the direction-appropriate network intent
+/// itself. Reads fetch; writes connect to a mutation target.
 #[test]
-fn every_tool_raises_a_network_fetch_intent() {
+fn every_tool_raises_its_authored_direction_as_a_network_intent() {
     for entry in catalog::operations() {
         let tool = tool_for(entry);
         let intents = tool.intents(&params_for(tool.as_ref()));
+        let expected = match entry.direction {
+            catalog::OperationDirection::Read => flux_spec::IntentBehavior::NetworkFetch,
+            catalog::OperationDirection::Write => flux_spec::IntentBehavior::NetworkConnect,
+        };
 
         assert!(
             intents
                 .intents
                 .iter()
-                .any(|intent| matches!(intent.behavior, flux_spec::IntentBehavior::NetworkFetch)),
-            "`{}` raises {:?}, which does not include the NetworkFetch `http.request` would have \
-             raised had the call gone through `Executor::dispatch`",
+                .any(|intent| intent.behavior == expected),
+            "`{}` raises {:?}, which does not include its authored {:?} direction as a network \
+             intent",
             entry.id,
-            intents.intents
+            intents.intents,
+            entry.direction
         );
     }
 }

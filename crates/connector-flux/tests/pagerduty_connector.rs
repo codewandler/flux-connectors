@@ -364,8 +364,8 @@ fn acknowledge_and_resolve_are_separate_operations_with_separate_risk() {
         );
         assert_eq!(
             operation.idempotency,
-            Idempotency::Idempotent,
-            "`{id}` is a PUT setting a fixed status; repeating it lands in the same state"
+            Idempotency::NonIdempotent,
+            "`{id}` is an authored write and may not license Flux to skip execution for a cached result"
         );
 
         let status_field = operation

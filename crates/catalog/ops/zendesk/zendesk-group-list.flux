@@ -2,7 +2,7 @@ op zendesk-group-list -> Any
   description "List the account's Zendesk groups without exposing optional filters or pagination"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

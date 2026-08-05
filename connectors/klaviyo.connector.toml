@@ -10,6 +10,14 @@ module = "klaviyo.flux"
 operations = ["klaviyo-account-list", "klaviyo-profile-list", "klaviyo-profile-get", "klaviyo-profile-create", "klaviyo-list-list", "klaviyo-event-create"]
 verify = "klaviyo-account-list"
 
+[operation_directions]
+klaviyo-account-list = "read"
+klaviyo-event-create = "write"
+klaviyo-list-list = "read"
+klaviyo-profile-create = "write"
+klaviyo-profile-get = "read"
+klaviyo-profile-list = "read"
+
 [operation_semantic_effects]
 klaviyo-account-list = []
 klaviyo-event-create = []

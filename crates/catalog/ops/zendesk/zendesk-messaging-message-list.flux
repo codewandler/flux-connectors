@@ -2,7 +2,7 @@ op zendesk-messaging-message-list(conversationId: String) -> Any
   description "List Messages"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"

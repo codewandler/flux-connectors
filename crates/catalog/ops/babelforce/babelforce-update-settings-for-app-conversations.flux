@@ -2,7 +2,7 @@ op babelforce-update-settings-for-app-conversations(body: Any) -> Any
   description "Update conversations settings"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

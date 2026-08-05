@@ -12,6 +12,14 @@ module = "figma.flux"
 operations = ["figma-user-me", "figma-file-get", "figma-file-nodes-get", "figma-image-render-get", "figma-project-files-list", "figma-file-comments-list"]
 verify = "figma-user-me"
 
+[operation_directions]
+figma-file-comments-list = "read"
+figma-file-get = "read"
+figma-file-nodes-get = "read"
+figma-image-render-get = "read"
+figma-project-files-list = "read"
+figma-user-me = "read"
+
 [operation_semantic_effects]
 figma-file-comments-list = []
 figma-file-get = []

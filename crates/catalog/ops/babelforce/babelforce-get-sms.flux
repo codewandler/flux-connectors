@@ -2,7 +2,7 @@ op babelforce-get-sms(id: String) -> Any
   description "Get an SMS"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

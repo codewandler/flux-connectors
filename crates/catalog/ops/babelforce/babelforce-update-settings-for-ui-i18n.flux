@@ -2,7 +2,7 @@ op babelforce-update-settings-for-ui-i18n(body: Any) -> Any
   description "Update i18n settings"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op babelforce-create-local-automation(applicationId: String, body: Any) -> Any
   description "Add an action to an application"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

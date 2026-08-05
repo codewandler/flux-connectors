@@ -6,7 +6,7 @@ op airtable-record-get(base_id: String, table_id: String, record_id: String) -> 
   description "Read one record from a table — its cell values are under `fields` in the response, keyed by column name. Returns every column the token can see, in Airtable's default JSON cell format: narrowing or reformatting them needs the `fields[]` and `cellFormat` query parameters this connector cannot encode. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.airtable.com"
@@ -18,7 +18,7 @@ op airtable-record-create(base_id: String, table_id: String, cell_values: Any) -
   description "Create one record in a table. Cell values are supplied under `fields`, keyed by column name, and must already be in the exact JSON form each column expects — Airtable's `typecast` coercion cannot be requested yet (see the connector's notes). The created record, with its `rec…` id, is in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.airtable.com"
@@ -32,7 +32,7 @@ op airtable-record-update(base_id: String, table_id: String, record_id: String, 
   description "Update one record's cell values. The write is sparse: only the columns named in `fields` change and every other column of the record is left exactly as it was. Values must already be in the form each column expects — `typecast` coercion cannot be requested yet. The updated record is in the response. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.airtable.com"
@@ -46,7 +46,7 @@ op airtable-record-delete(base_id: String, table_id: String, record_id: String) 
   description "Delete one record and every cell value in it. There is no API route back: Airtable's trash and revision history are UI features on a retention window, not endpoints, so a flux run cannot undo this. Responds `{\"id\": …, \"deleted\": true}`. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.airtable.com"

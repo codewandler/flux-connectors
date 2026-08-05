@@ -6,7 +6,7 @@ op trello-board-list -> Any
   description "List every board the token's own member can see, newest activity first. Takes no argument — `me` resolves to whoever the token belongs to. Also this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the credential pair"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.trello.com/1"
@@ -18,7 +18,7 @@ op trello-board-get(id: String) -> Any
   description "Get one board by id, with its settings and current state"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.trello.com/1"
@@ -30,7 +30,7 @@ op trello-board-lists(id: String) -> Any
   description "List the open lists (columns) on a board, left to right. Each carries the `id` trello-list-cards and trello-card-create take"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.trello.com/1"
@@ -42,7 +42,7 @@ op trello-list-cards(id: String) -> Any
   description "List the open cards in one list, in board order. Archived cards are not returned"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.trello.com/1"
@@ -54,7 +54,7 @@ op trello-card-create(list_id: String, name: String, description: String) -> Any
   description "Create a card at the bottom of a list. The card is created unassigned, with no due date and no labels; Trello notifies whoever watches the list"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.trello.com/1"
@@ -67,8 +67,8 @@ op trello-card-create(list_id: String, name: String, description: String) -> Any
 op trello-card-archive(id: String, closed: Bool) -> Any
   description "Archive a card, or restore an archived one. Archiving is reversible and destroys nothing: the card leaves its list and stays readable in the board's archive"
   risk "medium"
-  idempotency "idempotent"
-  effects ["network"]
+  idempotency "non_idempotent"
+  effects ["write", "network"]
   expose true
 
   base = "https://api.trello.com/1"

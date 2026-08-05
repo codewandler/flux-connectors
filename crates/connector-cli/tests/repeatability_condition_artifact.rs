@@ -1,4 +1,4 @@
-//! **The reason a method-defying idempotency claim is allowed reaches an artifact.**
+//! **The reason an authored conditional-idempotency claim is allowed reaches an artifact.**
 //!
 //! C-186's declaration would be worth very little if it stopped at the IR. `AGENTS.md` records six
 //! declarable surfaces that the loader validates and no artifact carries, and calls that the largest
@@ -39,6 +39,7 @@ description = "A hand-authored fixture connector."
 [[operations]]
 id = "acme-cache-purge"
 method = "POST"
+direction = "write"
 path = "/cache/purge"
 description = "Empty the whole cache for this account."
 risk = "high"
@@ -77,8 +78,8 @@ fn only_operation(document: &Value) -> &Value {
         .expect("the fixture connector publishes one operation")
 }
 
-/// **The claim and its evidence travel together.** A consumer reading `idempotency: "idempotent"` on
-/// a `POST` — the one combination the compiler otherwise refuses — can read why in the same object.
+/// **The claim and its evidence travel together.** A consumer reading authored conditional
+/// idempotency can read why in the same object.
 #[test]
 fn a_conditional_post_publishes_its_condition_beside_the_claim() {
     let reason = "purging an already-purged cache is a no-op";
@@ -88,22 +89,22 @@ fn a_conditional_post_publishes_its_condition_beside_the_claim() {
     assert_eq!(
         operation["idempotency"],
         Value::String("conditional".to_owned()),
-        "the published claim must be the one the author declared, not the one the method implies"
+        "the published claim must be the one the author declared"
     );
     assert_eq!(
         operation["repeatable_because"],
         Value::String(reason.to_owned()),
         "the justification must reach `{CATALOG_JSON}` verbatim — a reason that stops at the IR \
-         leaves a consumer reading a method-defying retry-safety claim with no way to audit it, \
+         leaves a consumer reading a conditional retry-safety claim with no way to audit it, \
          which is the gap this story closes rather than moves"
     );
 }
 
-/// **And the field is absent-shaped for everything else.** Publishing a reason on an operation whose
-/// idempotency follows from its verb would turn a deliberate exception into ambient noise, and a
-/// consumer could no longer tell the two apart by reading.
+/// **And the field is absent-shaped for everything else.** Publishing a reason on an operation
+/// carrying no conditional-idempotency claim would turn deliberate evidence into ambient noise,
+/// and a consumer could no longer tell the two apart by reading.
 #[test]
-fn an_operation_whose_method_decides_its_idempotency_publishes_no_condition() {
+fn a_non_idempotent_operation_publishes_no_condition() {
     let document = planned_catalog("unconditional-post", &purge_connector(None));
     let operation = only_operation(&document);
 

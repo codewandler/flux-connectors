@@ -58,6 +58,7 @@ const own = computed(() => ownIssues(props.operation))
            an empty path are two blanks in a meta line that reads as a fact about the operation. -->
       <span v-if="published(operation.method)" class="row__method">{{ operation.method }}</span>
       <code v-if="published(operation.path)">{{ operation.path }}</code>
+      <span>{{ operation.direction }}</span>
       <span>risk: {{ operation.risk }}</span>
       <span>{{ operation.idempotency }}</span>
     </p>

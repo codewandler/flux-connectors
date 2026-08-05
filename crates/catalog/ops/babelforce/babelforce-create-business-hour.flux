@@ -2,7 +2,7 @@ op babelforce-create-business-hour(body: Any) -> Any
   description "Create a business-hours profile"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

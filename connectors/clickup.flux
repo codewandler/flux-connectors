@@ -6,7 +6,7 @@ op clickup-team-list -> Any
   description "List the workspaces (called \"teams\" in ClickUp's API) the token can see. Takes no parameters; used as the verify read to prove a token resolves, and as the source of the workspace-level context a space id is nested under"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.clickup.com/api/v2"
@@ -18,7 +18,7 @@ op clickup-space-folder-list(space_id: String, archived: Bool) -> Any
   description "List a space's folders. Each folder's own lists are nested inline in the response — read a folder's `lists` field for the list ids clickup-list-task-list and clickup-task-create take, rather than looking for a separate folder-to-list operation"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.clickup.com/api/v2"
@@ -30,7 +30,7 @@ op clickup-list-task-list(list_id: String, archived: Bool, page: Number, order_b
   description "List tasks in a list, most recently created first by default"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.clickup.com/api/v2"
@@ -42,7 +42,7 @@ op clickup-task-get(task_id: String, include_subtasks: Bool) -> Any
   description "Get one task by id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.clickup.com/api/v2"
@@ -54,7 +54,7 @@ op clickup-task-create(list_id: String, name: String, description: String, statu
   description "Create a task in a list. Created with `notify_all` left at its default (false), so nobody is emailed by this call"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.clickup.com/api/v2"
@@ -68,7 +68,7 @@ op clickup-task-update(task_id: String, name: String, description: String, statu
   description "Update a task's plain fields (name, description, status, priority, due date). Every field below is optional and ClickUp's update is sparse: an omitted field is left unchanged. Reassigning or rewatching the task is not supported by this operation — ClickUp takes those as {add, rem} deltas naming specific people, which this connector does not declare"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.clickup.com/api/v2"

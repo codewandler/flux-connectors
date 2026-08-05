@@ -12,6 +12,14 @@ module = "box.flux"
 operations = ["box-user-me", "box-folder-get", "box-folder-items-list", "box-file-get", "box-folder-create", "box-file-copy"]
 verify = "box-user-me"
 
+[operation_directions]
+box-file-copy = "write"
+box-file-get = "read"
+box-folder-create = "write"
+box-folder-get = "read"
+box-folder-items-list = "read"
+box-user-me = "read"
+
 [operation_semantic_effects]
 box-file-copy = []
 box-file-get = []

@@ -90,16 +90,13 @@ mechanism at all. Each is pinned in `crates/connector-flux/tests/linear_connecto
 Two are not expressible, both on the safety axes. Neither would have withdrawn the connector on its
 own; they are recorded because they are real and because the next attempt inherits them.
 
-**5. `risk` and `idempotency` are forced for every operation, reads included.**
-`check_write_metadata` derives write-ness from the HTTP verb, and under GraphQL the verb is always
-`POST`. So no operation may declare `risk = "low"` or `idempotency = "idempotent"`. The risk floor
-rises to `medium` for a whole connector and `idempotency` carries no authored information anywhere in
-the file.
+**5. `risk`, `idempotency`, and direction are authored for every operation.**
+`check_write_metadata` reads the closed vendor-state direction, never the HTTP verb. GraphQL can
+therefore state a query transported by `POST` as `read` and a mutation transported by the same verb
+as `write`; the stable operation identity, not transport shape, carries the reviewed distinction.
 
-The rule is **right** and should not be weakened — it is what stops a REST write being waved through
-an approval gate. Its *premise* is a REST premise: that the verb distinguishes a read from a write.
-The effect is also **conservative** — a read over-stated, never a write under-stated — and gradation
-above the floor survives, so the axis is compressed rather than erased. If this is ever addressed,
+The guard remains strict where it matters: an authored write may not claim `low` or `idempotent`,
+while an authored read may. If GraphQL support is attempted again,
 the shape is an operation declaring that its verb is a transport detail, not a loosening of the check.
 
 **6. A failed call arrives as HTTP 200, and nothing can say so.** This is

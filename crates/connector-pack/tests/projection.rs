@@ -182,7 +182,10 @@ fn the_spec_carries_the_catalogue_entry_and_invents_nothing() {
     assert!(spec.description.starts_with(operation.description));
     assert_eq!(spec.risk, flux_spec::Risk::Medium);
     assert_eq!(spec.idempotency, flux_spec::Idempotency::NonIdempotent);
-    assert_eq!(spec.effects, vec![flux_spec::Effect::Network]);
+    assert_eq!(
+        spec.effects,
+        vec![flux_spec::Effect::Write, flux_spec::Effect::Network]
+    );
 
     // The declared parameters, as a real JSON Schema — not an empty object standing in for one.
     let properties = spec.input_schema["properties"]

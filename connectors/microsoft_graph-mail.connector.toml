@@ -12,6 +12,12 @@ api_version = "v1.0"
 module = "microsoft_graph-mail.flux"
 operations = ["microsoft_graph-mail-message-get", "microsoft_graph-mail-message-reply", "microsoft_graph-mail-folder-list", "microsoft_graph-mail-message-list"]
 
+[operation_directions]
+microsoft_graph-mail-folder-list = "read"
+microsoft_graph-mail-message-get = "read"
+microsoft_graph-mail-message-list = "read"
+microsoft_graph-mail-message-reply = "write"
+
 [operation_semantic_effects]
 microsoft_graph-mail-folder-list = []
 microsoft_graph-mail-message-get = []

@@ -2,7 +2,7 @@ op babelforce-update-phonebook-entry(id: String, body: Any) -> Any
   description "Update a phonebook entry"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

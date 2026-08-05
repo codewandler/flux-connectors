@@ -2,7 +2,7 @@ op asterisk-ari-mailboxes-get(mailboxName: String) -> Any
   description "Retrieve the current state of a mailbox."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

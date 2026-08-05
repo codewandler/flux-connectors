@@ -2,7 +2,7 @@ op babelforce-get-prompt(id: String) -> Any
   description "Get a prompt"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

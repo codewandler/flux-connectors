@@ -2,7 +2,7 @@ op babelforce-list-conversation-events(conversationId: String) -> Any
   description "List a conversation's events"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op babelforce-update-business-hour(id: String, body: Any) -> Any
   description "Update a business-hours profile"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

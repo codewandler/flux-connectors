@@ -2,7 +2,7 @@ op babelforce-send-sms(body: Any) -> Any
   description "Send an SMS"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

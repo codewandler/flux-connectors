@@ -2,7 +2,7 @@ op openrouter-chat-completion(model: String, messages: List<Any>, max_completion
   description "Create a chat completion through OpenRouter, routed to the named model. Billed per input and output token, so the caller must state a token budget via max_completion_tokens"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://openrouter.ai"

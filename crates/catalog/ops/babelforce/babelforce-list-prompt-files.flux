@@ -2,7 +2,7 @@ op babelforce-list-prompt-files -> Any
   description "List prompt files"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

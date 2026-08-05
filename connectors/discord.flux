@@ -6,7 +6,7 @@ op discord-current-user -> Any
   description "Read the bot user this token authenticates as — its snowflake id, username and application flags. Takes no argument. Also this connector's `verify`: the cheapest call that proves the token, the `Bot ` scheme word and the base URL are all correct together, and the one to run first when any other operation returns 401"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://discord.com/api/v10"
@@ -18,7 +18,7 @@ op discord-guild-list -> Any
   description "List the guilds (servers) this bot has been installed into — the complete set of guild ids the rest of this connector can address. Returns a partial guild object per entry, not the full one: call discord-guild-get for a guild's settings. Discord returns at most 200 per page and this connector does not page, so a bot in more guilds than that sees only the first 200"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://discord.com/api/v10"
@@ -30,7 +30,7 @@ op discord-guild-get(guild_id: String) -> Any
   description "Read one guild's settings and current state by id — its name, owner, moderation levels and enabled features. Membership counts are not included: they require a query flag this connector does not send, and Discord documents them as approximate"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://discord.com/api/v10"
@@ -42,7 +42,7 @@ op discord-guild-channels(guild_id: String) -> Any
   description "List every channel in a guild — text, voice, category and forum — in Discord's own ordering. This is where a channel id comes from: read `type` to find the text channels (type 0) discord-channel-messages and discord-message-create can address. Threads are not included; Discord returns them from a separate route this connector does not expose"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://discord.com/api/v10"
@@ -54,7 +54,7 @@ op discord-channel-messages(channel_id: String, limit: Number) -> Any
   description "Read the most recent messages in a text channel, newest first. Requires the bot to have READ_MESSAGE_HISTORY in the channel; without it Discord answers 403 rather than an empty list. The response is personal content — what people said, with author identity attached — so read it for what the calling flow needs and do not persist it beyond that"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://discord.com/api/v10"
@@ -66,7 +66,7 @@ op discord-message-create(channel_id: String, content: String, tts: Bool) -> Any
   description "Post a message to a text channel, visible to everyone in it and notifying whoever is watching. Requires the bot to have SEND_MESSAGES in the channel. Posting twice posts two messages — Discord offers no idempotency key on this route. Discord rate-limits this route per channel and does not publish the figure: on a 429, wait the number of seconds in the `Retry-After` header before retrying, rather than retrying immediately"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://discord.com/api/v10"

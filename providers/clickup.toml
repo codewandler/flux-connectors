@@ -135,6 +135,7 @@ tags = ["project-management"]
 [[operations]]
 id = "clickup-team-list"
 method = "GET"
+direction = "read"
 path = "/team"
 description = "List the workspaces (called \"teams\" in ClickUp's API) the token can see. Takes no parameters; used as the verify read to prove a token resolves, and as the source of the workspace-level context a space id is nested under"
 risk = "low"
@@ -154,6 +155,7 @@ properties = { teams = { type = "array", description = "Every workspace the toke
 [[operations]]
 id = "clickup-space-folder-list"
 method = "GET"
+direction = "read"
 path = "/space/{space_id}/folder"
 description = "List a space's folders. Each folder's own lists are nested inline in the response — read a folder's `lists` field for the list ids clickup-list-task-list and clickup-task-create take, rather than looking for a separate folder-to-list operation"
 risk = "low"
@@ -183,6 +185,7 @@ properties = { folders = { type = "array", description = "The space's folders", 
 [[operations]]
 id = "clickup-list-task-list"
 method = "GET"
+direction = "read"
 path = "/list/{list_id}/task"
 description = "List tasks in a list, most recently created first by default"
 risk = "low"
@@ -234,6 +237,7 @@ properties = { tasks = { type = "array", description = "The matching tasks", ite
 [[operations]]
 id = "clickup-task-get"
 method = "GET"
+direction = "read"
 path = "/task/{task_id}"
 description = "Get one task by id"
 risk = "low"
@@ -268,6 +272,7 @@ properties = { id = { type = "string" }, name = { type = "string" }, description
 [[operations]]
 id = "clickup-task-create"
 method = "POST"
+direction = "write"
 path = "/list/{list_id}/task"
 description = "Create a task in a list. Created with `notify_all` left at its default (false), so nobody is emailed by this call"
 risk = "medium"
@@ -319,6 +324,7 @@ properties = { id = { type = "string", description = "The created task's id — 
 [[operations]]
 id = "clickup-task-update"
 method = "PUT"
+direction = "write"
 path = "/task/{task_id}"
 description = "Update a task's plain fields (name, description, status, priority, due date). Every field below is optional and ClickUp's update is sparse: an omitted field is left unchanged. Reassigning or rewatching the task is not supported by this operation — ClickUp takes those as {add, rem} deltas naming specific people, which this connector does not declare"
 risk = "medium"

@@ -12,7 +12,7 @@
 //!   description "Add a note to a ticket; the note is private unless explicitly made public"
 //!   risk "medium"
 //!   idempotency "non_idempotent"
-//!   effects ["network"]
+//!   effects ["write", "network"]
 //!   expose true
 //!
 //!   $base = "https://example.freshdesk.com/api/v2"
@@ -32,9 +32,9 @@
 //! **`risk` and `idempotency` come from the IR — and a write may not carry a read's.** flux's
 //! approval gate reads them, and the IR makes both mandatory precisely so they cannot be decided by
 //! silence. Nothing here defaults them; what this module adds is a *refusal*, in
-//! [`check_write_metadata`], for the one direction that is unsafe — a state-changing method
-//! declaring `risk = "low"` (which the gate waves through) or a `POST`/`PATCH` declaring itself
-//! idempotent (which makes a `retry` around it unsound).
+//! [`check_write_metadata`], for the one direction that is unsafe — an authored `write` declaring
+//! `risk = "low"` (which the gate waves through) or declaring itself idempotent (which licenses
+//! Flux to skip execution through its op cache). HTTP method does not participate in that decision.
 //!
 //! **Query parameters are structured data, never URL text — C-30.** Flux 0.54's
 //! `http.request(query: ...)` owns RFC 3986 encoding and omits null values, so optional `false` and
@@ -171,7 +171,8 @@
 use std::collections::BTreeMap;
 
 use connector_spec::{
-    Connector, HttpMethod, Idempotency, Operation, Param, Position, Risk, FREE_FORM_BODY,
+    Connector, HttpMethod, Idempotency, Operation, OperationDirection, Param, Position, Risk,
+    FREE_FORM_BODY,
 };
 use flux_lang::ast::{DraftAst, Node, Param as FluxParam, SymbolName, TypeRef};
 use flux_lang::program::{CompositeOpDecl, CompositeOpMeta};
@@ -793,32 +794,29 @@ fn is_http_token(name: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b))
 }
 
-/// Whether the method changes state the vendor owns.
-fn mutates(method: HttpMethod) -> bool {
-    match method {
-        HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch | HttpMethod::Delete => true,
-        HttpMethod::Get | HttpMethod::Head | HttpMethod::Options => false,
-    }
+/// Whether the operation changes state the vendor owns.
+fn mutates(direction: OperationDirection) -> bool {
+    direction == OperationDirection::Write
 }
 
 /// **A write may not carry a read's metadata.** flux's approval gate reads `risk` and
-/// `idempotency`, so a `POST` that inherited a `GET`'s `low`/`idempotent` would be auto-approved and
-/// treated as safe to retry. Both are refused rather than corrected: a silent correction hides the
+/// `idempotency`, so an authored write carrying `low`/`idempotent` would be auto-approved and
+/// treated as safe to retry or skip. Both are refused rather than corrected: a silent correction hides the
 /// authoring mistake, and the IR omits `Default` on both enums for exactly that reason.
 ///
 /// # What C-186 changed, and what it deliberately did not
 ///
-/// Neither the `risk` refusal nor the `idempotent`-on-`POST`/`PATCH` refusal is relaxed. **Both are
+/// Neither the `risk` refusal nor the `idempotent`-on-write refusal is relaxed. **Both are
 /// unconditional, exactly as they were.** C-186's first landing did relax the second one — it let a
-/// `POST` claim `Idempotent` behind a justification — and that was wrong on flux's own terms:
+/// write claim `Idempotent` behind a justification — and that was wrong on flux's own terms:
 /// `flux_spec::coherence`'s I3 records that `Idempotent` is what "licenses the dispatcher's op cache
 /// to serve a stored result *instead of executing*". "Safe to repeat" and "safe to skip" are
 /// different claims, and only the second is what `Idempotent` means. Purging a cache is the first.
 ///
 /// What landed instead is a **tightening**, on the value flux actually reserves for this:
 /// [`Idempotency::Conditional`] is flux's stated escape hatch for a mutation that is genuinely
-/// replay-safe, and it was already permitted on every method here with nothing asked of it. Six
-/// operations used it before C-186 with the condition recorded nowhere. A mutating `conditional`
+/// replay-safe, and it was already permitted here with nothing asked of it. Six operations used it
+/// before C-186 with the condition recorded nowhere. An authored `conditional` write
 /// must now state its condition, and the condition is refused where it means nothing.
 /// **A credential-producing operation is refused rather than emitted** (C-136).
 ///
@@ -850,13 +848,12 @@ fn check_credential_diversion(operation: &Operation) -> Result<()> {
 }
 
 fn check_write_metadata(operation: &Operation) -> Result<()> {
-    // Checked ahead of the `mutates` gate, because the methods this refuses are exactly the ones the
-    // gate returns early on. A condition on a `GET` is where the field is most tempting and least
-    // meaningful: nothing about a read needs conditioning.
-    if operation.repeatable_because.is_some() && !mutates(operation.method) {
+    // Checked ahead of the write gate because authored reads return early there. A repeatability
+    // condition on a read is meaningless: nothing about a read needs conditioning.
+    if operation.repeatable_because.is_some() && !mutates(operation.direction) {
         return Err(Error::RepeatabilityConditionUnneeded {
             operation: operation.id.clone(),
-            method: method_word(operation.method),
+            direction: operation.direction.word(),
         });
     }
     // Likewise ahead of the gate for the same reason, and checked on the IR rather than only at the
@@ -867,31 +864,22 @@ fn check_write_metadata(operation: &Operation) -> Result<()> {
             idempotency: idempotency_tag(operation.idempotency),
         });
     }
-    if !mutates(operation.method) {
+    if !mutates(operation.direction) {
         return Ok(());
     }
     if operation.risk == Risk::Low {
         return Err(Error::WriteDeclaredLowRisk {
             operation: operation.id.clone(),
-            method: method_word(operation.method),
+            direction: operation.direction.word(),
         });
     }
-    // `PUT` and `DELETE` *are* idempotent methods under RFC 9110 §9.2.2, so this repository has
-    // always let them declare `idempotent`; `POST` and `PATCH` are not, and claiming otherwise makes
-    // a `retry` around the call unsound.
-    //
-    // Worth knowing while reading this: the `PUT`/`DELETE` permission is in open conflict with
-    // flux's I3, which does not consider the HTTP method at all — it refuses `Idempotent` on
-    // anything consequence-bearing. Nine shipped `PUT`s sit in that gap today. Resolving it is a
-    // decision about whose vocabulary wins across eight providers, not something to settle inside a
-    // guard, so it is measured and filed rather than changed here — see
-    // `crates/connector-pack/tests/metadata_coherence.rs`.
-    if operation.idempotency == Idempotency::Idempotent
-        && matches!(operation.method, HttpMethod::Post | HttpMethod::Patch)
-    {
+    // Flux's I3 refuses `Idempotent` on consequence-bearing work because that value permits a
+    // runtime to serve a cached result instead of executing. Authored direction is the connector's
+    // vendor-state truth, so every write is held to that canonical rule regardless of HTTP method.
+    if operation.idempotency == Idempotency::Idempotent {
         return Err(Error::WriteDeclaredIdempotent {
             operation: operation.id.clone(),
-            method: method_word(operation.method),
+            direction: operation.direction.word(),
         });
     }
     // The tightening. `conditional` was the one metadata value a write could carry with nothing
@@ -901,7 +889,7 @@ fn check_write_metadata(operation: &Operation) -> Result<()> {
     {
         return Err(Error::ConditionalWithoutItsCondition {
             operation: operation.id.clone(),
-            method: method_word(operation.method),
+            direction: operation.direction.word(),
         });
     }
     Ok(())
@@ -914,8 +902,8 @@ fn metadata(operation: &Operation) -> Result<CompositeOpMeta> {
         description: description(operation),
         risk: from_tag(risk_tag(operation.risk))?,
         idempotency: from_tag(idempotency_tag(operation.idempotency))?,
-        // Every generated op makes an HTTP request; nothing else it does is an effect flux tracks.
-        effects: vec![from_tag("network")?],
+        // Direction is connector truth. HTTP transport is an orthogonal effect and may not infer it.
+        effects: vec![from_tag(operation.direction.word())?, from_tag("network")?],
         // `expose true` is what surfaces the op to the model as an LLM tool — and it was a literal
         // here until C-413, which fused "this operation can be called" with "this operation is a
         // tool". Reading the declaration instead is what lets a connector cover a whole API without
@@ -1691,6 +1679,7 @@ mod tests {
             id: "vendor-thing-get".to_string(),
             service: DEFAULT_SERVICE.to_string(),
             method: HttpMethod::Get,
+            direction: connector_spec::OperationDirection::Read,
             path: path.to_string(),
             description: "Get a thing.".to_string(),
             risk: Risk::Low,

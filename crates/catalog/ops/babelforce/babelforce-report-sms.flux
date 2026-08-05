@@ -2,7 +2,7 @@ op babelforce-report-sms(page: Number, max: Number) -> Any
   description "Get an SMS report"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

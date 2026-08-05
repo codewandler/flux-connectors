@@ -164,6 +164,7 @@ tags = ["crm"]
 [[operations]]
 id = "salesforce-whoami"
 method = "GET"
+direction = "read"
 path = "/services/oauth2/userinfo"
 description = "Get the authenticated user and org for the current access token — the identity check for a settings page's Test Connection button. Takes no parameters"
 risk = "low"
@@ -184,6 +185,7 @@ properties = { sub = { type = "string", format = "uri", description = "The OIDC 
 [[operations]]
 id = "salesforce-record-get"
 method = "GET"
+direction = "read"
 path = "/services/data/v59.0/sobjects/{sobject_type}/{id}"
 description = "Read one SObject record by id. Returns every field of the record; narrowing to a subset needs the fields query parameter, which this connector cannot encode safely (see the provider file's header) so it is not offered"
 risk = "low"
@@ -217,6 +219,7 @@ properties = { attributes = { type = "object", required = ["type", "url"], prope
 [[operations]]
 id = "salesforce-record-create"
 method = "POST"
+direction = "write"
 path = "/services/data/v59.0/sobjects/{sobject_type}"
 description = "Create one SObject record. Which fields are required depends on the SObject type and the org's own validation rules and page layouts — check with salesforce-sobject-describe first"
 risk = "medium"
@@ -252,20 +255,14 @@ properties = { id = { type = "string", description = "The new record's 18-charac
 [[operations]]
 id = "salesforce-record-update"
 method = "PATCH"
+direction = "write"
 path = "/services/data/v59.0/sobjects/{sobject_type}/{id}"
 description = "Update one or more fields on an existing SObject record. Only the supplied fields change; fields left out are untouched. Answers 204 with no body on success"
 risk = "medium"
-# TRUE FACT, FALSE DECLARATION, BY DESIGN — read before "fixing" this.
-#
-# Sending the same field values twice changes nothing the second time, which is genuinely
-# idempotent under RFC 9110 §9.2.2. It cannot be declared here: `check_write_metadata`
-# (`crates/connector-flux/src/op.rs:594-604`) refuses `idempotency = "idempotent"` on `PATCH`
-# unconditionally, by method, regardless of what the endpoint actually does — the same refusal
-# `providers/cloudflare.toml`'s cache purge and `providers/launchdarkly.toml`'s flag toggle hit and
-# recorded as C-186. That story is still open; until it lands, the honest-but-refused claim is
-# declared here as `non_idempotent` and the true claim lives in this comment and in the
-# `description` above, exactly as C-186's two connectors do it. The direction is safe: it makes a
-# host more conservative about retrying than the endpoint requires, never less.
+# Sending the same field values twice appears replay-safe, but Flux's `Idempotent` also licenses
+# skipping execution for a cached result and is therefore refused on every authored write. This
+# operation remains conservatively `non_idempotent`; declaring `conditional` would require a stated
+# vendor guarantee reviewed for this endpoint.
 idempotency = "non_idempotent"
 
 [[operations.params.path]]
@@ -298,6 +295,7 @@ body_schema = { type = "object", description = "The fields to change, as a JSON 
 [[operations]]
 id = "salesforce-sobject-describe"
 method = "GET"
+direction = "read"
 path = "/services/data/v59.0/sobjects/{sobject_type}/describe"
 description = "Describe an SObject's schema: its label, whether it is custom, its create/update/delete/query permissions, and every field's name, type and constraints. The reference for what salesforce-record-create and salesforce-record-update may send"
 risk = "low"

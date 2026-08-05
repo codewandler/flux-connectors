@@ -7,7 +7,7 @@ op babelforce-user-me-get -> Any
   description "Get the current User"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -19,7 +19,7 @@ op babelforce-list-accounts -> Any
   description "Get List of available Accounts"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"
@@ -31,7 +31,7 @@ op babelforce-reset-password -> Any
   description "Request a Password Change"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -2,7 +2,7 @@ op asterisk-ari-asterisk-add-log(logChannelName: String, configuration: String) 
   description "Adds a log channel."
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

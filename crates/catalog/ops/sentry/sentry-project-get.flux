@@ -2,7 +2,7 @@ op sentry-project-get(organization_id_or_slug: String, project_id_or_slug: Strin
   description "Get one project — its name, slug, platform, teams, DSN-bearing client keys' status and whether it is currently accepting events. This is the project an issue belongs to, so it is how a triage flow finds out which service is broken. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/detail` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://sentry.io"

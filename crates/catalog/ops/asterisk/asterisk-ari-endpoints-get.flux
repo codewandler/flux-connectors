@@ -2,7 +2,7 @@ op asterisk-ari-endpoints-get(tech: String, resource: String) -> Any
   description "Details for an endpoint."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://{host}:8089/ari"

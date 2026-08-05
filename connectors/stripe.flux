@@ -6,7 +6,7 @@ op stripe-balance-get -> Any
   description "Get the account's current balance — what is available to pay out and what is still pending, per currency. Takes no parameters, and reports the balance of whichever mode the key belongs to: a test key returns the test balance. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.stripe.com"
@@ -18,7 +18,7 @@ op stripe-customer-get(customer: String) -> Any
   description "Get one customer by id: name, email, phone, billing address, default payment method and account balance. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires. A deleted customer is returned with `deleted: true` and almost no other fields. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.stripe.com"
@@ -30,7 +30,7 @@ op stripe-charge-get(charge: String) -> Any
   description "Get one charge by id: amount, currency, whether it was captured, whether it was refunded and how much of it, the card's last four digits and brand, and the failure or decline reason if it did not succeed. `amount` is in the currency's smallest unit — 1000 is ten dollars, and also ten thousand yen. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.stripe.com"
@@ -42,7 +42,7 @@ op stripe-payment-intent-get(payment_intent: String) -> Any
   description "Get one payment intent by id — the modern shape of a payment, covering the whole lifecycle from creation to capture. Its `status` is what says where the payment stands; `requires_capture` means the money is authorized but not yet taken. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.stripe.com"
@@ -54,7 +54,7 @@ op stripe-refund-get(refund: String) -> Any
   description "Get one refund by id: its amount, the charge it belongs to, its reason and its status. A refund that reports `pending` has not reached the customer's bank yet, and one that reports `failed` means the money came back — the customer was not paid. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.stripe.com"
@@ -66,7 +66,7 @@ op stripe-payment-intent-capture(payment_intent: String, idempotency_key: String
   description "Capture an authorized payment intent, charging the customer the **full** authorized amount. Only a payment intent in `requires_capture` can be captured; a partial capture needs an `amount` this connector cannot send. Stripe answers 402 with an `error.code` such as `card_declined` when the capture is refused, and that arrives as data rather than as a failure. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body."
   risk "destructive"
   idempotency "conditional"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.stripe.com"
@@ -78,7 +78,7 @@ op stripe-payment-intent-cancel(payment_intent: String, idempotency_key: String)
   description "Cancel a payment intent, releasing any authorization hold on the customer's card. This cannot be undone — a canceled intent is final, and collecting the payment afterwards means creating a new one. An intent that has already succeeded cannot be canceled; refund it instead. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body."
   risk "high"
   idempotency "conditional"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.stripe.com"
@@ -90,7 +90,7 @@ op stripe-charge-refund-create(charge: String, idempotency_key: String) -> Any
   description "Refund a charge **in full** and irreversibly: the entire un-refunded amount goes back to the customer's original payment method, usually within five to ten business days. A partial refund needs an `amount` this connector cannot send. Stripe's fee on the original charge is not returned. There is no way to undo a refund — collecting the money again means charging the customer again. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/code` in the response body."
   risk "destructive"
   idempotency "conditional"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.stripe.com"
@@ -102,7 +102,7 @@ op stripe-country-spec-list(limit: Number) -> Any
   description "List country-specific requirements, supported currencies and payment capabilities without changing an account"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.stripe.com"
@@ -114,7 +114,7 @@ op stripe-event-list(limit: Number) -> Any
   description "List Stripe account events for operational visibility without replaying or changing an event"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.stripe.com"
@@ -126,7 +126,7 @@ op stripe-exchange-rate-list(limit: Number) -> Any
   description "List current Stripe exchange rates without creating a conversion or moving funds"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.stripe.com"
@@ -138,7 +138,7 @@ op stripe-billing-meter-list(limit: Number) -> Any
   description "List usage-billing meter definitions without creating, changing or deactivating one"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.stripe.com"

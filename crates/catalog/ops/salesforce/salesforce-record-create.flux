@@ -2,7 +2,7 @@ op salesforce-record-create(sobject_type: String, body: Any) -> Any
   description "Create one SObject record. Which fields are required depends on the SObject type and the org's own validation rules and page layouts — check with salesforce-sobject-describe first"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{instance}.my.salesforce.com"

@@ -2,7 +2,7 @@ op zendesk-messaging-conversation-update(conversationId: String, displayName: St
   description "Set one conversation's display name to an absolute non-empty value"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"

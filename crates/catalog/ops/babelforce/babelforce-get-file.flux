@@ -2,7 +2,7 @@ op babelforce-get-file(id: String) -> Any
   description "Get a file"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

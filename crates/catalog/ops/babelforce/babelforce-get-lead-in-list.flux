@@ -2,7 +2,7 @@ op babelforce-get-lead-in-list(id: String, leadId: String) -> Any
   description "Get a lead"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -200,6 +200,7 @@ tags = ["design"]
 [[operations]]
 id = "miro-board-list"
 method = "GET"
+direction = "read"
 path = "/boards"
 description = "List the boards this access token can see, with each board's id, name and description. Returns Miro's first page only; this connector declares no cursor or limit parameter (see the connector's header note). The board `id` returned here is what every other operation in this connector needs as `board_id`"
 risk = "low"
@@ -215,6 +216,7 @@ properties = { data = { type = "array", items = { type = "object", required = ["
 [[operations]]
 id = "miro-board-item-list"
 method = "GET"
+direction = "read"
 path = "/boards/{board_id}/items"
 description = "List the items on a board, of any type (sticky note, shape, text or frame). Each item's shape depends on its `type`: sticky notes and text carry `data.content`, shapes carry `data.content` and `data.shape`, frames carry `data.title`. Returns Miro's first page only; this connector declares no cursor or limit parameter (see the connector's header note)"
 risk = "low"
@@ -241,6 +243,7 @@ properties = { data = { type = "array", items = { oneOf = [
 [[operations]]
 id = "miro-board-item-get"
 method = "GET"
+direction = "read"
 path = "/boards/{board_id}/items/{item_id}"
 description = "Get one item from a board, of any type (sticky note, shape, text or frame). Its shape depends on its `type` — see miro-board-item-list's description for what each carries"
 risk = "low"
@@ -271,6 +274,7 @@ oneOf = [
 [[operations]]
 id = "miro-sticky-note-create"
 method = "POST"
+direction = "write"
 path = "/boards/{board_id}/sticky_notes"
 description = "Create a sticky note on a board. Miro does not deduplicate: creating the same content twice makes two sticky notes, so this is not idempotent. The created note, with its assigned id, is in the response"
 risk = "medium"
@@ -304,14 +308,15 @@ properties = { id = { type = "string" }, type = { type = "string", const = "stic
 [[operations]]
 id = "miro-sticky-note-update"
 method = "PATCH"
+direction = "write"
 path = "/boards/{board_id}/sticky_notes/{item_id}"
 description = "Update a sticky note's text content. The content sent replaces what was there, so setting the same content twice ends in the same state. The updated note is in the response"
 risk = "medium"
 # Genuinely idempotent by Miro's behaviour (an absolute value, not a delta), and now declarable as
 # such: C-186's escape hatch landed, and this comment's own instruction — "the honest fix is C-186's
-# escape hatch, not yet landed" — is what it is being spent on. The `PATCH` refusal is unchanged for
-# an author who states nothing; `idempotent_because` is what buys the claim, and it is published
-# beside the claim in `web/public/catalog.json`.
+# escape hatch, not yet landed" — is what it is being spent on. Authored writes refuse `idempotent`;
+# `repeatable_because` supports the honest `conditional` claim and is published beside it in
+# `web/public/catalog.json`.
 #
 # The description above was rewritten in the same change. It had grown an explanation of
 # `check_write_metadata` — a fact about this repository's compiler, in the one string that reaches a
@@ -350,6 +355,7 @@ properties = { id = { type = "string" }, type = { type = "string", const = "stic
 [[operations]]
 id = "miro-sticky-note-delete"
 method = "DELETE"
+direction = "write"
 path = "/boards/{board_id}/sticky_notes/{item_id}"
 description = "Delete one sticky note. There is no undo route in the API. Responds with no content"
 # See the header comment. The only tier that makes flux's approval gate stop for this.

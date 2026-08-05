@@ -2,7 +2,7 @@ op babelforce-list-all-simple-reporting-calls(page: Number, max: Number, session
   description "List reporting calls (simple)"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

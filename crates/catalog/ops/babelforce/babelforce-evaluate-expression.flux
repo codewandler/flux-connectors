@@ -2,7 +2,7 @@ op babelforce-evaluate-expression(async: Bool, body: Any) -> Any
   description "Evaluates a single Expression based on a provided Context"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

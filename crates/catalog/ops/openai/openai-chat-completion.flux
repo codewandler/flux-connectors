@@ -2,7 +2,7 @@ op openai-chat-completion(model: String, messages: List<Any>, max_completion_tok
   description "Create a chat completion. Billed per input and output token, so the caller must state a token budget via max_completion_tokens"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://api.openai.com"

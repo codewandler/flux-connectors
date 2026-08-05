@@ -8,8 +8,8 @@
 //! nobody can rebuild.
 
 use connector_spec::{
-    Connector, Gid, HttpMethod, Idempotency, Oip, Operation, ParamSet, Pid, Provenance, Quirks,
-    Risk, Service, DEFAULT_SERVICE,
+    Connector, Gid, HttpMethod, Idempotency, Oip, Operation, OperationDirection, ParamSet, Pid,
+    Provenance, Quirks, Risk, Service, DEFAULT_SERVICE,
 };
 
 /// A tiny deterministic generator. Numerical Recipes' LCG constants; the values only have to be
@@ -35,6 +35,7 @@ fn operation(id: &str, service: &str) -> Operation {
         id: id.to_owned(),
         service: service.to_owned(),
         method: HttpMethod::Get,
+        direction: OperationDirection::Read,
         path: "/v1/things".to_owned(),
         description: String::new(),
         risk: Risk::Low,
@@ -282,7 +283,7 @@ fn a_provider_file_that_loads_publishes_only_round_tripping_addresses() {
                      authority = {authority:?}\napi_version = {api_version:?}\n\n\
                      [[services]]\nname = {service:?}\n\n\
                      [[operations]]\nid = \"acme-thing-get\"\nservice = {service:?}\n\
-                     method = \"GET\"\npath = \"/v1/things\"\nrisk = \"low\"\n\
+                     method = \"GET\"\ndirection = \"read\"\npath = \"/v1/things\"\nrisk = \"low\"\n\
                      idempotency = \"idempotent\"\n"
                 );
 

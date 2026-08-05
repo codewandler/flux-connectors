@@ -6,7 +6,7 @@ op mailchimp-ping -> Any
   description "Check that the API is reachable and the credential works. Takes no argument and returns no account data — Mailchimp calls it a health check that returns nothing account-specific. Also this connector's `verify`: it is the one call that proves both halves of the configuration at once, because a wrong key and a wrong datacentre label both fail it"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{dc}.api.mailchimp.com/3.0"
@@ -18,7 +18,7 @@ op mailchimp-audience-list -> Any
   description "List the audiences in the account, with the id every contact operation takes. Returns Mailchimp's default first page only — this connector declares no paging parameters, so compare the number of entries against `total_items` before treating the result as complete"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{dc}.api.mailchimp.com/3.0"
@@ -30,7 +30,7 @@ op mailchimp-audience-get(list_id: String) -> Any
   description "Get one audience by id, with its settings and current member counts"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{dc}.api.mailchimp.com/3.0"
@@ -42,7 +42,7 @@ op mailchimp-audience-member-list(list_id: String) -> Any
   description "List the contacts in an audience, subscribed and unsubscribed alike. Returns Mailchimp's default first page only — this connector declares no paging or status filter, so compare the number of entries against `total_items` before treating the result as complete. Every entry is personal data"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{dc}.api.mailchimp.com/3.0"
@@ -54,7 +54,7 @@ op mailchimp-audience-member-get(list_id: String, subscriber_hash: String) -> An
   description "Get one contact in an audience, including its subscription status and opt-in record. The contact is addressed by a hash of its own address, not by the address — see `subscriber_hash`. Returns personal data"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{dc}.api.mailchimp.com/3.0"
@@ -65,8 +65,8 @@ op mailchimp-audience-member-get(list_id: String, subscriber_hash: String) -> An
 op mailchimp-audience-member-upsert(list_id: String, subscriber_hash: String, email_address: String, status_if_new: String, status: String) -> Any
   description "Add a contact to an audience, or update the one already there. Creating with `status_if_new = \"pending\"` makes Mailchimp send its own opt-in confirmation and record the consent; creating with \"subscribed\" asserts that the account already holds that consent and sends nothing. Setting `status` on an existing contact changes whether they receive mail. This writes personal data about a third party and is not undone by calling it again"
   risk "high"
-  idempotency "idempotent"
-  effects ["network"]
+  idempotency "non_idempotent"
+  effects ["write", "network"]
   expose true
 
   base = "https://{dc}.api.mailchimp.com/3.0"
@@ -80,7 +80,7 @@ op mailchimp-campaign-list -> Any
   description "List the campaigns in the account — drafts, scheduled, sending and sent alike. Returns Mailchimp's default first page only, and this connector declares no status or date filter, so compare the number of entries against `total_items` before treating the result as complete"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{dc}.api.mailchimp.com/3.0"

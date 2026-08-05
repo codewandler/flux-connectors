@@ -2,7 +2,7 @@ op zendesk-messaging-conversation-create -> Any
   description "Create an empty SDK group conversation in the configured Zendesk Messaging app"
   risk "high"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com/sc"

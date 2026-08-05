@@ -11,6 +11,12 @@ module = "postmark-server.flux"
 operations = ["postmark-email-send", "postmark-deliverystats-get", "postmark-bounce-list", "postmark-bounce-get"]
 verify = "postmark-deliverystats-get"
 
+[operation_directions]
+postmark-bounce-get = "read"
+postmark-bounce-list = "read"
+postmark-deliverystats-get = "read"
+postmark-email-send = "write"
+
 [operation_semantic_effects]
 postmark-bounce-get = []
 postmark-bounce-list = []

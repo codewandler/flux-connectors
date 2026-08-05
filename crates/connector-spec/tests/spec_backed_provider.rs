@@ -131,6 +131,7 @@ fn a_selected_operation_carries_the_documents_request_and_the_authors_judgement(
         "
 [[patch.operations]]
 select = \"showTicket\"
+direction = \"read\"
 rename = \"zendesk-ticket-show\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -160,12 +161,14 @@ fn inline_operations_and_selected_ones_land_in_one_connector() {
 [[operations]]
 id = \"zendesk-hand-written\"
 method = \"GET\"
+direction = \"read\"
 path = \"/api/v2/users/me\"
 risk = \"low\"
 idempotency = \"idempotent\"
 
 [[patch.operations]]
 select = \"listTickets\"
+direction = \"read\"
 rename = \"zendesk-ticket-list\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -204,6 +207,7 @@ fn plain_load_refuses_a_spec_backed_file_rather_than_returning_a_skeleton() {
         "
 [[patch.operations]]
 select = \"showTicket\"
+direction = \"read\"
 rename = \"zendesk-ticket-show\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -245,6 +249,7 @@ base_url = \"https://acme.zendesk.com\"
 [[operations]]
 id = \"zendesk-hand-written\"
 method = \"GET\"
+direction = \"read\"
 path = \"/api/v2/users/me\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -262,6 +267,7 @@ fn a_select_that_names_no_operation_is_refused_and_suggests_the_near_misses() {
         "
 [[patch.operations]]
 select = \"showticket\"
+direction = \"read\"
 rename = \"zendesk-ticket-show\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -287,6 +293,7 @@ fn an_operation_the_ingest_skipped_cannot_be_selected() {
         "
 [[patch.operations]]
 select = \"fixtureMultipartUpload\"
+direction = \"write\"
 rename = \"zendesk-upload\"
 risk = \"medium\"
 idempotency = \"non_idempotent\"
@@ -303,15 +310,15 @@ idempotency = \"non_idempotent\"
 fn a_selection_that_states_no_risk_or_idempotency_is_refused() {
     for (patch, expected) in [
         (
-            "select = \"deleteTicket\"\nrename = \"zendesk-ticket-delete\"\nidempotency = \"non_idempotent\"",
+            "select = \"deleteTicket\"\ndirection = \"write\"\nrename = \"zendesk-ticket-delete\"\nidempotency = \"non_idempotent\"",
             "`risk`",
         ),
         (
-            "select = \"deleteTicket\"\nrename = \"zendesk-ticket-delete\"\nrisk = \"destructive\"",
+            "select = \"deleteTicket\"\ndirection = \"write\"\nrename = \"zendesk-ticket-delete\"\nrisk = \"destructive\"",
             "`idempotency`",
         ),
         (
-            "select = \"deleteTicket\"\nrename = \"zendesk-ticket-delete\"",
+            "select = \"deleteTicket\"\ndirection = \"write\"\nrename = \"zendesk-ticket-delete\"",
             "`risk` and no `idempotency`",
         ),
     ] {
@@ -334,6 +341,7 @@ fn a_selection_that_states_no_rename_is_refused_rather_than_taking_the_operation
         "
 [[patch.operations]]
 select = \"listTickets\"
+direction = \"read\"
 risk = \"low\"
 idempotency = \"idempotent\"
 ",
@@ -351,6 +359,7 @@ fn a_parameter_correction_that_matches_nothing_is_refused() {
         "
 [[patch.operations]]
 select = \"listTickets\"
+direction = \"read\"
 rename = \"zendesk-ticket-list\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -373,6 +382,7 @@ fn a_parameter_correction_that_matches_is_applied() {
         "
 [[patch.operations]]
 select = \"listTickets\"
+direction = \"read\"
 rename = \"zendesk-ticket-list\"
 description = \"List tickets, newest first.\"
 risk = \"low\"
@@ -413,6 +423,7 @@ fn a_selected_operation_is_held_to_every_rule_an_inline_one_is() {
         "
 [[patch.operations]]
 select = \"showTicket\"
+direction = \"read\"
 rename = \"zendesk-ticket-show\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -441,6 +452,7 @@ base_url = \"https://acme.zendesk.com\"
 [[operations]]
 id = \"zendesk-hand-written\"
 method = \"GET\"
+direction = \"read\"
 path = \"/api/v2/users/me\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -497,6 +509,7 @@ fn the_pinned_document_is_compiled_even_when_a_later_one_sits_beside_it() {
             "
 [[patch.operations]]
 select = \"showTicket\"
+direction = \"read\"
 rename = \"zendesk-ticket-show\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -603,12 +616,14 @@ fn loading_a_spec_backed_provider_is_deterministic() {
         "
 [[patch.operations]]
 select = \"createTicket\"
+direction = \"write\"
 rename = \"zendesk-ticket-create\"
 risk = \"medium\"
 idempotency = \"non_idempotent\"
 
 [[patch.operations]]
 select = \"showTicket\"
+direction = \"read\"
 rename = \"zendesk-ticket-show\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -745,6 +760,7 @@ const BOTH_GET_USER: &str = r#"
 [[patch.operations]]
 service = "manager"
 select = "getUser"
+direction = "read"
 rename = "acme-manager-user-get"
 risk = "low"
 idempotency = "idempotent"
@@ -752,6 +768,7 @@ idempotency = "idempotent"
 [[patch.operations]]
 service = "user"
 select = "getUser"
+direction = "read"
 rename = "acme-user-me-get"
 risk = "low"
 idempotency = "idempotent"
@@ -797,6 +814,7 @@ fn a_single_spec_table_and_a_one_entry_spec_array_compile_identically() {
         "
 [[patch.operations]]
 select = \"showTicket\"
+direction = \"read\"
 rename = \"zendesk-ticket-show\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -871,6 +889,7 @@ fn a_patch_that_names_no_service_is_refused_when_several_documents_are_declared(
         "
 [[patch.operations]]
 select = \"getUser\"
+direction = \"read\"
 rename = \"acme-user-get\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -893,6 +912,7 @@ fn a_patch_naming_a_service_no_document_declares_is_refused() {
 [[patch.operations]]
 service = \"task-automation\"
 select = \"getUser\"
+direction = \"read\"
 rename = \"acme-user-get\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -911,6 +931,7 @@ fn selecting_one_operation_twice_from_one_document_is_still_refused() {
 [[patch.operations]]
 service = \"manager\"
 select = \"getUser\"
+direction = \"read\"
 rename = \"acme-manager-user-get\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -918,6 +939,7 @@ idempotency = \"idempotent\"
 [[patch.operations]]
 service = \"manager\"
 select = \"getUser\"
+direction = \"read\"
 rename = \"acme-manager-user-fetch\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -973,6 +995,7 @@ fn one_documents_security_does_not_overwrite_the_others() {
 [[patch.operations]]
 service = \"manager\"
 select = \"getUser\"
+direction = \"read\"
 rename = \"acme-manager-user-get\"
 risk = \"low\"
 idempotency = \"idempotent\"
@@ -980,6 +1003,7 @@ idempotency = \"idempotent\"
 [[patch.operations]]
 service = \"user\"
 select = \"getUser\"
+direction = \"read\"
 rename = \"acme-user-me-get\"
 risk = \"low\"
 idempotency = \"idempotent\"

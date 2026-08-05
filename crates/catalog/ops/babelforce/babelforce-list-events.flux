@@ -2,7 +2,7 @@ op babelforce-list-events(type: String) -> Any
   description "List available events"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

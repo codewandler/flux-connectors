@@ -149,14 +149,14 @@ version. Unparseable
 or non-canonically-formatted output is therefore structurally impossible. Illustrative output:
 
 > **Corrected by C-8:** the op name is kebab, not dotted — flux's `decl_name` grammar rejects dots
-> in a *declaration* — and the formatter emits `effects ["network"]` with quotes.
+> in a *declaration* — and the formatter emits quoted effects in canonical direction-first order.
 
 ```flux
 op zendesk-ticket-show(ticket_id: Number) -> Any
   description "Show one Zendesk ticket by id"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   $url = fmt("{base}/api/v2/tickets/{ticket_id}.json")

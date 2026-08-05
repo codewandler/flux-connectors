@@ -12,6 +12,13 @@ module = "cloudflare.flux"
 operations = ["cloudflare-zone-list", "cloudflare-dns-record-list", "cloudflare-dns-record-create", "cloudflare-dns-record-delete", "cloudflare-cache-purge"]
 verify = "cloudflare-zone-list"
 
+[operation_directions]
+cloudflare-cache-purge = "write"
+cloudflare-dns-record-create = "write"
+cloudflare-dns-record-delete = "write"
+cloudflare-dns-record-list = "read"
+cloudflare-zone-list = "read"
+
 [operation_semantic_effects]
 cloudflare-cache-purge = []
 cloudflare-dns-record-create = []

@@ -2,7 +2,7 @@ op newrelic-deployment-create(application_id: String, revision: String, changelo
   description "Record a deployment marker against an application, timestamped now. The marker appears on every chart for that application and is visible to everyone on the account; this connector cannot remove one once recorded. Calling this twice records two deployments"
   risk "medium"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose true
 
   base = "https://{host}/v2"

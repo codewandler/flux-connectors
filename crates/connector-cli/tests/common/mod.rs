@@ -47,6 +47,7 @@ description = "A hand-authored fixture connector."
 [[operations]]
 id = "{id}-thing-get"
 method = "GET"
+direction = "read"
 path = "/v1/things/{{thing_id}}"
 description = "Fetch one thing."
 risk = "low"

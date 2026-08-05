@@ -2,7 +2,7 @@ op babelforce-list-accounts -> Any
   description "Get List of available Accounts"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -123,6 +123,8 @@ export interface Operation {
   provider: string
   /** The service this operation belongs to — exactly one, and every operation has one. */
   service: string
+  /** Connector-authored vendor-state direction; never derived from the HTTP method. */
+  direction: 'read' | 'write'
   description: string
   risk: string
   idempotency: string

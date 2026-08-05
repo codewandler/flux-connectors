@@ -2,7 +2,7 @@ op zendesk-incremental-organization-list(start_time: Number, per_page: Number) -
   description "Incrementally export organizations updated at or after a required Unix start time with an optional integer page size"
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://{subdomain}.zendesk.com"

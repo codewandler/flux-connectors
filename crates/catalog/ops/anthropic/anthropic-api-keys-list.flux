@@ -2,7 +2,7 @@ op anthropic-api-keys-list -> Any
   description "List the organization's API keys, with each key's name, status and a redacted hint — never the key itself. Unpaginated and unfiltered. A non-2xx response is returned as data, not a failure: the vendor's error message is at `/error/message`, its error code at `/error/type` in the response body."
   risk "low"
   idempotency "idempotent"
-  effects ["network"]
+  effects ["read", "network"]
   expose true
 
   base = "https://api.anthropic.com"

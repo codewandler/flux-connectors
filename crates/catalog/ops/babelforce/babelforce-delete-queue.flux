@@ -2,7 +2,7 @@ op babelforce-delete-queue(id: String) -> Any
   description "Delete a queue"
   risk "destructive"
   idempotency "non_idempotent"
-  effects ["network"]
+  effects ["write", "network"]
   expose false
 
   base = "https://services.babelforce.com"

@@ -457,40 +457,36 @@ pub enum Error {
         secret: String,
     },
 
-    /// A request-changing method declared the risk of a read.
+    /// An authored write declared the risk of a read.
     ///
     /// flux's approval gate reads `risk`, and `low` is the tier that passes without a human. A
-    /// `POST`/`PUT`/`PATCH`/`DELETE` changes state the vendor owns, which is not something this
+    /// A connector-authored `write` changes state the vendor owns, which is not something this
     /// emitter can certify as unsurprising — [`connector_spec::Risk::Low`] is documented as "reads,
     /// and writes that cannot surprise anyone". Refused rather than quietly raised: a silent
     /// correction would hide the authoring mistake that produced it, and the IR omits `Default` on
-    /// both fields precisely so neither is decided by silence.
+    /// all three fields precisely so none is decided by silence or HTTP method.
     #[error(
-        "operation `{operation}`: a {method} changes state the vendor owns and may not declare \
+        "operation `{operation}`: a {direction} changes state the vendor owns and may not declare \
          `risk = \"low\"` — flux's approval gate waves `low` through without a human. Declare the \
          risk this write actually carries"
     )]
     WriteDeclaredLowRisk {
         /// The operation id.
         operation: String,
-        /// The HTTP method, as `http.request` spells it.
-        method: &'static str,
+        /// The connector-authored operation direction.
+        direction: &'static str,
     },
 
-    /// A `POST` or `PATCH` declared itself idempotent.
+    /// An authored write declared itself idempotent.
     ///
-    /// Neither method is idempotent under RFC 9110 §9.2.2, and `idempotency` is what tells flux
-    /// whether wrapping the call in a `retry` is sound — the field's own IR documentation puts it
-    /// as "guessing is how a retry turns one charge into three". `PUT` and `DELETE` *are* idempotent
-    /// by RFC and are left alone.
-    ///
-    /// **This refusal is unconditional and C-186 did not weaken it**, though its first landing did.
+    /// HTTP replay semantics do not answer whether Flux may reuse a cached result instead of
+    /// executing a vendor mutation. **This refusal is unconditional.**
     /// The escape for a write that really is replay-safe is `idempotency = "conditional"` plus a
     /// stated `repeatable_because`, which is the value `flux_spec::coherence` reserves for exactly
     /// this: `Idempotent` licenses flux's op cache to serve a stored result *instead of executing*,
     /// which is a stronger claim than "repeating is safe" and not one a cache purge can make.
     #[error(
-        "operation `{operation}`: a {method} is not an idempotent method (RFC 9110 §9.2.2) and may \
+        "operation `{operation}`: a {direction} may \
          not declare `idempotency = \"idempotent\"` — flux would treat a retry around it as safe, \
          and its op cache would be licensed to serve a stored result instead of running the call at \
          all. If repeating this endpoint really is safe, declare `idempotency = \"conditional\"` \
@@ -499,8 +495,8 @@ pub enum Error {
     WriteDeclaredIdempotent {
         /// The operation id.
         operation: String,
-        /// The HTTP method, as `http.request` spells it.
-        method: &'static str,
+        /// The connector-authored operation direction.
+        direction: &'static str,
     },
 
     /// A mutating operation declared `conditional` without stating the condition.
@@ -511,7 +507,7 @@ pub enum Error {
     /// condition in no field and no artifact. A host read that some condition existed and learned
     /// nothing about what it was.
     #[error(
-        "operation `{operation}`: a {method} declares `idempotency = \"conditional\"` but states no \
+        "operation `{operation}`: a {direction} declares `idempotency = \"conditional\"` but states no \
          `repeatable_because`. `conditional` is the claim that repeating is safe *under a stated \
          condition*; say what makes it safe — what the vendor does on a repeat — so a reviewer and a \
          host can both read it"
@@ -519,8 +515,8 @@ pub enum Error {
     ConditionalWithoutItsCondition {
         /// The operation id.
         operation: String,
-        /// The HTTP method, as `http.request` spells it.
-        method: &'static str,
+        /// The connector-authored operation direction.
+        direction: &'static str,
     },
 
     /// `repeatable_because` was stated on an operation that changes nothing.
@@ -530,15 +526,15 @@ pub enum Error {
     /// operations that never needed it until no reviewer read any of them, which is how an escape
     /// hatch quietly becomes the norm.
     #[error(
-        "operation `{operation}`: `repeatable_because` is stated on a {method}, which changes \
+        "operation `{operation}`: `repeatable_because` is stated on a {direction}, which changes \
          nothing and so has no repeat hazard to put a condition on. The field exists only to state \
          the condition behind `idempotency = \"conditional\"` on a write; remove it"
     )]
     RepeatabilityConditionUnneeded {
         /// The operation id.
         operation: String,
-        /// The HTTP method, as `http.request` spells it.
-        method: &'static str,
+        /// The connector-authored operation direction.
+        direction: &'static str,
     },
 
     /// `repeatable_because` was stated beside an `idempotency` that is not `conditional`.
