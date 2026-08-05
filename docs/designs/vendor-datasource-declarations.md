@@ -82,7 +82,9 @@ connector surface reaches no artifact. Decision 0006 rule 6 makes declared reach
 criterion** for this surface: from its first release, `[[datasources]]` reaches
 
 - **M** — the service manifest (`connectors/<provider>[-<service>].connector.toml`),
-- **J** — the public catalogue (`web/public/catalog.json` and the published `v1` data), and
+- **J** — the public catalogue (`web/public/catalog.json` alone — connector-surfaces.md's **J** is
+  exactly that file; `web/public/v1/**` is C-112's flux-core catalogue, not a connector
+  artifact), and
 - **R** — the embedded Rust catalogue (`crates/catalog/src/generated/<provider>.rs`),
 
 and **never F**, the generated `.flux` module. A datasource emits no `op`: the module is what a

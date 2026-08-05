@@ -14,7 +14,7 @@
 
 [vision.md:30](../vision.md) still defines a connector as *"what remains once you stop hand-writing
 the part a machine can derive: **auth + operations + quirks**"*. That sentence was true of an IR with
-three surfaces. `Connector` (`crates/connector-spec/src/ir.rs:760-849`) now has **sixteen fields**,
+three surfaces. `Connector` (`crates/connector-spec/src/ir.rs:1610`) now has **sixteen fields**,
 and the three the vision names are not even the interesting ones any more: `quirks` reaches almost
 nothing, and `auth` reaches neither the module nor the manifest.
 
@@ -56,7 +56,7 @@ a fact of the IR.
 The five surfaces that name something callable or matchable — `operations`, `events`, `channels`,
 `config`, `graphs` — are **members of a service**, and they share **one namespace within it**. This
 is not aspirational; it is enforced. `Connector::member_names_of`
-(`crates/connector-spec/src/ir.rs:1057`) returns all five kinds concatenated precisely so that a
+(`crates/connector-spec/src/ir.rs:1956`) returns all five kinds concatenated precisely so that a
 caller cannot get the rule wrong by checking three lists and forgetting the fourth, and the loader
 refuses a duplicate across kinds.
 
@@ -79,7 +79,7 @@ Artifacts, abbreviated: **F** = `connectors/<provider>[-<service>].flux` · **M*
 | surface | TOML spelling | what it emits | what consumes it | status |
 |---|---|---|---|---|
 | **operations** | `[[operations]]` | **F** one `op` each · **M** ids only · **R** + **J** full rows · **T** one `ToolSpec` each | flux's module loader; the explorer; `connector-pack` | **complete** — the only surface that reaches every artifact |
-| **services** | `[[services]]` | **F**+**M** the *emission unit*: one module and one manifest per service · **J** a `services[]` block | the build's file split; the explorer | **complete**, with one gap: **R** has no service field at all (`crates/catalog/src/lib.rs:264-291`) |
+| **services** | `[[services]]` | **F**+**M** the *emission unit*: one module and one manifest per service · **J** a `services[]` block · **R** a `service` field on every operation row | the build's file split; the explorer; `connector-pack`, keying tenant configuration by service | **complete** — the embedded `Operation` carries `pub service` (`crates/catalog/src/lib.rs:239`), closing the R gap this row once recorded |
 | **auth** | `[[auth]]`, `[[default_auth]]` | **R** + **J** only · applied at execute by `connector-pack` | `connector-pack`; the explorer | **not in F, not in M** — that is [C-10](../stories/C-10-auth-injection-and-manifest.md), still `ready` |
 | **events** | `[[events]]` | **M** minus `schema`/`when` · **J** with both | a host registering subscriptions | **complete**; the omission is deliberate, see below · absent from **R** |
 | **channels** | `[[channels]]` | **M** + **J** · **nothing into F, by design** | a host; the explorer | **declaration complete, no runtime.** The adapter is [C-118](../stories/C-118-connector-channel-adapter.md) |

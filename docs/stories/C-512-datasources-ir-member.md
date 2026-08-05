@@ -60,11 +60,11 @@ independent to retrieve through and nothing hand-written to drift.
       (`crates/connector-spec/src/ir.rs:2207` as of 2026-08-05) and the exhaustive destructuring
       in `HashDomain::of` (`ir.rs:2257`), where the new field is a compile error until classified;
       this story classifies it in.
-- [ ] The same implementation diff corrects the two places that still count the member namespace
+- [ ] The same implementation diff corrects the three places that still count the member namespace
       at three: the `member_names_of` doc comment (`crates/connector-spec/src/ir.rs:1942`–`1946`
-      as of 2026-08-05) and the cross-kind collision error string
-      (`crates/connector-spec/src/provider.rs:4508`–`4512`) must both say **six** member kinds
-      once `[[datasources]]` lands.
+      as of 2026-08-05), the `validate_member_namespace` doc comment
+      (`crates/connector-spec/src/provider.rs:4460`) and the cross-kind collision error string
+      (`provider.rs:4508`–`4512`) must all say **six** member kinds once `[[datasources]]` lands.
 - [ ] The provider-TOML JSON Schema (`crates/connector-spec/schema/provider-toml.schema.json`)
       gains `$defs` entries for the datasource member and its binding/mapping objects, and each
       new object is registered in `accepted_keys()` (`crates/connector-spec/src/provider.rs:6013`

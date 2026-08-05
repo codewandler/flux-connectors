@@ -6,7 +6,7 @@ status: backlog
 design: docs/designs/vendor-datasource-declarations.md
 epic: vendor-datasources
 areas: [connector-cli, catalog, web]
-note: "Decision 0006 rule 6 makes non-empty artifact reach an ENTRY criterion: [[datasources]] reaches M + catalog.json/v1 + the embedded Rust catalogue from its first release, and never the generated .flux module — the plugin-manifest declared-then-dropped failure must not recur"
+note: "Decision 0006 rule 6 makes non-empty artifact reach an ENTRY criterion: [[datasources]] reaches M + catalog.json + the embedded Rust catalogue from its first release, and never the generated .flux module — the plugin-manifest declared-then-dropped failure must not recur"
 ---
 
 # Publish the datasource surface into the manifest, the public catalogue and the embedded catalogue
@@ -23,9 +23,10 @@ so the surface ships observable rather than joining the dead-surface table in
 - [ ] A `[[datasources]]` member is emitted into the service manifest
       (`connectors/<provider>[-<service>].connector.toml`), respecting service selection — a
       manifest never carries a member of a service it does not own.
-- [ ] It is emitted into `web/public/catalog.json` (and the published v1 data where the schema
-      carries members), with the binding, entity and cursor facts a consumer needs to bind it —
-      and no credential material of any kind.
+- [ ] It is emitted into `web/public/catalog.json`, with the binding, entity and cursor facts a
+      consumer needs to bind it — and no credential material of any kind. (`web/public/v1/**` is
+      the flux-core catalogue — [C-112](C-112-publish-flux-core-specifications-in-the-explorer.md)
+      — not a connector artifact, and out of this surface's reach.)
 - [ ] It is emitted into the embedded Rust catalogue (`crates/catalog/src/generated/<provider>.rs`).
 - [ ] **Nothing reaches the generated `.flux` module.** The emitter refuses to dress a datasource
       up as an `op`, exactly as it refuses a pollable event — flux lifts `op` declarations only,
