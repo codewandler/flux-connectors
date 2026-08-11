@@ -23820,13 +23820,26 @@
               "name": null,
               "prefix": "Bearer "
             },
-            "description": "SSO-issued babelforce access token, minted outside flux and supplied through the environment",
+            "description": "babelforce access token. Either supplied through the environment, or obtained by the host running one of the grants below",
             "env": [
               "BABELFORCE_ACCESS_TOKEN"
             ],
             "user_env": [],
             "user_suffix": null,
-            "oauth2": null
+            "oauth2": {
+              "endpoint": "",
+              "authorize_path": "",
+              "token_path": "/oauth/token",
+              "client_id": "",
+              "scopes": [
+                "*"
+              ],
+              "grants": [
+                "password",
+                "refresh_token"
+              ],
+              "redirect": null
+            }
           }
         ],
         "default": [

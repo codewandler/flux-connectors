@@ -504,6 +504,59 @@ pub enum Subject {
     User,
 }
 
+/// **A named weakness in how a credential is obtained** (C-440). Mirrors
+/// `connector_spec::AuthHazard`.
+///
+/// The axis a host refuses on, and it is deliberately a *declared property* rather than a connector
+/// name: an operator who wants no password-grant authentication anywhere says that once, and the
+/// fifty-sixth connector — added next month by somebody who never read their policy — is covered by
+/// the same sentence. A list of names is correct on the day it is written and silently wrong
+/// afterwards.
+///
+/// # This is a *kind*. [`Risk`] is a *level*
+///
+/// Not interchangeable, and the difference is load-bearing because [`Risk`] is **ordered** and a
+/// selector compares against that ordering. A hazard has no position on that ladder: a password
+/// grant that buys a **read-only** token is [`Risk::Low`] *and* hazardous. A fifth rung would be
+/// wrong in one direction or the other — high enough to catch it and every destructive operation
+/// inherits a weakness it does not have; low enough not to and `at_most(Risk::High)` silently
+/// admits password-grant authentication to every rule an operator has already written.
+///
+/// # The absence is not a clean bill of health
+///
+/// `None` on a [`Credential`] means *no weakness is declared*, which is the state every connector
+/// but babelforce is in and which nobody has reviewed. It does not mean *reviewed and found safe*.
+/// A consumer's fail-closed default is written against the presence of a value.
+///
+/// Not `#[non_exhaustive]`, for the reason [`Placement`] is not: a consumer matching exhaustively
+/// *should* be told when the set grows, because a new hazard is a new weakness they have not decided
+/// about — and defaulting it into a catch-all arm is how a deployment admits one it never saw.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AuthHazard {
+    /// The resource owner's own password is presented to **the host** rather than to the
+    /// authorization server — the OAuth 2.0 resource owner password credentials grant.
+    ///
+    /// **RFC 9700 §2.4** says the grant MUST NOT be used: it exposes the resource owner's
+    /// credentials to the client, widens where they can leak beyond the authorization server, and
+    /// cannot carry two-factor authentication. **RFC 6749 §4.3** makes discarding them once a token
+    /// is obtained a MUST for the client, and a host running the grant is that client. **CWE-522**
+    /// is the nearest weakness-catalogue entry. OAuth 2.1 drops the grant entirely.
+    ResourceOwnerSecretShared,
+}
+
+impl AuthHazard {
+    /// The stable published spelling a host's deployment filter matches as an exact word.
+    ///
+    /// Matched exhaustively rather than derived, for the reason [`Subject`] is: the string is
+    /// configuration an operator audits in another repository, and it must not move because a
+    /// derive attribute did.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Self::ResourceOwnerSecretShared => "resource_owner_secret_shared",
+        }
+    }
+}
+
 /// One credential a connector declares: what it is called, where its value is kept, and how it
 /// reaches the wire.
 ///
@@ -531,6 +584,12 @@ pub struct Credential {
     /// Unlike the three fields above, this one has a meaningful *unreviewed* state, and every
     /// connector shipped before C-528 is in it. Read [`Subject::Unstated`] before branching on this.
     pub subject: Subject,
+    /// The declared weakness in **obtaining** this credential, when it has one — see [`AuthHazard`].
+    ///
+    /// `None` means no weakness is declared, not that one was looked for and not found. A host
+    /// refuses a hazardous acquisition unless its deployment explicitly opted into that hazard,
+    /// which is what makes the refusal a property rather than a list of connector names.
+    pub hazard: Option<AuthHazard>,
 }
 
 /// One string pair in a generated declaration (query, header or payload mapping).

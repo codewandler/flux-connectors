@@ -29,6 +29,7 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::BasicJoin { user_env: &["JIRA_USER"], user_suffix: "" },
         place: crate::Placement::Header { name: "Authorization", prefix: "Basic " },
         subject: crate::Subject::Unstated,
+        hazard: None,
     },
 ];
 

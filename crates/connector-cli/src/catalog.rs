@@ -479,6 +479,10 @@ fn render_auth(connector: &Connector) -> Result<String> {
         // see — "nobody checked" and "this is an app token" call for different behaviour — so it is
         // published rather than skipped the way the *manifest* skips it to keep artifacts stable.
         out.push_str(&format!("        subject: {},\n", subject(method.subject)));
+        // The declared weakness in obtaining this credential (C-440). `None` is emitted rather than
+        // omitted for the same reason `subject` is: a host reads the absence as *nothing declared*
+        // and refuses on the presence, so both answers have to be visible in the table.
+        out.push_str(&format!("        hazard: {},\n", hazard(method.hazard)));
         out.push_str("    },\n");
     }
     out.push_str("];\n\n");
@@ -797,6 +801,20 @@ fn subject(subject: connector_spec::Subject) -> &'static str {
         connector_spec::Subject::Unstated => "crate::Subject::Unstated",
         connector_spec::Subject::App => "crate::Subject::App",
         connector_spec::Subject::User => "crate::Subject::User",
+    }
+}
+
+/// The declared weakness in obtaining the credential (C-440).
+///
+/// Exhaustive, for the reason [`subject`] is, and here the wrong answer is worse: a catch-all arm
+/// would answer a hazard this emitter had never heard of with a plausible neighbour, and a
+/// deployment that allowed the neighbour would then admit an acquisition nobody decided about.
+fn hazard(hazard: Option<connector_spec::AuthHazard>) -> &'static str {
+    match hazard {
+        None => "None",
+        Some(connector_spec::AuthHazard::ResourceOwnerSecretShared) => {
+            "Some(crate::AuthHazard::ResourceOwnerSecretShared)"
+        }
     }
 }
 

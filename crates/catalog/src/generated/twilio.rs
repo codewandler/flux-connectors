@@ -29,6 +29,7 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::BasicJoin { user_env: &["TWILIO_ACCOUNT_SID"], user_suffix: "" },
         place: crate::Placement::Header { name: "Authorization", prefix: "Basic " },
         subject: crate::Subject::Unstated,
+        hazard: None,
     },
     crate::Credential {
         name: "twilio.webhook_signing_secret",
@@ -36,6 +37,7 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Inbound,
         subject: crate::Subject::Unstated,
+        hazard: None,
     },
 ];
 

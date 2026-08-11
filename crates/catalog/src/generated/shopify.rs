@@ -29,6 +29,7 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "X-Shopify-Access-Token", prefix: "" },
         subject: crate::Subject::Unstated,
+        hazard: None,
     },
 ];
 

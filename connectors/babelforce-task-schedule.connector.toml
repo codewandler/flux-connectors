@@ -28,7 +28,44 @@ babelforce-submit-task-schedule = []
 name = "babelforce.access_token"
 scheme = "bearer"
 env = ["BABELFORCE_ACCESS_TOKEN"]
-description = "SSO-issued babelforce access token, minted outside flux and supplied through the environment"
+description = "babelforce access token. Either supplied through the environment, or obtained by the host running one of the grants below"
+subject = "user"
+hazard = "resource_owner_secret_shared"
+
+[auth.oauth2]
+token_path = "/oauth/token"
+scopes = ["*"]
+grants = ["password", "refresh_token"]
+
+[[auth.quirks.token_endpoint]]
+grant = "client_credentials"
+behaviour = "`expires_in` is read from the request and defaults to `-1`, which the service reads as *never expires*. An unattended caller that omits it therefore gets a non-expiring token rather than a short-lived one."
+attribution = "babelforce's own `AuthController.token()`, read against `specs/babelforce/auth-2026-06-25.openapi.yaml`, which declares no request-side `expires_in`. Recorded from the owner's measurement in flux-exchange's credential-acquisition epic (C-440)."
+measured = "2026-08-02"
+
+[[auth.quirks.token_endpoint]]
+grant = "password"
+behaviour = "`expires_in` is read from the request when present, and the service default applies when it is absent."
+attribution = "babelforce's own `AuthController.token()`, read against `specs/babelforce/auth-2026-06-25.openapi.yaml`, which declares no request-side `expires_in`. Recorded from the owner's measurement in flux-exchange's credential-acquisition epic (C-440)."
+measured = "2026-08-02"
+
+[[auth.quirks.token_endpoint]]
+grant = "refresh_token"
+behaviour = "`expires_in` is read from the request and passed into the refresh. Separately, `account_id` on the request **switches the account** the new token belongs to — nothing in RFC 6749 makes a refresh change whose token it is, so a host that rotates a credential without pinning `account_id` can silently move it to another account."
+attribution = "babelforce's own `AuthController.token()`, read against `specs/babelforce/auth-2026-06-25.openapi.yaml`, which declares neither a request-side `expires_in` nor `account_id`. Recorded from the owner's measurement in flux-exchange's credential-acquisition epic (C-440)."
+measured = "2026-08-02"
+
+[[auth.quirks.token_endpoint]]
+grant = "link"
+behaviour = "A fifth `grant_type` that no vendored document declares at all. `expires_in` is read from the request and then clamped to **at most 60 seconds**, so a lifetime asked for here is a ceiling rather than a request."
+attribution = "babelforce's own `AuthController.token()`, read against `specs/babelforce/auth-2026-06-25.openapi.yaml:211-220`, whose `grant_type` enum names four grants and not this one. Recorded from the owner's measurement in flux-exchange's credential-acquisition epic (C-440)."
+measured = "2026-08-02"
+
+[[auth.quirks.token_endpoint]]
+grant = "authorization_code"
+behaviour = "`expires_in` is **not read**. Only `access_type` is, defaulting to `offline`. This row is a measurement and not a gap: the one grant that ignores the field is the fact a reader most needs, because it is the one where asking for a lifetime silently does nothing."
+attribution = "babelforce's own `AuthController.token()`, read against `specs/babelforce/auth-2026-06-25.openapi.yaml`, which declares no request-side `expires_in`. Recorded from the owner's measurement in flux-exchange's credential-acquisition epic (C-440)."
+measured = "2026-08-02"
 
 [[default_auth]]
 credentials = ["babelforce.access_token"]

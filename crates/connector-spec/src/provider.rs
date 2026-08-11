@@ -59,10 +59,10 @@ use crate::inbound::{
 };
 use crate::lock::sha256_hex;
 use crate::{
-    response_location_exists, AuthMethod, AuthRequirement, AuthScheme, Connector, HttpMethod,
-    Idempotency, JsonSchema, Operation, OperationDirection, OperationSpecSource, Param, ParamSet,
-    Provenance, Quirks, Risk, Role, Runtime, SemanticEffect, Service, Tag, DEFAULT_SERVICE,
-    MIN_REPEATABILITY_CONDITION,
+    response_location_exists, AuthHazard, AuthMethod, AuthRequirement, AuthScheme, Connector,
+    HttpMethod, Idempotency, JsonSchema, OAuthGrant, Operation, OperationDirection,
+    OperationSpecSource, Param, ParamSet, Provenance, Quirks, Risk, Role, Runtime, SemanticEffect,
+    Service, Tag, DEFAULT_SERVICE, MIN_REPEATABILITY_CONDITION,
 };
 
 /// The documented JSON Schema for `providers/<name>.toml`.
@@ -5120,6 +5120,128 @@ fn validate_one_credential_acquisition(
     }
 }
 
+/// **A grant that carries a declared weakness must declare it** (C-440).
+///
+/// The closed [`AuthHazard`] vocabulary is only worth having if a connector cannot opt out of it by
+/// silence. A host's deployment filter refuses on the *presence* of a hazard, so a connector that
+/// allows the resource-owner password grant and declares no hazard is admitted by the very
+/// deployment that set out to refuse exactly this — and the omission is one line nobody wrote rather
+/// than anything a reviewer sees. `AGENTS.md` puts it generally: a marking that reads as a safety
+/// decision while recording only that the question was never asked is worse than no marking at all.
+///
+/// The rule runs one way. A hazard on a credential whose grants do not include `password` is not
+/// refused here: the vocabulary is about how a credential is *obtained*, and a future hazard need
+/// not be an OAuth grant at all.
+fn validate_one_credential_hazard(method: &AuthMethod, problems: &mut Vec<String>) {
+    let Some(spec) = &method.oauth2 else {
+        return;
+    };
+    if !spec.grants.contains(&OAuthGrant::Password) || method.hazard.is_some() {
+        return;
+    }
+    problems.push(format!(
+        "credential {:?} allows the `password` grant and declares no `hazard`. The resource owner's \
+         own password reaching this host is a named weakness — RFC 9700 §2.4 says the grant MUST \
+         NOT be used, and OAuth 2.1 drops it — and a host refuses it by declared property rather \
+         than by connector name, so an undeclared one is admitted by the deployment that set out to \
+         refuse it. Declare `hazard = {:?}` beside the grant, or remove `password` from `grants`",
+        method.name,
+        AuthHazard::ResourceOwnerSecretShared.word()
+    ));
+}
+
+/// **Every auth quirk names a grant, says what was measured, and says who measured it when**
+/// (C-440).
+///
+/// A quirk is asserted against a vendor's implementation and contradicted by that vendor's own
+/// document, so the two provenance fields are what separate it from a guess that aged. They are
+/// checked rather than trusted because the cost of an unattributed one is already on the record:
+/// `providers/babelforce.toml` carries an open question to a vendor's API owners that nobody can now
+/// answer, because whoever raised it did not write down what they had read.
+fn validate_one_credential_quirks(method: &AuthMethod, problems: &mut Vec<String>) {
+    let name = method.name.as_str();
+    if method.quirks.is_empty() {
+        return;
+    }
+
+    // A token endpoint the connector never declared is one nothing will ever read — the same rule
+    // an `oauth.redirect_uri` binding already carries.
+    if method.oauth2.is_none() {
+        problems.push(format!(
+            "credential {name:?} declares a `quirks.token_endpoint` measurement and no \
+             `[auth.oauth2]` block. A token-endpoint quirk describes an endpoint the host reaches to \
+             run a grant, and a credential declaring no grant has no such endpoint, so nothing would \
+             ever read it"
+        ));
+    }
+
+    let mut seen: Vec<&str> = Vec::new();
+    for quirk in &method.quirks.token_endpoint {
+        let grant = quirk.grant.trim();
+        if grant.is_empty() {
+            problems.push(format!(
+                "credential {name:?} declares a `quirks.token_endpoint` measurement with an empty \
+                 `grant`. The vendor's own `grant_type` word is what says which of the endpoint's \
+                 behaviours was measured; one endpoint answers differently per grant, which is the \
+                 whole reason these are recorded one at a time"
+            ));
+        } else if seen.contains(&grant) {
+            problems.push(format!(
+                "credential {name:?} declares two `quirks.token_endpoint` measurements for grant \
+                 {grant:?}. That is two answers to one question, and nothing downstream could say \
+                 which was measured last — record one, and supersede it in place when the vendor \
+                 changes"
+            ));
+        }
+        seen.push(grant);
+
+        for (field, value) in [
+            ("behaviour", quirk.behaviour.as_str()),
+            ("attribution", quirk.attribution.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                problems.push(format!(
+                    "credential {name:?}'s `quirks.token_endpoint` measurement for grant \
+                     {grant:?} declares an empty `{field}`. A quirk contradicts the vendor's own \
+                     document, so a reader a year from now needs to know what was measured and \
+                     against what — an unattributed one is indistinguishable from a guess"
+                ));
+            }
+        }
+
+        if !is_iso_date(&quirk.measured) {
+            problems.push(format!(
+                "credential {name:?}'s `quirks.token_endpoint` measurement for grant {grant:?} \
+                 declares `measured = {:?}`, which is not a date. It must be `YYYY-MM-DD`: a quirk \
+                 is a timestamped claim about a vendor's running implementation, and \"recently\" \
+                 does not let a reader decide whether it predates the release they are debugging",
+                quirk.measured
+            ));
+        }
+    }
+}
+
+/// Whether `value` is a calendar date spelled `YYYY-MM-DD`.
+///
+/// Deliberately a shape-and-range check rather than a date library: the question is whether an
+/// author wrote a date at all, and a leap-year rule would be a dependency bought to reject
+/// `2026-02-30` in a provenance field no arithmetic is ever done on.
+fn is_iso_date(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
+        return false;
+    }
+    if !bytes
+        .iter()
+        .enumerate()
+        .all(|(index, byte)| matches!(index, 4 | 7) || byte.is_ascii_digit())
+    {
+        return false;
+    }
+    let number = |range: std::ops::Range<usize>| value[range].parse::<u32>().unwrap_or(0);
+    (1..=12).contains(&number(5..7)) && (1..=31).contains(&number(8..10))
+}
+
 /// Checks the connector's own credential declarations.
 fn validate_credentials(connector: &Connector, problems: &mut Vec<String>) {
     let mut seen: Vec<&str> = Vec::new();
@@ -5170,6 +5292,8 @@ fn validate_credentials(connector: &Connector, problems: &mut Vec<String>) {
         }
 
         validate_one_credential_acquisition(connector, method, problems);
+        validate_one_credential_hazard(method, problems);
+        validate_one_credential_quirks(method, problems);
         for key in method.env.iter().chain(&method.user_env) {
             if key.trim().is_empty() {
                 problems.push(format!("credential {name:?} lists an empty env-var key"));
@@ -6141,6 +6265,8 @@ pub fn accepted_keys() -> Vec<(&'static str, Vec<String>)> {
         ("authMethod", probe::<AuthMethod>()),
         ("oauth2", probe::<crate::OAuth2Spec>()),
         ("oauthRedirect", probe::<crate::OAuthRedirect>()),
+        ("authQuirks", probe::<crate::AuthQuirks>()),
+        ("tokenEndpointQuirk", probe::<crate::TokenEndpointQuirk>()),
         ("authRequirement", probe::<AuthRequirement>()),
         ("operation", probe::<Operation>()),
         ("producedCredential", probe::<crate::ProducedCredential>()),

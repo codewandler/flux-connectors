@@ -29,6 +29,7 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
         subject: crate::Subject::User,
+        hazard: None,
     },
     crate::Credential {
         name: "gitlab.oauth_token",
@@ -36,6 +37,7 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::OAuth2(&crate::OAuth2 { endpoint: "login", authorize_path: "/oauth/authorize", token_path: "/oauth/token", client_id: "", scopes: &["read_api", "read_user", "read_repository"], grants: &[crate::OAuthGrant::AuthorizationCode, crate::OAuthGrant::RefreshToken], redirect: None }),
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
         subject: crate::Subject::User,
+        hazard: None,
     },
 ];
 

@@ -885,6 +885,24 @@ These failures are recorded decisions. Do not “fix” one without reading its 
   cannot ask what a service claims to do or page a list for connectors that state those facts in
   provider TOML. Do not close this by widening the manifest ad hoc; the surface-to-artifact mapping is decided in
   [docs/designs/connector-surfaces.md](docs/designs/connector-surfaces.md).
+
+  **`quirks` gained a third scope in C-440 and it does not belong in that table**, which is the
+  point of recording it here rather than adding a fifth row. `Quirks` hangs off an *operation*, and
+  an authentication endpoint is never one, so a token endpoint's measured departures had nowhere to
+  live until `[[auth]]` could hold them. Re-measured 2026-08-11:
+
+  | surface | declared today | where it stops |
+  |---|---|---|
+  | `[[auth]] quirks.token_endpoint` | 5 declarations on 1 provider (`grep -c '^\[\[auth.quirks.token_endpoint\]\]' providers/*.toml` → `providers/babelforce.toml:5`) | the **connector manifest**, which carries all 5 on each of babelforce's four; no consumer reads them |
+
+  It reaches an artifact because `connectors/*.connector.toml` serializes the whole `[[auth]]`
+  block, so a new field there is published without anybody widening a manifest — the opposite
+  failure mode from the four above, and worth knowing before adding one. It reaches **neither**
+  whole-catalogue artifact: `web/public/catalog.json` and `crates/catalog/src/generated/` both
+  enumerate their fields, and neither lists it (`grep -c token_endpoint web/public/catalog.json` →
+  `0`). The sibling declaration C-440 added, `[[auth]] hazard`, is not in this list at all — it
+  reaches the manifest *and* `catalog::Credential`, and flux-exchange's
+  `FLUX_EXCHANGE_ALLOW_AUTH_HAZARDS` is the consumer.
 - **Freshdesk declares no credential.** Its API key occupies the Basic username position, which the
   current model treats as non-secret config. Emitting it would bypass secret gating and redaction;
   the deliberate result is a fail-closed 401.

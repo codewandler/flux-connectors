@@ -116,7 +116,8 @@ pub use connector_address::{
 };
 
 pub use auth::{
-    AuthMethod, AuthRequirement, AuthScheme, OAuth2Spec, OAuthGrant, OAuthRedirect, Subject,
+    AuthHazard, AuthMethod, AuthQuirks, AuthRequirement, AuthScheme, OAuth2Spec, OAuthGrant,
+    OAuthRedirect, Subject, TokenEndpointQuirk,
 };
 pub use config::{Approval, Binding, Choice, ConfigField, Format, Level, Pin, Position};
 pub use credential::{CredentialRef, InstanceId, Layout, TenantInstances, TenantLayout};

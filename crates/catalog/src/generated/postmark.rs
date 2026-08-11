@@ -29,6 +29,7 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "X-Postmark-Server-Token", prefix: "" },
         subject: crate::Subject::Unstated,
+        hazard: None,
     },
 ];
 

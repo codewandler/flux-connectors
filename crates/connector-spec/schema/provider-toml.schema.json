@@ -1092,6 +1092,17 @@
             "user"
           ],
           "description": "Whose authority this credential carries when it is used — the \"on behalf of\" axis. `app` acts as the integration (Slack's `xoxb-` bot token, a GitHub App installation token); `user` acts as the person who granted it (Slack's `xoxp-` user token, an Atlassian 3LO token, a personal access token). Defaults to `unstated`, which means NOBODY HAS REVIEWED THIS rather than `app`: a consumer needing the distinction refuses on it, because assuming `app` over-grants and assuming `user` silently fails."
+        },
+        "hazard": {
+          "type": "string",
+          "enum": [
+            "resource_owner_secret_shared"
+          ],
+          "description": "A named weakness in HOW this credential is obtained, so a host refuses it by declared property rather than by connector name. A CLOSED set: an unrecognised spelling is refused at the loader, because a free-form string makes the consuming filter a string match, and a near-miss spelling then reads as `no hazard declared` and is admitted by the very deployment that refused the thing it names. `resource_owner_secret_shared` is the OAuth 2.0 resource owner password credentials grant — RFC 9700 §2.4 says it MUST NOT be used, RFC 6749 §4.3 makes discarding the password a MUST for the client, CWE-522 is the nearest weakness entry, and OAuth 2.1 drops the grant. A hazard is a KIND, not a level: it does not belong on `risk`, which is an ordered damage claim, because a password grant that buys a read-only token is low risk AND hazardous. Declaring the `password` grant without a hazard is refused."
+        },
+        "quirks": {
+          "$ref": "#/$defs/authQuirks",
+          "description": "What this credential's authentication surface does that its own document does not say."
         }
       }
     },
@@ -1184,6 +1195,47 @@
         "redirect": {
           "$ref": "#/$defs/oauthRedirect",
           "description": "The loopback redirect the `authorization_code` login binds."
+        }
+      }
+    },
+
+    "authQuirks": {
+      "type": "object",
+      "title": "Authentication-surface quirks",
+      "description": "Measured departures of a connector's AUTHENTICATION surface from what its own documents declare. The sibling of an operation's `quirks`, one scope up: an authentication endpoint is never a connector operation, so a token endpoint's quirks have nowhere else to live. Declarations, not behaviour — nothing acts on them.",
+      "additionalProperties": false,
+      "properties": {
+        "token_endpoint": {
+          "type": "array",
+          "description": "Measured behaviours of the credential's token endpoint, at most one per vendor `grant_type`. Deliberately prose and not a knob: one vendor's endpoint reads the same undeclared request field differently for every grant — defaulting it to `never expires` on one, clamping it to 60 seconds on another, ignoring it on a third — so a general field would be a promise every other connector was then assumed to keep. Requires an `[auth.oauth2]` block, since a credential declaring no grant has no token endpoint for a quirk to be about.",
+          "items": { "$ref": "#/$defs/tokenEndpointQuirk" }
+        }
+      }
+    },
+
+    "tokenEndpointQuirk": {
+      "type": "object",
+      "title": "One measured token-endpoint behaviour",
+      "description": "Asserted against a vendor's implementation and contradicted by that vendor's own document, which is why the provenance fields are required rather than optional: a reader a year from now has to know which of the two was checked, and when.",
+      "additionalProperties": false,
+      "required": ["grant", "behaviour", "attribution", "measured"],
+      "properties": {
+        "grant": {
+          "type": "string",
+          "description": "The vendor's own `grant_type` word this measurement is about. A free string rather than the `grants` enum, deliberately: an undeclared grant is exactly the kind worth recording, and a closed vocabulary could not name one."
+        },
+        "behaviour": {
+          "type": "string",
+          "description": "What was measured, in prose."
+        },
+        "attribution": {
+          "type": "string",
+          "description": "What was read, and by whom — enough for a reader to repeat the measurement or date it. An unattributed quirk is indistinguishable from a guess that aged."
+        },
+        "measured": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The day the measurement was made, `YYYY-MM-DD`. The loader refuses anything else: \"recently\" does not let a reader decide whether the claim predates the vendor release they are debugging."
         }
       }
     },
