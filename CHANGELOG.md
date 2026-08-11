@@ -9,6 +9,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The published catalogue carries a credential's OAuth2 acquisition** (C-525). `catalog::Acquisition`
+  gains an `OAuth2` variant holding a `&'static catalog::OAuth2`, with `catalog::OAuthGrant` and
+  `catalog::OAuthRedirect` beside it, mirroring `connector_spec::OAuth2Spec` field for field in
+  `&'static` form. The crate keeps zero runtime dependencies. Until now `OAuth2Spec` reached the
+  emitted manifest and `web/public/catalog.json` but had no representation in `crates/catalog` — the
+  one artifact Exchange and autodev link — so an `[auth.oauth2]` declaration would have been a
+  marking no host could read. The loader now also refuses a credential declaring both an
+  `[auth.oauth2]` grant and an operation's `produces_credential`, naming both and carrying the
+  discriminator: an authorize or token endpoint is never a connector operation, so a credential
+  obtained from the vendor's OAuth endpoints declares only the grant. No provider declares the block
+  yet, so every generated artifact is byte-identical and `build`/`diff` still report 1102 artifacts
+  up to date.
+
+  **Breaking for consumers that match `Acquisition` exhaustively** — the same break `Minted` made,
+  and the reason the enum is deliberately not `#[non_exhaustive]`. `connector-pack` treats the new
+  variant as `Static`: the stored value is an access token the host already obtained, and the pack
+  opens no socket, so a grant is not something it could run.
+
+### Added
+
 - **The connector domain is named once, in `docs/concepts.md`** (C-522). Connector, Service,
   Operation, Event Type, Channel Binding and Graph each get one definition and the artifact that
   publishes it, and the terms a *host* adds — Connection, Channel, Event Delivery, Trigger,

@@ -395,6 +395,81 @@ pub enum Acquisition {
         /// A literal appended to the resolved user half before the `user:secret` join.
         user_suffix: &'static str,
     },
+    /// **The host runs an OAuth2 grant and places the resulting access token** (C-525).
+    ///
+    /// Read as a placement instruction this is [`Static`](Self::Static) too — a freshly granted
+    /// access token goes onto the request exactly as a pasted one does. What the variant adds is
+    /// the only thing a host cannot derive from anything else in the catalogue: **which endpoints
+    /// the grant runs against, which grants this credential allows, and what it asks for.**
+    ///
+    /// It is on this axis rather than on [`Credential`] because that is what this axis *is* — how
+    /// stored material becomes the value that is placed — and because [`Minted`](Self::Minted)
+    /// settled the same question the same way: a variant costs nothing until something uses it,
+    /// whereas a field on `Credential` rewrites every generated table for a fact most connectors
+    /// never declare.
+    ///
+    /// **Nothing in this repository performs the grant.** An authorize endpoint is a browser
+    /// redirect and a token endpoint's response body *is* a credential, so neither is a connector
+    /// operation and neither is emitted into a `.flux` module. This variant is the declaration a
+    /// host reads before doing it itself.
+    OAuth2(&'static OAuth2),
+}
+
+/// How a host obtains an OAuth2-backed credential. Mirrors `connector_spec::OAuth2Spec`.
+///
+/// **Carries no secret and has no field one could occupy.** [`client_id`](Self::client_id) is
+/// public by specification (RFC 6749 §2.2); the client *secret* is a `[[config]]` binding the host
+/// resolves from its own store and never appears here, in a provider TOML, or in any generated
+/// artifact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OAuth2 {
+    /// The declared endpoint name whose base URL [`authorize_path`](Self::authorize_path) and
+    /// [`token_path`](Self::token_path) resolve against. Empty means the connector's own base URL.
+    ///
+    /// It is a name rather than a URL because the endpoint's host allow-list is what admits the
+    /// token exchange through the egress gate; a bare URL would name a host nothing had admitted.
+    pub endpoint: &'static str,
+    /// The authorize endpoint path, joined onto the endpoint base URL.
+    pub authorize_path: &'static str,
+    /// The token endpoint path. Every grant and every refresh POSTs here.
+    pub token_path: &'static str,
+    /// The OAuth2 client id. Public by specification — see the type's own documentation.
+    pub client_id: &'static str,
+    /// The scopes the grant requests.
+    pub scopes: &'static [&'static str],
+    /// The grants a host may run for this credential. A grant absent from this list is one the
+    /// connector does not allow, not one the host may try anyway.
+    pub grants: &'static [OAuthGrant],
+    /// The loopback redirect an [`OAuthGrant::AuthorizationCode`] login binds.
+    pub redirect: Option<OAuthRedirect>,
+}
+
+/// One token grant an [`OAuth2`] credential allows. Mirrors `connector_spec::OAuthGrant`.
+///
+/// Closed, for the reason [`Placement`] is: a grant this did not recognise would have to become
+/// *some* grant, and every wrong answer either sends a credential to an endpoint that does not
+/// expect it or runs a flow the connector never allowed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OAuthGrant {
+    /// Browser redirect plus loopback callback, with PKCE.
+    AuthorizationCode,
+    /// The resource-owner password grant. RFC 6749 §4.3.2 makes discarding the password a MUST for
+    /// the client, and a host running this one is that client.
+    Password,
+    /// Exchange a stored refresh token for a fresh access token.
+    RefreshToken,
+    /// The two-legged client-credentials grant, with no user.
+    ClientCredentials,
+}
+
+/// The loopback redirect an `authorization_code` login binds. Mirrors
+/// `connector_spec::OAuthRedirect`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OAuthRedirect {
+    /// The loopback port to bind.
+    pub port: u16,
+    /// The callback path the browser is redirected to.
+    pub path: &'static str,
 }
 
 /// One credential a connector declares: what it is called, where its value is kept, and how it

@@ -5005,6 +5005,52 @@ fn validate_auth_prefix(
     }
 }
 
+/// **One credential, one acquisition** (C-525) — the sibling of
+/// [`validate_one_credential_disposition`], one axis over.
+///
+/// That function refuses two declarations of *where a credential appears in a response*. This one
+/// refuses two declarations of *how a credential is obtained at all*: `[auth.oauth2]` says the host
+/// runs a grant against the vendor's own OAuth endpoints, and an operation's `produces_credential`
+/// naming the same credential says one of this connector's own calls mints it. Both cannot be true,
+/// and the cost of not refusing falls on the emitter — `catalog::Acquisition` has one variant per
+/// credential, so something downstream would have to *choose*, silently, and publish an acquisition
+/// the author never declared.
+///
+/// The refusal carries the discriminator, because it is the one thing neither field's own
+/// documentation supplies: an authorize or token endpoint is **never a connector operation**
+/// (`AGENTS.md` § Authentication contract), so a credential obtained from the vendor's OAuth
+/// endpoints is always the `[auth.oauth2]` case. `produces_credential` is for a credential minted by
+/// an ordinary operation the connector genuinely declares — a session login, a device registration.
+fn validate_one_credential_acquisition(
+    connector: &Connector,
+    method: &AuthMethod,
+    problems: &mut Vec<String>,
+) {
+    if method.oauth2.is_none() {
+        return;
+    }
+    let name = method.name.as_str();
+    for operation in &connector.operations {
+        let Some(produced) = &operation.produces_credential else {
+            continue;
+        };
+        if produced.credential != method.name {
+            continue;
+        }
+        problems.push(format!(
+            "credential {name:?} declares an `[auth.oauth2]` grant, and operation {:?} declares \
+             `produces_credential` naming it. Those state two different acquisitions of one \
+             credential — the host runs a token grant, or this connector's own call mints it — and \
+             exactly one governs. An authorize or token endpoint is never a connector operation, so \
+             a credential obtained from the vendor's OAuth endpoints declares only `[auth.oauth2]` \
+             and the minting operation is removed; `produces_credential` is for a credential minted \
+             by an ordinary operation this connector declares, and such a credential declares no \
+             `[auth.oauth2]` block",
+            operation.id
+        ));
+    }
+}
+
 /// Checks the connector's own credential declarations.
 fn validate_credentials(connector: &Connector, problems: &mut Vec<String>) {
     let mut seen: Vec<&str> = Vec::new();
@@ -5053,6 +5099,8 @@ fn validate_credentials(connector: &Connector, problems: &mut Vec<String>) {
                 "credential {name:?} names no `env` keys, so nothing can resolve it to a value"
             ));
         }
+
+        validate_one_credential_acquisition(connector, method, problems);
         for key in method.env.iter().chain(&method.user_env) {
             if key.trim().is_empty() {
                 problems.push(format!("credential {name:?} lists an empty env-var key"));

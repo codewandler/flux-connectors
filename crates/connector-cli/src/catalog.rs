@@ -739,6 +739,14 @@ fn render_config_choices(connector: &Connector) -> String {
 /// tie-break — and `Minted` wins over the scheme-derived answer because a minted credential's
 /// *placement* is unaffected by it (`Bearer` stays `Bearer`); what changes is only the provenance.
 fn acquisition(connector: &Connector, method: &connector_spec::AuthMethod) -> String {
+    // OAuth2 is answered first, and the loader has already refused the one arrangement where that
+    // ordering could matter: a credential declaring `[auth.oauth2]` *and* named by an operation's
+    // `produces_credential` states two contradictory acquisitions, and is refused rather than
+    // silently resolved here (C-525). So this is a lookup, not a precedence rule doing real work.
+    if let Some(oauth2) = &method.oauth2 {
+        return oauth2_acquisition(oauth2);
+    }
+
     if let Some((operation, produced)) = connector.operations.iter().find_map(|operation| {
         operation
             .produces_credential
@@ -766,6 +774,61 @@ fn acquisition(connector: &Connector, method: &connector_spec::AuthMethod) -> St
         ),
         _ => "crate::Acquisition::Static".to_string(),
     }
+}
+
+/// The OAuth2 acquisition, rendered as a `&'static` the catalogue can hold (C-525).
+///
+/// `&crate::OAuth2 { … }` is a borrow of a temporary, which is legal here for one specific reason:
+/// every field is a constant with no `Drop` and no interior mutability, so const promotion lifts it
+/// to `'static` in the `static AUTH` initializer. A field that ever stopped being const would fail
+/// to compile rather than silently allocate — which is the property that keeps the catalogue
+/// dependency-free.
+///
+/// **Nothing here can carry a value.** `client_id` is public by specification; the scopes, paths and
+/// grants are vendor facts. The client secret is a `[[config]]` binding, resolved by the host from
+/// its own store, and there is no field on `OAuth2Spec` it could travel in.
+fn oauth2_acquisition(spec: &connector_spec::OAuth2Spec) -> String {
+    let scopes = spec
+        .scopes
+        .iter()
+        .map(|scope| string(scope))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let grants = spec
+        .grants
+        .iter()
+        .map(|grant| {
+            // Exhaustive, for the reason `placement` is: a grant mapped to the wrong variant runs
+            // the wrong flow, and a catch-all arm is how a new one gets mapped to a plausible
+            // neighbour instead of failing the build.
+            let variant = match grant {
+                connector_spec::OAuthGrant::AuthorizationCode => "AuthorizationCode",
+                connector_spec::OAuthGrant::Password => "Password",
+                connector_spec::OAuthGrant::RefreshToken => "RefreshToken",
+                connector_spec::OAuthGrant::ClientCredentials => "ClientCredentials",
+            };
+            format!("crate::OAuthGrant::{variant}")
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let redirect = match &spec.redirect {
+        Some(redirect) => format!(
+            "Some(crate::OAuthRedirect {{ port: {}, path: {} }})",
+            redirect.port,
+            string(&redirect.path)
+        ),
+        None => "None".to_string(),
+    };
+
+    format!(
+        "crate::Acquisition::OAuth2(&crate::OAuth2 {{ endpoint: {}, authorize_path: {}, \
+         token_path: {}, client_id: {}, scopes: &[{scopes}], grants: &[{grants}], \
+         redirect: {redirect} }})",
+        string(&spec.endpoint),
+        string(&spec.authorize_path),
+        string(&spec.token_path),
+        string(&spec.client_id),
+    )
 }
 
 /// The placement axis: where the value goes on the request.
@@ -1346,5 +1409,66 @@ mod tests {
             source: String::new(),
         }];
         render(&connector(), &stray).expect_err("a stray rendering must not be rendered");
+    }
+
+    /// An `[auth.oauth2]` credential reaches the **published Rust catalogue** (C-525).
+    ///
+    /// The IR has modelled `OAuth2Spec` since C-90 and the manifest and `catalog.json` both carry
+    /// it, but `crates/catalog` had no representation at all — which is the artifact Exchange and
+    /// autodev link. Every field is asserted rather than a sample: a field silently dropped here is
+    /// a grant a host cannot run, and it would look exactly like a connector that declared nothing.
+    #[test]
+    fn an_oauth2_credential_renders_its_whole_acquisition() {
+        let mut connector = connector();
+        connector.auth[0].oauth2 = Some(connector_spec::OAuth2Spec {
+            endpoint: "login".to_string(),
+            authorize_path: "/oauth/authorize".to_string(),
+            token_path: "/oauth/token".to_string(),
+            client_id: "acme-client".to_string(),
+            scopes: vec!["read:thing".to_string(), "write:thing".to_string()],
+            grants: vec![
+                connector_spec::OAuthGrant::AuthorizationCode,
+                connector_spec::OAuthGrant::RefreshToken,
+            ],
+            redirect: Some(connector_spec::OAuthRedirect {
+                port: 8976,
+                path: "/callback".to_string(),
+            }),
+        });
+
+        let rendered = render_auth(&connector).expect("an oauth2 credential must render");
+
+        assert!(
+            rendered.contains("crate::Acquisition::OAuth2"),
+            "the oauth2 acquisition did not reach the catalogue:\n{rendered}"
+        );
+        for expected in [
+            r#"endpoint: "login""#,
+            r#"authorize_path: "/oauth/authorize""#,
+            r#"token_path: "/oauth/token""#,
+            r#"client_id: "acme-client""#,
+            r#"scopes: &["read:thing", "write:thing"]"#,
+            "grants: &[crate::OAuthGrant::AuthorizationCode, crate::OAuthGrant::RefreshToken]",
+            r#"redirect: Some(crate::OAuthRedirect { port: 8976, path: "/callback" })"#,
+        ] {
+            assert!(
+                rendered.contains(expected),
+                "`{expected}` is missing from the rendered acquisition:\n{rendered}"
+            );
+        }
+    }
+
+    /// A credential with no `[auth.oauth2]` block is untouched — the whole catalogue depends on it.
+    #[test]
+    fn a_plain_credential_is_still_static() {
+        let rendered = render_auth(&connector()).expect("the plain fixture must render");
+        assert!(
+            rendered.contains("crate::Acquisition::Static"),
+            "a plain credential stopped being Static:\n{rendered}"
+        );
+        assert!(
+            !rendered.contains("OAuth2"),
+            "a plain credential gained an oauth2 acquisition:\n{rendered}"
+        );
     }
 }
