@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developer.box.com/guides/authentication/"),
         binds: "credential.box.access_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"access_token\",\"label\":\"Access token\",\"help\":\"Create an app at box.com/developers/console. For a quick connection, generate a Developer Token from the app's Configuration tab — it lasts 60 minutes and is meant for testing. For a token that keeps working, complete the app's OAuth2 authorization flow and supply the resulting access token\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.box.com/guides/authentication/\",\"binds\":\"credential.box.access_token\"}",
     },
 ];

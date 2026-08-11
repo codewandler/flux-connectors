@@ -494,6 +494,12 @@ fn render_config(connector: &Connector) -> Result<String> {
             .map(|binds| string(binds))
             .collect::<Vec<_>>()
             .join(", ");
+        let also_services = field
+            .also_services
+            .iter()
+            .map(|service| string(service))
+            .collect::<Vec<_>>()
+            .join(", ");
         let declaration = serde_json::to_string(field)?;
         out.push_str("    crate::ConfigField {\n");
         out.push_str(&format!("        name: {},\n", string(&field.name)));
@@ -524,6 +530,7 @@ fn render_config(connector: &Connector) -> Result<String> {
         ));
         out.push_str(&format!("        binds: {},\n", string(&field.binds)));
         out.push_str(&format!("        also_binds: &[{also_binds}],\n"));
+        out.push_str(&format!("        also_services: &[{also_services}],\n"));
         out.push_str(&format!(
             "        declaration_json: {},\n",
             string(&declaration)
@@ -1073,6 +1080,7 @@ mod tests {
             docs_url: None,
             binds: "endpoint.tenant".to_string(),
             also_binds: Vec::new(),
+            also_services: Vec::new(),
         });
 
         let rendered = render(&connector, &renderings()).unwrap();

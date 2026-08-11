@@ -55,6 +55,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://docs.stripe.com/keys"),
         binds: "credential.stripe.secret_key",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"secret_key\",\"label\":\"Secret key\",\"help\":\"From the Stripe dashboard under Developers → API keys. **A test key and a live key are different values.** The test key begins `sk_test` and acts only on test data; the live key begins `sk_live` and moves real money out of your account — a refund made with it is a real refund. Check the Test mode toggle in the dashboard before you copy. A restricted key (`rk_live` / `rk_test`) with write access to Charges, PaymentIntents and Refunds and read access to Customers and Balance is safer and is enough for this connector\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://docs.stripe.com/keys\",\"binds\":\"credential.stripe.secret_key\"}",
     },
 ];

@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://vercel.com/docs/rest-api#creating-an-access-token"),
         binds: "credential.vercel.token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"token\",\"label\":\"Access token\",\"help\":\"Create one at vercel.com/account/tokens (personal) or via an Integration's OAuth flow. Scope it to the narrowest team or project you can\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://vercel.com/docs/rest-api#creating-an-access-token\",\"binds\":\"credential.vercel.token\"}",
     },
     crate::ConfigField {
@@ -64,6 +65,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://vercel.com/docs/rest-api/reference/welcome#authentication"),
         binds: "query.teamId",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"team_id\",\"label\":\"Vercel team id\",\"help\":\"The team this connection acts on behalf of. Find it under Team Settings -> General -> Team ID, or in the URL of your team's dashboard. Every call this connector makes is scoped to it; a personal (non-team) account is not supported\",\"example\":\"team_1a2b3c4d5e6f7g8h9i0j\",\"docs_url\":\"https://vercel.com/docs/rest-api/reference/welcome#authentication\",\"binds\":\"query.teamId\"}",
     },
 ];

@@ -16,9 +16,9 @@ queryable Rust catalogue, and a flux Tool pack.
 > this repository is `crates/connectors-api` — `publish = false`, loopback-only, and the thing that has
 > actually sent bytes to a vendor. See [Current limitations](#current-limitations).
 
-The repository currently contains **835 curated connector operations across 55 providers and 66
+The repository currently contains **835 curated connector operations across 55 providers and 67
 services**, plus 53 events and 5 channel bindings. It also publishes 77 Flux-owned core operations, node
-kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **1108
+kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **1110
 committed, reviewable artifacts** without contacting a vendor. Browse them in the
 [catalogue explorer](https://flux.codewandler.org/explorer).
 
@@ -75,7 +75,7 @@ cargo run -p connector-cli -- build
 On a clean checkout, `diff` reports:
 
 ```text
-1108 artifacts up to date (55 providers checked)
+1110 artifacts up to date (55 providers checked)
 ```
 
 Then inspect [`connectors/zendesk.flux`](connectors/zendesk.flux), browse the

@@ -469,11 +469,15 @@ fn no_shipped_provider_has_an_unbound_template_variable() {
             for variable in
                 connector_spec::config::template_variables(connector.base_url_of(service))
             {
+                // The head service, or a sibling sharing the same one address (C-529). GitLab's
+                // API and OAuth surfaces are one deployment, so one approved `{origin}` fills both.
                 assert!(
-                    connector
-                        .config_of(service)
-                        .any(|field| field.binds == format!("endpoint.{variable}")),
-                    "providers/{name}.toml leaves `{{{variable}}}` unbound"
+                    connector.config.iter().any(|field| {
+                        let fills = field.service == service
+                            || field.also_services.iter().any(|extra| extra == service);
+                        fills && field.binds == format!("endpoint.{variable}")
+                    }),
+                    "providers/{name}.toml leaves `{{{variable}}}` unbound for service {service:?}"
                 );
             }
         }

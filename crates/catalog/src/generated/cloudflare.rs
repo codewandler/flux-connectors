@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developers.cloudflare.com/fundamentals/api/get-started/create-token/"),
         binds: "credential.cloudflare.api_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"api_token\",\"label\":\"Cloudflare API token\",\"help\":\"Create one at My Profile -> API Tokens -> Create Token, using the \\\"Edit zone DNS\\\" template or a custom token with Zone:Read, DNS:Edit and Cache Purge permissions on the zones you want this connector to reach. Cloudflare shows the token once\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developers.cloudflare.com/fundamentals/api/get-started/create-token/\",\"binds\":\"credential.cloudflare.api_token\"}",
     },
     crate::ConfigField {
@@ -64,6 +65,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/"),
         binds: "path.zone_id",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"zone_id\",\"label\":\"Cloudflare zone id\",\"help\":\"The zone (domain) this connection manages, as 32 lowercase hex characters. Find it on the zone's Overview page in the Cloudflare dashboard, bottom right under \\\"Zone ID\\\", or by running the connector's \\\"List zones\\\" operation. One connection manages one zone\",\"example\":\"023e105f4ecef8ad9ca31a8372d0c353\",\"docs_url\":\"https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/\",\"binds\":\"path.zone_id\"}",
     },
 ];

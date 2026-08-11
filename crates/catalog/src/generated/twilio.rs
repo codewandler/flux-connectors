@@ -55,6 +55,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://www.twilio.com/docs/iam/api/account"),
         binds: "username.twilio.basic_auth",
         also_binds: &["path.AccountSid"],
+        also_services: &[],
         declaration_json: "{\"name\":\"account_sid\",\"label\":\"Account SID\",\"help\":\"Copy this from the Twilio Console dashboard — it starts with AC and is the same value used to sign in to the API, not your login email\",\"example\":\"ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\",\"format\":\"token\",\"docs_url\":\"https://www.twilio.com/docs/iam/api/account\",\"binds\":\"username.twilio.basic_auth\",\"also_binds\":[\"path.AccountSid\"]}",
     },
     crate::ConfigField {
@@ -71,6 +72,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://www.twilio.com/docs/iam/api/account"),
         binds: "credential.twilio.basic_auth",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"auth_token\",\"label\":\"Auth Token\",\"help\":\"Your primary Auth Token from the Twilio Console dashboard. Twilio shows it masked by default — click to reveal it\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://www.twilio.com/docs/iam/api/account\",\"binds\":\"credential.twilio.basic_auth\"}",
     },
 ];

@@ -10,8 +10,8 @@ the stories, not the generated region. New work? Copy [`_TEMPLATE.md`](_TEMPLATE
 ## Status
 
 **Snapshot: v0.20.0 (re-measured 2026-08-11).** Measured with `ls providers/*.toml | wc -l` and
-`cargo run -p connector-cli -- build`: 55 provider definitions compile to a fixed point of 1108
-artifacts ("55 providers, 1108 artifacts up to date; nothing written"). The publishable host seam
+`cargo run -p connector-cli -- build`: 55 provider definitions compile to a fixed point of 1110
+artifacts ("55 providers, 1110 artifacts up to date; nothing written"). The publishable host seam
 is prepared on the engine line recorded in `crates/connector-cli/tests/flux_engine_line.rs`
 (`ENGINE_LINE`) — not repeated here, because a version quoted in prose is the hand-typed figure
 AGENTS.md warns about; [C-521](C-521-move-the-flux-engine-line-to-0-58.md) owns the next bump. The
@@ -510,6 +510,8 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-525 — The published catalogue carries a credential's OAuth2 acquisition](C-525-publish-oauth2-acquisition-in-the-catalogue.md) · Bridge · OAuth2Spec is modelled in the IR and reaches the explorer's catalog.json and the emitted manifest, but NOT crates/catalog — the one artifact Exchange and autodev link. Declaring an OAuth2 connector before this ships a marking no host can read
 - [C-527 — GitHub and GitLab can answer what a token reaches](C-527-forge-discovery-reads.md) · Connector · Every forge operation took {owner}/{repo} or {project_id} as given, so a caller holding only a token could not find an organisation, a group or a repository — the connector described a repository nobody could name
 - [C-528 — A credential declares whose authority it carries](C-528-a-credential-declares-whose-authority-it-carries.md) · Spec · the on-behalf-of axis — Slack's one OAuth grant returns a bot token and a user token that are placed identically, acquired identically, and differ only in who they can act as
+- [C-529 — One deployment asks its origin question once](C-529-one-deployment-one-origin-question.md) · Spec · a self-managed GitLab serves its REST API and its OAuth endpoints from one server; without a shared endpoint slot the connector must ask the operator the same question twice, and two slots that must agree and are not forced to is how a token exchange reaches a host the API never approved
+- [C-530 — GitLab authenticates as the integration or on behalf of a user](C-530-gitlab-delegated-oauth.md) · Connector · the first shipped OAuth2 connector — an org-wide static token or a per-user grant, declared as alternatives, with one operator-approved origin serving both the API and the OAuth endpoints of gitlab.com or a self-hosted instance
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

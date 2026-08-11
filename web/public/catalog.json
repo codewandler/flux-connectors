@@ -175351,6 +175351,17 @@
           "api_version": "v4",
           "gid": "com.gitlab.api:v4",
           "operation_count": 9
+        },
+        {
+          "name": "login",
+          "description": "GitLab's OAuth2 authorize and token endpoints, at the instance origin.",
+          "base_url": "{origin}",
+          "hosts": [
+            "{origin}"
+          ],
+          "api_version": "v4",
+          "gid": "com.gitlab.api/login:v4",
+          "operation_count": 0
         }
       ],
       "auth": {
@@ -175372,9 +175383,40 @@
             "user_env": [],
             "user_suffix": null,
             "oauth2": null
+          },
+          {
+            "name": "gitlab.oauth_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null,
+              "prefix": "Bearer "
+            },
+            "description": "GitLab OAuth2 access token obtained on behalf of a signed-in user. Bounded by that user's own permissions, never by the application's",
+            "env": [],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": {
+              "endpoint": "login",
+              "authorize_path": "/oauth/authorize",
+              "token_path": "/oauth/token",
+              "client_id": "",
+              "scopes": [
+                "read_api",
+                "read_user",
+                "read_repository"
+              ],
+              "grants": [
+                "authorization_code",
+                "refresh_token"
+              ],
+              "redirect": null
+            }
           }
         ],
         "default": [
+          [
+            "gitlab.oauth_token"
+          ],
           [
             "gitlab.token"
           ]
@@ -175435,6 +175477,9 @@
             "type": "object"
           },
           "credentials": [
+            [
+              "gitlab.oauth_token"
+            ],
             [
               "gitlab.token"
             ]
@@ -175592,6 +175637,9 @@
             "type": "array"
           },
           "credentials": [
+            [
+              "gitlab.oauth_token"
+            ],
             [
               "gitlab.token"
             ]
@@ -175786,6 +175834,9 @@
             "type": "array"
           },
           "credentials": [
+            [
+              "gitlab.oauth_token"
+            ],
             [
               "gitlab.token"
             ]
@@ -175989,6 +176040,9 @@
           },
           "credentials": [
             [
+              "gitlab.oauth_token"
+            ],
+            [
               "gitlab.token"
             ]
           ],
@@ -176150,6 +176204,9 @@
           },
           "credentials": [
             [
+              "gitlab.oauth_token"
+            ],
+            [
               "gitlab.token"
             ]
           ],
@@ -176305,6 +176362,9 @@
             "type": "object"
           },
           "credentials": [
+            [
+              "gitlab.oauth_token"
+            ],
             [
               "gitlab.token"
             ]
@@ -176507,6 +176567,9 @@
           },
           "credentials": [
             [
+              "gitlab.oauth_token"
+            ],
+            [
               "gitlab.token"
             ]
           ],
@@ -176660,6 +176723,9 @@
           },
           "credentials": [
             [
+              "gitlab.oauth_token"
+            ],
+            [
               "gitlab.token"
             ]
           ],
@@ -176798,6 +176864,9 @@
           },
           "credentials": [
             [
+              "gitlab.oauth_token"
+            ],
+            [
               "gitlab.token"
             ]
           ],
@@ -176833,7 +176902,31 @@
           "approval": "operator",
           "docs_url": "https://docs.gitlab.com/administration/",
           "binds": "endpoint.origin",
+          "also_services": [
+            "login"
+          ],
           "level": "connection"
+        },
+        {
+          "name": "oauth_client_id",
+          "label": "GitLab OAuth application id",
+          "help": "Create an application under Admin -> Applications (self-managed) or User Settings -> Applications (gitlab.com), with the redirect URI your deployment serves. This is the application id, which is public",
+          "example": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+          "required": false,
+          "docs_url": "https://docs.gitlab.com/integration/oauth_provider/",
+          "binds": "oauth.client_id",
+          "level": "operator"
+        },
+        {
+          "name": "oauth_client_secret",
+          "label": "GitLab OAuth application secret",
+          "help": "The application secret issued beside the id above. Supplied once by whoever runs this deployment, never by an end user",
+          "format": "token",
+          "required": false,
+          "secret": true,
+          "docs_url": "https://docs.gitlab.com/integration/oauth_provider/",
+          "binds": "oauth.client_secret",
+          "level": "operator"
         },
         {
           "name": "token",

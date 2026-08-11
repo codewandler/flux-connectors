@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developer.pagerduty.com/docs/authentication"),
         binds: "credential.pagerduty.api_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"api_token\",\"label\":\"PagerDuty API access key\",\"help\":\"Create a REST API key in PagerDuty under Integrations, then API Access Keys. A read-only key is enough to list incidents, services and on-calls; acknowledging or resolving an incident needs a full-access key. PagerDuty shows the key once, when it is created\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.pagerduty.com/docs/authentication\",\"binds\":\"credential.pagerduty.api_token\"}",
     },
 ];

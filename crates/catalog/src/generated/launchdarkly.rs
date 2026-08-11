@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://docs.launchdarkly.com/home/account/api"),
         binds: "credential.launchdarkly.api_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"api_token\",\"label\":\"LaunchDarkly API access token\",\"help\":\"Create one under Account settings → Authorization → Access tokens in LaunchDarkly. Give it at least reader access to the projects this connection should reach, and writer access if launchdarkly-flag-toggle will be used. LaunchDarkly shows the token once\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://docs.launchdarkly.com/home/account/api\",\"binds\":\"credential.launchdarkly.api_token\"}",
     },
 ];

@@ -623,6 +623,14 @@ pub struct ConfigField {
     pub docs_url: Option<&'static str>,
     pub binds: &'static str,
     pub also_binds: &'static [&'static str],
+    /// The further services whose base URL this one value also fills (C-529).
+    ///
+    /// Empty for the ordinary field. When it is not, [`service`](Self::service) remains the address
+    /// the value is stored under and the services named here resolve their `{variable}` from that
+    /// same address — one question, one value, one [`approval`](Self::approval). A host composing a
+    /// URL for a sibling service must consult this or it will report an unbound placeholder for a
+    /// value the operator has already supplied.
+    pub also_services: &'static [&'static str],
     /// Canonical JSON for the complete form declaration, including choices.
     pub declaration_json: &'static str,
 }

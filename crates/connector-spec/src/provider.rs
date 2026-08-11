@@ -2859,6 +2859,71 @@ fn validate_binding(connector: &Connector, field: &ConfigField, problems: &mut V
         validate_one_binding(connector, field, binds, problems);
     }
     validate_slot_is_not_shared(connector, field, problems);
+    validate_also_services(connector, field, problems);
+}
+
+/// **A shared endpoint slot names real sibling services, and only an endpoint slot may be shared**
+/// (C-529).
+///
+/// Four refusals, each closing a way the declaration could name something without doing anything:
+///
+/// 1. **Only an `endpoint.` binding may be shared.** A credential or a request pin has no
+///    per-service placeholder for a second service to fill, so an entry on one is a service named
+///    for no effect — which reads like coverage and is not.
+/// 2. **Every named service is declared.** A typo would leave the real service's `{variable}`
+///    unbound, and the coverage check would then report the *other* service as the problem.
+/// 3. **The head is not repeated.** `service = "default"` with `also_services = ["default"]` is one
+///    slot spelled twice; harmless to resolve and a sign the author meant a different name.
+/// 4. **No service is named twice.**
+///
+/// What this deliberately does *not* refuse is two fields reaching one service with different
+/// variables — that is ordinary, and Contentful's two `space_id` fields stay two slots because they
+/// share no field, not because anything here stops them.
+fn validate_also_services(connector: &Connector, field: &ConfigField, problems: &mut Vec<String>) {
+    if field.also_services.is_empty() {
+        return;
+    }
+    let name = field.name.as_str();
+
+    if !matches!(field.binding(), Some(Binding::Endpoint { .. })) {
+        problems.push(format!(
+            "configuration field {name:?} declares `also_services`, but binds {:?} rather than an \
+             `endpoint.<variable>`. Only a base-URL placeholder exists once per service and can \
+             therefore be filled for a sibling service; a credential or a request pin has no \
+             per-service slot, so the entry would name a service without reaching anything there",
+            field.binds
+        ));
+        return;
+    }
+
+    let declared = connector.service_names();
+    let mut seen: Vec<&str> = Vec::new();
+    for extra in &field.also_services {
+        let extra = extra.as_str();
+        if extra == field.service {
+            problems.push(format!(
+                "configuration field {name:?} lists its own service {extra:?} in `also_services`. \
+                 The head `service` already carries the address; listing it again is one slot \
+                 spelled twice"
+            ));
+            continue;
+        }
+        if seen.contains(&extra) {
+            problems.push(format!(
+                "configuration field {name:?} lists service {extra:?} twice in `also_services`"
+            ));
+            continue;
+        }
+        seen.push(extra);
+        if !declared.contains(&extra) {
+            problems.push(format!(
+                "configuration field {name:?} lists service {extra:?} in `also_services`, which \
+                 this connector does not declare. A misspelled sibling leaves the real service's \
+                 base-URL placeholder unbound, and the failure would then be reported against that \
+                 service rather than against this typo"
+            ));
+        }
+    }
 }
 
 /// **The destination set itself is well-formed**, before any of its members is resolved.
@@ -3375,7 +3440,11 @@ fn validate_every_template_variable_is_asked_for(
             // bind a hostname. That is C-164's third measured shape, and C-229 does not move it —
             // the field that binds Algolia's hostname *and* its header binds the hostname in
             // `binds`, which is what makes `{app_id}` the one placeholder both destinations carry.
-            let bound = connector.config_of(service).any(|field| {
+            // `config_of` is the head-service lookup; `also_services` extends the same field's one
+            // address to a sibling surface of the same deployment (C-529). Both are consulted, and
+            // neither admits an `also_binds` — a further destination is a request position by
+            // construction, so a header pin still does not bind a hostname.
+            let bound = connector.config_filling(service).any(|field| {
                 matches!(field.binding(), Some(Binding::Endpoint { variable: v }) if v == variable)
             });
             if !bound {

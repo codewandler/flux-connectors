@@ -86,8 +86,13 @@ base_url = "{origin}/api/v4"
 
 description = "GitLab: discover reachable groups and projects; read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only"
 
-# Every operation authenticates the same way.
-default_auth = [{ credentials = ["gitlab.token"] }]
+# Either credential authenticates every operation, and the two are alternatives rather than a pair
+# (C-530): a deployment provisions one static token org-wide, or each user completes an OAuth2 grant
+# and acts as themselves. A host picks; this file only says both are valid.
+default_auth = [
+  { credentials = ["gitlab.oauth_token"] },
+  { credentials = ["gitlab.token"] },
+]
 
 # The "Test connection" button. `GET /user` takes no parameters and cannot do anything except prove
 # the token resolves — it returns the authenticated user, which is also the read a settings page
@@ -109,7 +114,44 @@ scheme = "bearer"
 # older `PRIVATE-TOKEN: <token>` header, but the bearer form is documented, is what GitLab's own
 # OAuth2-flavoured docs lead with, and is what the story specifies).
 env = ["GITLAB_TOKEN"]
+# C-528: a GitLab personal access token acts as **the person who created it** — every call is
+# attributed to that user and bounded by their permissions. It is not an integration identity, and a
+# host that stored one at a tenant-wide address would let any member act as its creator.
+subject = "user"
 description = "GitLab personal access token sent as a bearer. A token scoped to read_api is enough for every read below; the api scope is required for gitlab-issue-create"
+
+[[auth]]
+# **The delegated credential: an operator registers one OAuth application, and each person grants it**
+# (C-530). The static token above stays for the org-wide arrangement where one credential is
+# provisioned once; this is the "on behalf of" arrangement, where a signed-in user completes the
+# grant and the host stores the result for that user alone.
+#
+# Both are declared because they are genuinely different deployments of the same connector, and
+# `default_auth` below admits either. Nothing here chooses between them — that is the host's, and it
+# is why `subject` exists.
+name = "gitlab.oauth_token"
+scheme = "bearer"
+subject = "user"
+description = "GitLab OAuth2 access token obtained on behalf of a signed-in user. Bounded by that user's own permissions, never by the application's"
+
+# The host runs every grant; nothing this repository emits performs OAuth. `endpoint` names the
+# declared `login` service rather than carrying a URL, which is the property that keeps the token
+# exchange inside the egress allow-list — `http_hosts` derives from declared base URLs, so a URL
+# written here would name a host nothing had admitted. It also means a self-managed instance's OAuth
+# endpoints follow the one operator-approved origin automatically, instead of being a second
+# destination somebody could point elsewhere.
+[auth.oauth2]
+endpoint = "login"
+authorize_path = "/oauth/authorize"
+token_path = "/oauth/token"
+# `read_repository` is here for a reason worth stating: it is what lets the resulting token clone
+# over HTTPS. Cloning is not a connector operation — git speaks its own wire protocol — but the
+# credential a git client is handed is this one, and a scope absent from this list is one the
+# connector does not request.
+scopes = ["read_api", "read_user", "read_repository"]
+# `refresh_token` is not optional in practice. A GitLab OAuth access token expires in two hours by
+# default, and an unattended fleet outlives that; without the refresh grant the connection dies mid-run.
+grants = ["authorization_code", "refresh_token"]
 
 # ---------------------------------------------------------------------------------------------
 # Operations — 9: the parameterless verify read, the two discovery reads that produce a numeric
@@ -125,10 +167,33 @@ description = "GitLab personal access token sent as a bearer. A token scoped to 
 # to a service, and there is no other service here to attach it to. It carries `tags` and
 # nothing else, which is what keeps `default` implicit and this file emitting the same
 # `gitlab.flux` it emitted before.
+#
+# `legacy = true` (C-458) is what preserves that after `login` was added below: it keeps the
+# published, address-elided `default` service exactly as it was while a named sibling exists, at the
+# cost of every member having to state `service` explicitly — which is the point, since a new member
+# must not enter the address-elided service by silence.
 name = "default"
+legacy = true
 tags = ["source-control", "issue-tracking"]
 
+[[services]]
+# **The vendor's OAuth2 endpoints, which are not under `/api/v4`** (C-529).
+#
+# Declared as a service because that is how this repository names an endpoint whose base URL differs
+# from the connector's, and because `http_hosts` derives from declared base URLs — a token exchange
+# against a host nothing declared is one the egress gate refuses. `OAuth2Spec.endpoint` below names
+# this service rather than carrying a URL of its own, which is the property that keeps it that way:
+# a field holding a destination is a field that can hold a destination somebody chose.
+#
+# It declares no operations, and must not. An authorize endpoint is a browser redirect and a token
+# endpoint's response body *is* a credential, so neither is a connector operation — AGENTS.md
+# § Authentication contract. The host runs the grant; this service exists so the host knows where.
+name = "login"
+description = "GitLab's OAuth2 authorize and token endpoints, at the instance origin."
+base_url = "{origin}"
+
 [[operations]]
+service = "default"
 id = "gitlab-user-get"
 method = "GET"
 direction = "read"
@@ -160,6 +225,7 @@ properties = { id = { type = "integer", description = "The user's global id" }, 
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "gitlab-group-list"
 method = "GET"
 direction = "read"
@@ -199,6 +265,7 @@ items = { type = "object", required = ["id", "name", "path", "full_path"], prope
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "gitlab-project-list"
 method = "GET"
 direction = "read"
@@ -250,6 +317,7 @@ items = { type = "object", required = ["id", "name", "path_with_namespace"], pro
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "gitlab-issue-list"
 method = "GET"
 direction = "read"
@@ -290,6 +358,7 @@ items = { type = "object", required = ["id", "iid", "project_id", "title", "stat
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "gitlab-issue-get"
 method = "GET"
 direction = "read"
@@ -324,6 +393,7 @@ properties = { id = { type = "integer", description = "The issue's global id" },
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "gitlab-issue-create"
 method = "POST"
 direction = "write"
@@ -364,6 +434,7 @@ properties = { id = { type = "integer", description = "The new issue's global id
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "gitlab-merge-request-list"
 method = "GET"
 direction = "read"
@@ -404,6 +475,7 @@ items = { type = "object", required = ["id", "iid", "project_id", "title", "stat
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "gitlab-pipeline-get"
 method = "GET"
 direction = "read"
@@ -432,6 +504,7 @@ properties = { id = { type = "integer", description = "The pipeline's own id, wh
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "gitlab-branch-list"
 method = "GET"
 direction = "read"
@@ -472,6 +545,13 @@ items = { type = "object", required = ["name", "commit"], properties = { name = 
 
 [[config]]
 name = "origin"
+service = "default"
+# **One deployment, one origin question** (C-529). The API surface and the OAuth surface are the same
+# GitLab server, so they are the same fact — and asking twice is not merely redundant. Two slots that
+# must agree and are not forced to is how a token exchange gets pointed at a host the API never
+# approved, which is the whole reason `approval = "operator"` is below. The head service keeps the
+# address; `login` resolves `{origin}` from this same value, under this same approval.
+also_services = ["login"]
 label = "GitLab origin"
 help = "The HTTPS origin only, without `/api/v4` or another path. Leave the default for GitLab.com; a self-managed origin requires deployment/operator approval before it becomes active"
 example = "https://gitlab.company.example"
@@ -482,8 +562,43 @@ approval = "operator"
 docs_url = "https://docs.gitlab.com/administration/"
 binds = "endpoint.origin"
 
+# ---------------------------------------------------------------------------------------------
+# The OAuth application, registered once by whoever runs the product (C-530).
+#
+# These are **operator** level and the level is derived, never authored: it is a consequence of
+# binding `oauth.*`. That derivation is the thing protecting an end user here — asking a tenant for a
+# client secret would hand them the product's own credential, which the configuration contract calls
+# out as a real defect in both directions.
+#
+# The client id is public by specification (RFC 6749 §2.2) and the secret is not, which is the whole
+# difference between the two declarations below.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "oauth_client_id"
+service = "default"
+label = "GitLab OAuth application id"
+help = "Create an application under Admin -> Applications (self-managed) or User Settings -> Applications (gitlab.com), with the redirect URI your deployment serves. This is the application id, which is public"
+example = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+format = "text"
+required = false
+docs_url = "https://docs.gitlab.com/integration/oauth_provider/"
+binds = "oauth.client_id"
+
+[[config]]
+name = "oauth_client_secret"
+service = "default"
+label = "GitLab OAuth application secret"
+help = "The application secret issued beside the id above. Supplied once by whoever runs this deployment, never by an end user"
+format = "token"
+secret = true
+required = false
+docs_url = "https://docs.gitlab.com/integration/oauth_provider/"
+binds = "oauth.client_secret"
+
 [[config]]
 name = "token"
+service = "default"
 label = "GitLab personal access token"
 help = "Create one in the selected GitLab installation's User Settings -> Access Tokens. Grant read_api for every read below, or api if you also want gitlab-issue-create to work"
 format = "token"

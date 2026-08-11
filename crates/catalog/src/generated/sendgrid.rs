@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://www.twilio.com/docs/sendgrid/ui/account-and-settings/api-keys"),
         binds: "credential.sendgrid.api_key",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"api_key\",\"label\":\"SendGrid API key\",\"help\":\"Create one under Settings → API Keys in the SendGrid dashboard. Restrict it to only the scopes this connector needs — Mail Send is unnecessary, since this connector never sends mail\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://www.twilio.com/docs/sendgrid/ui/account-and-settings/api-keys\",\"binds\":\"credential.sendgrid.api_key\"}",
     },
 ];

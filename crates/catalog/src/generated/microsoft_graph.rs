@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://learn.microsoft.com/en-us/graph/auth/auth-concepts"),
         binds: "credential.microsoft_graph.access_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"access_token\",\"service\":\"mail\",\"label\":\"Microsoft Graph access token\",\"help\":\"An OAuth2 access token for Microsoft Graph, minted through an Entra ID app registration with the delegated or application permissions the enabled operations need (Mail.Read and Mail.Send for mail, MailboxSettings.Read for Outlook settings, Calendars.ReadWrite for calendar, Files.ReadWrite for files). flux is handed an already-minted token; it does not perform the sign-in or client-credentials grant itself\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://learn.microsoft.com/en-us/graph/auth/auth-concepts\",\"binds\":\"credential.microsoft_graph.access_token\"}",
     },
 ];

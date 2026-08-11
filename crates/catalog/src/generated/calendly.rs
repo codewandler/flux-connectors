@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developer.calendly.com/getting-started"),
         binds: "credential.calendly.access_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"access_token\",\"label\":\"Calendly access token\",\"help\":\"Create one under Integrations & apps → API & Webhooks → Personal access tokens in Calendly. Calendly shows it once\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.calendly.com/getting-started\",\"binds\":\"credential.calendly.access_token\"}",
     },
 ];

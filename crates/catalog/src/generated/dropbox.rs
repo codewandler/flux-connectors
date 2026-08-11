@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developers.dropbox.com/oauth-guide"),
         binds: "credential.dropbox.access_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"access_token\",\"label\":\"Access token\",\"help\":\"Create an app at dropbox.com/developers/apps. For a quick connection, generate an access token directly from the app's Settings tab. For a token that keeps working for other users, complete the app's OAuth2 authorization flow and supply the resulting access token\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developers.dropbox.com/oauth-guide\",\"binds\":\"credential.dropbox.access_token\"}",
     },
 ];

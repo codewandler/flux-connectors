@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developers.klaviyo.com/en/docs/retrieve_api_credentials"),
         binds: "credential.klaviyo.api_key",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"api_key\",\"label\":\"Klaviyo private API key\",\"help\":\"Create one in Klaviyo under Settings > Account > API keys > Create Private API Key. Grant it these scopes and no more: accounts:read (for the connection test), profiles:read, profiles:write, lists:read and events:write. A key missing one of these still connects successfully and then fails on the single call that needs it. The key begins pk_ followed by a long hex string; it is shown once, so store it when it is created\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developers.klaviyo.com/en/docs/retrieve_api_credentials\",\"binds\":\"credential.klaviyo.api_key\"}",
     },
 ];

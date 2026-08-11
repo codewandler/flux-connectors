@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developers.notion.com/docs/authorization"),
         binds: "credential.notion.token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"token\",\"label\":\"Integration token\",\"help\":\"Create an integration at notion.so/my-integrations and copy its Internal Integration Secret. **Then share your pages with it**: in Notion, open each page or database, use the ••• menu → Connections → and add your integration. An integration can only see content that has been shared with it this way, so a token that is otherwise valid returns a 404 for a page you can see in your browser until you do. Sharing a parent page shares everything under it\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developers.notion.com/docs/authorization\",\"binds\":\"credential.notion.token\"}",
     },
 ];

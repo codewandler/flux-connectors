@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developers.intercom.com/docs/references/rest-api/api.intercom.io/"),
         binds: "endpoint.host",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"host\",\"label\":\"Intercom region\",\"help\":\"Which region this Intercom workspace is hosted in. Pick United States, European Union or Australia — Intercom assigns the region when the workspace is created and it does not change. If you are not sure, look at the URL you use Intercom at: app.intercom.com is the US region, app.eu.intercom.com the EU one and app.au.intercom.com the Australian one. A token issued for one region returns 401 against another, exactly as a revoked token would\",\"example\":\"api.intercom.io\",\"format\":\"hostname\",\"choices\":[{\"value\":\"api.intercom.io\",\"label\":\"United States\"},{\"value\":\"api.eu.intercom.io\",\"label\":\"European Union\"},{\"value\":\"api.au.intercom.io\",\"label\":\"Australia\"}],\"docs_url\":\"https://developers.intercom.com/docs/references/rest-api/api.intercom.io/\",\"binds\":\"endpoint.host\"}",
     },
 ];

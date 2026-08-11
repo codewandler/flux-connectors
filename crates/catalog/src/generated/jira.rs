@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://support.atlassian.com/jira-software-cloud/docs/what-is-a-jira-site/"),
         binds: "endpoint.site",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"site\",\"label\":\"Atlassian site name\",\"help\":\"The part of your Jira URL before `.atlassian.net` — if you sign in at `acme.atlassian.net`, this is `acme`\",\"example\":\"acme\",\"format\":\"subdomain\",\"docs_url\":\"https://support.atlassian.com/jira-software-cloud/docs/what-is-a-jira-site/\",\"binds\":\"endpoint.site\"}",
     },
     crate::ConfigField {
@@ -64,6 +65,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: None,
         binds: "username.jira.api_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"email\",\"label\":\"Atlassian account email\",\"help\":\"The email of the account that minted the API token. It travels as the username half of the request\",\"example\":\"you@acme.com\",\"format\":\"email\",\"binds\":\"username.jira.api_token\"}",
     },
     crate::ConfigField {
@@ -80,6 +82,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://id.atlassian.com/manage-profile/security/api-tokens"),
         binds: "credential.jira.api_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"api_token\",\"label\":\"API token\",\"help\":\"Create one at id.atlassian.com under Security → API tokens. Atlassian shows it once\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://id.atlassian.com/manage-profile/security/api-tokens\",\"binds\":\"credential.jira.api_token\"}",
     },
 ];

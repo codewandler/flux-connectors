@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://www.figma.com/developers/api"),
         binds: "credential.figma.token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"token\",\"label\":\"Personal access token\",\"help\":\"From your Figma account settings, under Personal access tokens. Figma shows it once, at creation time\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://www.figma.com/developers/api\",\"binds\":\"credential.figma.token\"}",
     },
 ];

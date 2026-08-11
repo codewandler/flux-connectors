@@ -570,8 +570,12 @@ fn manifest(connector: &Connector, service: &str) -> Result<String> {
                 .operation(id)
                 .is_some_and(|operation| operation.service == service)
         }),
+        // `config_filling`, not `config_of` (C-529): a service whose base URL is templated must
+        // carry the field that fills it, or a host reading this one manifest sees a placeholder
+        // nothing declares. Each field keeps its own `service`, so the shared slot still reads as
+        // one address rather than two.
         config: connector
-            .config_of(service)
+            .config_filling(service)
             .map(manifest_config)
             .collect::<Result<Vec<_>>>()?,
         events: connector
@@ -583,7 +587,7 @@ fn manifest(connector: &Connector, service: &str) -> Result<String> {
             .map(|channel| manifest_channel(connector, channel))
             .collect(),
         config_choices: connector
-            .config_of(service)
+            .config_filling(service)
             .filter_map(manifest_choices)
             .collect(),
     };

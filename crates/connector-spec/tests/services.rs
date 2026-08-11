@@ -447,10 +447,24 @@ fn every_shipped_service_is_spellable_and_a_single_service_provider_declares_non
                      refuses: {reason}. The name reaches `connectors/*-{service}.flux`"
                 );
             }
+            // **An operation-less service is admitted only when something else needs its base URL**
+            // (C-529/C-530). GitLab's `login` service declares no operation and must not: an
+            // authorize endpoint is a browser redirect and a token endpoint's response body *is* a
+            // credential, so neither is a connector operation. It exists so an `[auth.oauth2]` block
+            // can name a declared endpoint instead of carrying a URL — which is what keeps the token
+            // exchange inside the host allow-list, since `http_hosts` derives from declared base
+            // URLs. The invariant is therefore "no service exists for nothing", not "every service
+            // has operations".
+            let named_by_a_grant = connector.auth.iter().any(|method| {
+                method
+                    .oauth2
+                    .as_ref()
+                    .is_some_and(|spec| spec.endpoint == service)
+            });
             assert!(
-                connector.operations_of(service).next().is_some(),
-                "providers/{name} declares service {service:?} with no operation in it, so a build \
-                 emits an empty module and manifest for it"
+                connector.operations_of(service).next().is_some() || named_by_a_grant,
+                "providers/{name} declares service {service:?} with no operation in it and no \
+                 `[auth.oauth2]` naming it, so a build emits an empty module and manifest for it"
             );
         }
 

@@ -9,6 +9,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **GitLab authenticates as the integration or on behalf of a user** (C-530), and it is the first
+  shipped connector to declare `[auth.oauth2]`. `gitlab.oauth_token` sits beside `gitlab.token` and
+  `default_auth` lists them as **alternatives**: a deployment provisions one static token org-wide,
+  or each signed-in person completes an OAuth2 grant and acts as themselves. Both declare
+  `subject = "user"`. The OAuth application is operator level, derived from `binds`, so an end user
+  is never asked for the product's own client secret. `read_repository` is requested and the reason
+  recorded — it is what lets the resulting token clone over HTTPS, and while cloning is not a
+  connector operation the credential a git client is handed is this one. `connectors/gitlab.flux` is
+  byte-identical.
+
+- **One deployment asks its origin question once** (C-529). `ConfigField::also_services` lets one
+  field fill the base-URL placeholder of several services, keeping `service` as the head and the
+  address the value is stored under. A self-managed GitLab serves its REST API at `{origin}/api/v4`
+  and its OAuth endpoints at `{origin}` — one server, one fact — so gitlab.com and a self-hosted
+  instance both work from one operator-approved value that moves both surfaces together. Declaring
+  it twice would be a security defect rather than a redundancy: two slots that must agree and are
+  not forced to is how a token exchange reaches a host the API never approved.
+
+  Sharing is stated, never inferred — Contentful's two `space_id` fields stay two values, because
+  keyed as one a management write went to whichever space the delivery reads had been configured
+  with. Four loader refusals; `catalog::ConfigField` publishes the field; a per-service manifest now
+  carries whatever fills its placeholder.
+
+  The alternative — an `origin` on `OAuth2Spec` — was rejected: it puts a destination in a second
+  spellable place, which is the defect C-523 exists to remove, in the one place where getting it
+  wrong sends the client secret somewhere else. `OAuth2Spec.endpoint` stays a reference to a declared
+  endpoint, which is what keeps the exchange inside the egress allow-list by construction.
+
 - **A credential declares whose authority it carries** (C-528). `connector_spec::Subject` and
   `catalog::Subject` — `unstated` | `app` | `user` — land on `AuthMethod` and on the published
   `catalog::Credential`. This is the "on behalf of" axis, independent of placement and acquisition:

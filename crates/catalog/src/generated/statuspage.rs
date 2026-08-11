@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: None,
         binds: "endpoint.page_id",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"page_id\",\"label\":\"Status page id\",\"help\":\"The id of the status page this connection administers. Statuspage shows it in the address bar of the page's own management screen (manage.statuspage.io/pages/<page id>) and on the API keys screen. One connection administers one page: an account with several status pages needs one installation per page\",\"binds\":\"endpoint.page_id\"}",
     },
     crate::ConfigField {
@@ -64,6 +65,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developer.statuspage.io/"),
         binds: "credential.statuspage.api_key",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"api_key\",\"label\":\"Statuspage API key\",\"help\":\"Create one under your Statuspage user account's API keys screen. The key carries the permissions of the account that created it, so an account that should only read incidents must not be the one that mints this key. Statuspage shows the key once\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.statuspage.io/\",\"binds\":\"credential.statuspage.api_key\"}",
     },
 ];

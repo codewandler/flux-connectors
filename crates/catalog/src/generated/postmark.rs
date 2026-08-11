@@ -48,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://postmarkapp.com/support/article/1008-what-are-the-account-server-api-tokens"),
         binds: "credential.postmark.server_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"server_token\",\"service\":\"server\",\"label\":\"Postmark Server Token\",\"help\":\"Find it on the server's API Tokens tab in the Postmark dashboard. Grants sending and that server's own message history only — it cannot list or manage servers\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://postmarkapp.com/support/article/1008-what-are-the-account-server-api-tokens\",\"binds\":\"credential.postmark.server_token\"}",
     },
 ];

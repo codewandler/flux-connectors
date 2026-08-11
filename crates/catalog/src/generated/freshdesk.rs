@@ -41,6 +41,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://support.freshdesk.com/en/support/solutions/articles/50000004820"),
         binds: "endpoint.domain",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"domain\",\"label\":\"Freshdesk domain\",\"help\":\"Your full Freshdesk host, as it appears in the address bar — `acme.freshdesk.com`, including the `.freshdesk.com` part\",\"example\":\"acme.freshdesk.com\",\"format\":\"hostname\",\"docs_url\":\"https://support.freshdesk.com/en/support/solutions/articles/50000004820\",\"binds\":\"endpoint.domain\"}",
     },
 ];
