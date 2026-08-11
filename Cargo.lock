@@ -329,6 +329,7 @@ name = "codewandler-connector-pack"
 version = "0.20.0"
 dependencies = [
  "async-trait",
+ "codewandler-connector-address",
  "codewandler-connector-catalog",
  "codewandler-connector-secrets",
  "codewandler-flux-core",
