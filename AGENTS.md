@@ -98,7 +98,7 @@ The coordinator failures from the same session, and each of them cost a rework r
 
 ## Current project boundary
 
-**Snapshot: v0.15.0.** `cargo run -p connector-cli -- build` compiles **55 providers**, **66 services**
+**Snapshot: v0.20.0 (re-measured 2026-08-11).** `cargo run -p connector-cli -- build` compiles **55 providers**, **66 services**
 and **829 curated connector operations** — plus 53 events, 5 channel bindings and 77 Flux core entries
 (29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **1102 artifacts**. The
 compiler, the embedded Rust catalogue, the JSON catalogue, the Tool pack and the public explorer all

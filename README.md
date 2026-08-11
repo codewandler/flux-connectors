@@ -161,11 +161,14 @@ fails closed:
   redactor before building the request, and `crates/connectors-api` binds that to a real
   `http.request` from `codewandler-flux-web`. This repository has sent real bytes to a real vendor;
   the exchange is recorded in `crates/connectors-api/README.md`.
-- **Six declarable surfaces reach no artifact.** `config` (112 fields across 40 providers), `verify`
-  (40), a service's `roles`, `quirks.pagination`, `graphs` and `quirks.rate_limit` are modelled in the
-  IR and validated by the loader, and then appear in neither the manifest nor the published catalogue.
-  A host reading a connector today cannot render its settings page or find its "Test connection"
-  operation, even though the connector declares both.
+- **Four declarable surfaces still reach no artifact.** A service's `roles`, `quirks.pagination`,
+  `graphs` and `quirks.rate_limit` are modelled in the IR and validated by the loader, and then
+  appear in neither the manifest nor the published catalogue. **`config` and `verify` are no longer
+  among them** — C-87 published both, and today 82 config fields across 42 providers travel
+  identically into `web/public/catalog.json` and into 46 `connectors/*.connector.toml` manifests
+  (more manifests than providers because a multi-service connector emits one per service), alongside
+  `verify` on 42 of them. A host can now render a settings page and find the "Test connection"
+  operation from the artifact alone.
 - **Freshdesk ships with no credential at all**, deliberately. Its `base64(<api_key>:X)` places the
   secret in a position the current IR cannot mark as secret. Emitting it would bypass secret gating
   and redaction, so the connector fails closed with a 401 instead.
@@ -175,11 +178,15 @@ fails closed:
   out until the runtime's form encoder is available. See
   [docs/designs/query-encoding.md](docs/designs/query-encoding.md).
 - **Base URLs can contain template variables**, such as `https://{subdomain}.zendesk.com`. A connector
-  binds each one with a `[[config]]` field — but since `config` reaches no artifact, a host cannot yet
-  discover what to ask for.
-- **OpenAPI ingest is not wired.** All 53 providers are hand-authored, and `specs/` currently vendors
-  only flux's own core catalogue. A `[spec]`-backed provider is rejected rather than compiled into a
-  plausible but empty module.
+  binds each one with a `[[config]]` field, and since C-87 that binding reaches the manifest and the
+  catalogue, so a host can discover what to ask for.
+- **OpenAPI ingest is partly wired.** 47 of the 55 providers are hand-authored; 8 are `[spec]`-backed
+  against a vendored, hash-pinned vendor document — `asterisk`, `babelforce`, `github`,
+  `microsoft_graph`, `openai`, `stripe`, `twilio` and `zendesk`. `specs/` vendors those documents
+  beside flux's own core catalogue, each with a provenance record naming the upstream URL and hash
+  (`specs/<vendor>.provenance.toml`, or `specs/asterisk/provenance.toml` for the one whose upstream
+  is a directory). What remains unwired is the *fetch* half: `specs/` is refreshed by the scripts in
+  `scripts/`, never by the build, which still reaches no network.
 - **`check`, `fetch`, and `install` are not implemented.** Their CLI entries fail explicitly and
   point to their owning stories.
 

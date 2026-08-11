@@ -9,10 +9,13 @@ the stories, not the generated region. New work? Copy [`_TEMPLATE.md`](_TEMPLATE
 
 ## Status
 
-**Snapshot: v0.17.0 (2026-08-03).** Measured with `ls providers/*.toml | wc -l` and
-`cargo run -p connector-cli -- diff`: 55 provider definitions compile to a fixed point of 1102
-artifacts. The publishable host seam is prepared on Flux 0.54, and the generated board below is the current
-story state rather than the original scaffold plan.
+**Snapshot: v0.20.0 (re-measured 2026-08-11).** Measured with `ls providers/*.toml | wc -l` and
+`cargo run -p connector-cli -- build`: 55 provider definitions compile to a fixed point of 1102
+artifacts ("55 providers, 1102 artifacts up to date; nothing written"). The publishable host seam
+is prepared on the engine line recorded in `crates/connector-cli/tests/flux_engine_line.rs`
+(`ENGINE_LINE`) — not repeated here, because a version quoted in prose is the hand-typed figure
+AGENTS.md warns about; [C-521](C-521-move-the-flux-engine-line-to-0-58.md) owns the next bump. The
+generated board below is the current story state rather than the original scaffold plan.
 
 Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 `cargo clippy --workspace --all-targets -- -D warnings` · `cargo fmt --all --check` · public-site
@@ -62,6 +65,7 @@ _A connector is more than a set of callable operations. It also has **schemas** 
 - [C-39 — Emit synthetic describe and schema operations](C-39-synthetic-introspection-ops.md) · Codegen · metadata reachable from inside a flux session, via the mechanism that already exists
 
 ### Connector Config
+- [C-523 — Publish one canonical normalized HTTPS-origin API for every consumer](C-523-publish-canonical-https-origin.md) · Bridge · Milestone 1 blocker: Exchange X-125 must validate and compare the exact origin contract without copying connector-spec or depending on an unpublished compiler crate
 - [C-88 — Prove OAuth2 on one provider — the operator level is currently unexercised](C-88-prove-oauth2.md) · Spec · OAuth2Spec is a landed type NO shipped provider uses, so half the configuration model is proven only by a fixture. tests/auth_archetypes.rs asserts that gap and fails the day this lands
 - [C-89 — The hosted OAuth redirect has no home — OAuthRedirect is loopback-only](C-89-hosted-oauth-redirect.md) · Bridge · OAuthRedirect is {port, path} — a CLI shape. A hosted callback is https://app.example.com/oauth/callback, supplied by the host, and often must be pre-registered in the vendor's dashboard before the flow works at all
 
@@ -184,6 +188,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-506 — Upgrade the public-site toolchain past the upstream Vite advisories](C-506-upstream-vite-advisories.md) · BLOCKED upstream — VitePress 1.6.4 resolves Vite <=6.4.2 and esbuild <=0.24.2; npm reports two moderate and one high development-server advisory with no fix available
 
 ## Backlog
+- [C-521 — Move the flux engine line to 0.58](C-521-move-the-flux-engine-line-to-0-58.md) · Core · post-Milestone-1: registry preflight on all seven codewandler-flux-* crates, then all six engine pins move together and the four-crate closure releases as 0.21.0; flux-spec 1.x is checked separately
 
 ### All Integrations Connectors
 - [C-497 — Declare how connector operations bind to non-HTTP runtimes](C-497-declare-runtime-operation-bindings.md) · Spec · runtime currently names only a kind; a rich operation still has no declared adapter operation or Exchange-consumable stream/lifecycle/result contract
@@ -230,6 +235,11 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 _The [configuration surface](connector-configuration.md) modelled *what a human supplies*. It stopped_
 - [C-90 — Credential addressing and the secret-store seam (epic)](C-90-credential-addressing-epic.md) · Spec · EPIC — the address, store seam and provider authorities landed; the Flux adapter remains an explicit parked story
 
+### Database datasources
+_"A datasource pointing at a database" is the single most requested read surface a deployment can_
+- [C-519 — A SQL database connector with declared read-only operations](C-519-a-sql-database-connector-with-declared-read-only-operations.md) · Core · Decisions 0006 and 0008: PostgreSQL first; declared connection form with a file-shaped secret and the private destination class; read-only query and schema introspection under the rich-runtime plan
+- [C-520 — Datasource members projected over the SQL connector](C-520-datasource-members-projected-over-the-sql-connector.md) · Core · Decision 0006 rule 6: datasource members as projections over the declared operations; schema, list and get fixtures for the Exchange read seam
+
 ### the flow graph — connector members composed into one Flux op
 _Four waves built this vocabulary without naming it:_
 - [C-94 — The flow graph — connector members composed into one Flux op (epic)](C-94-flow-graph-epic.md) · Spec · EPIC — the graph vocabulary, lowering and path map landed; boundary programs and richer nodes remain explicit backlog stories
@@ -269,6 +279,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-512 — The [[datasources]] member — namespace, derived schema, per-verb bindings and validation](C-512-datasources-ir-member.md) · Spec · the sixth member kind. A datasource member joins member_names_of, derives its entity schema from the IR, binds list/get to named operations with explicit param/filter/cursor/field mappings, and is refused at load when a binding dangles. Joins the HashDomain as compiled meaning
 - [C-513 — Publish the datasource surface into the manifest, the public catalogue and the embedded catalogue](C-513-publish-the-datasource-surface.md) · Codegen · Decision 0006 rule 6 makes non-empty artifact reach an ENTRY criterion: [[datasources]] reaches M + catalog.json + the embedded Rust catalogue from its first release, and never the generated .flux module — the plugin-manifest declared-then-dropped failure must not recur
 - [C-514 — Retire quirks.pagination into the datasource binding's cursor vocabulary](C-514-retire-quirks-pagination.md) · Spec · re-measured 2026-08-04: pagination still has no reader outside the loader, and two providers declare it (twilio ×2, babelforce patches ×2 — zendesk's 2026-07-31 row is stale). Decision 0006 rule 6: superseded by the [[datasources]] cursor vocabulary and REMOVED, not left as another declared-but-unreachable surface
+- [C-524 — RFC Editor corpus is a searchable, locally cached datasource](C-524-rfc-editor-corpus-datasource.md) · Connector · index every RFC from the authoritative RFC Editor corpus once, then serve bounded full-text search and get from an atomic local snapshot with offline last-good reuse
 
 ## Done
 - [C-1 — Scaffold the Cargo workspace and the gate](C-1-scaffold-workspace.md) · Foundation · everything else builds on this
@@ -495,6 +506,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-510 — Adopt the Decision 0006 datasource vocabulary](C-510-adopt-the-decision-0006-datasource-vocabulary.md) · Bridge · Decision 0006 defines the family's one datasource concept — a declared read-only record surface — and places vendor-data Datasource Definitions here. This reconciles C-137…C-140 onto the indexed DatasourceBackend they always needed and charters the [[datasources]] IR surface before Milestone 5 deletes the plugin channel
 - [C-515 — Publish recoverable prepared secret transactions](C-515-recoverable-prepared-secret-transactions.md) · Bridge · Released in v0.20.0; five native hosts and the immutable Exchange registry-adoption checkpoint are verified
 - [C-516 — Connector operation direction is explicit at the ToolSpec seam](C-516-explicit-operation-direction.md) · Bridge · 829 operations now carry reviewed read/write direction; stable spec identities fail closed and Flux remains the sole gather-admission authority
+- [C-522 — Name the connector domain once across the Flux family](C-522-name-the-connector-domain-once.md) · Surfaces · Connector, Service, Operation, Event Type and Channel Binding need one definition; Provider remains only the published compatibility type
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

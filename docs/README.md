@@ -8,6 +8,7 @@ roadmap, story status, design records, and notes. Work is tracked with the **tra
 
 | If you want… | Read |
 |---|---|
+| **The connector vocabulary** — Connector, Service, Operation, Event Type and Channel Binding | [concepts.md](concepts.md) |
 | Why the project exists; the principles | [vision.md](vision.md) |
 | Status + what's next; the epics | [roadmap.md](roadmap.md) |
 | **What to work on right now** | [stories/README.md](stories/README.md) — the backlog/status board |

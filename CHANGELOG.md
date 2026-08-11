@@ -7,8 +7,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The connector domain is named once, in `docs/concepts.md`** (C-522). Connector, Service,
+  Operation, Event Type, Channel Binding and Graph each get one definition and the artifact that
+  publishes it, and the terms a *host* adds — Connection, Channel, Event Delivery, Trigger,
+  Datasource, App, Managed Agent — are named as explicitly not connector members. The page records
+  that `connector_catalog::Provider`/`ProviderKey` are compatibility API names, that no standalone
+  `Service` value is published (service identity travels as a `service` field on `Operation`,
+  `Event`, `Channel`, `ConfigField` and `ConfigChoices`), and that no provider declares a
+  `[[graphs]]` member. Recovered from an unmerged 2026-08-03 branch and re-measured against v0.20.0
+  before landing; the branch's `docs/vision.md` delta was dropped because C-495 has since reversed
+  the *Non-goals* wording it restored.
+
 ### Changed
 
+- **Three stale documentation claims are corrected against measured output.** `README.md` said six
+  declarable surfaces reach no artifact with `config` at "112 fields across 40 providers" — C-87
+  published `config` and `verify`, and the measured figures are 82 config fields across 42 providers,
+  identical in `web/public/catalog.json` and across 46 emitted manifests, with `verify` on 42. It
+  also said all 53 providers are hand-authored and that a `[spec]`-backed provider is rejected; there
+  are 55 providers and 8 are `[spec]`-backed. `AGENTS.md` and `docs/stories/README.md` carried
+  `v0.15.0`/`v0.17.0` snapshot labels against a v0.20.0 tree; the catalogue counts beside them
+  re-measured exact and are unchanged.
 - **Connector operation direction is now an explicit reviewed safety fact** (C-516). Every one of
   the 829 published operations states closed `read` or `write` direction independently of its HTTP
   method. Generated Flux, manifests, embedded/public catalogues, intents and staging carry that

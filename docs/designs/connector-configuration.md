@@ -1,7 +1,7 @@
 # Design: the connector configuration surface
 
 **Status:** accepted (IR, loader and consumer artifacts landed) · **Pillar:** Spec (+ Codegen, Bridge) ·
-**Epic:** `connector-config` · **Stories:** C-86 … C-89 ·
+**Epic:** `connector-config` · **Stories:** C-86 … C-89, C-508, C-523 ·
 **Supersedes:** [C-68](../stories/C-68-endpoint-binding.md)'s binding half ·
 **Amends:** [C-22](../stories/C-22-auth-conformance-matrix.md), [C-62](../stories/C-62-codegen-subscription-ops.md), [C-67](../stories/C-67-required-scopes.md)
 
@@ -238,6 +238,39 @@ The policy is declaration data, not a GitLab-only host feature. Manifest, embedd
 and public catalogue carry `format`, `default`, `approval`, `binds` and derived `level`; renderers can
 show the activation requirement without parsing provider TOML. Configured values never enter those
 artifacts or a model-visible operation schema.
+
+### An HTTPS origin is one published normalized value, not a parser per consumer (C-523)
+
+C-508 initially put the declaration-time validator in `connector-spec` and a second runtime
+validator in `connector-pack`. A shared case table held their accepted languages together, but it
+did not give an outside consumer an implementation: `connector-spec` is compiler machinery and is
+intentionally absent from the crates.io publish closure. Exchange needs the rule before persisting
+and approving a proposal, so leaving the split in place would require a third parser or would publish
+the compiler merely to share one small vocabulary.
+
+The canonical type therefore belongs in published `connector-address`, below both consumers. The
+crate already owns the pure validated names that cross the compiler/host boundary; an HTTPS origin is
+the same kind of value vocabulary. Its public parse result is a normalized `HttpsOrigin`, and its
+failure is a closed value-free refusal that retains no caller text. It performs no IO, adds no URL or
+compiler dependency, and does not own approval state.
+
+Canonical rendering is part of identity, not presentation: `https` has one spelling, DNS names are
+lowercase, IP literals and ports use canonical standard-library spelling, and the effective default
+port `443` is omitted. Consequently Exchange can use normalized equality for proposal revisions and
+approval, while the pack uses the same normalized value for both transport and permission subjects.
+Equivalent spelling cannot manufacture a replacement proposal; different canonical origins remain a
+real authority change.
+
+One corpus records each input with either its canonical output or its typed refusal. The address
+type, `connector-spec` declaration validation and `connector-pack` runtime projection all consume
+that corpus. Provider-authored defaults and examples must already be canonical so generated public
+artifacts stay deterministic; connection input may arrive in an equivalent safe spelling and is
+normalized before it is compared or activated.
+
+This does **not** make `connector-spec` publishable and does not put Exchange in this workspace.
+`connector-spec` and `connector-pack` consume `connector-address`; Exchange consumes the released
+`codewandler-connector-address` crate from crates.io. No consumer copies the grammar, reads provider
+TOML, or uses a sibling path/git dependency.
 
 ## Invariants — all refusals
 
