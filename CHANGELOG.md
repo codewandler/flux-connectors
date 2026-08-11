@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-08-12
+
 ### Added
 
 - **Internal infrastructure markers leave the public repository** (C-532). `docs/designs/spec-front-end.md`

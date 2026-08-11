@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-08-12
+
 ### New
 
 - **GitLab can sign a person in, instead of asking them to paste a token.** A GitLab connection can
