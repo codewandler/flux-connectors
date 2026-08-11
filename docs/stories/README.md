@@ -509,6 +509,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-522 — Name the connector domain once across the Flux family](C-522-name-the-connector-domain-once.md) · Surfaces · Connector, Service, Operation, Event Type and Channel Binding need one definition; Provider remains only the published compatibility type
 - [C-525 — The published catalogue carries a credential's OAuth2 acquisition](C-525-publish-oauth2-acquisition-in-the-catalogue.md) · Bridge · OAuth2Spec is modelled in the IR and reaches the explorer's catalog.json and the emitted manifest, but NOT crates/catalog — the one artifact Exchange and autodev link. Declaring an OAuth2 connector before this ships a marking no host can read
 - [C-527 — GitHub and GitLab can answer what a token reaches](C-527-forge-discovery-reads.md) · Connector · Every forge operation took {owner}/{repo} or {project_id} as given, so a caller holding only a token could not find an organisation, a group or a repository — the connector described a repository nobody could name
+- [C-528 — A credential declares whose authority it carries](C-528-a-credential-declares-whose-authority-it-carries.md) · Spec · the on-behalf-of axis — Slack's one OAuth grant returns a bot token and a user token that are placed identically, acquired identically, and differ only in who they can act as
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

@@ -28,12 +28,14 @@ static AUTH: &[crate::Credential] = &[
         leaf: "key",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Query { name: "key" },
+        subject: crate::Subject::Unstated,
     },
     crate::Credential {
         name: "trello.token",
         leaf: "token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Query { name: "token" },
+        subject: crate::Subject::Unstated,
     },
 ];
 

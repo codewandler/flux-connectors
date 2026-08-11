@@ -475,6 +475,10 @@ fn render_auth(connector: &Connector) -> Result<String> {
             acquisition(connector, method)
         ));
         out.push_str(&format!("        place: {},\n", placement(&method.scheme)));
+        // Emitted even when unreviewed, deliberately. `Unstated` is a state a host must be able to
+        // see — "nobody checked" and "this is an app token" call for different behaviour — so it is
+        // published rather than skipped the way the *manifest* skips it to keep artifacts stable.
+        out.push_str(&format!("        subject: {},\n", subject(method.subject)));
         out.push_str("    },\n");
     }
     out.push_str("];\n\n");
@@ -773,6 +777,19 @@ fn acquisition(connector: &Connector, method: &connector_spec::AuthMethod) -> St
             string(method.user_suffix.as_deref().unwrap_or_default())
         ),
         _ => "crate::Acquisition::Static".to_string(),
+    }
+}
+
+/// The subject axis: whose authority the credential carries (C-528).
+///
+/// Exhaustive, for the reason [`placement`] is. There are only three answers and one of them means
+/// "unreviewed"; a catch-all arm would map a fourth to whichever neighbour was listed last, and on
+/// this axis the wrong neighbour is either an over-grant or a silent failure.
+fn subject(subject: connector_spec::Subject) -> &'static str {
+    match subject {
+        connector_spec::Subject::Unstated => "crate::Subject::Unstated",
+        connector_spec::Subject::App => "crate::Subject::App",
+        connector_spec::Subject::User => "crate::Subject::User",
     }
 }
 
@@ -1456,6 +1473,35 @@ mod tests {
                 "`{expected}` is missing from the rendered acquisition:\n{rendered}"
             );
         }
+    }
+
+    /// **Whose authority a credential carries reaches the catalogue** (C-528).
+    ///
+    /// Same argument as C-525's: a declaration that stops at the IR is one Exchange and autodev
+    /// cannot act on, and this axis exists precisely so a host can bound a credential's reach. The
+    /// unreviewed default is published too — a host must be able to see the difference between
+    /// "this is an app token" and "nobody checked", because those call for different behaviour.
+    #[test]
+    fn every_credential_publishes_its_subject() {
+        let mut reviewed = connector();
+        reviewed.auth[0].subject = connector_spec::Subject::App;
+        reviewed.auth[1].subject = connector_spec::Subject::User;
+
+        let rendered = render_auth(&reviewed).expect("subjects must render");
+        assert!(
+            rendered.contains("subject: crate::Subject::App"),
+            "an app subject did not reach the catalogue:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("subject: crate::Subject::User"),
+            "a user subject did not reach the catalogue:\n{rendered}"
+        );
+
+        let unreviewed = render_auth(&connector()).expect("the plain fixture must render");
+        assert!(
+            unreviewed.contains("subject: crate::Subject::Unstated"),
+            "an unreviewed credential must publish `Unstated`, not nothing:\n{unreviewed}"
+        );
     }
 
     /// A credential with no `[auth.oauth2]` block is untouched — the whole catalogue depends on it.

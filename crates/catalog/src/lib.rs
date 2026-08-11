@@ -472,6 +472,38 @@ pub struct OAuthRedirect {
     pub path: &'static str,
 }
 
+/// **Whose authority a credential carries when it is used** (C-528). Mirrors
+/// `connector_spec::Subject`.
+///
+/// The "on behalf of" axis, independent of every other one: [`Placement`] says where the value goes,
+/// [`Acquisition`] says how it is obtained, and this says *who the vendor thinks is acting* once it
+/// arrives. Slack is the case that forces it — one OAuth v2 grant returns a workspace bot token and
+/// a signed-in user's token in one response, placed identically and acquired identically, differing
+/// only in who they can act as.
+///
+/// A host reads this to bound a credential's reach and to decide where it may be stored: an
+/// app-subject credential is provisioned once for a tenant, a user-subject one once per person, and
+/// keeping a user token at a tenant-wide address would let one member act as another.
+///
+/// # `Unstated` is a real answer and must be handled
+///
+/// It means *"nobody has reviewed this credential for its subject"* — not "app". Every connector
+/// shipped before C-528 carries it, including genuinely ambiguous ones: GitHub's single
+/// `github.token` covers both an App installation token and a personal access token, which are
+/// opposite answers. **A consumer that needs the distinction refuses on `Unstated`** rather than
+/// assuming; assuming `App` over-grants, and assuming `User` silently fails.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Subject {
+    /// Not reviewed. Carries no claim in either direction — refuse rather than choose one.
+    #[default]
+    Unstated,
+    /// The integration itself: Slack's `xoxb-` bot token, a GitHub App installation token.
+    App,
+    /// The person who granted it — "on behalf of": Slack's `xoxp-` user token, an Atlassian 3LO
+    /// token, a personal access token.
+    User,
+}
+
 /// One credential a connector declares: what it is called, where its value is kept, and how it
 /// reaches the wire.
 ///
@@ -494,6 +526,11 @@ pub struct Credential {
     pub acquire: Acquisition,
     /// Where that value goes on the request.
     pub place: Placement,
+    /// Whose authority the value carries once it arrives — see [`Subject`].
+    ///
+    /// Unlike the three fields above, this one has a meaningful *unreviewed* state, and every
+    /// connector shipped before C-528 is in it. Read [`Subject::Unstated`] before branching on this.
+    pub subject: Subject,
 }
 
 /// One string pair in a generated declaration (query, header or payload mapping).

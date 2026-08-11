@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "api_token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "SSWS " },
+        subject: crate::Subject::Unstated,
     },
 ];
 

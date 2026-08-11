@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "api_key",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "X-Algolia-API-Key", prefix: "" },
+        subject: crate::Subject::Unstated,
     },
 ];
 

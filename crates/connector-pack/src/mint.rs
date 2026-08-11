@@ -338,6 +338,7 @@ mod tests {
                     name: "Authorization",
                     prefix: "Bearer ",
                 },
+                subject: catalog::Subject::App,
             },
             catalog::Credential {
                 name: "slack.session_token",
@@ -350,6 +351,7 @@ mod tests {
                     name: "Authorization",
                     prefix: "Bearer ",
                 },
+                subject: catalog::Subject::App,
             },
         ])
     }
@@ -699,6 +701,7 @@ mod tests {
                 from: "/access_token",
             },
             place: catalog::Placement::Inbound,
+            subject: catalog::Subject::App,
         }]);
 
         let error = projected(provider, Arc::new(Vendor), store().await)
@@ -720,6 +723,7 @@ mod tests {
                 name: "Authorization",
                 prefix: "Bearer ",
             },
+            subject: catalog::Subject::App,
         }]);
 
         let result = projected(provider, Arc::new(Vendor), store().await)

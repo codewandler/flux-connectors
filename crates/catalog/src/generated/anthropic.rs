@@ -28,12 +28,14 @@ static AUTH: &[crate::Credential] = &[
         leaf: "api_key",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "x-api-key", prefix: "" },
+        subject: crate::Subject::Unstated,
     },
     crate::Credential {
         name: "anthropic.admin_key",
         leaf: "admin_key",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "x-api-key", prefix: "" },
+        subject: crate::Subject::Unstated,
     },
 ];
 

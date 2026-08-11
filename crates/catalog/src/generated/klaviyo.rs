@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "api_key",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Klaviyo-API-Key " },
+        subject: crate::Subject::Unstated,
     },
 ];
 

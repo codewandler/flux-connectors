@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "anon_key",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "apikey", prefix: "" },
+        subject: crate::Subject::Unstated,
     },
 ];
 

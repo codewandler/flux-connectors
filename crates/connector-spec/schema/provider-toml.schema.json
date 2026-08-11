@@ -1078,6 +1078,15 @@
         "oauth2": {
           "$ref": "#/$defs/oauth2",
           "description": "Present when the credential is OAuth2-backed and the host runs the token grants. Absent for a plain environment-to-secret credential."
+        },
+        "subject": {
+          "type": "string",
+          "enum": [
+            "unstated",
+            "app",
+            "user"
+          ],
+          "description": "Whose authority this credential carries when it is used — the \"on behalf of\" axis. `app` acts as the integration (Slack's `xoxb-` bot token, a GitHub App installation token); `user` acts as the person who granted it (Slack's `xoxp-` user token, an Atlassian 3LO token, a personal access token). Defaults to `unstated`, which means NOBODY HAS REVIEWED THIS rather than `app`: a consumer needing the distinction refuses on it, because assuming `app` over-grants and assuming `user` silently fails."
         }
       }
     },

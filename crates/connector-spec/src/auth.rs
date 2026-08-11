@@ -137,6 +137,72 @@ pub enum AuthScheme {
     Signing,
 }
 
+/// **Whose authority a credential carries when it is used** (C-528).
+///
+/// This is the "on behalf of" axis, and it is independent of every other one. [`AuthScheme`] says
+/// where the value goes; [`OAuth2Spec`] says how it is obtained; this says *who the vendor thinks is
+/// acting* once it arrives. Slack is the case that forces it: one OAuth v2 grant returns two tokens
+/// in one response — `access_token` is the workspace's bot (`xoxb-`) and
+/// `authed_user.access_token` is the signed-in person (`xoxp-`). They are placed identically, they
+/// are acquired by the same grant, and they differ in nothing an existing axis can express, while
+/// differing in **who they can act as and how much they can reach**.
+///
+/// Three consequences ride on it, which is why it is a declaration rather than a host convention:
+///
+/// - **Blast radius.** An app-subject token carries the integration's own grant across the whole
+///   workspace; a user-subject token is bounded by one person's permissions. A host that cannot tell
+///   them apart cannot bound either.
+/// - **Who supplies it.** An app credential is provisioned once by whoever runs the product; a user
+///   credential is provisioned once *per person*, and storing one under a tenant-wide address would
+///   let one member act as another.
+/// - **Whether a grant may be delegated at all.** Only a user-subject credential can answer "act on
+///   behalf of the signed-in user".
+///
+/// # Why there is an `Unstated` variant, and why it is the default
+///
+/// [`OperationDirection`](crate::OperationDirection) has no default: C-516 reviewed all 829
+/// operations and made both front-ends state it. That is the stronger design and it is not available
+/// here yet — 55 connectors ship credentials today and **none has been reviewed for this**, some
+/// genuinely ambiguously: `providers/github.toml`'s single `github.token` is documented as covering
+/// GitHub App installation tokens (app-subject) *and* personal access tokens (user-subject), which
+/// is one declaration standing for two different answers.
+///
+/// So the default is [`Unstated`](Self::Unstated) and it means exactly *"nobody has reviewed this"*,
+/// not *"app"*. A host needing the distinction **refuses on `Unstated`** rather than assuming the
+/// safer-sounding value, because assuming `app` over-grants and assuming `user` silently fails.
+/// Defaulting to `App` would have been the marking `AGENTS.md` warns about: one that reads as a
+/// safety decision while recording only that the question was never asked.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Subject {
+    /// **Not reviewed.** Carries no claim in either direction; a consumer that needs the answer
+    /// refuses rather than choosing one.
+    #[default]
+    Unstated,
+    /// The integration itself. Slack's `xoxb-` bot token, a GitHub App installation token.
+    App,
+    /// The person who granted it — "on behalf of". Slack's `xoxp-` user token, an Atlassian 3LO
+    /// token, a personal access token.
+    User,
+}
+
+impl Subject {
+    /// The stable spelling published by manifests and catalogues.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Self::Unstated => "unstated",
+            Self::App => "app",
+            Self::User => "user",
+        }
+    }
+
+    /// Whether this is the unreviewed default, which is what `skip_serializing_if` keys on so that
+    /// no already-published artifact moves.
+    pub const fn is_unstated(&self) -> bool {
+        matches!(self, Self::Unstated)
+    }
+}
+
 /// A token grant an [`OAuth2Spec`] credential allows the host to run. Mirrors
 /// `flux_plugin_protocol::OAuthGrant`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -258,6 +324,12 @@ pub struct AuthMethod {
     /// plain env-to-secret credential.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub oauth2: Option<OAuth2Spec>,
+    /// Whose authority this credential carries when it is used — see [`Subject`].
+    ///
+    /// Defaults to [`Subject::Unstated`] and is skipped when it is, so adding this axis moved no
+    /// already-published manifest byte.
+    #[serde(default, skip_serializing_if = "Subject::is_unstated")]
+    pub subject: Subject,
 }
 
 impl AuthMethod {

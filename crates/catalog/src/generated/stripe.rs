@@ -28,12 +28,14 @@ static AUTH: &[crate::Credential] = &[
         leaf: "secret_key",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+        subject: crate::Subject::Unstated,
     },
     crate::Credential {
         name: "stripe.webhook_signing_secret",
         leaf: "webhook_signing_secret",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Inbound,
+        subject: crate::Subject::Unstated,
     },
 ];
 

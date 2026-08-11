@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "X-Figma-Token", prefix: "" },
+        subject: crate::Subject::Unstated,
     },
 ];
 

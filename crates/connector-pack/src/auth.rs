@@ -289,6 +289,10 @@ mod tests {
             leaf: "token",
             acquire,
             place,
+            // This module is the *placement* half, and placement is subject-independent: an app
+            // token and a user token go onto a request identically. `Unstated` therefore keeps the
+            // fixture honest about what it is exercising.
+            subject: catalog::Subject::Unstated,
         }))
     }
 

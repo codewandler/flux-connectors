@@ -28,12 +28,14 @@ name = "slack.bot_token"
 scheme = "bearer"
 env = ["SLACK_BOT_TOKEN"]
 description = "Slack bot user OAuth token (xoxb-…) with chat:write, channels:history, users:read and reactions:write"
+subject = "app"
 
 [[auth]]
 name = "slack.signing_secret"
 scheme = "signing"
 env = ["SLACK_SIGNING_SECRET"]
 description = "Slack app signing secret, used to verify inbound Events API requests. Never sent to Slack"
+subject = "app"
 
 [[default_auth]]
 credentials = ["slack.bot_token"]

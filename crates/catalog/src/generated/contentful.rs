@@ -28,12 +28,14 @@ static AUTH: &[crate::Credential] = &[
         leaf: "delivery_token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+        subject: crate::Subject::Unstated,
     },
     crate::Credential {
         name: "contentful.management_token",
         leaf: "management_token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+        subject: crate::Subject::Unstated,
     },
 ];
 

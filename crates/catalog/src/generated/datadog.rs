@@ -28,12 +28,14 @@ static AUTH: &[crate::Credential] = &[
         leaf: "api_key",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "DD-API-KEY", prefix: "" },
+        subject: crate::Subject::Unstated,
     },
     crate::Credential {
         name: "datadog.application_key",
         leaf: "application_key",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "DD-APPLICATION-KEY", prefix: "" },
+        subject: crate::Subject::Unstated,
     },
 ];
 

@@ -9,6 +9,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A credential declares whose authority it carries** (C-528). `connector_spec::Subject` and
+  `catalog::Subject` — `unstated` | `app` | `user` — land on `AuthMethod` and on the published
+  `catalog::Credential`. This is the "on behalf of" axis, independent of placement and acquisition:
+  Slack's single OAuth v2 grant returns a workspace bot token and the signed-in person's token in one
+  response, placed identically and acquired identically, differing only in who they can act as.
+  `providers/slack.toml` had that fact in prose and no field to state it in; it now declares both
+  credentials `app`.
+
+  **The default is `unstated`, and it means "nobody has reviewed this" rather than `app`.** A
+  consumer needing the distinction refuses on it — assuming `app` over-grants, assuming `user`
+  silently fails. Requiring every connector to state it, as C-516 did for direction, is not yet
+  available: 55 connectors ship credentials unreviewed and some are genuinely ambiguous, GitHub's
+  single `github.token` being documented as covering both an App installation token and a personal
+  access token. The unreviewed default is skipped when serialized, so only Slack's manifest moved.
+
+  **Breaking for consumers that construct `catalog::Credential`** — it gains a field and is
+  deliberately not `#[non_exhaustive]`. Every generated catalogue table was rewritten; no `.flux`
+  byte moved.
+
 - **GitHub and GitLab can answer what a token reaches** (C-527). GitHub gains `github-user-get`,
   `github-org-list`, `github-org-repo-list` and `github-user-repo-list`; GitLab gains
   `gitlab-group-list` and `gitlab-project-list`. Every forge operation previously took `{owner}`/

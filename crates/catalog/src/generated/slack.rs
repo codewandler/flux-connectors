@@ -28,12 +28,14 @@ static AUTH: &[crate::Credential] = &[
         leaf: "bot_token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+        subject: crate::Subject::App,
     },
     crate::Credential {
         name: "slack.signing_secret",
         leaf: "signing_secret",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Inbound,
+        subject: crate::Subject::App,
     },
 ];
 

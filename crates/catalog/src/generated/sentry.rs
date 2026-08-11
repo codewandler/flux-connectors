@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "auth_token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+        subject: crate::Subject::Unstated,
     },
 ];
 
