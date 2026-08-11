@@ -11,8 +11,10 @@ use flux_runtime::{Tool, ToolContext};
 use flux_system::{System, Workspace};
 use serde_json::{json, Value};
 
-#[path = "../../connector-spec/tests/fixtures/origin_grammar.rs"]
-mod origin_grammar;
+#[path = "../../connector-address/tests/fixtures/origin_corpus.rs"]
+mod origin_corpus;
+
+use origin_corpus::Outcome;
 
 const TENANT: &str = "t-origin-parity";
 const CONFIGURED_ORIGIN: &str = "https://configured-origin-sentinel.example:8443";
@@ -61,23 +63,40 @@ fn empty_credentials() -> Credentials {
     Credentials::new(Arc::new(MemoryStore::new()), TENANT).expect("valid tenant")
 }
 
+/// The runtime half of the shared corpus (C-523): a supplied value is accepted exactly where the
+/// corpus records a canonical origin, and **the destination is that canonical origin** rather than
+/// the text the tenant happened to type. `connector-spec` reads the same corpus for the declaration
+/// half, where only the canonical spelling is admissible.
 #[test]
-fn the_runtime_accepts_exactly_the_shared_origin_grammar_cases() {
-    for case in origin_grammar::ORIGIN_CASES {
-        let outcome = project(case.value, empty_credentials()).build_request(&json!({}));
-        assert_eq!(
-            outcome.is_ok(),
-            case.accepted,
-            "runtime classified {:?} differently from the shared contract: {outcome:?}",
-            case.value
-        );
-        if !case.accepted {
-            let error = outcome.expect_err("the shared case is refused");
-            assert!(matches!(error, Error::UnsafeOrigin { .. }), "{error}");
-            assert!(
-                !error.to_string().contains(case.value),
-                "an invalid configured origin reached refusal evidence: {error}"
-            );
+fn the_runtime_normalizes_exactly_the_shared_origin_corpus() {
+    for case in origin_corpus::ORIGIN_CASES {
+        let operation = project(case.input, empty_credentials());
+        let outcome = operation.build_request(&json!({}));
+        match case.outcome {
+            Outcome::Canonical(canonical) => {
+                let request = outcome.unwrap_or_else(|error| {
+                    panic!("{:?} is a safe configured origin: {error}", case.input)
+                });
+                assert_eq!(
+                    request.url,
+                    format!("{canonical}/api/v4/user"),
+                    "{:?} reached a destination that is not its canonical origin",
+                    case.input
+                );
+                assert_eq!(
+                    operation.permission_subjects(&json!({})),
+                    [request.url],
+                    "the permission subject must be the same normalized origin as the destination"
+                );
+            }
+            Outcome::Refused(_) => {
+                let error = outcome.expect_err("the shared corpus refuses this value");
+                assert!(matches!(error, Error::UnsafeOrigin { .. }), "{error}");
+                assert!(
+                    !error.to_string().contains(case.input),
+                    "an invalid configured origin reached refusal evidence: {error}"
+                );
+            }
         }
     }
 }

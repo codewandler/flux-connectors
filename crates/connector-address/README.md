@@ -25,6 +25,23 @@ assert_eq!(
 );
 ```
 
+It also owns the one destination a *tenant* supplies: an operator-approved HTTPS origin.
+
+```rust
+use connector_address::{HttpsOrigin, OriginRefusal};
+
+// Equivalent safe spellings are one value, so equality is a comparison of destinations.
+let supplied = HttpsOrigin::parse("HTTPS://GitLab.com:443")?;
+assert_eq!(supplied, HttpsOrigin::parse("https://gitlab.com")?);
+assert_eq!(supplied.as_str(), "https://gitlab.com");
+
+// The connector owns every byte after the origin.
+assert_eq!(
+    HttpsOrigin::parse("https://gitlab.company.example/api/v4"),
+    Err(OriginRefusal::Path)
+);
+```
+
 ## What it is
 
 Four addresses sharing one grammar:
@@ -41,6 +58,31 @@ Every component is validated, the reserved `default` service is elided from all 
 and not merely a destination. A tenant id is treated as untrusted input, because it reaches a
 filesystem-like path in a secret store: there is no way to construct a reference that renders a
 traversing path.
+
+…and one normalized value, `HttpsOrigin`:
+
+```text
+https://gitlab.com                  the reviewed default of a self-managed connector
+https://gitlab.company.example:8443 one installation of it
+```
+
+`HttpsOrigin::parse` accepts a supplied origin in any equivalent safe spelling and returns the
+canonical one: lowercase scheme and DNS host, standard-library spelling for an IPv4 or bracketed IPv6
+literal, decimal port, and no default `:443`. `Eq`, `Ord` and `Hash` therefore compare destinations
+rather than caller text, which is what a consumer needs in order to decide whether a proposed origin
+is the same as an approved one. `HttpsOrigin::parse_canonical` is the stricter door for a value that
+gets *published* — a provider-authored default or example — and refuses anything that is not already
+its own canonical form.
+
+Userinfo, plain HTTP, a path (`/` included), a query, a fragment, whitespace, a `{placeholder}`, an
+unbracketed IPv6 literal, a malformed or non-ASCII host and a zero or out-of-range port are all
+refused, as a closed `OriginRefusal` that **names the class and never retains the supplied text** —
+a configured origin is a private installation's deployment detail, and a refusal is exactly where it
+would otherwise be copied into a log. The accepted value does not render itself through `Debug`
+either; `as_str()` is the deliberate call.
+
+It holds no approval state: whether a canonical origin is *allowed* is a policy question for the host
+that stores connections.
 
 ## What it is not
 

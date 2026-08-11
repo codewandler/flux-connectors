@@ -161,6 +161,44 @@ fn request_and_permission_subject_share_the_approved_origin_and_effective_port()
     );
 }
 
+/// **An equivalent spelling of the reviewed default is the default** (C-523). Approval compares
+/// normalized origins, not caller text, so re-typing `https://gitlab.com` in upper case or with its
+/// effective port spelled out stays the zero-configuration path instead of manufacturing a
+/// custom-origin proposal that deployment policy must approve.
+#[test]
+fn an_equivalent_spelling_of_the_default_origin_is_not_a_custom_proposal() {
+    for spelling in [
+        "HTTPS://GitLab.com",
+        "https://gitlab.com:443",
+        "https://GITLAB.COM:0443",
+    ] {
+        let proposed = MemoryConfig::new().with_endpoint(
+            TENANT,
+            "gitlab",
+            DEFAULT_SERVICE,
+            "origin",
+            spelling,
+        );
+        let operation = project("gitlab-user-get", proposed);
+        let request = operation
+            .build_request(&json!({}))
+            .unwrap_or_else(|error| panic!("{spelling:?} is the reviewed default: {error}"));
+        assert_eq!(request.url, "https://gitlab.com/api/v4/user");
+        assert_eq!(
+            operation.permission_subjects(&json!({})),
+            ["https://gitlab.com/api/v4/user"],
+            "the destination and the permission subject must be the same normalized origin"
+        );
+        assert_eq!(
+            operation.intents(&json!({})).intents[0].target,
+            flux_spec::IntentTarget::Url {
+                url: "https://gitlab.com/api/v4/user".to_owned(),
+            },
+            "the approval prompt and the evidence record name the normalized destination too"
+        );
+    }
+}
+
 #[test]
 fn replacing_an_approved_origin_creates_a_new_inert_proposal() {
     let config = MemoryConfig::new()

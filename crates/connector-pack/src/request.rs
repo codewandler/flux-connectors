@@ -115,6 +115,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use connector_address::HttpsOrigin;
 use flux_lang::ast::Node;
 use flux_lang::program::CompositeOpDecl;
 use serde_json::Value;
@@ -738,7 +739,7 @@ impl Slot {
     /// cannot introduce a delimiter into a template that had none either.
     pub(crate) fn substitutable(self, value: &str) -> bool {
         match self {
-            Self::Origin => validate_origin(value).is_ok(),
+            Self::Origin => HttpsOrigin::parse(value).is_ok(),
             Self::Host => validate_authority(value).is_ok(),
             other => other.validate(value).is_ok(),
         }
@@ -777,10 +778,13 @@ impl Slot {
             ));
         }
         match self {
-            Self::Origin => {
-                validate_origin(value)?;
-                Ok(value.to_owned())
-            }
+            // **The substituted text is the normalized origin, not the supplied one** (C-523).
+            // `Operation::endpoint` has already normalized it, so this is idempotent for the
+            // ordinary path; stating it here too is what makes "the destination is a canonical
+            // origin" a property of substitution rather than of one caller remembering to do it.
+            Self::Origin => HttpsOrigin::parse(value)
+                .map(HttpsOrigin::into_string)
+                .map_err(|refusal| refusal.to_string()),
             Self::Host => Ok(value.to_owned()),
             Self::Path => {
                 validate_path(value)?;
@@ -813,67 +817,6 @@ impl Slot {
             }
         }
     }
-}
-
-/// Runtime validation for an origin value. Kept in the published pack because it may not depend on
-/// the compiler crate. The diagnostic deliberately never quotes the configured value.
-pub(crate) fn validate_origin(value: &str) -> Result<(), String> {
-    let authority = value
-        .strip_prefix("https://")
-        .ok_or_else(|| "the configured origin is not an absolute HTTPS origin".to_owned())?;
-    if authority.is_empty()
-        || authority.chars().any(char::is_whitespace)
-        || authority
-            .chars()
-            .any(|c| matches!(c, '/' | '?' | '#' | '@' | '{' | '}'))
-    {
-        return Err(
-            "the configured origin must contain only an HTTPS scheme and authority, with no \
-             credentials, path, query or fragment"
-                .to_owned(),
-        );
-    }
-    let (host, port) = if authority.starts_with('[') {
-        let close = authority
-            .find(']')
-            .ok_or_else(|| "the configured origin has an invalid IPv6 authority".to_owned())?;
-        authority[1..close]
-            .parse::<std::net::Ipv6Addr>()
-            .map_err(|_| "the configured origin has an invalid IPv6 authority".to_owned())?;
-        let tail = &authority[close + 1..];
-        let port = if tail.is_empty() {
-            None
-        } else {
-            Some(
-                tail.strip_prefix(':')
-                    .ok_or_else(|| "the configured origin has an invalid authority".to_owned())?,
-            )
-        };
-        (&authority[1..close], port)
-    } else {
-        match authority.rsplit_once(':') {
-            Some((host, port)) if !host.contains(':') => (host, Some(port)),
-            Some(_) => return Err("the configured origin has an invalid authority".to_owned()),
-            None => (authority, None),
-        }
-    };
-    if host.is_empty()
-        || (host.parse::<std::net::IpAddr>().is_err()
-            && host.split('.').any(|label| {
-                label.is_empty()
-                    || label.starts_with('-')
-                    || label.ends_with('-')
-                    || !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
-            }))
-    {
-        return Err("the configured origin has an invalid host".to_owned());
-    }
-    if let Some(port) = port {
-        if port.parse::<u16>().ok().filter(|port| *port != 0).is_none() {
-            return Err("the configured origin has an invalid port".to_owned());
-        }
-    }
-    Ok(())
 }
 
 /// A value that stays inside one path segment.

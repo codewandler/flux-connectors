@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use connector_address::HttpsOrigin;
 use flux_lang::program::CompositeOpDecl;
 use flux_runtime::{Tool, ToolContext, ToolResult};
 use flux_spec::{
@@ -335,6 +336,14 @@ impl Operation {
     /// The fallback cannot report this method's error, but it must still honour it. In particular,
     /// an operator-gated proposal is inert data: it is neither a request destination nor a subject
     /// that may enter an approval prompt, intent or evidence record.
+    ///
+    /// **An origin is normalized here, once** (C-523), and the normalized text is what both callers
+    /// receive — so the request destination, the permission subject and the intent are the same
+    /// value by construction rather than by two code paths agreeing. Normalizing before the approval
+    /// comparison is the other half: a tenant re-typing the reviewed default as `HTTPS://GitLab.com`
+    /// or with its effective `:443` spelled out is naming the destination that was already reviewed,
+    /// and turning that into a custom-origin proposal would ask an operator to approve a change
+    /// nobody made.
     fn endpoint(&self, variable: &str) -> Result<String, Error> {
         let field = Field::from_placeholder(variable);
         let resolved = self
@@ -347,24 +356,33 @@ impl Operation {
                 tenant: self.settings.tenant().to_owned(),
                 field: format!("endpoint.{variable}"),
             })?;
+        let mut value = resolved.value().to_owned();
         if let Some(declaration) = endpoint_declaration(self.provider, self.entry.service, variable)
         {
+            let mut is_declared_default = declaration.default == Some(resolved.value());
             if declaration.format == "origin" {
-                request::validate_origin(resolved.value()).map_err(|reason| {
+                let origin = HttpsOrigin::parse(resolved.value()).map_err(|refusal| {
                     Error::UnsafeOrigin {
                         operation: self.entry.id.into(),
                         provider: self.provider.id.into(),
                         service: self.entry.service.into(),
                         field: declaration.name.into(),
-                        reason: reason.into(),
+                        reason: refusal.to_string().into(),
                     }
                 })?;
+                // The declared default is canonical — the loader refuses a declaration that is not
+                // — so parsing it cannot fail; a `None` here is a connector that declares no
+                // default, which is not the reviewed destination either way.
+                is_declared_default = declaration
+                    .default
+                    .and_then(|default| HttpsOrigin::parse(default).ok())
+                    .is_some_and(|default| default == origin);
+                value = origin.into_string();
             }
             match declaration.approval {
                 catalog::Approval::None => {}
                 catalog::Approval::Operator
-                    if declaration.default != Some(resolved.value())
-                        && !resolved.is_operator_approved() =>
+                    if !is_declared_default && !resolved.is_operator_approved() =>
                 {
                     return Err(Error::UnapprovedConfig {
                         operation: self.entry.id.into(),
@@ -376,7 +394,7 @@ impl Operation {
                 catalog::Approval::Operator => {}
             }
         }
-        Ok(resolved.value().to_owned())
+        Ok(value)
     }
 
     /// The catalogue entry behind this tool.

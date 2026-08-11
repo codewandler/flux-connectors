@@ -33,6 +33,15 @@ path = "src/lib.rs"
 # claim above stays a true statement about this manifest. `dependency_fence.rs` is what holds it.
 catalog.workspace = true
 
+# **The published address vocabulary** (C-523). `HttpsOrigin` is the one grammar that has to mean the
+# same thing in three programs — the compiler that validates a declared origin, this pack, which
+# turns a supplied one into a request destination and a permission subject, and Exchange, which
+# persists and approves a proposal. This edge is what replaces the runtime copy of that grammar that
+# used to live in `request.rs`; it reaches *down*, into a crate that holds no parser, no client and
+# no compiler, and it is already in the publish closure through `connector-secrets`, so it grows
+# what ships by nothing.
+connector-address.workspace = true
+
 # The credential port (C-116). `SecretStore` is consumed, never redefined, and C-90's
 # `CredentialRef`/`Layout` come through it rather than from a second addressing scheme.
 #

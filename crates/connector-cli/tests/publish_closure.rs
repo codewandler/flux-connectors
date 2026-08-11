@@ -189,6 +189,49 @@ fn no_machinery_crate_is_published() {
     }
 }
 
+/// Acceptance (C-523): a consumer outside this workspace — Exchange — can depend on the runtime pack
+/// and the origin vocabulary **together**, from the registry, without the compiler coming with them.
+///
+/// Three claims, because each fails differently. The pack must *reach* the vocabulary, or the shared
+/// `HttpsOrigin` is not shared and the runtime is back to a copied grammar. The vocabulary must be
+/// **published**, or a consumer that names both gets one that does not resolve. And neither may drag
+/// `connector-spec` in, which is the edge C-407 removed and the one a "just depend on the loader"
+/// shortcut would recreate — this is the second, narrower statement of
+/// [`no_machinery_crate_is_published`], stated over the one root that now holds the origin grammar.
+#[test]
+fn the_pack_and_the_origin_vocabulary_are_consumable_together_without_the_compiler() {
+    const PACK: &str = "codewandler-connector-pack";
+    const ADDRESS: &str = "codewandler-connector-address";
+
+    let workspace = Workspace::read();
+    let reached = workspace.closure(PACK);
+    assert!(
+        reached.contains(ADDRESS),
+        "`{PACK}` does not depend on `{ADDRESS}`, so the HTTPS-origin grammar it enforces at runtime \
+         is a copy rather than the published one: {reached:?}"
+    );
+
+    let order = workspace.publish_order(ROOTS);
+    let position = |name: &str| {
+        order
+            .iter()
+            .position(|published| published == name)
+            .unwrap_or_else(|| panic!("`{name}` is not in the publish order: {order:?}"))
+    };
+    assert!(
+        position(ADDRESS) < position(PACK),
+        "`{ADDRESS}` must be live on crates.io before `{PACK}` names it: {order:?}"
+    );
+
+    for machinery in MACHINERY {
+        assert!(
+            !reached.contains(*machinery),
+            "`{PACK}` reaches `{machinery}`. Exchange consumes this pack from the registry, so this \
+             edge would either publish the compiler or leave the pack unresolvable: {reached:?}"
+        );
+    }
+}
+
 /// [`MACHINERY`] is only a property while it is complete. Without this, a second emitter or a second
 /// front-end crate is simply not asked about: it is in neither list, so nothing objects when a
 /// published crate grows an edge into it.
