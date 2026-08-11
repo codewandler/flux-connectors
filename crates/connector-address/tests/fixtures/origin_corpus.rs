@@ -90,9 +90,13 @@ pub const ORIGIN_CASES: &[OriginCase] = &[
         input: "https://gitlab.internal",
         outcome: Outcome::Canonical("https://gitlab.internal"),
     },
+    // A self-managed instance at a multi-label corporate name, which is the ordinary shape of a
+    // self-hosted forge and the case a public-DNS-only grammar would wrongly refuse. The host is
+    // `.example` (RFC 2606) deliberately: a corpus is a committed, published file, and a real
+    // deployment's hostname is infrastructure detail that does not belong in one.
     OriginCase {
-        input: "https://gitlab.stack.babelforce.com",
-        outcome: Outcome::Canonical("https://gitlab.stack.babelforce.com"),
+        input: "https://gitlab.stack.example",
+        outcome: Outcome::Canonical("https://gitlab.stack.example"),
     },
     OriginCase {
         input: "https://10.42.0.7:8443",
