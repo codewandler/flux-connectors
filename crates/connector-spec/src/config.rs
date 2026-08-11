@@ -247,6 +247,9 @@ pub enum Format {
     Url,
     /// An absolute HTTPS origin: scheme, authority and optional explicit port, with no userinfo,
     /// path, query or fragment. The connector appends every API path itself.
+    ///
+    /// The grammar is [`connector_address::HttpsOrigin`]'s, and a **declaration** must carry the
+    /// canonical spelling of it — see [`Format::validate`].
     Origin,
     /// An email address. Zendesk and Jira both put one in the Basic username position.
     Email,
@@ -311,7 +314,17 @@ impl Format {
                 }
                 Ok(())
             }
-            Self::Origin => validate_https_origin(value),
+            // **A declaration, not a connection value** — so the canonical spelling is required
+            // rather than merely accepted (C-523). This is applied to an `example`, a `default` and
+            // every `choice`, each of which is copied verbatim into the connector manifest, the
+            // embedded catalogue and the public catalogue; a second safe spelling of one origin
+            // would ship as a second origin, and the runtime, which normalizes a supplied value
+            // before comparing it against the reviewed default, would disagree with the artifact
+            // about which destination that is. A tenant's own value goes through
+            // `HttpsOrigin::parse` in `connector-pack` and may be spelled any equivalent safe way.
+            Self::Origin => connector_address::HttpsOrigin::parse_canonical(value)
+                .map(|_| ())
+                .map_err(|refusal| refusal.to_string()),
             Self::Email => {
                 let mut halves = value.split('@');
                 let (Some(local), Some(domain), None) =
@@ -326,81 +339,6 @@ impl Format {
             }
         }
     }
-}
-
-/// Validate the deliberately small HTTPS-origin grammar used by operator-pinned endpoints.
-///
-/// A URL parser would accept paths, userinfo, queries and fragments and make each a second policy
-/// question. This type accepts none of them: the value ends after an authority and the connector
-/// owns every byte after it.
-pub fn validate_https_origin(value: &str) -> Result<(), String> {
-    let authority = value.strip_prefix("https://").ok_or_else(|| {
-        "an origin must begin with `https://`; plain HTTP would carry credentials in cleartext"
-            .to_owned()
-    })?;
-    if authority.is_empty() {
-        return Err("an origin must name a host".to_owned());
-    }
-    if let Some(bad) = authority
-        .chars()
-        .find(|c| matches!(c, '/' | '?' | '#' | '@'))
-    {
-        return Err(format!(
-            "an origin ends after its authority and may not contain {bad:?}; userinfo, paths, \
-             queries and fragments are connector-owned or forbidden"
-        ));
-    }
-    if authority.chars().any(char::is_whitespace) {
-        return Err("an origin authority may not contain whitespace".to_owned());
-    }
-
-    let (host, port) = if authority.starts_with('[') {
-        let close = authority
-            .find(']')
-            .ok_or_else(|| "an IPv6 origin must close its `[` host with `]`".to_owned())?;
-        let host = &authority[1..close];
-        host.parse::<std::net::Ipv6Addr>()
-            .map_err(|_| "the bracketed origin host is not an IPv6 address".to_owned())?;
-        let tail = &authority[close + 1..];
-        let port = if tail.is_empty() {
-            None
-        } else {
-            Some(tail.strip_prefix(':').ok_or_else(|| {
-                "only an optional `:<port>` may follow an IPv6 origin host".to_owned()
-            })?)
-        };
-        (host, port)
-    } else {
-        match authority.rsplit_once(':') {
-            Some((host, port)) if !host.contains(':') => (host, Some(port)),
-            Some(_) => return Err("an IPv6 origin host must be enclosed in `[` and `]`".to_owned()),
-            None => (authority, None),
-        }
-    };
-
-    if host.is_empty() {
-        return Err("an origin must name a host".to_owned());
-    }
-    if host.parse::<std::net::IpAddr>().is_err() {
-        for label in host.split('.') {
-            if label.is_empty()
-                || label.starts_with('-')
-                || label.ends_with('-')
-                || !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
-            {
-                return Err("the origin host is not a DNS name or IP address".to_owned());
-            }
-        }
-    }
-    if let Some(port) = port {
-        let port: u16 = port
-            .parse()
-            .map_err(|_| "an origin port must be a decimal number from 1 to 65535".to_owned())?;
-        if port == 0 {
-            return Err("an origin port must be a decimal number from 1 to 65535".to_owned());
-        }
-    }
-    Ok(())
 }
 
 /// One DNS label: lowercase alphanumerics and inner hyphens.

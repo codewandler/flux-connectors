@@ -2,7 +2,7 @@
 id: C-523
 title: "Publish one canonical normalized HTTPS-origin API for every consumer"
 pillar: Bridge
-status: ready
+status: in-progress
 priority: 0
 design: docs/designs/connector-configuration.md
 epic: connector-config
@@ -25,48 +25,71 @@ would publish compiler machinery merely to share a small value vocabulary.
 
 ## Acceptance
 
-- [ ] Published `codewandler-connector-address` owns a public `HttpsOrigin` value type and a closed,
+- [x] Published `codewandler-connector-address` owns a public `HttpsOrigin` value type and a closed,
       typed refusal. The API is pure, performs no IO, adds no parser or compiler dependency, and its
       public signature exposes only standard-library and connector-address-owned types.
-- [ ] Parsing returns a normalized value rather than a validated input string. Its canonical text
+- [x] Parsing returns a normalized value rather than a validated input string. Its canonical text
       spells the scheme `https`, lowercases ASCII DNS names, renders IPv4 and bracketed IPv6 through
       their canonical standard-library spelling, renders a non-default port as canonical decimal,
       and omits the effective default `:443` port. `Eq`, ordering and hashing therefore compare
       origins, not caller spelling.
-- [ ] Equivalent safe input spellings normalize to one value, including case-insensitive HTTPS and
+- [x] Equivalent safe input spellings normalize to one value, including case-insensitive HTTPS and
       DNS spelling, IPv6 compression and a zero-padded/default port. Userinfo, HTTP, an empty or
       non-ASCII/invalid host, an unbracketed IPv6 address, a zero/out-of-range port, path (including
       `/`), query, fragment, whitespace and placeholder braces remain refusals. The connector owns
       every byte after the origin.
-- [ ] The refusal is value-free by construction: variants identify the rejected class without
+- [x] The refusal is value-free by construction: variants identify the rejected class without
       retaining the supplied text, and `Display`, `Debug`, error chaining and tests never reproduce
       the configured origin. The normalized value also does not expose its customer-supplied text
       through an incidental derived `Debug`; deliberate canonical rendering remains an explicit API.
-- [ ] One committed corpus carries input, expected canonical output or expected refusal variant.
+- [x] One committed corpus carries input, expected canonical output or expected refusal variant.
       `connector-address`, `connector-spec`'s `Format::Origin`/loader path and `connector-pack`'s
       projection/runtime path all consume that corpus; the old spec-owned table and both copied
       production validators are removed.
-- [ ] Connector declarations publish canonical defaults and examples: the loader refuses a
+- [x] Connector declarations publish canonical defaults and examples: the loader refuses a
       declaration whose accepted origin is not already in canonical form. Runtime connection input
       may use an equivalent safe spelling and is normalized before approval/default comparison,
       request composition, permission subjects, intents or evidence are derived.
-- [ ] `connector-pack` depends directly on `connector-address`, never on `connector-spec`, and uses
+- [x] `connector-pack` depends directly on `connector-address`, never on `connector-spec`, and uses
       the same normalized `HttpsOrigin` instance for the request destination and the permission
       subject. GitLab's canonical default stays byte-for-byte `https://gitlab.com`; an equivalent
       spelling of that default does not become a custom-origin approval event.
-- [ ] The crates.io publish-closure and packaging tests prove `connector-address` and
+- [x] The crates.io publish-closure and packaging tests prove `connector-address` and
       `connector-pack` are consumable together while `connector-spec`, `connector-flux` and
       `connector-cli` remain unpublished compiler machinery. No path or git dependency is added.
-- [ ] The public API documentation gives Exchange one registry dependency and one parse/normalize
+- [x] The public API documentation gives Exchange one registry dependency and one parse/normalize
       contract. Exchange needs no origin parser, provider-TOML reader, sibling checkout, path/git
       dependency or `connector-spec` publication to implement X-125.
-- [ ] Failing-first tests cover canonicalization, typed/value-free refusals, compiler/runtime corpus
+- [x] Failing-first tests cover canonicalization, typed/value-free refusals, compiler/runtime corpus
       parity, GitLab default/custom approval equivalence and request/permission-subject identity;
       the targeted crate tests and publish-closure/package gates are green.
 
 ## Progress
 
-- (not started)
+- **Implemented on `impl/C-523`, branched from `428938cd` on `chore/integration-sweep`.**
+- `crates/connector-address/src/origin.rs` owns `HttpsOrigin` and the closed `OriginRefusal`.
+  `parse` normalizes a supplied value; `parse_canonical` is the stricter door a *declaration* goes
+  through, so the rule "a published origin is already canonical" lives with the type rather than
+  being restated in the loader. `Debug` is hand-written and value-free on both types.
+- The corpus is `crates/connector-address/tests/fixtures/origin_corpus.rs` (input → canonical text
+  or refusal class). Three consumers read it: `crates/connector-address/tests/origin.rs`,
+  `crates/connector-spec/tests/operator_pinned_origin.rs` (accepted **iff** already canonical) and
+  `crates/connector-pack/tests/origin_grammar_parity.rs` (accepted, and the request URL is the
+  canonical origin). `crates/connector-spec/tests/fixtures/origin_grammar.rs` is deleted.
+- Both production copies are gone: `connector_spec::config::validate_https_origin` and
+  `connector_pack::request::validate_origin`.
+- `Operation::endpoint` (`crates/connector-pack/src/tool.rs`) normalizes once and returns the
+  canonical text, so the request destination, the permission subject and the intent are the same
+  value by construction; the approval comparison against the declared default is made on normalized
+  origins, so an equivalent spelling of `https://gitlab.com` is not a custom-origin proposal.
+- Gate: `cargo fmt --all --check`, `cargo build --workspace`,
+  `cargo clippy --workspace --all-targets -- -D warnings`, the whole `connector-address`,
+  `connector-spec`, `connector-pack` and `connectors-api` suites, `connector-cli`'s
+  `publish_closure`/`dependency_fence`/`pack_links_no_http_client`/`no_network`, and
+  `cargo run -q -p connector-cli -- diff` → `1110 artifacts up to date (55 providers checked)`.
+- **For the coordinator:** the one-line `Cargo.lock` hunk for the new `connector-pack` →
+  `connector-address` edge is in its own commit, and `crates/connector-cli/tests/publish_closure.rs`
+  gains one test (the acceptance's publish-closure proof).
 
 ## Notes
 

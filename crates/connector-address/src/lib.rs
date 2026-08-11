@@ -11,6 +11,13 @@
 //! [`address`] owns the first three and [`credential`] the fourth; they share one grammar, one
 //! reserved [`DEFAULT_SERVICE`] and one elision rule, which is why they are one crate.
 //!
+//! [`origin`] owns one more name of the same kind: **which server** a connection reaches, when the
+//! vendor is self-managed and the connector cannot know it in advance. It is here for the reason the
+//! rest of this crate is here — the compiler validates a declared origin, the runtime pack composes
+//! a request and a permission subject from a supplied one, and Exchange persists and approves a
+//! proposal, so a copy of the grammar in each of them is three programs that can disagree about
+//! which destination was approved (C-523).
+//!
 //! # Why this is its own crate
 //!
 //! It used to be two modules of `connector-spec`, and that crate is the **compiler**: the connector
@@ -32,10 +39,14 @@
 //!
 //! # What it does not do
 //!
-//! It holds no value, opens no socket and reads no file. An address is a **name**; resolving one to
+//! It holds no secret, opens no socket and reads no file. An address is a **name**; resolving one to
 //! a secret is `connector-secrets`' job, and producing one from a provider definition is
 //! `connector-spec`'s. This crate only says which names are well-formed and how they render — which
 //! is exactly why it can be validated, round-tripped, and depended on by both sides.
+//!
+//! [`HttpsOrigin`] is the one name a *tenant* supplies rather than a provider file, and it does not
+//! widen that boundary: it is normalized text, it stores nothing, and it says nothing about whether
+//! deployment policy has approved the destination it names — that state stays with the host.
 //!
 //! ```
 //! use connector_address::{CredentialRef, Gid, Layout, TenantLayout};
@@ -54,11 +65,13 @@
 
 pub mod address;
 pub mod credential;
+pub mod origin;
 
 pub use address::{Gid, Oip, Pid};
 pub use credential::{
     CredentialRef, CredentialScope, InstanceId, Layout, TenantInstances, TenantLayout,
 };
+pub use origin::{HttpsOrigin, OriginRefusal};
 
 /// The name of the implicit service every operation belongs to unless it names another.
 ///
