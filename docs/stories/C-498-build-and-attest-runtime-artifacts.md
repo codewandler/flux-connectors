@@ -2,7 +2,8 @@
 id: C-498
 title: "Build and attest connector runtime artifacts"
 pillar: Build
-status: backlog
+status: ready
+priority: 0
 design: docs/designs/all-integrations-are-connectors.md
 epic: all-integrations-connectors
 areas: [runtime, release, supply-chain]

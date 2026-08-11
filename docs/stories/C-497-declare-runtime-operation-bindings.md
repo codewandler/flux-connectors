@@ -2,7 +2,8 @@
 id: C-497
 title: "Declare how connector operations bind to non-HTTP runtimes"
 pillar: Spec
-status: backlog
+status: ready
+priority: 0
 design: docs/designs/all-integrations-are-connectors.md
 epic: all-integrations-connectors
 areas: [connector-spec, connector-flux, catalog]
