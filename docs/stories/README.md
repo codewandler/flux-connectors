@@ -34,6 +34,11 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 - [C-402 — Decide whether a whole-host template needs an operator allowlist](C-402-whole-host-template-allowlist.md) · Bridge · DECIDED 2026-08-01, refined by C-508: the connector declares a closed host bound or an explicit operator-pinned self-managed-origin policy; the loader REFUSES a whole-host template declaring neither
 - [C-477 — Align runtime API versions with vendored provider contracts](C-477-pin-runtime-api-version-contracts.md) · Connector · compatibility follow-up — GitHub can send its dated API version; Stripe needs an explicit account-version decision
 
+### All Integrations Connectors
+- [C-497 — Declare how connector operations bind to non-HTTP runtimes](C-497-declare-runtime-operation-bindings.md) · Spec · runtime currently names only a kind; a rich operation still has no declared adapter operation or Exchange-consumable stream/lifecycle/result contract
+- [C-498 — Build and attest connector runtime artifacts](C-498-build-and-attest-runtime-artifacts.md) · Build · a plugin/process/container connector needs an immutable binary or image identity and verified Exchange install path outside the Flux release pipeline
+- [C-504 — Project every connector runtime through the zero-IO pack](C-504-project-runtime-plans-through-connector-pack.md) · Bridge · connector-pack currently resolves an HTTP Tool; make it produce one declared zero-IO runtime plan consumed and dispatched only by Exchange
+
 ### Anthropic Managed Agents — the first vendor that declares both transports and its own event set
 _The `channel-bindings` and `inbound-events` epics built a model for the reverse call direction —_
 - [C-444 — Decide: may a connector create and run a Managed Agents session?](C-444-decide-managed-agents-charter.md) · Spec · DECISION, not a task — the fourth shape of C-123's question. Management plane is ordinary SaaS; the SESSION plane runs an agent loop and bills inference, and flux has flux-agent/flux-orchestrate of its own. Nothing in the epic's session half may start before this
@@ -186,14 +191,11 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 ## Backlog
 
 ### All Integrations Connectors
-- [C-497 — Declare how connector operations bind to non-HTTP runtimes](C-497-declare-runtime-operation-bindings.md) · Spec · runtime currently names only a kind; a rich operation still has no declared adapter operation or Exchange-consumable stream/lifecycle/result contract
-- [C-498 — Build and attest connector runtime artifacts](C-498-build-and-attest-runtime-artifacts.md) · Build · a plugin/process/container connector needs an immutable binary or image identity and verified Exchange install path outside the Flux release pipeline
 - [C-499 — Migrate the Confluence, GitLab, Jira and Slack plugins](C-499-migrate-collaboration-plugins.md) · Connector · four catalogue providers already exist, but operation parity, Slack Socket Mode and a measured cutover from the native crates do not
 - [C-500 — Migrate Docker and Kubernetes into infrastructure connectors](C-500-migrate-docker-and-kubernetes.md) · Connector · preserve Unix-socket, kubeconfig/in-cluster, watch/log/exec and port-forward behavior through declared rich runtimes; Exchange requires tenant isolation
 - [C-501 — Migrate the observability plugins into connectors](C-501-migrate-observability-plugins.md) · Connector · Alertmanager, Grafana, Loki, Opsgenie and Prometheus become catalogue-owned integrations, including streaming/tailing and datasource contracts
 - [C-502 — Migrate SQL, Vault and 1Password into connectors](C-502-migrate-data-and-secret-plugins.md) · Connector · database handles and secret-store operations need lifecycle and credential-result boundaries, not an exemption from the connector model
 - [C-503 — Migrate AWS, Homer, Hugging Face and web search adapters](C-503-migrate-the-remaining-native-adapters.md) · Connector · close the residual inventory: SigV4/CLI-backed AWS, Homer HTTP/JWT, Hugging Face and provider-selecting web search
-- [C-504 — Project every connector runtime through the zero-IO pack](C-504-project-runtime-plans-through-connector-pack.md) · Bridge · connector-pack currently resolves an HTTP Tool; make it produce one declared zero-IO runtime plan consumed and dispatched only by Exchange
 
 ### channel bindings — generalize a flux `channel` over a connector
 _[inbound-events.md](inbound-events.md) models an **event** — the vendor calls us — and stops there._

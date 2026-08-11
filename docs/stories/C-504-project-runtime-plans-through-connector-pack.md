@@ -2,7 +2,8 @@
 id: C-504
 title: "Project every connector runtime through the zero-IO pack"
 pillar: Bridge
-status: backlog
+status: ready
+priority: 0
 design: docs/designs/all-integrations-are-connectors.md
 epic: all-integrations-connectors
 areas: [connector-pack, runtime]
