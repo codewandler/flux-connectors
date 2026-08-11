@@ -3086,7 +3086,7 @@ fn validate_one_binding(
                 }
             }
         }
-        Binding::OAuthClientId | Binding::OAuthClientSecret => {
+        Binding::OAuthClientId | Binding::OAuthClientSecret | Binding::OAuthRedirectUri => {
             if !connector.auth.iter().any(|method| method.oauth2.is_some()) {
                 problems.push(format!(
                     "configuration field {name:?} binds an OAuth app registration, but no `[[auth]]` \

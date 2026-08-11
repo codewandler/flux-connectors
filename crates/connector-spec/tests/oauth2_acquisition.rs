@@ -167,3 +167,84 @@ credential = "acme.access_token"
         "the refusal must name both declarations: {refusal}"
     );
 }
+
+/// **A hosted deployment can be asked for its redirect URI** (C-531).
+///
+/// The third half of one registration. A client id, a client secret and a redirect URI are issued
+/// together when somebody registers an application with the vendor, so they are supplied together,
+/// by the same person, at the same level — and leaving this one out was the reason a hosted host had
+/// nowhere to put its callback. `OAuth2Spec::redirect` models a loopback port and path, which is the
+/// RFC 8252 §7.3 shape for a native app on the operator's own machine; a service reached at
+/// `https://exchange.internal/…` cannot be spelled that way at all.
+///
+/// The connector still declares no destination. This is a *slot*, exactly like `endpoint.origin`:
+/// the vendor does not choose your callback, you register it with them.
+#[test]
+fn a_redirect_uri_is_an_operator_level_registration_field() {
+    let source = provider(&format!(
+        r#"
+{}{READ}
+[[config]]
+name = "oauth_client_id"
+label = "Acme application id"
+help = "The application id issued when you register the app."
+format = "text"
+required = false
+binds = "oauth.client_id"
+
+[[config]]
+name = "oauth_redirect_uri"
+label = "Acme redirect URI"
+help = "The callback this deployment serves, registered with the application above."
+example = "https://exchange.internal/api/oauth/callback"
+format = "url"
+required = false
+binds = "oauth.redirect_uri"
+"#,
+        credential(OAUTH2)
+    ));
+
+    let connector = load(&source).expect("a redirect URI registration field must load");
+    let field = connector
+        .config_field("oauth_redirect_uri")
+        .expect("the connector declares it");
+
+    assert_eq!(
+        field.level(),
+        Some(connector_spec::Level::Operator),
+        "a redirect URI is registered once with the app, like the client id beside it"
+    );
+    assert!(
+        !field.secret,
+        "a redirect URI is public — it travels in the authorize request as a query parameter"
+    );
+    assert_eq!(
+        field.binding().map(|binding| binding.target()),
+        Some("redirect_uri")
+    );
+}
+
+/// The same rule the client id already had: a registration field with no grant to belong to is
+/// refused, because nothing would ever read it.
+#[test]
+fn a_redirect_uri_without_a_grant_is_refused() {
+    let source = provider(&format!(
+        r#"
+{}{READ}
+[[config]]
+name = "oauth_redirect_uri"
+label = "Acme redirect URI"
+help = "The callback this deployment serves."
+format = "url"
+required = false
+binds = "oauth.redirect_uri"
+"#,
+        credential("")
+    ));
+
+    let refusal = refusal(&source);
+    assert!(
+        refusal.contains("oauth_redirect_uri") && refusal.contains("oauth2"),
+        "the refusal must name the field and the missing grant: {refusal}"
+    );
+}

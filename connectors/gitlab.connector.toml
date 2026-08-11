@@ -85,6 +85,17 @@ binds = "oauth.client_id"
 level = "operator"
 
 [[config]]
+name = "oauth_redirect_uri"
+label = "GitLab OAuth redirect URI"
+help = "The callback address this deployment serves, registered as a redirect URI on the application above. GitLab matches it exactly, so it must be the same string in both places — including the scheme, any port, and no trailing slash"
+example = "https://exchange.internal/api/oauth/callback"
+format = "url"
+required = false
+docs_url = "https://docs.gitlab.com/integration/oauth_provider/"
+binds = "oauth.redirect_uri"
+level = "operator"
+
+[[config]]
 name = "oauth_client_secret"
 label = "GitLab OAuth application secret"
 help = "The application secret issued beside the id above. Supplied once by whoever runs this deployment, never by an end user"

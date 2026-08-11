@@ -914,13 +914,13 @@ sha256 = "a7a3293268f062d09eb576806f0e5af271c039b9427f9852c8280c8fecc692e7"
 [[provider]]
 id = "gitlab"
 generator = "flux-connectors 0.20.0"
-toml_sha256 = "01f0b9e0c2b74e072e20a52a9f528b9d78981bebee55f84088c0ca8739f22fc8"
-ir_sha256 = "480502039fb30c4665b3770a9756567b70228c6e4837273ef50c6325756e74b0"
+toml_sha256 = "4b8869384f2309a275b49673d166bdc84876f46114d035eae90dcdbaae8d901e"
+ir_sha256 = "e0bb7ad1f2c5174161bab8618aa90ead7ec50420e3c9e2010b7cc0b4b9466830"
 
 [provider.artifacts]
 "connectors/gitlab-login.connector.toml" = "6d6186c611a73ff2afa2b22fcd1c332f822f268d531707804cc51436aee5d6d7"
 "connectors/gitlab-login.flux" = "41f115f85e6d5dac505f67ad536a8550185d6148035504c67fd2f226a62e7dba"
-"connectors/gitlab.connector.toml" = "4e99d249c18bc482677b1884277e8194feaa0b934af42ad99b7990af8851f7f1"
+"connectors/gitlab.connector.toml" = "0babd5ba8986c673823a287c7f6e2099a60343cd4ad4c39ea0359b6ef8d08def"
 "connectors/gitlab.flux" = "f7c40d5571fb3ed2f7f2300571c74cef40c1141d2858b267f166cdb3da525b48"
 "crates/catalog/ops/gitlab/gitlab-branch-list.flux" = "9b62d31ee3518f0b12b1217df2590036faab7d51fc8892732d07da6c180040dc"
 "crates/catalog/ops/gitlab/gitlab-group-list.flux" = "69564d88d4ce28b3a4df4d72be8acbeab064f82b5ecfd7b9298bf472c468e40f"
@@ -931,7 +931,7 @@ ir_sha256 = "480502039fb30c4665b3770a9756567b70228c6e4837273ef50c6325756e74b0"
 "crates/catalog/ops/gitlab/gitlab-pipeline-get.flux" = "8c3e367eb355f762ce423223b0b9b6068dcdf2fbffd9c27f1711eb545385a062"
 "crates/catalog/ops/gitlab/gitlab-project-list.flux" = "bf649798c691d9a35cffa22876d7bcb399996903944ec726d8dd2c1bca91b178"
 "crates/catalog/ops/gitlab/gitlab-user-get.flux" = "5371ec702e8fcb7ce6f70c6204b54283ca321d0a13f63f931ed31bab8cf8cc17"
-"crates/catalog/src/generated/gitlab.rs" = "ba9dc20981cd2b7a0c4390b789f69b18287205f7d9976adda143e8ec423c22be"
+"crates/catalog/src/generated/gitlab.rs" = "19359dc761513a7617f012b8597c1624c3d98f8f4676234b21954fb5ff5acb25"
 
 [[provider]]
 id = "google"

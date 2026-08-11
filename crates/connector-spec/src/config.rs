@@ -646,6 +646,22 @@ pub enum Binding<'a> {
     OAuthClientId,
     /// The OAuth app's client secret — `oauth.client_secret`. Operator level, and secret.
     OAuthClientSecret,
+    /// The redirect URI registered with the OAuth app — `oauth.redirect_uri`. Operator level, and
+    /// **not** secret (C-531).
+    ///
+    /// It is the third half of one registration. A client id, a client secret and a redirect URI are
+    /// issued together when somebody registers an application with the vendor, so they are supplied
+    /// together, by the same person, at the same level. Leaving this one out was the reason a hosted
+    /// deployment had nowhere to put its callback: [`OAuth2Spec::redirect`](crate::OAuth2Spec)
+    /// models a **loopback port and path** — the shape RFC 8252 §7.3 describes for a native app on
+    /// the operator's own machine — and a service reached at `https://exchange.internal/…` cannot be
+    /// spelled that way.
+    ///
+    /// **The connector still declares no destination.** This is a slot a host fills, exactly like
+    /// `endpoint.origin`; the vendor does not choose your callback, you register it with them. What
+    /// the connector supplies is the *question*, so an operator is asked for it during setup rather
+    /// than discovering the mismatch on the vendor's error page after a failed grant.
+    OAuthRedirectUri,
 }
 
 impl<'a> Binding<'a> {
@@ -662,7 +678,9 @@ impl<'a> Binding<'a> {
     /// time, rather than on every call — not *which* of these two levels supplies it.
     pub fn level(self) -> Level {
         match self {
-            Self::OAuthClientId | Self::OAuthClientSecret => Level::Operator,
+            Self::OAuthClientId | Self::OAuthClientSecret | Self::OAuthRedirectUri => {
+                Level::Operator
+            }
             Self::Endpoint { .. }
             | Self::Request { .. }
             | Self::ChannelQuery { .. }
@@ -685,7 +703,7 @@ impl<'a> Binding<'a> {
             Self::ChannelQuery { .. } => "channel_query",
             Self::Credential { .. } => "credential",
             Self::Username { .. } => "username",
-            Self::OAuthClientId | Self::OAuthClientSecret => "oauth",
+            Self::OAuthClientId | Self::OAuthClientSecret | Self::OAuthRedirectUri => "oauth",
         }
     }
 
@@ -700,6 +718,7 @@ impl<'a> Binding<'a> {
             Self::ChannelQuery { parameter, .. } => parameter,
             Self::OAuthClientId => "client_id",
             Self::OAuthClientSecret => "client_secret",
+            Self::OAuthRedirectUri => "redirect_uri",
         }
     }
 
@@ -722,7 +741,8 @@ impl<'a> Binding<'a> {
             | Self::Request { .. }
             | Self::ChannelQuery { .. }
             | Self::Username { .. }
-            | Self::OAuthClientId => false,
+            | Self::OAuthClientId
+            | Self::OAuthRedirectUri => false,
         }
     }
 
@@ -749,7 +769,8 @@ impl<'a> Binding<'a> {
             Self::Credential { .. }
             | Self::Username { .. }
             | Self::OAuthClientId
-            | Self::OAuthClientSecret => Ok(()),
+            | Self::OAuthClientSecret
+            | Self::OAuthRedirectUri => Ok(()),
         }
     }
 }
@@ -811,11 +832,13 @@ pub fn parse_binding(binds: &str) -> Result<Binding<'_>, String> {
     match binds {
         "oauth.client_id" => Ok(Binding::OAuthClientId),
         "oauth.client_secret" => Ok(Binding::OAuthClientSecret),
+        "oauth.redirect_uri" => Ok(Binding::OAuthRedirectUri),
         _ => Err(format!(
             "{binds:?} is not a binding. A configuration value goes to exactly one of: \
              `endpoint.<variable>`, `path.<variable>`, `query.<name>`, `header.<name>`, \
              `channel.<binding>.query.<parameter>`, \
-             `credential.<name>`, `username.<name>`, `oauth.client_id`, `oauth.client_secret`"
+             `credential.<name>`, `username.<name>`, `oauth.client_id`, `oauth.client_secret`, \
+             `oauth.redirect_uri`"
         )),
     }
 }

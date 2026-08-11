@@ -317,6 +317,14 @@ fn every_oauth_connector_generates_the_operator_connection_split() {
             Some((Some(connector_spec::Level::Operator), true)),
             "providers/{name}.toml declares an OAuth grant without an operator-level, secret client secret"
         );
+        // The third half of the same registration (C-531). A grant whose redirect URI cannot be
+        // supplied is one only a loopback deployment can complete, and `OAuth2Spec::redirect` models
+        // nothing else — so without this a hosted host has nowhere to put its callback.
+        assert_eq!(
+            level_of("oauth.redirect_uri"),
+            Some((Some(connector_spec::Level::Operator), false)),
+            "providers/{name}.toml declares an OAuth grant without an operator-level, public redirect URI"
+        );
 
         for method in granted {
             let spec = method.oauth2.as_ref().expect("filtered above");

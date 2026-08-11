@@ -30,6 +30,11 @@
   owner, repository or project identifier supplied up front, with nothing to look them up with.
 - **GitHub connections have a Test connection check.** It reports which account the configured token
   is acting as, so a settings page can confirm a connection works before anything depends on it.
+- **A GitLab connection asks for the callback address your deployment serves.** Registering a
+  GitLab application gives you an application id, a secret and a redirect address; all three are now
+  collected together during setup. Previously only a callback on the same machine could be described,
+  so a hosted installation had nowhere to record the address it actually serves and only found out
+  when a sign-in attempt was rejected.
 - **A connection can say whose permissions a credential carries.** Credentials that act as the
   integration itself are now distinguishable from credentials that act on behalf of a specific
   person. Where that has not been reviewed yet, it says so plainly rather than guessing — so nothing

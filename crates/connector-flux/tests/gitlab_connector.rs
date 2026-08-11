@@ -373,9 +373,9 @@ fn the_config_surface_asks_for_the_origin_the_token_and_the_oauth_app() {
 
     assert_eq!(
         connector.config.len(),
-        4,
-        "gitlab needs one endpoint choice, one credential and one OAuth app registration, with no \
-         GitLab-only side channel"
+        5,
+        "gitlab needs one endpoint choice, one credential and one OAuth app registration — id, \
+         secret and redirect URI — with no GitLab-only side channel"
     );
     let level_of = |binds: &str| {
         connector
@@ -384,7 +384,13 @@ fn the_config_surface_asks_for_the_origin_the_token_and_the_oauth_app() {
             .find(|field| field.binds == binds)
             .unwrap_or_else(|| panic!("gitlab declares no field binding `{binds}`"))
     };
-    for (binds, secret) in [("oauth.client_id", false), ("oauth.client_secret", true)] {
+    for (binds, secret) in [
+        ("oauth.client_id", false),
+        ("oauth.client_secret", true),
+        // The third half of the registration (C-531): issued with the other two, supplied by the
+        // same person, and public — it travels in the authorize request as a query parameter.
+        ("oauth.redirect_uri", false),
+    ] {
         let field = level_of(binds);
         assert_eq!(
             field.level(),

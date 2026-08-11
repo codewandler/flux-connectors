@@ -9,6 +9,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A hosted deployment can be asked for its redirect URI** (C-531). `oauth.redirect_uri` joins
+  `oauth.client_id` and `oauth.client_secret` as an operator-level, non-secret binding — the third
+  half of one application registration, issued together and supplied together. `OAuth2Spec::redirect`
+  models a loopback port and path (RFC 8252 §7.3, the native-app shape), so a host reached at
+  `https://exchange.internal/api/oauth/callback` previously had nowhere to declare its callback and
+  would have met the mismatch on the vendor's error page. `providers/gitlab.toml` declares it, and
+  `auth_archetypes.rs` now requires it of every connector declaring a grant. The loopback field is
+  kept and not deprecated: a loopback redirect is a vendor fact, a registered URI is a deployment
+  fact, and both can be true for one connector.
+
 - **GitLab authenticates as the integration or on behalf of a user** (C-530), and it is the first
   shipped connector to declare `[auth.oauth2]`. `gitlab.oauth_token` sits beside `gitlab.token` and
   `default_auth` lists them as **alternatives**: a deployment provisions one static token org-wide,

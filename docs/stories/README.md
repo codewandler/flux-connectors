@@ -512,6 +512,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-528 — A credential declares whose authority it carries](C-528-a-credential-declares-whose-authority-it-carries.md) · Spec · the on-behalf-of axis — Slack's one OAuth grant returns a bot token and a user token that are placed identically, acquired identically, and differ only in who they can act as
 - [C-529 — One deployment asks its origin question once](C-529-one-deployment-one-origin-question.md) · Spec · a self-managed GitLab serves its REST API and its OAuth endpoints from one server; without a shared endpoint slot the connector must ask the operator the same question twice, and two slots that must agree and are not forced to is how a token exchange reaches a host the API never approved
 - [C-530 — GitLab authenticates as the integration or on behalf of a user](C-530-gitlab-delegated-oauth.md) · Connector · the first shipped OAuth2 connector — an org-wide static token or a per-user grant, declared as alternatives, with one operator-approved origin serving both the API and the OAuth endpoints of gitlab.com or a self-hosted instance
+- [C-531 — A hosted deployment can be asked for its redirect URI](C-531-a-redirect-uri-is-part-of-the-app-registration.md) · Spec · OAuth2Spec::redirect models a loopback port and path — the native-app shape — so a service reached at https://exchange.internal/... had nowhere to put its callback
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->
