@@ -29,6 +29,7 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
         subject: crate::Subject::App,
+        hazard: None,
     },
     crate::Credential {
         name: "slack.signing_secret",
@@ -36,6 +37,7 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Inbound,
         subject: crate::Subject::App,
+        hazard: None,
     },
 ];
 

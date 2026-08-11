@@ -241,7 +241,119 @@ sha256 = "031327359000bd70d6b2ab012868971cc834812e5f61f5157531e7cb5daa4d85"
 name = "babelforce.access_token"
 scheme = "bearer"
 env = ["BABELFORCE_ACCESS_TOKEN"]
-description = "SSO-issued babelforce access token, minted outside flux and supplied through the environment"
+# `env` stays, and is not a leftover. It is the arrangement where somebody pastes a token minted out
+# of band; the `[auth.oauth2]` block below is the arrangement where the **host** obtains one. Both are
+# real deployments of this connector and nothing here chooses between them.
+description = "babelforce access token. Either supplied through the environment, or obtained by the host running one of the grants below"
+# C-528, and the grant below is what settles it. The password grant takes `username` — "the user's
+# email/username" (`specs/babelforce/auth-2026-06-25.openapi.yaml:235-240`) — and the resulting token
+# acts as **that person**, bounded by their own permissions. The SSO-issued token in `env` is the same
+# person's by another route. It is not an integration identity: a host that stored one at a
+# tenant-wide address would let any member act as whoever authenticated.
+subject = "user"
+# C-440. The resource owner's own password reaches the host on the `password` grant, and a deployment
+# refuses that by this declared property rather than by connector name. RFC 9700 §2.4 says the grant
+# MUST NOT be used — it exposes the owner's credentials to the client, widens where they can leak, and
+# cannot carry two-factor — RFC 6749 §4.3 makes discarding them a MUST for the client, and OAuth 2.1
+# drops the grant entirely. It is declared rather than refused here because a babelforce user has an
+# email address and a password, not a token, so this vendor offers this grant or nothing; knowing that
+# and opting in is a decision for a deployment, which is what the word makes possible.
+hazard = "resource_owner_secret_shared"
+
+# **The host performs the grant; nothing this repository emits performs OAuth** (`AGENTS.md`
+# § Authentication contract). The three `/oauth/*` paths stay withheld and are not operations — see
+# the exclusion block further down — and a declaration emits no `.flux` module, so the withholding is
+# untouched by this block and babelforce's `389 + 5 + 3 = 397` accounting is unchanged.
+#
+# `endpoint` is deliberately absent: all five documents declare the same server as the connector's own
+# `base_url`, so the token exchange resolves against it and is inside the same egress allow-list as
+# every other call. Naming a URL here would name a host nothing had admitted.
+[auth.oauth2]
+# `specs/babelforce/auth-2026-06-25.openapi.yaml:289-304` — `securitySchemes.oauth2.flows` declares
+# `authorizationCode` (`authorizationUrl: /oauth/authorize`, `tokenUrl: /oauth/token`) and `password`
+# (`tokenUrl: /oauth/token`), both with `refreshUrl: /oauth/token`. Every grant and every refresh
+# POSTs to the one path.
+token_path = "/oauth/token"
+# The vendor publishes exactly one scope, `*` ("All Access"), on both flows — there is nothing here to
+# narrow with, and requesting none would ask for less than the vendor's own document offers. **Raise a
+# narrower scope vocabulary with the babelforce API owners**; a total scope is the gap, not the choice.
+scopes = ["*"]
+# **Two grants, and the omissions are the considered part.**
+#
+# `authorization_code` is a documented flow and is deliberately **not** declared, because `grants` is
+# a permission list rather than a mirror of the document — a grant absent from it is one the host may
+# not run, not one it may try anyway. Completing that flow needs an application this repository cannot
+# describe: `OAuthTokenRequest` (`:211-258`) marks `client_id` "Required for `authorization_code`",
+# `redirect_uri` "`authorization_code` only", and no vendored document says how a babelforce operator
+# registers one or what redirect URIs it accepts. Declaring the grant would publish an operator
+# experience nobody has verified exists, and `authorize_path` is omitted for the same reason: it would
+# be an endpoint no declared grant reaches.
+#
+# `client_credentials` appears in that same `grant_type` enum and in **no** flow, so it is not a grant
+# this connector allows either. Its measured behaviour is still recorded below, because a quirk records
+# what the endpoint *does*, not what the connector permits.
+#
+# What is left is the pair a host can actually run from what an operator already has — a babelforce
+# user's email address and password — which is the arrangement C-440 exists to make declarable, and
+# the reason the `hazard` above is not optional.
+grants = ["password", "refresh_token"]
+
+# ---------------------------------------------------------------------------------------------
+# Token-endpoint quirks — C-440, measured 2026-08-02
+# ---------------------------------------------------------------------------------------------
+#
+# **Declarations, not behaviour.** Nothing reads these yet; they exist so that what was measured is
+# written down where the next reader looks, with who measured it and when, rather than surviving in a
+# story note. Each is asserted against babelforce's own token controller and **contradicted by
+# babelforce's own document**, which is exactly why the attribution is required: a reader a year from
+# now has to know which of the two this repository checked.
+#
+# The occasion was a token lifetime, and the answer was *no general knob*. `OAuthTokenRequest`
+# (`specs/babelforce/auth-2026-06-25.openapi.yaml:211-258`) declares eleven properties — `grant_type`,
+# `code`, `redirect_uri`, `code_verifier`, `refresh_token`, `username`, `password`, `client_id`,
+# `client_secret`, `scope`, `access_type` — and **none of them is a lifetime**; `expires_in` appears
+# only on the *response* (`:270-277`). The controller nonetheless reads it off the request, and reads
+# it differently for every grant. One field, five behaviours, one vendor: a general `requested_ttl`
+# would be a hard cap here, ignored there, and the difference between an hour and forever somewhere
+# else, while inviting the other fifty-four providers to be assumed to honour something none of them
+# declares. Owner-decided 2026-08-02, in flux-exchange: if it is not in the specification, it does not
+# become a general thing.
+#
+# **This is the second documentation gap to raise with the babelforce API owners**, and unlike the
+# `X-Auth-Access-Id` question above it has an answer attached. Beyond the request-side `expires_in` and
+# `account_id` below, the token response carries `expire_time` (absolute UTC milliseconds) beside the
+# standard `expires_in`, `GET /oauth/tokeninfo` exists, and `link` is a fifth `grant_type`. None of the
+# five vendored documents declares any of them. A quirk that becomes spec should stop being a quirk.
+
+[[auth.quirks.token_endpoint]]
+grant = "client_credentials"
+behaviour = "`expires_in` is read from the request and defaults to `-1`, which the service reads as *never expires*. An unattended caller that omits it therefore gets a non-expiring token rather than a short-lived one."
+attribution = "babelforce's own `AuthController.token()`, read against `specs/babelforce/auth-2026-06-25.openapi.yaml`, which declares no request-side `expires_in`. Recorded from the owner's measurement in flux-exchange's credential-acquisition epic (C-440)."
+measured = "2026-08-02"
+
+[[auth.quirks.token_endpoint]]
+grant = "password"
+behaviour = "`expires_in` is read from the request when present, and the service default applies when it is absent."
+attribution = "babelforce's own `AuthController.token()`, read against `specs/babelforce/auth-2026-06-25.openapi.yaml`, which declares no request-side `expires_in`. Recorded from the owner's measurement in flux-exchange's credential-acquisition epic (C-440)."
+measured = "2026-08-02"
+
+[[auth.quirks.token_endpoint]]
+grant = "refresh_token"
+behaviour = "`expires_in` is read from the request and passed into the refresh. Separately, `account_id` on the request **switches the account** the new token belongs to — nothing in RFC 6749 makes a refresh change whose token it is, so a host that rotates a credential without pinning `account_id` can silently move it to another account."
+attribution = "babelforce's own `AuthController.token()`, read against `specs/babelforce/auth-2026-06-25.openapi.yaml`, which declares neither a request-side `expires_in` nor `account_id`. Recorded from the owner's measurement in flux-exchange's credential-acquisition epic (C-440)."
+measured = "2026-08-02"
+
+[[auth.quirks.token_endpoint]]
+grant = "link"
+behaviour = "A fifth `grant_type` that no vendored document declares at all. `expires_in` is read from the request and then clamped to **at most 60 seconds**, so a lifetime asked for here is a ceiling rather than a request."
+attribution = "babelforce's own `AuthController.token()`, read against `specs/babelforce/auth-2026-06-25.openapi.yaml:211-220`, whose `grant_type` enum names four grants and not this one. Recorded from the owner's measurement in flux-exchange's credential-acquisition epic (C-440)."
+measured = "2026-08-02"
+
+[[auth.quirks.token_endpoint]]
+grant = "authorization_code"
+behaviour = "`expires_in` is **not read**. Only `access_type` is, defaulting to `offline`. This row is a measurement and not a gap: the one grant that ignores the field is the fact a reader most needs, because it is the one where asking for a lifetime silently does nothing."
+attribution = "babelforce's own `AuthController.token()`, read against `specs/babelforce/auth-2026-06-25.openapi.yaml`, which declares no request-side `expires_in`. Recorded from the owner's measurement in flux-exchange's credential-acquisition epic (C-440)."
+measured = "2026-08-02"
 
 # `X-Auth-Access-Id` / `X-Auth-Access-Token`: **not declared by any of the five documents, so there
 # is nothing here to exclude.**
@@ -283,10 +395,22 @@ description = "SSO-issued babelforce access token, minted outside flux and suppl
 # `jwt` block would go (§5.1.2, `crates/connector-spec/src/auth.rs:60-69`). Nothing in this file
 # would change.
 #
-# The documents model the bearer as OAuth2 with a **password grant** at `/oauth/token`
-# (`manager-2026-07-10.openapi.yaml:26271-26279`), and we still do not implement it: it would require
-# flux to hold a babelforce user password in order to mint tokens, which is strictly worse than
-# holding the token (§5.1.4). Revisit only if babelforce publishes a client-credentials flow.
+# **The password grant is now declared, and the paragraph that used to sit here was answered rather
+# than overruled** (C-440). It read that the documents model the bearer as OAuth2 with a password
+# grant at `/oauth/token` and that "we still do not implement it: it would require **flux** to hold a
+# babelforce user password in order to mint tokens, which is strictly worse than holding the token".
+# That objection was correct about flux and is why nothing here changed for a year: putting acquisition
+# in a `.flux` module binds a raw token to a model-visible symbol, and holding a password to get there
+# is worse again.
+#
+# What changed is *who performs it*. `AGENTS.md` § Authentication contract: the **host** resolves the
+# credential and performs effectful acquisition such as OAuth2. A declaration is not an
+# implementation — it emits no module, selects no operation, and reaches no `connector_pack::resolve`
+# — so the objection's premise never applies to it. And the residual weakness the objection named is
+# real, which is why it is not merely dropped but **stated**, as `hazard` above, so a deployment
+# refuses it by property unless somebody opted in. The suggestion to "revisit only if babelforce
+# publishes a client-credentials flow" is likewise settled: it publishes none — `client_credentials`
+# is in the request enum and in no flow — and the grant is declared on the flows that exist.
 #
 # **This paragraph used to carry a second argument, and it is now moot.** It read that widening to
 # the full surface makes `/oauth/token` itself a *selected, callable operation*, which "is not the

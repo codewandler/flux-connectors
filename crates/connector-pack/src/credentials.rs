@@ -712,6 +712,7 @@ mod tests {
             acquire: catalog::Acquisition::Static,
             place: catalog::Placement::Query { name: "token" },
             subject: catalog::Subject::App,
+            hazard: None,
         }]));
         Box::leak(Box::new(provider))
     }

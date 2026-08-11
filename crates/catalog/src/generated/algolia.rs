@@ -29,6 +29,7 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "X-Algolia-API-Key", prefix: "" },
         subject: crate::Subject::Unstated,
+        hazard: None,
     },
 ];
 

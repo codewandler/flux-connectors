@@ -29,6 +29,7 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::BasicJoin { user_env: &["ZENDESK_USER"], user_suffix: "/token" },
         place: crate::Placement::Header { name: "Authorization", prefix: "Basic " },
         subject: crate::Subject::Unstated,
+        hazard: None,
     },
     crate::Credential {
         name: "zendesk.messaging_key",
@@ -36,6 +37,7 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::BasicJoin { user_env: &["ZENDESK_MESSAGING_KEY_ID"], user_suffix: "" },
         place: crate::Placement::Header { name: "Authorization", prefix: "Basic " },
         subject: crate::Subject::Unstated,
+        hazard: None,
     },
 ];
 

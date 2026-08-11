@@ -26,9 +26,10 @@ static AUTH: &[crate::Credential] = &[
     crate::Credential {
         name: "babelforce.access_token",
         leaf: "access_token",
-        acquire: crate::Acquisition::Static,
+        acquire: crate::Acquisition::OAuth2(&crate::OAuth2 { endpoint: "", authorize_path: "", token_path: "/oauth/token", client_id: "", scopes: &["*"], grants: &[crate::OAuthGrant::Password, crate::OAuthGrant::RefreshToken], redirect: None }),
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
-        subject: crate::Subject::Unstated,
+        subject: crate::Subject::User,
+        hazard: Some(crate::AuthHazard::ResourceOwnerSecretShared),
     },
 ];
 

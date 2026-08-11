@@ -270,6 +270,31 @@ fn a_signing_secret_is_collected_like_any_credential_and_sent_nowhere() {
 ///   token exchange inside the host allow-list;
 /// - the credential states its [`Subject`], because a delegated token that cannot say whose
 ///   authority it carries is one a host cannot bound.
+///
+/// # Two of those were written about `authorization_code` and said "every grant" (C-440)
+///
+/// The assertions were correct and their scope was not, which only became visible when a second
+/// OAuth connector landed declaring a different grant. Both narrowings are the *document's* own
+/// distinction rather than a convenience:
+///
+/// - **The registration triple is `authorization_code`'s.** A client id, a client secret and a
+///   redirect URI are issued together when somebody registers an application, and a redirect URI has
+///   no meaning without a browser leg — babelforce's `OAuthTokenRequest` marks `redirect_uri`
+///   "`authorization_code` only" and `client_id` "Required for `authorization_code` and
+///   `client_credentials`". A resource-owner password grant needs none of the three: the operator
+///   already has the username and password. Requiring them anyway would have forced a connector to
+///   publish an operator experience nobody had verified the vendor offers, which is the failure
+///   `AGENTS.md` records as "Acceptance must not assert a mechanism nobody has verified exists".
+///   `authorize_path` is narrowed with them, for the same reason: it is the browser leg's endpoint.
+/// - **An empty `endpoint` is the one host that is certainly admitted.** The assertion's premise is
+///   that a grant naming no declared endpoint reaches a host the allow-list never admitted — and
+///   that is exactly backwards for the empty value, which `OAuth2Spec::endpoint` documents as *the
+///   connector's own base URL*. That host is where every operation already goes, so it is admitted by
+///   construction. What must still be refused is a **named** endpoint that names no service, which is
+///   a typo pointing the token exchange at nothing.
+///
+/// What did **not** narrow: [`Subject`], which every grant owes an answer to, and `token_path`, which
+/// every grant POSTs to.
 #[test]
 fn every_oauth_connector_generates_the_operator_connection_split() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers");
@@ -307,37 +332,59 @@ fn every_oauth_connector_generates_the_operator_connection_split() {
                 .map(|field| (field.level(), field.secret))
         };
 
-        assert_eq!(
-            level_of("oauth.client_id"),
-            Some((Some(connector_spec::Level::Operator), false)),
-            "providers/{name}.toml declares an OAuth grant without a public, operator-level client id"
-        );
-        assert_eq!(
-            level_of("oauth.client_secret"),
-            Some((Some(connector_spec::Level::Operator), true)),
-            "providers/{name}.toml declares an OAuth grant without an operator-level, secret client secret"
-        );
-        // The third half of the same registration (C-531). A grant whose redirect URI cannot be
-        // supplied is one only a loopback deployment can complete, and `OAuth2Spec::redirect` models
-        // nothing else — so without this a hosted host has nowhere to put its callback.
-        assert_eq!(
-            level_of("oauth.redirect_uri"),
-            Some((Some(connector_spec::Level::Operator), false)),
-            "providers/{name}.toml declares an OAuth grant without an operator-level, public redirect URI"
-        );
+        // The registration triple belongs to the browser leg — see this test's docs. A connector
+        // that runs only a password or refresh grant asks an operator for nothing to register.
+        let redirects = granted.iter().any(|method| {
+            method.oauth2.as_ref().is_some_and(|spec| {
+                spec.grants
+                    .contains(&connector_spec::OAuthGrant::AuthorizationCode)
+            })
+        });
+        if redirects {
+            assert_eq!(
+                level_of("oauth.client_id"),
+                Some((Some(connector_spec::Level::Operator), false)),
+                "providers/{name}.toml declares an `authorization_code` grant without a public, operator-level client id"
+            );
+            assert_eq!(
+                level_of("oauth.client_secret"),
+                Some((Some(connector_spec::Level::Operator), true)),
+                "providers/{name}.toml declares an `authorization_code` grant without an operator-level, secret client secret"
+            );
+            // The third half of the same registration (C-531). A grant whose redirect URI cannot be
+            // supplied is one only a loopback deployment can complete, and `OAuth2Spec::redirect`
+            // models nothing else — so without this a hosted host has nowhere to put its callback.
+            assert_eq!(
+                level_of("oauth.redirect_uri"),
+                Some((Some(connector_spec::Level::Operator), false)),
+                "providers/{name}.toml declares an `authorization_code` grant without an operator-level, public redirect URI"
+            );
+        }
 
         for method in granted {
             let spec = method.oauth2.as_ref().expect("filtered above");
             assert!(
-                !spec.token_path.is_empty() && !spec.authorize_path.is_empty(),
-                "providers/{name}.toml: credential {:?} declares a grant with no endpoints",
+                !spec.token_path.is_empty(),
+                "providers/{name}.toml: credential {:?} declares a grant with no token endpoint, \
+                 which every grant and every refresh POSTs to",
                 method.name
             );
             assert!(
-                connector.service_names().contains(&spec.endpoint.as_str()),
+                !spec
+                    .grants
+                    .contains(&connector_spec::OAuthGrant::AuthorizationCode)
+                    || !spec.authorize_path.is_empty(),
+                "providers/{name}.toml: credential {:?} allows the `authorization_code` grant and \
+                 declares no authorize path, so nothing says where the browser leg begins",
+                method.name
+            );
+            assert!(
+                spec.endpoint.is_empty()
+                    || connector.service_names().contains(&spec.endpoint.as_str()),
                 "providers/{name}.toml: credential {:?} resolves its grant against endpoint {:?}, \
-                 which is not a declared service — a grant naming no declared endpoint reaches a \
-                 host the allow-list never admitted",
+                 which is not a declared service — a grant naming an endpoint nothing declares \
+                 reaches a host the allow-list never admitted. Leaving it empty is the other legal \
+                 answer, and means the connector's own base URL",
                 method.name,
                 spec.endpoint
             );

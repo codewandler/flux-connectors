@@ -263,6 +263,144 @@ pub struct OAuth2Spec {
     pub redirect: Option<OAuthRedirect>,
 }
 
+/// **A named weakness in how a credential is obtained** (C-440).
+///
+/// This is the axis a host refuses on. An operator who wants no password-grant authentication
+/// anywhere says that once, about a declared property, and every connector carrying it refuses —
+/// including the fifty-sixth, added next month by somebody who never read their policy. The
+/// alternative is a list of connector names, which is correct on the day it is written and silently
+/// wrong afterwards.
+///
+/// # Why the set is closed, and refused rather than defaulted
+///
+/// A free-form `hazard = "..."` string carrying its own citations is more expressive and strictly
+/// worse, because it makes the consuming filter a string match. A near-miss spelling matches no
+/// allow-list entry, reads as *no hazard declared*, and is admitted by the very deployment that
+/// refused the thing it names. So an unrecognised spelling is a loader refusal — serde's own
+/// `unknown variant` message, which names the rejected value and the accepted one, exactly as
+/// [`Runtime`](crate::Runtime) already does. The cost is that a new hazard is a deliberate edit
+/// here, and that cost is the point.
+///
+/// # This is a *kind*. [`Risk`](crate::Risk) is a *level*
+///
+/// They are not interchangeable, and the difference is load-bearing because `Risk` is **ordered**
+/// and selectors compare against that ordering. A hazard has no position on that ladder: a password
+/// grant that buys a **read-only** token is `Risk::Low` *and* hazardous. A fifth rung would be wrong
+/// in one direction or the other — high enough to catch it and every destructive operation inherits
+/// a weakness it does not have; low enough not to and an `at_most` selector silently admits
+/// password-grant authentication to every rule an operator has already written.
+///
+/// It is likewise **not** a field on an operation. A hazard is a property of an *acquisition*, which
+/// happens once per connection; an operation happens per call. Putting it on
+/// [`Operation`](crate::Operation) would restate one connection's fact on babelforce's 389 rows and
+/// invite a per-call answer to a per-connection question.
+///
+/// # The spelling is a contract with a consumer that already shipped
+///
+/// flux-exchange's `crates/exchange-host/src/acquisition.rs` maps its own `AuthHazard` variant to
+/// the string `resource_owner_secret_shared`, and its `FLUX_EXCHANGE_ALLOW_AUTH_HAZARDS` deployment
+/// gate filters on exactly that word. What this repository emits is what that filter reads, which is
+/// why [`word`](Self::word) matches exhaustively rather than deferring to the serde encoding, and
+/// why `tests/auth_hazard.rs` pins the two together.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthHazard {
+    /// The resource owner's own password is presented to **the host** rather than to the
+    /// authorization server — the OAuth 2.0 resource owner password credentials grant.
+    ///
+    /// The name states the property a filter is written against and an auditor can check — *the
+    /// resource owner's secret was shared* — rather than naming the grant that happens to be the
+    /// shipped instance of it.
+    ///
+    /// **RFC 9700 §2.4** (OAuth 2.0 Security Best Current Practice, 2025) says the grant **MUST
+    /// NOT** be used, for three reasons that together are the whole hazard: it exposes the resource
+    /// owner's credentials to the client; it widens where those credentials can leak, beyond the
+    /// authorization server; and it cannot carry two-factor or any other multi-step authentication.
+    /// **RFC 6749 §4.3** makes discarding them once a token is obtained a MUST for the client, and
+    /// a host running this grant *is* that client. **CWE-522**, *Insufficiently Protected
+    /// Credentials*, is the nearest weakness-catalogue entry. OAuth 2.1 drops the grant entirely.
+    ///
+    /// It remains worth declaring rather than refusing outright, because a vendor that offers
+    /// nothing else offers this or nothing — which is a decision for a deployment to make knowingly.
+    ResourceOwnerSecretShared,
+}
+
+impl AuthHazard {
+    /// The stable published spelling, which a host's deployment filter matches as an exact word.
+    ///
+    /// Matched exhaustively rather than obtained by serialising the enum. Deployment policy is
+    /// configuration an operator audits, and changing a serde attribute must not silently change the
+    /// string that grants a weaker authentication path.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Self::ResourceOwnerSecretShared => "resource_owner_secret_shared",
+        }
+    }
+}
+
+/// **What a connector's authentication surface does that its own document does not say** (C-440).
+///
+/// The word and its discipline are already here — `quirks.pagination` and `quirks.rate_limit` are
+/// declarations rather than behaviour, and reach the IR and the loader and no artifact. What is new
+/// is the **scope**: [`Quirks`](crate::Quirks) hangs off an operation, and an authentication
+/// endpoint is never an operation, so a token endpoint's measured departures had nowhere to live.
+///
+/// Kept deliberately narrow. Owner-decided 2026-08-02: *if it is not in the specification, it does
+/// not become a general thing*. The occasion was a token lifetime, and the argument against
+/// generalising it is one vendor's own numbers — babelforce's token endpoint reads a request
+/// `expires_in` its document never declares, defaulting it to *never expires* on one grant, clamping
+/// it to sixty seconds on another, and ignoring it on a third. A general `requested_ttl` would be a
+/// hard cap here, ignored there, and the difference between an hour and forever somewhere else,
+/// while inviting fifty-four other providers to be assumed to honour something none of them
+/// declares.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuthQuirks {
+    /// Measured behaviours of the credential's token endpoint, at most one per vendor `grant_type`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub token_endpoint: Vec<TokenEndpointQuirk>,
+}
+
+impl AuthQuirks {
+    /// Whether the credential declares no quirk at all — the case every shipped connector but one
+    /// is in, and what `skip_serializing_if` keys on so no published manifest moved.
+    pub fn is_empty(&self) -> bool {
+        self.token_endpoint.is_empty()
+    }
+}
+
+/// One measured departure of a token endpoint from the document that describes it.
+///
+/// Every field is required, and [`attribution`](Self::attribution) and [`measured`](Self::measured)
+/// are why. A quirk is asserted against a vendor's *implementation* and contradicted by that
+/// vendor's own *document*; a reader a year from now needs to know which of the two this repository
+/// checked and when, or the declaration is indistinguishable from a guess that aged.
+/// `providers/babelforce.toml` already carries one unattributed open question to a vendor's API
+/// owners that nobody can now answer, which is what an unattributed claim costs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TokenEndpointQuirk {
+    /// The vendor's own `grant_type` word this measurement is about.
+    ///
+    /// A string rather than an [`OAuthGrant`], and deliberately. `OAuthGrant` mirrors flux's
+    /// vocabulary field for field, and a vendor's undeclared grant is precisely the thing that
+    /// vocabulary does not have a variant for — babelforce serves a fifth, `link`, that appears in
+    /// no document and in no specification. A quirk that could only name grants the specification
+    /// already knows would be unable to record the ones worth recording.
+    pub grant: String,
+    /// What was measured, in prose.
+    ///
+    /// Prose rather than a field, because a field is a promise every other connector is then assumed
+    /// to keep. See [`AuthQuirks`] for the ruling this follows.
+    pub behaviour: String,
+    /// What was read, and by whom — enough for a reader to repeat the measurement or date it.
+    pub attribution: String,
+    /// The day the measurement was made, `YYYY-MM-DD`. The loader refuses anything else, because
+    /// "recently" does not let a reader decide whether it predates the vendor release they are
+    /// debugging.
+    pub measured: String,
+}
+
 /// One credential a connector declares: its name, and how it reaches the wire.
 ///
 /// Mirrors `flux_plugin_protocol::AuthMethod`, except that flux's identifying field is called
@@ -330,6 +468,18 @@ pub struct AuthMethod {
     /// already-published manifest byte.
     #[serde(default, skip_serializing_if = "Subject::is_unstated")]
     pub subject: Subject,
+    /// The declared weakness in **obtaining** this credential, when it has one — see [`AuthHazard`].
+    ///
+    /// `None` is the case every connector but babelforce is in, and it means *no weakness is
+    /// declared* rather than *this was reviewed and found safe*. A host's fail-closed default is
+    /// written against the presence of a value, so an absent field admits and a declared one is
+    /// refused unless a deployment opted in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hazard: Option<AuthHazard>,
+    /// What this credential's authentication surface does that its own document does not say — see
+    /// [`AuthQuirks`].
+    #[serde(default, skip_serializing_if = "AuthQuirks::is_empty")]
+    pub quirks: AuthQuirks,
 }
 
 impl AuthMethod {

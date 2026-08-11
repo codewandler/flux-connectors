@@ -29,6 +29,7 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Query { name: "key" },
         subject: crate::Subject::Unstated,
+        hazard: None,
     },
     crate::Credential {
         name: "trello.token",
@@ -36,6 +37,7 @@ static AUTH: &[crate::Credential] = &[
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Query { name: "token" },
         subject: crate::Subject::Unstated,
+        hazard: None,
     },
 ];
 
