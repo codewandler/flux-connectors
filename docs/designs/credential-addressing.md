@@ -36,9 +36,9 @@ decorator: the client is commodity, the convention is the part worth owning.
 |---|---|---|
 | action-proxy | `customer/<accountUuid>/integrations/<integrationUuid>` | Vault KV **v1**; both ids arrive as **unvalidated client headers** |
 | `credentials-store` (Go) | `cloud/<provider>/<service>` | **no tenant segment at all**; no `gemini` key exists |
-| `sbf/secrets` | `tenants/<tenantID>/{static/<prefix>\|credentials/<credentialID>}` | KV v2, tenant derived server-side from an introspection claim |
+| the vendor's internal secret store | `tenants/<tenantID>/{static/<prefix>\|credentials/<credentialID>}` | KV v2, tenant derived server-side from an introspection claim |
 
-`sbf/secrets` is the real precedent for `tenants/`, and its own justification is that action-proxy's
+That internal store is the real precedent for `tenants/`, and its own justification is that action-proxy's
 approach was fragmented across four stores with split-brain between Vault and mongo. Worth knowing
 before adopting either wholesale.
 
@@ -155,7 +155,7 @@ expressible the day one appears, without moving every path that already exists.
 **Validating a tenant id does not make an attacker-supplied one safe to act on.** This crate refuses a
 traversing id; it cannot vouch for *provenance*.
 
-The two precedents differ exactly here, and it is the difference that mattered: `sbf/secrets` derives
+The two precedents differ exactly here, and it is the difference that mattered: the internal store derives
 the tenant server-side from an authenticated principal and documents that handlers *"must take the
 tenant from here, never from input"*; action-proxy takes it from a client header. Deriving the tenant
 is the host's job and stays the host's job — this design would be actively harmful if it left anyone

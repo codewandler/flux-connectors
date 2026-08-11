@@ -9,6 +9,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Internal infrastructure markers leave the public repository** (C-532). `docs/designs/spec-front-end.md`
+  argued that the vendored specs are public while the fetch configuration is internal, cited a
+  leak-marker regex naming strings "that must never be published" — and then quoted those strings, in
+  a public repository, in the paragraph making the argument. Eleven occurrences across eight files:
+  the internal forge hostname, two internal repository paths, and the internal secret store's path
+  cited eight times as an architectural precedent. All are now described rather than named; every
+  argument that cited one is preserved, because each depends on what that system *did* rather than on
+  what it is called. This does not unpublish anything — the hostname is inside the released v0.20.0
+  tag — it stops the strings reaching any further release or crates.io copy.
+
 - **A hosted deployment can be asked for its redirect URI** (C-531). `oauth.redirect_uri` joins
   `oauth.client_id` and `oauth.client_secret` as an operator-level, non-secret binding — the third
   half of one application registration, issued together and supplied together. `OAuth2Spec::redirect`

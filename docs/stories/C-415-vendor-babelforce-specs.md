@@ -30,7 +30,8 @@ nothing in them that a public repository must not carry — so `[spec]` has some
       (exact, by digest). The second exists because the first is not sufficient: the `accessId` value is
       reused as a plain `id:` three lines above, where a key-scoped rule cannot see it.
 - [x] **No internal marker reaches the repo.** A test applies
-      `manager-sdk/scripts/leak-markers.regex` (`gitlab\.stack`, `sbf/services`, `latest\.dev`, …) to
+      `manager-sdk/scripts/leak-markers.regex` (the internal forge host, internal repository paths
+      and non-production hostnames) to
       everything added here and fails on a hit. `sources.json` and `pull.sh` are **not** copied in —
       they hold the GitLab host and project ids and are the thing that must stay internal.
       → `no_internal_marker_survives_in_a_vendored_document`,
