@@ -3,7 +3,7 @@ id: C-524
 title: "RFC Editor corpus is a searchable, locally cached datasource"
 pillar: Connector
 status: backlog
-design: docs/designs/vendor-datasource-declarations.md
+design: docs/designs/rfc-editor-corpus.md
 epic: vendor-datasources
 areas: [providers, datasources, runtime, cache, search]
 note: "index every RFC from the authoritative RFC Editor corpus once, then serve bounded full-text search and get from an atomic local snapshot with offline last-good reuse"
@@ -23,7 +23,7 @@ gain a vendor-specific fetcher or a second local fallback.
 
 ## Acceptance
 
-- [ ] A design review fixes the source, refresh, cache and indexing contract before implementation.
+- [x] A design review fixes the source, refresh, cache and indexing contract before implementation.
       It uses the RFC Editor's authoritative corpus and supported mirror/index surfaces—not its web
       search UI—and pins the allowed origins. The reviewed inputs include the text corpus exposed by
       `rsync.rfc-editor.org::rfcs-text-only`, `rfc-index.xml`, and canonical
@@ -75,6 +75,20 @@ gain a vendor-specific fetcher or a second local fallback.
   that searches all RFCs and caches them locally. Upstream reconnaissance confirmed that the RFC
   Editor publishes canonical per-RFC text, an RFC index, and an official `rfcs-text-only` rsync
   module specifically for keeping a local mirror current. No implementation has started.
+- 2026-08-12: **Design landed** — [rfc-editor-corpus.md](../designs/rfc-editor-corpus.md), and
+  `design:` repointed at it from the epic's surface design. It fixes the pinned origins and the
+  no-silent-mirror rule, the two-entity contract with string RFC numbers and one identity across
+  search/get/relation, the two-version snapshot with staged-validate-atomic-swap and a
+  snapshot-scoped opaque cursor, host-supplied cache placement with quarantine-and-rebuild, and the
+  zero-network read envelope. Upstream facts the story asserts were **not** re-verified — this
+  repository reaches no network — and are carried as eleven marked assumptions; A11 (the RFC
+  Editor's automated-mirroring policy) can invalidate the story rather than a detail of it.
+  **Implementation remains blocked and the story stays `backlog`**: C-512 and C-513 are both
+  `status: backlog` and no `[[datasources]]` surface exists in the IR, the provider schema or
+  `catalog.json`; C-497/C-498 are `ready`, not done. Two gaps the listed prerequisites do **not**
+  close were found and are recorded in the design — the planned member has no `search` verb
+  (Decision 0006 rule 2 gives live mode `schema`/`list`/`get`), and Decision 0008 rule 1's closed
+  local-capability set has no writable-state kind to declare a snapshot root under.
 
 ## Notes
 
