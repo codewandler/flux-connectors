@@ -247,21 +247,31 @@ fn a_signing_secret_is_collected_like_any_credential_and_sent_nowhere() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Archetype 7 — OAuth2. THE EXPLICIT FAILING CASE.
+// Archetype 7 — OAuth2. THE CASE THAT WAS FAILING AND NOW SHIPS.
 //
-// C-22 requires that an archetype the model cannot render is a documented failing case rather than a
-// gap found later. This is it, and it is the reason the epic's operator-level half is unproven.
+// C-22 required that an archetype the model cannot render be a documented failing case rather than a
+// gap found later. It was one until C-530, and the test that recorded it named its own successor:
+// "replace it with an assertion about the form OAuth generates: an operator-level client id and
+// client secret, and a connection-level consent step rather than a pasted token". This is that
+// assertion.
 // ---------------------------------------------------------------------------------------------
 
-/// `OAuth2Spec` is a landed type that **no shipped provider uses**, so the operator level of the
-/// configuration model — `oauth.client_id`, `oauth.client_secret` — is currently exercised only by
-/// fixtures.
+/// **Every OAuth2 connector generates the operator/connection split the model promises.**
 ///
-/// This test asserts the gap rather than papering over it. When a provider adopts OAuth it will fail,
-/// and the fix is to assert the generated form instead: an operator-level client id and secret, and a
-/// connection-level "Connect" button rather than a token input.
+/// The predecessor asserted that no provider declared `[auth.oauth2]` at all, which made the
+/// operator level of the configuration model exercised only by fixtures. What replaces it is the
+/// shape rather than the absence, checked over the real corpus:
+///
+/// - the app registration is **operator** level and its secret is marked secret — asking a tenant
+///   for a client secret hands them the product's own credential, which is the defect the two-level
+///   model exists to prevent, and `Level` is derived from `binds` so an author cannot state it
+///   wrongly;
+/// - the grant names a **declared service** rather than carrying a URL, which is what keeps the
+///   token exchange inside the host allow-list;
+/// - the credential states its [`Subject`], because a delegated token that cannot say whose
+///   authority it carries is one a host cannot bound.
 #[test]
-fn no_shipped_provider_exercises_oauth_yet() {
+fn every_oauth_connector_generates_the_operator_connection_split() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers");
     let mut with_oauth: Vec<String> = Vec::new();
     let mut checked = 0;
@@ -277,19 +287,76 @@ fn no_shipped_provider_exercises_oauth_yet() {
             .to_string_lossy()
             .to_string();
         let connector = shipped(&name);
-        if connector.auth.iter().any(|m| m.oauth2.is_some()) {
-            with_oauth.push(name);
-        }
         checked += 1;
-    }
-    assert!(checked > 0, "no providers were checked");
 
+        let granted: Vec<_> = connector
+            .auth
+            .iter()
+            .filter(|method| method.oauth2.is_some())
+            .collect();
+        if granted.is_empty() {
+            continue;
+        }
+        with_oauth.push(name.clone());
+
+        let level_of = |binds: &str| {
+            connector
+                .config
+                .iter()
+                .find(|field| field.binds == binds)
+                .map(|field| (field.level(), field.secret))
+        };
+
+        assert_eq!(
+            level_of("oauth.client_id"),
+            Some((Some(connector_spec::Level::Operator), false)),
+            "providers/{name}.toml declares an OAuth grant without a public, operator-level client id"
+        );
+        assert_eq!(
+            level_of("oauth.client_secret"),
+            Some((Some(connector_spec::Level::Operator), true)),
+            "providers/{name}.toml declares an OAuth grant without an operator-level, secret client secret"
+        );
+        // The third half of the same registration (C-531). A grant whose redirect URI cannot be
+        // supplied is one only a loopback deployment can complete, and `OAuth2Spec::redirect` models
+        // nothing else — so without this a hosted host has nowhere to put its callback.
+        assert_eq!(
+            level_of("oauth.redirect_uri"),
+            Some((Some(connector_spec::Level::Operator), false)),
+            "providers/{name}.toml declares an OAuth grant without an operator-level, public redirect URI"
+        );
+
+        for method in granted {
+            let spec = method.oauth2.as_ref().expect("filtered above");
+            assert!(
+                !spec.token_path.is_empty() && !spec.authorize_path.is_empty(),
+                "providers/{name}.toml: credential {:?} declares a grant with no endpoints",
+                method.name
+            );
+            assert!(
+                connector.service_names().contains(&spec.endpoint.as_str()),
+                "providers/{name}.toml: credential {:?} resolves its grant against endpoint {:?}, \
+                 which is not a declared service — a grant naming no declared endpoint reaches a \
+                 host the allow-list never admitted",
+                method.name,
+                spec.endpoint
+            );
+            assert_ne!(
+                method.subject,
+                connector_spec::Subject::Unstated,
+                "providers/{name}.toml: credential {:?} is obtained by a grant but does not say \
+                 whose authority it carries, so a host cannot bound its reach (C-528)",
+                method.name
+            );
+        }
+    }
+
+    assert!(checked > 0, "no providers were checked");
+    // Derived-set discipline: if the corpus ever stops declaring OAuth, this test passes vacuously
+    // and the archetype silently stops being exercised again.
     assert!(
-        with_oauth.is_empty(),
-        "{with_oauth:?} now declare `[auth.oauth2]`. That is the intended direction — but this test \
-         encoded the fact that the operator level of the configuration model was unproven, so \
-         replace it with an assertion about the form OAuth generates: an operator-level client id \
-         and client secret, and a connection-level consent step rather than a pasted token"
+        !with_oauth.is_empty(),
+        "no shipped provider declares `[auth.oauth2]`, so archetype 7 is unexercised once more"
     );
 }
 

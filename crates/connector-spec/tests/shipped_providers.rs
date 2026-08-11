@@ -122,11 +122,14 @@ fn operation_selection_stays_curated() {
         // history and create/start/stop/restart/delete. Optional filters, force deletion and signal
         // bodies wait for C-30/C-56, and the event history is not misrepresented as a channel.
         ("fly", 9),
-        // C-52's established 5 now sit beside C-469's 4 exact first-party OpenAPI selections:
-        // repository issues, pull-request files, workflow runs and commits. The new collections
-        // retain integer page/per_page only; string filters and search remain excluded pending
-        // C-30. See the header comment in `providers/github.toml`.
-        ("github", 9),
+        // C-52's established 5, C-469's 4 exact first-party OpenAPI selections (repository issues,
+        // pull-request files, workflow runs and commits) and C-527's 4 discovery reads (the
+        // authenticated user, their organisations, an organisation's repositories and their own).
+        // The C-469 four still retain integer page/per_page only — that is now a *compatibility*
+        // bound on published request bytes rather than the safety one it began as, since C-30 landed
+        // structured query encoding. The C-527 four therefore carry the vendor's scalar filters.
+        // See the header comment in `providers/github.toml`.
+        ("github", 13),
         // C-51's established 4 now sit beside C-472's 4 exact first-party OpenAPI selections:
         // stored response get/input items, files and batches. Integer limits survive; string
         // cursors and expansion filters remain excluded pending C-30. See `providers/openai.toml`.

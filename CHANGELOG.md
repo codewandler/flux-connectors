@@ -7,8 +7,134 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Internal infrastructure markers leave the public repository** (C-532). `docs/designs/spec-front-end.md`
+  argued that the vendored specs are public while the fetch configuration is internal, cited a
+  leak-marker regex naming strings "that must never be published" — and then quoted those strings, in
+  a public repository, in the paragraph making the argument. Eleven occurrences across eight files:
+  the internal forge hostname, two internal repository paths, and the internal secret store's path
+  cited eight times as an architectural precedent. All are now described rather than named; every
+  argument that cited one is preserved, because each depends on what that system *did* rather than on
+  what it is called. This does not unpublish anything — the hostname is inside the released v0.20.0
+  tag — it stops the strings reaching any further release or crates.io copy.
+
+- **A hosted deployment can be asked for its redirect URI** (C-531). `oauth.redirect_uri` joins
+  `oauth.client_id` and `oauth.client_secret` as an operator-level, non-secret binding — the third
+  half of one application registration, issued together and supplied together. `OAuth2Spec::redirect`
+  models a loopback port and path (RFC 8252 §7.3, the native-app shape), so a host reached at
+  `https://exchange.internal/api/oauth/callback` previously had nowhere to declare its callback and
+  would have met the mismatch on the vendor's error page. `providers/gitlab.toml` declares it, and
+  `auth_archetypes.rs` now requires it of every connector declaring a grant. The loopback field is
+  kept and not deprecated: a loopback redirect is a vendor fact, a registered URI is a deployment
+  fact, and both can be true for one connector.
+
+- **GitLab authenticates as the integration or on behalf of a user** (C-530), and it is the first
+  shipped connector to declare `[auth.oauth2]`. `gitlab.oauth_token` sits beside `gitlab.token` and
+  `default_auth` lists them as **alternatives**: a deployment provisions one static token org-wide,
+  or each signed-in person completes an OAuth2 grant and acts as themselves. Both declare
+  `subject = "user"`. The OAuth application is operator level, derived from `binds`, so an end user
+  is never asked for the product's own client secret. `read_repository` is requested and the reason
+  recorded — it is what lets the resulting token clone over HTTPS, and while cloning is not a
+  connector operation the credential a git client is handed is this one. `connectors/gitlab.flux` is
+  byte-identical.
+
+- **One deployment asks its origin question once** (C-529). `ConfigField::also_services` lets one
+  field fill the base-URL placeholder of several services, keeping `service` as the head and the
+  address the value is stored under. A self-managed GitLab serves its REST API at `{origin}/api/v4`
+  and its OAuth endpoints at `{origin}` — one server, one fact — so gitlab.com and a self-hosted
+  instance both work from one operator-approved value that moves both surfaces together. Declaring
+  it twice would be a security defect rather than a redundancy: two slots that must agree and are
+  not forced to is how a token exchange reaches a host the API never approved.
+
+  Sharing is stated, never inferred — Contentful's two `space_id` fields stay two values, because
+  keyed as one a management write went to whichever space the delivery reads had been configured
+  with. Four loader refusals; `catalog::ConfigField` publishes the field; a per-service manifest now
+  carries whatever fills its placeholder.
+
+  The alternative — an `origin` on `OAuth2Spec` — was rejected: it puts a destination in a second
+  spellable place, which is the defect C-523 exists to remove, in the one place where getting it
+  wrong sends the client secret somewhere else. `OAuth2Spec.endpoint` stays a reference to a declared
+  endpoint, which is what keeps the exchange inside the egress allow-list by construction.
+
+- **A credential declares whose authority it carries** (C-528). `connector_spec::Subject` and
+  `catalog::Subject` — `unstated` | `app` | `user` — land on `AuthMethod` and on the published
+  `catalog::Credential`. This is the "on behalf of" axis, independent of placement and acquisition:
+  Slack's single OAuth v2 grant returns a workspace bot token and the signed-in person's token in one
+  response, placed identically and acquired identically, differing only in who they can act as.
+  `providers/slack.toml` had that fact in prose and no field to state it in; it now declares both
+  credentials `app`.
+
+  **The default is `unstated`, and it means "nobody has reviewed this" rather than `app`.** A
+  consumer needing the distinction refuses on it — assuming `app` over-grants, assuming `user`
+  silently fails. Requiring every connector to state it, as C-516 did for direction, is not yet
+  available: 55 connectors ship credentials unreviewed and some are genuinely ambiguous, GitHub's
+  single `github.token` being documented as covering both an App installation token and a personal
+  access token. The unreviewed default is skipped when serialized, so only Slack's manifest moved.
+
+  **Breaking for consumers that construct `catalog::Credential`** — it gains a field and is
+  deliberately not `#[non_exhaustive]`. Every generated catalogue table was rewritten; no `.flux`
+  byte moved.
+
+- **GitHub and GitLab can answer what a token reaches** (C-527). GitHub gains `github-user-get`,
+  `github-org-list`, `github-org-repo-list` and `github-user-repo-list`; GitLab gains
+  `gitlab-group-list` and `gitlab-project-list`. Every forge operation previously took `{owner}`/
+  `{repo}` or a numeric `{project_id}` as given, so a caller holding a valid token could enumerate
+  nothing. `gitlab-project-list` returns that numeric id and `http_url_to_repo` beside it — the HTTPS
+  clone address, declared because cloning is not a connector operation. GitHub also declares
+  `verify = "github-user-get"`; it had none, so a host reading its manifest had no Test connection
+  read. The catalogue moves 829 → 835 operations and 1102 → 1108 artifacts; the five originally
+  published GitHub operations keep their Flux bytes.
+
+  Three reviewed gates asserted that nothing percent-encodes a query value and enforced "every query
+  parameter is an integer". **C-30 invalidated that premise** — a scalar now travels in the
+  structured `http.request(query: …)` map with RFC 3986 semantics. The rule was corrected to the two
+  properties it was a proxy for, both strictly stronger: every query parameter is a scalar, and no
+  query value reaches the URL, checked on every operation rather than four exempted ids. The
+  published reads keep their narrow parameter sets as a compatibility bound on shipped request
+  bytes, now labelled as such.
+
+- **The published catalogue carries a credential's OAuth2 acquisition** (C-525). `catalog::Acquisition`
+  gains an `OAuth2` variant holding a `&'static catalog::OAuth2`, with `catalog::OAuthGrant` and
+  `catalog::OAuthRedirect` beside it, mirroring `connector_spec::OAuth2Spec` field for field in
+  `&'static` form. The crate keeps zero runtime dependencies. Until now `OAuth2Spec` reached the
+  emitted manifest and `web/public/catalog.json` but had no representation in `crates/catalog` — the
+  one artifact Exchange and autodev link — so an `[auth.oauth2]` declaration would have been a
+  marking no host could read. The loader now also refuses a credential declaring both an
+  `[auth.oauth2]` grant and an operation's `produces_credential`, naming both and carrying the
+  discriminator: an authorize or token endpoint is never a connector operation, so a credential
+  obtained from the vendor's OAuth endpoints declares only the grant. No provider declares the block
+  yet, so every generated artifact is byte-identical and `build`/`diff` still report 1102 artifacts
+  up to date.
+
+  **Breaking for consumers that match `Acquisition` exhaustively** — the same break `Minted` made,
+  and the reason the enum is deliberately not `#[non_exhaustive]`. `connector-pack` treats the new
+  variant as `Static`: the stored value is an access token the host already obtained, and the pack
+  opens no socket, so a grant is not something it could run.
+
+### Added
+
+- **The connector domain is named once, in `docs/concepts.md`** (C-522). Connector, Service,
+  Operation, Event Type, Channel Binding and Graph each get one definition and the artifact that
+  publishes it, and the terms a *host* adds — Connection, Channel, Event Delivery, Trigger,
+  Datasource, App, Managed Agent — are named as explicitly not connector members. The page records
+  that `connector_catalog::Provider`/`ProviderKey` are compatibility API names, that no standalone
+  `Service` value is published (service identity travels as a `service` field on `Operation`,
+  `Event`, `Channel`, `ConfigField` and `ConfigChoices`), and that no provider declares a
+  `[[graphs]]` member. Recovered from an unmerged 2026-08-03 branch and re-measured against v0.20.0
+  before landing; the branch's `docs/vision.md` delta was dropped because C-495 has since reversed
+  the *Non-goals* wording it restored.
+
 ### Changed
 
+- **Three stale documentation claims are corrected against measured output.** `README.md` said six
+  declarable surfaces reach no artifact with `config` at "112 fields across 40 providers" — C-87
+  published `config` and `verify`, and the measured figures are 82 config fields across 42 providers,
+  identical in `web/public/catalog.json` and across 46 emitted manifests, with `verify` on 42. It
+  also said all 53 providers are hand-authored and that a `[spec]`-backed provider is rejected; there
+  are 55 providers and 8 are `[spec]`-backed. `AGENTS.md` and `docs/stories/README.md` carried
+  `v0.15.0`/`v0.17.0` snapshot labels against a v0.20.0 tree; the catalogue counts beside them
+  re-measured exact and are unchanged.
 - **Connector operation direction is now an explicit reviewed safety fact** (C-516). Every one of
   the 829 published operations states closed `read` or `write` direction independently of its HTTP
   method. Generated Flux, manifests, embedded/public catalogues, intents and staging carry that

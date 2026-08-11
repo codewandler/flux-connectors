@@ -4,30 +4,34 @@ generator = "flux-connectors 0.20.0"
 connector = "gitlab"
 gid = "com.gitlab.api:v4"
 vendor = "GitLab"
-description = "GitLab: read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only"
+description = "GitLab: discover reachable groups and projects; read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only"
 runtime = "http"
 base_url = "{origin}/api/v4"
 api_version = "v4"
 module = "gitlab.flux"
-operations = ["gitlab-user-get", "gitlab-issue-list", "gitlab-issue-get", "gitlab-issue-create", "gitlab-merge-request-list", "gitlab-pipeline-get", "gitlab-branch-list"]
+operations = ["gitlab-user-get", "gitlab-group-list", "gitlab-project-list", "gitlab-issue-list", "gitlab-issue-get", "gitlab-issue-create", "gitlab-merge-request-list", "gitlab-pipeline-get", "gitlab-branch-list"]
 verify = "gitlab-user-get"
 
 [operation_directions]
 gitlab-branch-list = "read"
+gitlab-group-list = "read"
 gitlab-issue-create = "write"
 gitlab-issue-get = "read"
 gitlab-issue-list = "read"
 gitlab-merge-request-list = "read"
 gitlab-pipeline-get = "read"
+gitlab-project-list = "read"
 gitlab-user-get = "read"
 
 [operation_semantic_effects]
 gitlab-branch-list = []
+gitlab-group-list = []
 gitlab-issue-create = []
 gitlab-issue-get = []
 gitlab-issue-list = []
 gitlab-merge-request-list = []
 gitlab-pipeline-get = []
+gitlab-project-list = []
 gitlab-user-get = []
 
 [[auth]]
@@ -35,6 +39,23 @@ name = "gitlab.token"
 scheme = "bearer"
 env = ["GITLAB_TOKEN"]
 description = "GitLab personal access token sent as a bearer. A token scoped to read_api is enough for every read below; the api scope is required for gitlab-issue-create"
+subject = "user"
+
+[[auth]]
+name = "gitlab.oauth_token"
+scheme = "bearer"
+description = "GitLab OAuth2 access token obtained on behalf of a signed-in user. Bounded by that user's own permissions, never by the application's"
+subject = "user"
+
+[auth.oauth2]
+endpoint = "login"
+authorize_path = "/oauth/authorize"
+token_path = "/oauth/token"
+scopes = ["read_api", "read_user", "read_repository"]
+grants = ["authorization_code", "refresh_token"]
+
+[[default_auth]]
+credentials = ["gitlab.oauth_token"]
 
 [[default_auth]]
 credentials = ["gitlab.token"]
@@ -50,7 +71,40 @@ default = "https://gitlab.com"
 approval = "operator"
 docs_url = "https://docs.gitlab.com/administration/"
 binds = "endpoint.origin"
+also_services = ["login"]
 level = "connection"
+
+[[config]]
+name = "oauth_client_id"
+label = "GitLab OAuth application id"
+help = "Create an application under Admin -> Applications (self-managed) or User Settings -> Applications (gitlab.com), with the redirect URI your deployment serves. This is the application id, which is public"
+example = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+required = false
+docs_url = "https://docs.gitlab.com/integration/oauth_provider/"
+binds = "oauth.client_id"
+level = "operator"
+
+[[config]]
+name = "oauth_redirect_uri"
+label = "GitLab OAuth redirect URI"
+help = "The callback address this deployment serves, registered as a redirect URI on the application above. GitLab matches it exactly, so it must be the same string in both places — including the scheme, any port, and no trailing slash"
+example = "https://exchange.internal/api/oauth/callback"
+format = "url"
+required = false
+docs_url = "https://docs.gitlab.com/integration/oauth_provider/"
+binds = "oauth.redirect_uri"
+level = "operator"
+
+[[config]]
+name = "oauth_client_secret"
+label = "GitLab OAuth application secret"
+help = "The application secret issued beside the id above. Supplied once by whoever runs this deployment, never by an end user"
+format = "token"
+required = false
+secret = true
+docs_url = "https://docs.gitlab.com/integration/oauth_provider/"
+binds = "oauth.client_secret"
+level = "operator"
 
 [[config]]
 name = "token"

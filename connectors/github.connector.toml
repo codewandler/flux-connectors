@@ -3,11 +3,12 @@
 generator = "flux-connectors 0.20.0"
 connector = "github"
 vendor = "GitHub"
-description = "GitHub REST API: read repositories, commits, issues, pull requests and Actions workflow runs, and write issues and issue comments"
+description = "GitHub REST API: discover the authenticated user, their organisations and reachable repositories; read repositories, commits, issues, pull requests and Actions workflow runs; and write issues and issue comments"
 runtime = "http"
 base_url = "https://api.github.com"
 module = "github.flux"
-operations = ["github-repo-get", "github-issue-get", "github-pull-get", "github-issue-create", "github-issue-comment-add", "github-issue-list", "github-pull-files-list", "github-workflow-run-list", "github-commit-list"]
+operations = ["github-repo-get", "github-issue-get", "github-pull-get", "github-issue-create", "github-issue-comment-add", "github-issue-list", "github-pull-files-list", "github-workflow-run-list", "github-commit-list", "github-user-get", "github-org-list", "github-org-repo-list", "github-user-repo-list"]
+verify = "github-user-get"
 
 [operation_directions]
 github-commit-list = "read"
@@ -15,9 +16,13 @@ github-issue-comment-add = "write"
 github-issue-create = "write"
 github-issue-get = "read"
 github-issue-list = "read"
+github-org-list = "read"
+github-org-repo-list = "read"
 github-pull-files-list = "read"
 github-pull-get = "read"
 github-repo-get = "read"
+github-user-get = "read"
+github-user-repo-list = "read"
 github-workflow-run-list = "read"
 
 [operation_semantic_effects]
@@ -26,9 +31,13 @@ github-issue-comment-add = []
 github-issue-create = []
 github-issue-get = []
 github-issue-list = []
+github-org-list = []
+github-org-repo-list = []
 github-pull-files-list = []
 github-pull-get = []
 github-repo-get = []
+github-user-get = []
+github-user-repo-list = []
 github-workflow-run-list = []
 
 [[auth]]

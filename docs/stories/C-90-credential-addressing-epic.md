@@ -45,7 +45,8 @@ store can be wrapped in a convention rather than each deployment inventing one.
   to say which is current. Refused now, as `Gid::parse` already does.
 - 2026-07-30 — **The remembered path `tenants/{uuid}/cloud/google/gemini` does not exist.** It
   conflates action-proxy's `customer/<uuid>/integrations/<uuid>`, the Go credentials-store's
-  un-tenanted `cloud/<provider>/<service>`, and `sbf/secrets`' `tenants/<id>/credentials/<id>`. The
+  un-tenanted `cloud/<provider>/<service>`, and the vendor's internal secret store's
+  `tenants/<id>/credentials/<id>`. The
   design records all three.
 
 ## Notes

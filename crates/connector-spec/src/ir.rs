@@ -1924,6 +1924,22 @@ impl Connector {
             .filter(move |field| field.service == service)
     }
 
+    /// The configuration fields that **fill** one service's base-URL placeholders, in IR order.
+    ///
+    /// Wider than [`config_of`](Self::config_of), and the difference is C-529's: a field may name
+    /// sibling services in `also_services`, filling their `{variable}` from its own single address.
+    /// GitLab's API surface and its OAuth surface are one deployment, so one operator-approved
+    /// origin fills both.
+    ///
+    /// Use this wherever the question is *"can this service's URL be composed"*; use `config_of`
+    /// wherever the question is *"which values does this service own"*, since the head service is
+    /// still the one the value is stored under.
+    pub fn config_filling<'a>(&'a self, service: &'a str) -> impl Iterator<Item = &'a ConfigField> {
+        self.config.iter().filter(move |field| {
+            field.service == service || field.also_services.iter().any(|extra| extra == service)
+        })
+    }
+
     /// A configuration field by name.
     pub fn config_field(&self, name: &str) -> Option<&ConfigField> {
         self.config.iter().find(|field| field.name == name)

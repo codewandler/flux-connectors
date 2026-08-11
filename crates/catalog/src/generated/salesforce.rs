@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "access_token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+        subject: crate::Subject::Unstated,
     },
 ];
 
@@ -47,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: None,
         binds: "endpoint.instance",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"instance\",\"label\":\"Salesforce My Domain name\",\"help\":\"The subdomain of your org's My Domain URL — if you log in at acme.my.salesforce.com, this is acme. Find it under Setup → Company Settings → My Domain, or read it off the instance_url your org's login flow returns\",\"example\":\"acme\",\"format\":\"subdomain\",\"binds\":\"endpoint.instance\"}",
     },
     crate::ConfigField {
@@ -63,6 +65,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: None,
         binds: "credential.salesforce.access_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"access_token\",\"label\":\"Access token\",\"help\":\"An OAuth2 access token for this org — minted by Salesforce's own login flow, or by a Connected App's client-credentials or JWT-bearer flow, and pasted here already-minted. It is short-lived; a call that starts failing with 401 usually means this needs refreshing\",\"format\":\"token\",\"secret\":true,\"binds\":\"credential.salesforce.access_token\"}",
     },
 ];

@@ -138,6 +138,11 @@ scheme = "bearer"
 # `[auth.oauth2]` block appears — flux is handed an already-minted token through the environment and
 # runs no grant, the same provenance babelforce's bearer has.
 env = ["SLACK_BOT_TOKEN"]
+# C-528: this token acts as the **integration**, not as a person. The whole paragraph above is that
+# fact in prose — "a bot posts as the app, so a write is attributable to the integration rather than
+# impersonating the operator" — and until C-528 there was no field to state it in, so a host reading
+# the catalogue could not tell this apart from a token that impersonates whoever installed it.
+subject = "app"
 description = "Slack bot user OAuth token (xoxb-…) with chat:write, channels:history, users:read and reactions:write"
 
 [[auth]]
@@ -152,6 +157,11 @@ name = "slack.signing_secret"
 # hex, `v0=`) is the row this repository's verification matrix was derived from. It is unreferenced
 # until an `events-api` binding lands, which is why nothing yet points at it.
 scheme = "signing"
+# C-528: `app`, and the reasoning differs from the bot token's. A signing secret never travels
+# outbound and acts as nobody — but it is issued to the *app* and is provisioned once per
+# installation, so `app` is the honest answer to "who supplies this and whose it is". `user` would be
+# a category error: no person has a signing secret of their own.
+subject = "app"
 env = ["SLACK_SIGNING_SECRET"]
 description = "Slack app signing secret, used to verify inbound Events API requests. Never sent to Slack"
 

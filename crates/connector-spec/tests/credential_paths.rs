@@ -458,7 +458,7 @@ fn a_path_from_another_convention_is_refused_rather_than_guessed_at() {
         "cloud/google/gemini",
         // flux's own Vault path.
         "secret/data/flux/plugin/slack/token",
-        // sbf/secrets' shape — the closest relative, and still not ours.
+        // The vendor's internal secret store's shape — the closest relative, and still not ours.
         "tenants/9f3a/credentials/abcd/extra",
         "tenants/9f3a",
         "",

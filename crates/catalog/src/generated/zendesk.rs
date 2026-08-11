@@ -28,12 +28,14 @@ static AUTH: &[crate::Credential] = &[
         leaf: "api_token",
         acquire: crate::Acquisition::BasicJoin { user_env: &["ZENDESK_USER"], user_suffix: "/token" },
         place: crate::Placement::Header { name: "Authorization", prefix: "Basic " },
+        subject: crate::Subject::Unstated,
     },
     crate::Credential {
         name: "zendesk.messaging_key",
         leaf: "messaging_key",
         acquire: crate::Acquisition::BasicJoin { user_env: &["ZENDESK_MESSAGING_KEY_ID"], user_suffix: "" },
         place: crate::Placement::Header { name: "Authorization", prefix: "Basic " },
+        subject: crate::Subject::Unstated,
     },
 ];
 
@@ -53,6 +55,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://support.zendesk.com/hc/en-us/articles/4409381383578"),
         binds: "endpoint.subdomain",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"subdomain\",\"label\":\"Zendesk subdomain\",\"help\":\"The part of your Zendesk URL before `.zendesk.com` — if you sign in at `acme.zendesk.com`, this is `acme`\",\"example\":\"acme\",\"format\":\"subdomain\",\"docs_url\":\"https://support.zendesk.com/hc/en-us/articles/4409381383578\",\"binds\":\"endpoint.subdomain\"}",
     },
     crate::ConfigField {
@@ -69,6 +72,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: None,
         binds: "username.zendesk.api_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"email\",\"label\":\"Agent email\",\"help\":\"The email of the Zendesk agent whose API token you are using. Zendesk sends it as the username half of the request, with its own `/token` marker appended — you do not type that part\",\"example\":\"agent@acme.com\",\"format\":\"email\",\"binds\":\"username.zendesk.api_token\"}",
     },
     crate::ConfigField {
@@ -85,6 +89,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://support.zendesk.com/hc/en-us/articles/4408889192858"),
         binds: "credential.zendesk.api_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"api_token\",\"label\":\"API token\",\"help\":\"Create one under Admin Center → Apps and integrations → Zendesk API. Zendesk shows it once\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://support.zendesk.com/hc/en-us/articles/4408889192858\",\"binds\":\"credential.zendesk.api_token\"}",
     },
     crate::ConfigField {
@@ -101,6 +106,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://support.zendesk.com/hc/en-us/articles/4409381383578"),
         binds: "endpoint.subdomain",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"help_center_subdomain\",\"service\":\"help-center\",\"label\":\"Zendesk subdomain\",\"help\":\"The part of your Zendesk URL before `.zendesk.com` — the same account subdomain used by Support\",\"example\":\"acme\",\"format\":\"subdomain\",\"docs_url\":\"https://support.zendesk.com/hc/en-us/articles/4409381383578\",\"binds\":\"endpoint.subdomain\"}",
     },
     crate::ConfigField {
@@ -117,6 +123,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: None,
         binds: "username.zendesk.api_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"help_center_email\",\"service\":\"help-center\",\"label\":\"Agent email\",\"help\":\"The Zendesk agent email used by the shared Support and Help Center API token; Zendesk appends `/token` on the wire\",\"example\":\"agent@acme.com\",\"format\":\"email\",\"binds\":\"username.zendesk.api_token\"}",
     },
     crate::ConfigField {
@@ -133,6 +140,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://support.zendesk.com/hc/en-us/articles/4408889192858"),
         binds: "credential.zendesk.api_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"help_center_api_token\",\"service\":\"help-center\",\"label\":\"API token\",\"help\":\"Reuse the Zendesk API token created under Admin Center → Apps and integrations → Zendesk API\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://support.zendesk.com/hc/en-us/articles/4408889192858\",\"binds\":\"credential.zendesk.api_token\"}",
     },
     crate::ConfigField {
@@ -149,6 +157,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://support.zendesk.com/hc/en-us/articles/4409381383578"),
         binds: "endpoint.subdomain",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"messaging_subdomain\",\"service\":\"messaging\",\"label\":\"Zendesk subdomain\",\"help\":\"The part of your Zendesk URL before `.zendesk.com` — the same account subdomain used by Support\",\"example\":\"acme\",\"format\":\"subdomain\",\"docs_url\":\"https://support.zendesk.com/hc/en-us/articles/4409381383578\",\"binds\":\"endpoint.subdomain\"}",
     },
     crate::ConfigField {
@@ -165,6 +174,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developer.zendesk.com/api-reference/apps/apps-api/apps/"),
         binds: "path.appId",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"messaging_app_id\",\"service\":\"messaging\",\"label\":\"Messaging app id\",\"help\":\"The Sunshine Conversations app id this connection manages, as one path-safe identifier\",\"example\":\"app_123\",\"docs_url\":\"https://developer.zendesk.com/api-reference/apps/apps-api/apps/\",\"binds\":\"path.appId\"}",
     },
     crate::ConfigField {
@@ -181,6 +191,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: None,
         binds: "username.zendesk.messaging_key",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"messaging_key_id\",\"service\":\"messaging\",\"label\":\"Messaging key id\",\"help\":\"The id half of an app-scoped Sunshine Conversations API key\",\"example\":\"key_123\",\"binds\":\"username.zendesk.messaging_key\"}",
     },
     crate::ConfigField {
@@ -197,6 +208,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developer.zendesk.com/documentation/conversations/getting-started/using-the-api/"),
         binds: "credential.zendesk.messaging_key",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"messaging_key_secret\",\"service\":\"messaging\",\"label\":\"Messaging key secret\",\"help\":\"The secret half of the app-scoped Sunshine Conversations API key; Zendesk shows it only when the key is created\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.zendesk.com/documentation/conversations/getting-started/using-the-api/\",\"binds\":\"credential.zendesk.messaging_key\"}",
     },
 ];

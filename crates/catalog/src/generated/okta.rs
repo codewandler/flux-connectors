@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "api_token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "SSWS " },
+        subject: crate::Subject::Unstated,
     },
 ];
 
@@ -47,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developer.okta.com/docs/api/#url-namespace"),
         binds: "endpoint.domain",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"domain\",\"label\":\"Okta domain\",\"help\":\"The full host you sign in to, without `https://` — if your Okta URL is `https://acme.okta.com`, this is `acme.okta.com`. European and preview orgs use `.okta-emea.com` and `.oktapreview.com`, and an org with a customised domain uses that instead, so give the whole host rather than just the first part\",\"example\":\"acme.okta.com\",\"format\":\"hostname\",\"docs_url\":\"https://developer.okta.com/docs/api/#url-namespace\",\"binds\":\"endpoint.domain\"}",
     },
     crate::ConfigField {
@@ -63,6 +65,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developer.okta.com/docs/guides/create-an-api-token/"),
         binds: "credential.okta.api_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"api_token\",\"label\":\"API token\",\"help\":\"Create one under Security → API → Tokens in the Okta Admin Console. The token inherits the permissions of the administrator who creates it, so create it as an account with only the access this connection needs — reading users and groups needs a read-only administrator, and okta-user-deactivate needs one that can manage users. Okta shows the token once, and it expires after 30 days without use\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.okta.com/docs/guides/create-an-api-token/\",\"binds\":\"credential.okta.api_token\"}",
     },
 ];

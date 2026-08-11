@@ -421,7 +421,7 @@ pub trait Layout {
 ///
 /// The tenant leads because it is the segment a store's access control is most likely to be written
 /// against — a Vault policy scoping a token to one customer is a prefix rule, and a prefix rule wants
-/// the tenant first. `sbf/secrets` reached the same shape independently
+/// the tenant first. The vendor's own internal secret store reached the same shape independently
 /// (`tenants/<tenantID>/credentials/<id>`), which is the closest real precedent in this ecosystem;
 /// action-proxy's `customer/<uuid>/integrations/<uuid>` is the same idea with the vendor identity
 /// replaced by an opaque row id, so nothing about the path says which API it opens.

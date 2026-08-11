@@ -98,9 +98,9 @@ The coordinator failures from the same session, and each of them cost a rework r
 
 ## Current project boundary
 
-**Snapshot: v0.15.0.** `cargo run -p connector-cli -- build` compiles **55 providers**, **66 services**
-and **829 curated connector operations** — plus 53 events, 5 channel bindings and 77 Flux core entries
-(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **1102 artifacts**. The
+**Snapshot: v0.20.0 + C-527 (re-measured 2026-08-11).** `cargo run -p connector-cli -- build` compiles **55 providers**, **67 services**
+and **835 curated connector operations** — plus 53 events, 5 channel bindings and 77 Flux core entries
+(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **1110 artifacts**. The
 compiler, the embedded Rust catalogue, the JSON catalogue, the Tool pack and the public explorer all
 work. **The repository now also ships a host**, `connectors-api` (C-200), which makes live API calls
 — it is fenced away from the compile path in both directions, and the compiler itself still reaches
@@ -186,7 +186,7 @@ cargo run -p connector-cli -- build
 cargo run -p connector-cli -- diff
 ```
 
-`diff` must finish with `1102 artifacts up to date (55 providers checked)` for the current catalogue.
+`diff` must finish with `1110 artifacts up to date (55 providers checked)` for the current catalogue.
 The artifact count legitimately changes when providers or operations change: it is not a permanent
 invariant, but it is checked at every commit against the real build plan. Regenerate this sentence
 and the counts under [Current project boundary](#current-project-boundary) when that plan changes;

@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "api_token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+        subject: crate::Subject::Unstated,
     },
 ];
 
@@ -47,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://dev.frontapp.com/docs/authentication"),
         binds: "credential.front.api_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"api_token\",\"label\":\"API token\",\"help\":\"In Front, open Settings → API & Integrations → API, and create a new token. A token is scoped to the teammate who creates it and to the scopes granted when it is created — replying and tagging require write scopes, not just read ones\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://dev.frontapp.com/docs/authentication\",\"binds\":\"credential.front.api_token\"}",
     },
 ];

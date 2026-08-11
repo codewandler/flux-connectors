@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "access_token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "X-Shopify-Access-Token", prefix: "" },
+        subject: crate::Subject::Unstated,
     },
 ];
 
@@ -47,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://help.shopify.com/en/manual/domains"),
         binds: "endpoint.shop",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"shop\",\"label\":\"Shop name\",\"help\":\"The part of your `myshopify.com` address before the dot — for `acme.myshopify.com`, this is `acme`. Not your custom storefront domain\",\"example\":\"acme\",\"format\":\"subdomain\",\"docs_url\":\"https://help.shopify.com/en/manual/domains\",\"binds\":\"endpoint.shop\"}",
     },
     crate::ConfigField {
@@ -63,6 +65,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://help.shopify.com/en/manual/apps/app-types/custom-apps"),
         binds: "credential.shopify.access_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"access_token\",\"label\":\"Admin API access token\",\"help\":\"From your custom app's API credentials page in the Shopify admin. Starts with `shpat_`, and Shopify shows it once\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://help.shopify.com/en/manual/apps/app-types/custom-apps\",\"binds\":\"credential.shopify.access_token\"}",
     },
 ];

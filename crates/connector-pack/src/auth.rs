@@ -126,6 +126,14 @@ pub(crate) fn acquire(credential: &'static Credential, secret: &str, user: Optio
         // side must not. Writing it as its own arm is what makes a future acquisition step on this
         // variant a decision somebody takes here rather than one that arrives by falling through.
         Acquisition::Minted { .. } => secret.to_string(),
+        // **Identical to `Static` for the same reason, and spelled out for the same reason** (C-525).
+        // The stored value is an access token the *host* obtained by running the grant, and by the
+        // time this crate places it there is nothing left to acquire. The variant carries the
+        // endpoints, scopes and grants the host reads before it runs one; this side must not, and
+        // structurally cannot — `connector-pack` opens no socket, so a token exchange is not a thing
+        // it could perform even if an arm here tried to. Its own arm is what keeps that a decision
+        // rather than a fall-through.
+        Acquisition::OAuth2(_) => secret.to_string(),
         // A `None` user cannot happen — the caller resolves it whenever the acquisition is a join —
         // and composing `base64(":<secret>")` would be a plausible header the vendor rejects with a
         // 401 that says nothing. The empty string is what a vendor would see either way; the caller's
@@ -281,6 +289,10 @@ mod tests {
             leaf: "token",
             acquire,
             place,
+            // This module is the *placement* half, and placement is subject-independent: an app
+            // token and a user token go onto a request identically. `Unstated` therefore keeps the
+            // fixture honest about what it is exercising.
+            subject: catalog::Subject::Unstated,
         }))
     }
 

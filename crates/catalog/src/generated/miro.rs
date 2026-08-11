@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "access_token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+        subject: crate::Subject::Unstated,
     },
 ];
 
@@ -47,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developers.miro.com/docs/getting-started-with-oauth"),
         binds: "credential.miro.access_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"access_token\",\"label\":\"Miro access token\",\"help\":\"Create one at your Miro app's settings (developers.miro.com) or from a personal access token under a board's Settings -> Apps, scoped to boards:read and boards:write. Miro shows the token once\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developers.miro.com/docs/getting-started-with-oauth\",\"binds\":\"credential.miro.access_token\"}",
     },
 ];

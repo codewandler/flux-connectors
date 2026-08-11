@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "" },
+        subject: crate::Subject::Unstated,
     },
 ];
 
@@ -47,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developer.clickup.com/docs/authentication"),
         binds: "credential.clickup.token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"token\",\"label\":\"ClickUp personal API token\",\"help\":\"Copy it from ClickUp under your avatar -> Settings -> Apps. ClickUp shows the full token there each time; treat it like a password — it is sent raw, with no scheme word, on every request\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developer.clickup.com/docs/authentication\",\"binds\":\"credential.clickup.token\"}",
     },
 ];

@@ -206,11 +206,13 @@ coordinator-fenced ratchet constants moving because babelforce goes 0/9 → 9/9 
 
 ## Vendoring and provenance
 
-The specs are not secret — the babelforce developer hub renders them publicly. What is internal is
-the **fetch configuration**: `manager-sdk/specs/sources.json` holds `gitlab.stack.babelforce.com`,
-project ids and `sbf/api-specs`, and `manager-sdk/scripts/leak-markers.regex` names `gitlab\.stack`
-and `sbf/services` as high-confidence markers that must never be published. flux-connectors is a
-public repo (`github.com/codewandler/flux-connectors`).
+The specs are not secret — the vendor's developer hub renders them publicly. What is internal is
+the **fetch configuration**: `manager-sdk/specs/sources.json` holds the internal forge host, project
+ids and the source repository path, and `manager-sdk/scripts/leak-markers.regex` names those same
+strings as high-confidence markers that must never be published. flux-connectors is a public repo
+(`github.com/codewandler/flux-connectors`), which is why this paragraph **describes** those strings
+rather than quoting them: a document explaining which values must never be published is a poor place
+to publish them, and it did exactly that until C-532.
 
 So the split is: **the pulled bytes are vendored here; the pull configuration is not.** `SpecSource`
 already accommodates it — `source_url` is `Option`, and `sha256` plus `upstream_version` carry

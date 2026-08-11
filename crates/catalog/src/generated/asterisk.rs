@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "password",
         acquire: crate::Acquisition::BasicJoin { user_env: &["ASTERISK_ARI_USERNAME"], user_suffix: "" },
         place: crate::Placement::Header { name: "Authorization", prefix: "Basic " },
+        subject: crate::Subject::Unstated,
     },
 ];
 
@@ -47,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: None,
         binds: "endpoint.host",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"host\",\"label\":\"Asterisk host\",\"help\":\"The hostname of the TLS-enabled Asterisk HTTP service without a scheme, port, or `/ari`\",\"example\":\"pbx.example.com\",\"binds\":\"endpoint.host\"}",
     },
     crate::ConfigField {
@@ -63,6 +65,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: None,
         binds: "username.asterisk.password",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"username\",\"label\":\"ARI username\",\"help\":\"The username configured for ARI in Asterisk's `ari.conf`\",\"example\":\"flux\",\"binds\":\"username.asterisk.password\"}",
     },
     crate::ConfigField {
@@ -79,6 +82,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: None,
         binds: "credential.asterisk.password",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"password\",\"label\":\"ARI password\",\"help\":\"The password configured beside the ARI username in Asterisk's `ari.conf`\",\"format\":\"token\",\"secret\":true,\"binds\":\"credential.asterisk.password\"}",
     },
     crate::ConfigField {
@@ -95,6 +99,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: None,
         binds: "channel.ari-events.query.app",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"app\",\"label\":\"Stasis application\",\"help\":\"The ARI Stasis application whose events this connection receives\",\"example\":\"flux\",\"binds\":\"channel.ari-events.query.app\"}",
     },
     crate::ConfigField {
@@ -111,6 +116,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: None,
         binds: "channel.ari-events.query.subscribeAll",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"subscribe_all\",\"label\":\"Subscribe to all applications\",\"help\":\"Whether ARI should deliver events for every application instead of only the named Stasis application\",\"example\":\"false\",\"required\":false,\"default\":\"false\",\"binds\":\"channel.ari-events.query.subscribeAll\"}",
     },
 ];

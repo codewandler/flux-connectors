@@ -166472,7 +166472,7 @@
       "id": "github",
       "authority": "com.github.api",
       "vendor": "GitHub",
-      "description": "GitHub REST API: read repositories, commits, issues, pull requests and Actions workflow runs, and write issues and issue comments",
+      "description": "GitHub REST API: discover the authenticated user, their organisations and reachable repositories; read repositories, commits, issues, pull requests and Actions workflow runs; and write issues and issue comments",
       "runtime": "http",
       "base_url": "https://api.github.com",
       "api_version": null,
@@ -166489,7 +166489,7 @@
           ],
           "api_version": null,
           "gid": null,
-          "operation_count": 9
+          "operation_count": 13
         }
       ],
       "auth": {
@@ -166519,7 +166519,7 @@
           ]
         ]
       },
-      "operation_count": 9,
+      "operation_count": 13,
       "operations": [
         {
           "id": "github-repo-get",
@@ -172995,19 +172995,2345 @@
             ],
             "notes": []
           }
+        },
+        {
+          "id": "github-user-get",
+          "provider": "github",
+          "service": "default",
+          "direction": "read",
+          "description": "Get the authenticated user — the identity the configured token acts as",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "semantic_effects": [],
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/user",
+          "spec_source": {
+            "operation_id": "users/get-authenticated",
+            "source_url": "https://raw.githubusercontent.com/github/rest-api-description/5e28810649ba41b5483753ba74f976f83856a504/descriptions/api.github.com/api.github.com.2022-11-28.json",
+            "upstream_version": "1.1.4",
+            "sha256": "a7a3293268f062d09eb576806f0e5af271c039b9427f9852c8280c8fecc692e7"
+          },
+          "parameters": [],
+          "input_schema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "discriminator": {
+              "mapping": {
+                "private": "#/components/schemas/private-user",
+                "public": "#/components/schemas/public-user"
+              },
+              "propertyName": "user_view_type"
+            },
+            "oneOf": [
+              {
+                "description": "Private User",
+                "properties": {
+                  "avatar_url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "bio": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "blog": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "business_plus": {
+                    "type": "boolean"
+                  },
+                  "collaborators": {
+                    "type": "integer"
+                  },
+                  "company": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "disk_usage": {
+                    "type": "integer"
+                  },
+                  "email": {
+                    "format": "email",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "events_url": {
+                    "type": "string"
+                  },
+                  "followers": {
+                    "type": "integer"
+                  },
+                  "followers_url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "following": {
+                    "type": "integer"
+                  },
+                  "following_url": {
+                    "type": "string"
+                  },
+                  "gists_url": {
+                    "type": "string"
+                  },
+                  "gravatar_id": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "hireable": {
+                    "nullable": true,
+                    "type": "boolean"
+                  },
+                  "html_url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "id": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "ldap_dn": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "login": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "node_id": {
+                    "type": "string"
+                  },
+                  "notification_email": {
+                    "format": "email",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "organizations_url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "owned_private_repos": {
+                    "type": "integer"
+                  },
+                  "plan": {
+                    "properties": {
+                      "collaborators": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "private_repos": {
+                        "type": "integer"
+                      },
+                      "space": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "collaborators",
+                      "name",
+                      "space",
+                      "private_repos"
+                    ],
+                    "type": "object"
+                  },
+                  "private_gists": {
+                    "type": "integer"
+                  },
+                  "public_gists": {
+                    "type": "integer"
+                  },
+                  "public_repos": {
+                    "type": "integer"
+                  },
+                  "received_events_url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "repos_url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "site_admin": {
+                    "type": "boolean"
+                  },
+                  "starred_url": {
+                    "type": "string"
+                  },
+                  "subscriptions_url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "total_private_repos": {
+                    "type": "integer"
+                  },
+                  "twitter_username": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "two_factor_authentication": {
+                    "type": "boolean"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "user_view_type": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "avatar_url",
+                  "events_url",
+                  "followers_url",
+                  "following_url",
+                  "gists_url",
+                  "gravatar_id",
+                  "html_url",
+                  "id",
+                  "node_id",
+                  "login",
+                  "organizations_url",
+                  "received_events_url",
+                  "repos_url",
+                  "site_admin",
+                  "starred_url",
+                  "subscriptions_url",
+                  "type",
+                  "url",
+                  "bio",
+                  "blog",
+                  "company",
+                  "email",
+                  "followers",
+                  "following",
+                  "hireable",
+                  "location",
+                  "name",
+                  "public_gists",
+                  "public_repos",
+                  "created_at",
+                  "updated_at",
+                  "collaborators",
+                  "disk_usage",
+                  "owned_private_repos",
+                  "private_gists",
+                  "total_private_repos",
+                  "two_factor_authentication"
+                ],
+                "title": "Private User",
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "description": "Public User",
+                "properties": {
+                  "avatar_url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "bio": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "blog": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "collaborators": {
+                    "type": "integer"
+                  },
+                  "company": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "disk_usage": {
+                    "type": "integer"
+                  },
+                  "email": {
+                    "format": "email",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "events_url": {
+                    "type": "string"
+                  },
+                  "followers": {
+                    "type": "integer"
+                  },
+                  "followers_url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "following": {
+                    "type": "integer"
+                  },
+                  "following_url": {
+                    "type": "string"
+                  },
+                  "gists_url": {
+                    "type": "string"
+                  },
+                  "gravatar_id": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "hireable": {
+                    "nullable": true,
+                    "type": "boolean"
+                  },
+                  "html_url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "id": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "location": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "login": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "node_id": {
+                    "type": "string"
+                  },
+                  "notification_email": {
+                    "format": "email",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "organizations_url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "owned_private_repos": {
+                    "type": "integer"
+                  },
+                  "plan": {
+                    "properties": {
+                      "collaborators": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "private_repos": {
+                        "type": "integer"
+                      },
+                      "space": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "collaborators",
+                      "name",
+                      "space",
+                      "private_repos"
+                    ],
+                    "type": "object"
+                  },
+                  "private_gists": {
+                    "type": "integer"
+                  },
+                  "public_gists": {
+                    "type": "integer"
+                  },
+                  "public_repos": {
+                    "type": "integer"
+                  },
+                  "received_events_url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "repos_url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "site_admin": {
+                    "type": "boolean"
+                  },
+                  "starred_url": {
+                    "type": "string"
+                  },
+                  "subscriptions_url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "total_private_repos": {
+                    "type": "integer"
+                  },
+                  "twitter_username": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "user_view_type": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "avatar_url",
+                  "events_url",
+                  "followers_url",
+                  "following_url",
+                  "gists_url",
+                  "gravatar_id",
+                  "html_url",
+                  "id",
+                  "node_id",
+                  "login",
+                  "organizations_url",
+                  "received_events_url",
+                  "repos_url",
+                  "site_admin",
+                  "starred_url",
+                  "subscriptions_url",
+                  "type",
+                  "url",
+                  "bio",
+                  "blog",
+                  "company",
+                  "email",
+                  "followers",
+                  "following",
+                  "hireable",
+                  "location",
+                  "name",
+                  "public_gists",
+                  "public_repos",
+                  "created_at",
+                  "updated_at"
+                ],
+                "title": "Public User",
+                "type": "object"
+              }
+            ]
+          },
+          "credentials": [
+            [
+              "github.token"
+            ]
+          ],
+          "hosts": [
+            "api.github.com"
+          ],
+          "flux": "op github-user-get -> Any\n  description \"Get the authenticated user — the identity the configured token acts as\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"read\", \"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/user\")\n  Accept = \"application/vnd.github+json\"\n  response = http.request(headers: { Accept }, method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "github-org-list",
+          "provider": "github",
+          "service": "default",
+          "direction": "read",
+          "description": "List the organisations the authenticated user belongs to, with bounded integer pagination",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "semantic_effects": [],
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/user/orgs",
+          "spec_source": {
+            "operation_id": "orgs/list-for-authenticated-user",
+            "source_url": "https://raw.githubusercontent.com/github/rest-api-description/5e28810649ba41b5483753ba74f976f83856a504/descriptions/api.github.com/api.github.com.2022-11-28.json",
+            "upstream_version": "1.1.4",
+            "sha256": "a7a3293268f062d09eb576806f0e5af271c039b9427f9852c8280c8fecc692e7"
+          },
+          "parameters": [
+            {
+              "name": "per_page",
+              "in": "query",
+              "wire": null,
+              "description": "The number of results per page (max 100). For more information, see \"[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api).\"",
+              "required": false,
+              "schema": {
+                "default": 30,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "wire": null,
+              "description": "The page number of the results to fetch. For more information, see \"[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api).\"",
+              "required": false,
+              "schema": {
+                "default": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "page": {
+                "default": 1,
+                "type": "integer"
+              },
+              "per_page": {
+                "default": 30,
+                "type": "integer"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "items": {
+              "description": "A GitHub organization.",
+              "properties": {
+                "avatar_url": {
+                  "type": "string"
+                },
+                "description": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "events_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "hooks_url": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "issues_url": {
+                  "type": "string"
+                },
+                "login": {
+                  "type": "string"
+                },
+                "members_url": {
+                  "type": "string"
+                },
+                "node_id": {
+                  "type": "string"
+                },
+                "public_members_url": {
+                  "type": "string"
+                },
+                "repos_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "url": {
+                  "format": "uri",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "login",
+                "url",
+                "id",
+                "node_id",
+                "repos_url",
+                "events_url",
+                "hooks_url",
+                "issues_url",
+                "members_url",
+                "public_members_url",
+                "avatar_url",
+                "description"
+              ],
+              "title": "Organization Simple",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "credentials": [
+            [
+              "github.token"
+            ]
+          ],
+          "hosts": [
+            "api.github.com"
+          ],
+          "flux": "op github-org-list(per_page: Number, page: Number) -> Any\n  description \"List the organisations the authenticated user belongs to, with bounded integer pagination\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"read\", \"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/user/orgs\")\n  Accept = \"application/vnd.github+json\"\n  response = http.request(headers: { Accept }, method: \"GET\", query: { page, per_page }, url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "github-org-repo-list",
+          "provider": "github",
+          "service": "default",
+          "direction": "read",
+          "description": "List an organisation's repositories, filtered by type and ordered, with bounded integer pagination",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "semantic_effects": [],
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/orgs/{org}/repos",
+          "spec_source": {
+            "operation_id": "repos/list-for-org",
+            "source_url": "https://raw.githubusercontent.com/github/rest-api-description/5e28810649ba41b5483753ba74f976f83856a504/descriptions/api.github.com/api.github.com.2022-11-28.json",
+            "upstream_version": "1.1.4",
+            "sha256": "a7a3293268f062d09eb576806f0e5af271c039b9427f9852c8280c8fecc692e7"
+          },
+          "parameters": [
+            {
+              "name": "org",
+              "in": "path",
+              "wire": null,
+              "description": "The organization name. The name is not case sensitive.",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "type",
+              "in": "query",
+              "wire": null,
+              "description": "Specifies the types of repositories you want returned.",
+              "required": false,
+              "schema": {
+                "default": "all",
+                "enum": [
+                  "all",
+                  "public",
+                  "private",
+                  "forks",
+                  "sources",
+                  "member"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "sort",
+              "in": "query",
+              "wire": null,
+              "description": "The property to sort the results by.",
+              "required": false,
+              "schema": {
+                "default": "created",
+                "enum": [
+                  "created",
+                  "updated",
+                  "pushed",
+                  "full_name"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "direction",
+              "in": "query",
+              "wire": null,
+              "description": "The order to sort by. Default: `asc` when using `full_name`, otherwise `desc`.",
+              "required": false,
+              "schema": {
+                "enum": [
+                  "asc",
+                  "desc"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "per_page",
+              "in": "query",
+              "wire": null,
+              "description": "The number of results per page (max 100). For more information, see \"[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api).\"",
+              "required": false,
+              "schema": {
+                "default": 30,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "wire": null,
+              "description": "The page number of the results to fetch. For more information, see \"[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api).\"",
+              "required": false,
+              "schema": {
+                "default": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "direction": {
+                "enum": [
+                  "asc",
+                  "desc"
+                ],
+                "type": "string"
+              },
+              "org": {
+                "type": "string"
+              },
+              "page": {
+                "default": 1,
+                "type": "integer"
+              },
+              "per_page": {
+                "default": 30,
+                "type": "integer"
+              },
+              "sort": {
+                "default": "created",
+                "enum": [
+                  "created",
+                  "updated",
+                  "pushed",
+                  "full_name"
+                ],
+                "type": "string"
+              },
+              "type": {
+                "default": "all",
+                "enum": [
+                  "all",
+                  "public",
+                  "private",
+                  "forks",
+                  "sources",
+                  "member"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "org"
+            ],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "items": {
+              "description": "Minimal Repository",
+              "properties": {
+                "allow_forking": {
+                  "type": "boolean"
+                },
+                "archive_url": {
+                  "type": "string"
+                },
+                "archived": {
+                  "type": "boolean"
+                },
+                "assignees_url": {
+                  "type": "string"
+                },
+                "blobs_url": {
+                  "type": "string"
+                },
+                "branches_url": {
+                  "type": "string"
+                },
+                "clone_url": {
+                  "type": "string"
+                },
+                "code_of_conduct": {
+                  "description": "Code Of Conduct",
+                  "properties": {
+                    "body": {
+                      "type": "string"
+                    },
+                    "html_url": {
+                      "format": "uri",
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "format": "uri",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "html_url",
+                    "key",
+                    "name"
+                  ],
+                  "title": "Code Of Conduct",
+                  "type": "object"
+                },
+                "collaborators_url": {
+                  "type": "string"
+                },
+                "comments_url": {
+                  "type": "string"
+                },
+                "commits_url": {
+                  "type": "string"
+                },
+                "compare_url": {
+                  "type": "string"
+                },
+                "contents_url": {
+                  "type": "string"
+                },
+                "contributors_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "custom_properties": {
+                  "additionalProperties": true,
+                  "description": "The custom properties that were defined for the repository. The keys are the custom property names, and the values are the corresponding custom property values.",
+                  "type": "object"
+                },
+                "default_branch": {
+                  "type": "string"
+                },
+                "delete_branch_on_merge": {
+                  "type": "boolean"
+                },
+                "deployments_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "description": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "disabled": {
+                  "type": "boolean"
+                },
+                "downloads_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "events_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "fork": {
+                  "type": "boolean"
+                },
+                "forks": {
+                  "type": "integer"
+                },
+                "forks_count": {
+                  "type": "integer"
+                },
+                "forks_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "full_name": {
+                  "type": "string"
+                },
+                "git_commits_url": {
+                  "type": "string"
+                },
+                "git_refs_url": {
+                  "type": "string"
+                },
+                "git_tags_url": {
+                  "type": "string"
+                },
+                "git_url": {
+                  "type": "string"
+                },
+                "has_discussions": {
+                  "type": "boolean"
+                },
+                "has_downloads": {
+                  "type": "boolean"
+                },
+                "has_issues": {
+                  "type": "boolean"
+                },
+                "has_pages": {
+                  "type": "boolean"
+                },
+                "has_projects": {
+                  "type": "boolean"
+                },
+                "has_pull_requests": {
+                  "type": "boolean"
+                },
+                "has_wiki": {
+                  "type": "boolean"
+                },
+                "homepage": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "hooks_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "html_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "id": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "is_template": {
+                  "type": "boolean"
+                },
+                "issue_comment_url": {
+                  "type": "string"
+                },
+                "issue_events_url": {
+                  "type": "string"
+                },
+                "issues_url": {
+                  "type": "string"
+                },
+                "keys_url": {
+                  "type": "string"
+                },
+                "labels_url": {
+                  "type": "string"
+                },
+                "language": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "languages_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "license": {
+                  "nullable": true,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "node_id": {
+                      "type": "string"
+                    },
+                    "spdx_id": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "nullable": true,
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "merges_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "milestones_url": {
+                  "type": "string"
+                },
+                "mirror_url": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "network_count": {
+                  "type": "integer"
+                },
+                "node_id": {
+                  "type": "string"
+                },
+                "notifications_url": {
+                  "type": "string"
+                },
+                "open_issues": {
+                  "type": "integer"
+                },
+                "open_issues_count": {
+                  "type": "integer"
+                },
+                "owner": {
+                  "description": "A GitHub user.",
+                  "properties": {
+                    "avatar_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "email": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "events_url": {
+                      "type": "string"
+                    },
+                    "followers_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "following_url": {
+                      "type": "string"
+                    },
+                    "gists_url": {
+                      "type": "string"
+                    },
+                    "gravatar_id": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "html_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "login": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "node_id": {
+                      "type": "string"
+                    },
+                    "organizations_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "received_events_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "repos_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "site_admin": {
+                      "type": "boolean"
+                    },
+                    "starred_at": {
+                      "type": "string"
+                    },
+                    "starred_url": {
+                      "type": "string"
+                    },
+                    "subscriptions_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "user_view_type": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "avatar_url",
+                    "events_url",
+                    "followers_url",
+                    "following_url",
+                    "gists_url",
+                    "gravatar_id",
+                    "html_url",
+                    "id",
+                    "node_id",
+                    "login",
+                    "organizations_url",
+                    "received_events_url",
+                    "repos_url",
+                    "site_admin",
+                    "starred_url",
+                    "subscriptions_url",
+                    "type",
+                    "url"
+                  ],
+                  "title": "Simple User",
+                  "type": "object"
+                },
+                "permissions": {
+                  "properties": {
+                    "admin": {
+                      "type": "boolean"
+                    },
+                    "maintain": {
+                      "type": "boolean"
+                    },
+                    "pull": {
+                      "type": "boolean"
+                    },
+                    "push": {
+                      "type": "boolean"
+                    },
+                    "triage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                },
+                "private": {
+                  "type": "boolean"
+                },
+                "pull_request_creation_policy": {
+                  "description": "The policy controlling who can create pull requests: all or collaborators_only.",
+                  "enum": [
+                    "all",
+                    "collaborators_only"
+                  ],
+                  "type": "string"
+                },
+                "pulls_url": {
+                  "type": "string"
+                },
+                "pushed_at": {
+                  "format": "date-time",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "releases_url": {
+                  "type": "string"
+                },
+                "role_name": {
+                  "type": "string"
+                },
+                "security_and_analysis": {
+                  "nullable": true,
+                  "properties": {
+                    "advanced_security": {
+                      "description": "Enable or disable GitHub Advanced Security for the repository.\n\nFor standalone Code Scanning or Secret Protection products, this parameter cannot be used.\n",
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            "enabled",
+                            "disabled"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "code_security": {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            "enabled",
+                            "disabled"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "dependabot_security_updates": {
+                      "description": "Enable or disable Dependabot security updates for the repository.",
+                      "properties": {
+                        "status": {
+                          "description": "The enablement status of Dependabot security updates for the repository.",
+                          "enum": [
+                            "enabled",
+                            "disabled"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "secret_scanning": {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            "enabled",
+                            "disabled"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "secret_scanning_ai_detection": {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            "enabled",
+                            "disabled"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "secret_scanning_delegated_alert_dismissal": {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            "enabled",
+                            "disabled"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "secret_scanning_delegated_bypass": {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            "enabled",
+                            "disabled"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "secret_scanning_delegated_bypass_options": {
+                      "properties": {
+                        "reviewers": {
+                          "description": "The bypass reviewers for secret scanning delegated bypass",
+                          "items": {
+                            "properties": {
+                              "mode": {
+                                "default": "ALWAYS",
+                                "description": "The bypass mode for the reviewer",
+                                "enum": [
+                                  "ALWAYS",
+                                  "EXEMPT"
+                                ],
+                                "type": "string"
+                              },
+                              "reviewer_id": {
+                                "description": "The ID of the team or role selected as a bypass reviewer",
+                                "type": "integer"
+                              },
+                              "reviewer_type": {
+                                "description": "The type of the bypass reviewer",
+                                "enum": [
+                                  "TEAM",
+                                  "ROLE"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "reviewer_id",
+                              "reviewer_type"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "secret_scanning_non_provider_patterns": {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            "enabled",
+                            "disabled"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "secret_scanning_push_protection": {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            "enabled",
+                            "disabled"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "size": {
+                  "description": "The size of the repository, in kilobytes. Size is calculated hourly. When a repository is initially created, the size is 0.",
+                  "type": "integer"
+                },
+                "ssh_url": {
+                  "type": "string"
+                },
+                "stargazers_count": {
+                  "type": "integer"
+                },
+                "stargazers_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "statuses_url": {
+                  "type": "string"
+                },
+                "subscribers_count": {
+                  "type": "integer"
+                },
+                "subscribers_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "subscription_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "svn_url": {
+                  "type": "string"
+                },
+                "tags_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "teams_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "temp_clone_token": {
+                  "type": "string"
+                },
+                "topics": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "trees_url": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "visibility": {
+                  "type": "string"
+                },
+                "watchers": {
+                  "type": "integer"
+                },
+                "watchers_count": {
+                  "type": "integer"
+                },
+                "web_commit_signoff_required": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "archive_url",
+                "assignees_url",
+                "blobs_url",
+                "branches_url",
+                "collaborators_url",
+                "comments_url",
+                "commits_url",
+                "compare_url",
+                "contents_url",
+                "contributors_url",
+                "deployments_url",
+                "description",
+                "downloads_url",
+                "events_url",
+                "fork",
+                "forks_url",
+                "full_name",
+                "git_commits_url",
+                "git_refs_url",
+                "git_tags_url",
+                "hooks_url",
+                "html_url",
+                "id",
+                "node_id",
+                "issue_comment_url",
+                "issue_events_url",
+                "issues_url",
+                "keys_url",
+                "labels_url",
+                "languages_url",
+                "merges_url",
+                "milestones_url",
+                "name",
+                "notifications_url",
+                "owner",
+                "private",
+                "pulls_url",
+                "releases_url",
+                "stargazers_url",
+                "statuses_url",
+                "subscribers_url",
+                "subscription_url",
+                "tags_url",
+                "teams_url",
+                "trees_url",
+                "url"
+              ],
+              "title": "Minimal Repository",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "credentials": [
+            [
+              "github.token"
+            ]
+          ],
+          "hosts": [
+            "api.github.com"
+          ],
+          "flux": "op github-org-repo-list(org: String, type: String, sort: String, direction: String, per_page: Number, page: Number) -> Any\n  description \"List an organisation's repositories, filtered by type and ordered, with bounded integer pagination\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"read\", \"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/orgs/{org}/repos\")\n  Accept = \"application/vnd.github+json\"\n  response = http.request(headers: { Accept }, method: \"GET\", query: { direction, page, per_page, sort, type }, url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "github-user-repo-list",
+          "provider": "github",
+          "service": "default",
+          "direction": "read",
+          "description": "List the repositories the authenticated user can access, filtered by visibility, affiliation and type",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "semantic_effects": [],
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/user/repos",
+          "spec_source": {
+            "operation_id": "repos/list-for-authenticated-user",
+            "source_url": "https://raw.githubusercontent.com/github/rest-api-description/5e28810649ba41b5483753ba74f976f83856a504/descriptions/api.github.com/api.github.com.2022-11-28.json",
+            "upstream_version": "1.1.4",
+            "sha256": "a7a3293268f062d09eb576806f0e5af271c039b9427f9852c8280c8fecc692e7"
+          },
+          "parameters": [
+            {
+              "name": "visibility",
+              "in": "query",
+              "wire": null,
+              "description": "Limit results to repositories with the specified visibility.",
+              "required": false,
+              "schema": {
+                "default": "all",
+                "enum": [
+                  "all",
+                  "public",
+                  "private"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "affiliation",
+              "in": "query",
+              "wire": null,
+              "description": "Comma-separated list of values. Can include:  \n * `owner`: Repositories that are owned by the authenticated user.  \n * `collaborator`: Repositories that the user has been added to as a collaborator.  \n * `organization_member`: Repositories that the user has access to through being a member of an organization. This includes every repository on every team that the user is on.",
+              "required": false,
+              "schema": {
+                "default": "owner,collaborator,organization_member",
+                "type": "string"
+              }
+            },
+            {
+              "name": "type",
+              "in": "query",
+              "wire": null,
+              "description": "Limit results to repositories of the specified type. Will cause a `422` error if used in the same request as **visibility** or **affiliation**.",
+              "required": false,
+              "schema": {
+                "default": "all",
+                "enum": [
+                  "all",
+                  "owner",
+                  "public",
+                  "private",
+                  "member"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "sort",
+              "in": "query",
+              "wire": null,
+              "description": "The property to sort the results by.",
+              "required": false,
+              "schema": {
+                "default": "full_name",
+                "enum": [
+                  "created",
+                  "updated",
+                  "pushed",
+                  "full_name"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "direction",
+              "in": "query",
+              "wire": null,
+              "description": "The order to sort by. Default: `asc` when using `full_name`, otherwise `desc`.",
+              "required": false,
+              "schema": {
+                "enum": [
+                  "asc",
+                  "desc"
+                ],
+                "type": "string"
+              }
+            },
+            {
+              "name": "per_page",
+              "in": "query",
+              "wire": null,
+              "description": "The number of results per page (max 100). For more information, see \"[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api).\"",
+              "required": false,
+              "schema": {
+                "default": 30,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "wire": null,
+              "description": "The page number of the results to fetch. For more information, see \"[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api).\"",
+              "required": false,
+              "schema": {
+                "default": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "affiliation": {
+                "default": "owner,collaborator,organization_member",
+                "type": "string"
+              },
+              "direction": {
+                "enum": [
+                  "asc",
+                  "desc"
+                ],
+                "type": "string"
+              },
+              "page": {
+                "default": 1,
+                "type": "integer"
+              },
+              "per_page": {
+                "default": 30,
+                "type": "integer"
+              },
+              "sort": {
+                "default": "full_name",
+                "enum": [
+                  "created",
+                  "updated",
+                  "pushed",
+                  "full_name"
+                ],
+                "type": "string"
+              },
+              "type": {
+                "default": "all",
+                "enum": [
+                  "all",
+                  "owner",
+                  "public",
+                  "private",
+                  "member"
+                ],
+                "type": "string"
+              },
+              "visibility": {
+                "default": "all",
+                "enum": [
+                  "all",
+                  "public",
+                  "private"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "items": {
+              "description": "A repository on GitHub.",
+              "properties": {
+                "allow_auto_merge": {
+                  "default": false,
+                  "description": "Whether to allow Auto-merge to be used on pull requests.",
+                  "type": "boolean"
+                },
+                "allow_forking": {
+                  "description": "Whether to allow forking this repo",
+                  "type": "boolean"
+                },
+                "allow_merge_commit": {
+                  "default": true,
+                  "description": "Whether to allow merge commits for pull requests.",
+                  "type": "boolean"
+                },
+                "allow_rebase_merge": {
+                  "default": true,
+                  "description": "Whether to allow rebase merges for pull requests.",
+                  "type": "boolean"
+                },
+                "allow_squash_merge": {
+                  "default": true,
+                  "description": "Whether to allow squash merges for pull requests.",
+                  "type": "boolean"
+                },
+                "allow_update_branch": {
+                  "default": false,
+                  "description": "Whether or not a pull request head branch that is behind its base branch can always be updated even if it is not required to be up to date before merging.",
+                  "type": "boolean"
+                },
+                "anonymous_access_enabled": {
+                  "description": "Whether anonymous git access is enabled for this repository",
+                  "type": "boolean"
+                },
+                "archive_url": {
+                  "type": "string"
+                },
+                "archived": {
+                  "default": false,
+                  "description": "Whether the repository is archived.",
+                  "type": "boolean"
+                },
+                "assignees_url": {
+                  "type": "string"
+                },
+                "blobs_url": {
+                  "type": "string"
+                },
+                "branches_url": {
+                  "type": "string"
+                },
+                "clone_url": {
+                  "type": "string"
+                },
+                "code_search_index_status": {
+                  "description": "The status of the code search index for this repository",
+                  "properties": {
+                    "lexical_commit_sha": {
+                      "type": "string"
+                    },
+                    "lexical_search_ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                },
+                "collaborators_url": {
+                  "type": "string"
+                },
+                "comments_url": {
+                  "type": "string"
+                },
+                "commits_url": {
+                  "type": "string"
+                },
+                "compare_url": {
+                  "type": "string"
+                },
+                "contents_url": {
+                  "type": "string"
+                },
+                "contributors_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "default_branch": {
+                  "description": "The default branch of the repository.",
+                  "type": "string"
+                },
+                "delete_branch_on_merge": {
+                  "default": false,
+                  "description": "Whether to delete head branches when pull requests are merged",
+                  "type": "boolean"
+                },
+                "deployments_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "description": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "disabled": {
+                  "description": "Returns whether or not this repository disabled.",
+                  "type": "boolean"
+                },
+                "downloads_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "events_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "fork": {
+                  "type": "boolean"
+                },
+                "forks": {
+                  "type": "integer"
+                },
+                "forks_count": {
+                  "type": "integer"
+                },
+                "forks_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "full_name": {
+                  "type": "string"
+                },
+                "git_commits_url": {
+                  "type": "string"
+                },
+                "git_refs_url": {
+                  "type": "string"
+                },
+                "git_tags_url": {
+                  "type": "string"
+                },
+                "git_url": {
+                  "type": "string"
+                },
+                "has_discussions": {
+                  "default": false,
+                  "description": "Whether discussions are enabled.",
+                  "type": "boolean"
+                },
+                "has_downloads": {
+                  "default": true,
+                  "deprecated": true,
+                  "description": "Whether downloads are enabled.",
+                  "type": "boolean"
+                },
+                "has_issues": {
+                  "default": true,
+                  "description": "Whether issues are enabled.",
+                  "type": "boolean"
+                },
+                "has_pages": {
+                  "type": "boolean"
+                },
+                "has_projects": {
+                  "default": true,
+                  "description": "Whether projects are enabled.",
+                  "type": "boolean"
+                },
+                "has_pull_requests": {
+                  "default": true,
+                  "description": "Whether pull requests are enabled.",
+                  "type": "boolean"
+                },
+                "has_wiki": {
+                  "default": true,
+                  "description": "Whether the wiki is enabled.",
+                  "type": "boolean"
+                },
+                "homepage": {
+                  "format": "uri",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "hooks_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "html_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "Unique identifier of the repository",
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "is_template": {
+                  "default": false,
+                  "description": "Whether this repository acts as a template that can be used to generate new repositories.",
+                  "type": "boolean"
+                },
+                "issue_comment_url": {
+                  "type": "string"
+                },
+                "issue_events_url": {
+                  "type": "string"
+                },
+                "issues_url": {
+                  "type": "string"
+                },
+                "keys_url": {
+                  "type": "string"
+                },
+                "labels_url": {
+                  "type": "string"
+                },
+                "language": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "languages_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "license": {
+                  "description": "License Simple",
+                  "nullable": true,
+                  "properties": {
+                    "html_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "node_id": {
+                      "type": "string"
+                    },
+                    "spdx_id": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "url": {
+                      "format": "uri",
+                      "nullable": true,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name",
+                    "url",
+                    "spdx_id",
+                    "node_id"
+                  ],
+                  "title": "License Simple",
+                  "type": "object"
+                },
+                "master_branch": {
+                  "type": "string"
+                },
+                "merge_commit_message": {
+                  "description": "The default value for a merge commit message.\n\n- `PR_TITLE` - default to the pull request's title.\n- `PR_BODY` - default to the pull request's body.\n- `BLANK` - default to a blank commit message.",
+                  "enum": [
+                    "PR_BODY",
+                    "PR_TITLE",
+                    "BLANK"
+                  ],
+                  "type": "string"
+                },
+                "merge_commit_title": {
+                  "description": "The default value for a merge commit title.\n\n- `PR_TITLE` - default to the pull request's title.\n- `MERGE_MESSAGE` - default to the classic title for a merge message (e.g., Merge pull request #123 from branch-name).",
+                  "enum": [
+                    "PR_TITLE",
+                    "MERGE_MESSAGE"
+                  ],
+                  "type": "string"
+                },
+                "merges_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "milestones_url": {
+                  "type": "string"
+                },
+                "mirror_url": {
+                  "format": "uri",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The name of the repository.",
+                  "type": "string"
+                },
+                "node_id": {
+                  "type": "string"
+                },
+                "notifications_url": {
+                  "type": "string"
+                },
+                "open_issues": {
+                  "type": "integer"
+                },
+                "open_issues_count": {
+                  "type": "integer"
+                },
+                "owner": {
+                  "description": "A GitHub user.",
+                  "properties": {
+                    "avatar_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "email": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "events_url": {
+                      "type": "string"
+                    },
+                    "followers_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "following_url": {
+                      "type": "string"
+                    },
+                    "gists_url": {
+                      "type": "string"
+                    },
+                    "gravatar_id": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "html_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "login": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "node_id": {
+                      "type": "string"
+                    },
+                    "organizations_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "received_events_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "repos_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "site_admin": {
+                      "type": "boolean"
+                    },
+                    "starred_at": {
+                      "type": "string"
+                    },
+                    "starred_url": {
+                      "type": "string"
+                    },
+                    "subscriptions_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "user_view_type": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "avatar_url",
+                    "events_url",
+                    "followers_url",
+                    "following_url",
+                    "gists_url",
+                    "gravatar_id",
+                    "html_url",
+                    "id",
+                    "node_id",
+                    "login",
+                    "organizations_url",
+                    "received_events_url",
+                    "repos_url",
+                    "site_admin",
+                    "starred_url",
+                    "subscriptions_url",
+                    "type",
+                    "url"
+                  ],
+                  "title": "Simple User",
+                  "type": "object"
+                },
+                "permissions": {
+                  "properties": {
+                    "admin": {
+                      "type": "boolean"
+                    },
+                    "maintain": {
+                      "type": "boolean"
+                    },
+                    "pull": {
+                      "type": "boolean"
+                    },
+                    "push": {
+                      "type": "boolean"
+                    },
+                    "triage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "admin",
+                    "pull",
+                    "push"
+                  ],
+                  "type": "object"
+                },
+                "private": {
+                  "default": false,
+                  "description": "Whether the repository is private or public.",
+                  "type": "boolean"
+                },
+                "pull_request_creation_policy": {
+                  "description": "The policy controlling who can create pull requests: all or collaborators_only.",
+                  "enum": [
+                    "all",
+                    "collaborators_only"
+                  ],
+                  "type": "string"
+                },
+                "pulls_url": {
+                  "type": "string"
+                },
+                "pushed_at": {
+                  "format": "date-time",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "releases_url": {
+                  "type": "string"
+                },
+                "size": {
+                  "description": "The size of the repository, in kilobytes. Size is calculated hourly. When a repository is initially created, the size is 0.",
+                  "type": "integer"
+                },
+                "squash_merge_commit_message": {
+                  "description": "The default value for a squash merge commit message:\n\n- `PR_BODY` - default to the pull request's body.\n- `COMMIT_MESSAGES` - default to the branch's commit messages.\n- `BLANK` - default to a blank commit message.",
+                  "enum": [
+                    "PR_BODY",
+                    "COMMIT_MESSAGES",
+                    "BLANK"
+                  ],
+                  "type": "string"
+                },
+                "squash_merge_commit_title": {
+                  "description": "The default value for a squash merge commit title:\n\n- `PR_TITLE` - default to the pull request's title.\n- `COMMIT_OR_PR_TITLE` - default to the commit's title (if only one commit) or the pull request's title (when more than one commit).",
+                  "enum": [
+                    "PR_TITLE",
+                    "COMMIT_OR_PR_TITLE"
+                  ],
+                  "type": "string"
+                },
+                "ssh_url": {
+                  "type": "string"
+                },
+                "stargazers_count": {
+                  "type": "integer"
+                },
+                "stargazers_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "starred_at": {
+                  "type": "string"
+                },
+                "statuses_url": {
+                  "type": "string"
+                },
+                "subscribers_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "subscription_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "svn_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "tags_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "teams_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "temp_clone_token": {
+                  "type": "string"
+                },
+                "topics": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "trees_url": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "use_squash_pr_title_as_default": {
+                  "default": false,
+                  "deprecated": true,
+                  "description": "Whether a squash merge commit can use the pull request title as default. **This property is closing down. Please use `squash_merge_commit_title` instead.",
+                  "type": "boolean"
+                },
+                "visibility": {
+                  "default": "public",
+                  "description": "The repository visibility: public, private, or internal.",
+                  "type": "string"
+                },
+                "watchers": {
+                  "type": "integer"
+                },
+                "watchers_count": {
+                  "type": "integer"
+                },
+                "web_commit_signoff_required": {
+                  "default": false,
+                  "description": "Whether to require contributors to sign off on web-based commits",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "archive_url",
+                "assignees_url",
+                "blobs_url",
+                "branches_url",
+                "collaborators_url",
+                "comments_url",
+                "commits_url",
+                "compare_url",
+                "contents_url",
+                "contributors_url",
+                "deployments_url",
+                "description",
+                "downloads_url",
+                "events_url",
+                "fork",
+                "forks_url",
+                "full_name",
+                "git_commits_url",
+                "git_refs_url",
+                "git_tags_url",
+                "hooks_url",
+                "html_url",
+                "id",
+                "node_id",
+                "issue_comment_url",
+                "issue_events_url",
+                "issues_url",
+                "keys_url",
+                "labels_url",
+                "languages_url",
+                "merges_url",
+                "milestones_url",
+                "name",
+                "notifications_url",
+                "owner",
+                "private",
+                "pulls_url",
+                "releases_url",
+                "stargazers_url",
+                "statuses_url",
+                "subscribers_url",
+                "subscription_url",
+                "tags_url",
+                "teams_url",
+                "trees_url",
+                "url",
+                "clone_url",
+                "default_branch",
+                "forks",
+                "forks_count",
+                "git_url",
+                "has_downloads",
+                "has_issues",
+                "has_projects",
+                "has_wiki",
+                "has_pages",
+                "homepage",
+                "language",
+                "archived",
+                "disabled",
+                "mirror_url",
+                "open_issues",
+                "open_issues_count",
+                "license",
+                "pushed_at",
+                "size",
+                "ssh_url",
+                "stargazers_count",
+                "svn_url",
+                "watchers",
+                "watchers_count",
+                "created_at",
+                "updated_at"
+              ],
+              "title": "Repository",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "credentials": [
+            [
+              "github.token"
+            ]
+          ],
+          "hosts": [
+            "api.github.com"
+          ],
+          "flux": "op github-user-repo-list(visibility: String, affiliation: String, type: String, sort: String, direction: String, per_page: Number, page: Number) -> Any\n  description \"List the repositories the authenticated user can access, filtered by visibility, affiliation and type\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"read\", \"network\"]\n  expose true\n\n  base = \"https://api.github.com\"\n  url = fmt(\"{base}/user/repos\")\n  Accept = \"application/vnd.github+json\"\n  response = http.request(headers: { Accept }, method: \"GET\", query: { affiliation, direction, page, per_page, sort, type, visibility }, url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
         }
       ],
       "events": [],
       "channels": [],
       "config": [],
-      "verify": null,
+      "verify": "github-user-get",
       "config_choices": []
     },
     {
       "id": "gitlab",
       "authority": "com.gitlab.api",
       "vendor": "GitLab",
-      "description": "GitLab: read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only",
+      "description": "GitLab: discover reachable groups and projects; read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only",
       "runtime": "http",
       "base_url": "{origin}/api/v4",
       "api_version": "v4",
@@ -173024,7 +175350,18 @@
           ],
           "api_version": "v4",
           "gid": "com.gitlab.api:v4",
-          "operation_count": 7
+          "operation_count": 9
+        },
+        {
+          "name": "login",
+          "description": "GitLab's OAuth2 authorize and token endpoints, at the instance origin.",
+          "base_url": "{origin}",
+          "hosts": [
+            "{origin}"
+          ],
+          "api_version": "v4",
+          "gid": "com.gitlab.api/login:v4",
+          "operation_count": 0
         }
       ],
       "auth": {
@@ -173046,15 +175383,46 @@
             "user_env": [],
             "user_suffix": null,
             "oauth2": null
+          },
+          {
+            "name": "gitlab.oauth_token",
+            "scheme": {
+              "kind": "bearer",
+              "name": null,
+              "prefix": "Bearer "
+            },
+            "description": "GitLab OAuth2 access token obtained on behalf of a signed-in user. Bounded by that user's own permissions, never by the application's",
+            "env": [],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": {
+              "endpoint": "login",
+              "authorize_path": "/oauth/authorize",
+              "token_path": "/oauth/token",
+              "client_id": "",
+              "scopes": [
+                "read_api",
+                "read_user",
+                "read_repository"
+              ],
+              "grants": [
+                "authorization_code",
+                "refresh_token"
+              ],
+              "redirect": null
+            }
           }
         ],
         "default": [
+          [
+            "gitlab.oauth_token"
+          ],
           [
             "gitlab.token"
           ]
         ]
       },
-      "operation_count": 7,
+      "operation_count": 9,
       "operations": [
         {
           "id": "gitlab-user-get",
@@ -173110,6 +175478,9 @@
           },
           "credentials": [
             [
+              "gitlab.oauth_token"
+            ],
+            [
               "gitlab.token"
             ]
           ],
@@ -173117,6 +175488,363 @@
             "{origin}"
           ],
           "flux": "op gitlab-user-get -> Any\n  description \"Get the currently authenticated user. Takes no parameters; used as the verify read to prove a token resolves\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"read\", \"network\"]\n  expose true\n\n  base = \"{origin}/api/v4\"\n  url = fmt(\"{base}/user\")\n  response = http.request(method: \"GET\", url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "gitlab-group-list",
+          "provider": "gitlab",
+          "service": "default",
+          "direction": "read",
+          "description": "List the groups the authenticated user is a member of, optionally narrowed by a search term",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "semantic_effects": [],
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/groups",
+          "spec_source": null,
+          "parameters": [
+            {
+              "name": "search",
+              "in": "query",
+              "wire": null,
+              "description": "Narrow the result to groups whose name or path matches this term. Free text; the runtime percent-encodes it",
+              "required": false,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "min_access_level",
+              "in": "query",
+              "wire": null,
+              "description": "Only groups where the user has at least this access level. GitLab's scale: 10 guest, 20 reporter, 30 developer, 40 maintainer, 50 owner",
+              "required": false,
+              "schema": {
+                "enum": [
+                  10,
+                  20,
+                  30,
+                  40,
+                  50
+                ],
+                "type": "integer"
+              }
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "wire": null,
+              "description": "1-based page number",
+              "required": false,
+              "schema": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "per_page",
+              "in": "query",
+              "wire": null,
+              "description": "Results per page, at most 100",
+              "required": false,
+              "schema": {
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "min_access_level": {
+                "enum": [
+                  10,
+                  20,
+                  30,
+                  40,
+                  50
+                ],
+                "type": "integer"
+              },
+              "page": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "per_page": {
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "search": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "items": {
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "full_path": {
+                  "description": "The namespaced path, `group/subgroup`",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The group's numeric id — what a project query's `id` refers to",
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "visibility": {
+                  "description": "`private`, `internal` or `public`",
+                  "type": "string"
+                },
+                "web_url": {
+                  "format": "uri",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "path",
+                "full_path"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "credentials": [
+            [
+              "gitlab.oauth_token"
+            ],
+            [
+              "gitlab.token"
+            ]
+          ],
+          "hosts": [
+            "{origin}"
+          ],
+          "flux": "op gitlab-group-list(search: String, min_access_level: Number, page: Number, per_page: Number) -> Any\n  description \"List the groups the authenticated user is a member of, optionally narrowed by a search term\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"read\", \"network\"]\n  expose true\n\n  base = \"{origin}/api/v4\"\n  url = fmt(\"{base}/groups\")\n  response = http.request(method: \"GET\", query: { min_access_level, page, per_page, search }, url)\n  return response\n",
+          "status": {
+            "works": false,
+            "issues": [
+              {
+                "code": "credential-not-injected",
+                "scope": "catalog",
+                "summary": "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls.",
+                "params": []
+              }
+            ],
+            "notes": []
+          }
+        },
+        {
+          "id": "gitlab-project-list",
+          "provider": "gitlab",
+          "service": "default",
+          "direction": "read",
+          "description": "List projects the authenticated user can reach, optionally narrowed by a search term — this is how a caller obtains the numeric project id every other operation requires",
+          "risk": "low",
+          "idempotency": "idempotent",
+          "semantic_effects": [],
+          "repeatable_because": null,
+          "method": "GET",
+          "path": "/projects",
+          "spec_source": null,
+          "parameters": [
+            {
+              "name": "search",
+              "in": "query",
+              "wire": null,
+              "description": "Narrow the result to projects whose name or path matches this term. Free text; the runtime percent-encodes it",
+              "required": false,
+              "schema": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            {
+              "name": "membership",
+              "in": "query",
+              "wire": null,
+              "description": "Limit to projects the authenticated user is a member of",
+              "required": false,
+              "schema": {
+                "type": "boolean"
+              }
+            },
+            {
+              "name": "owned",
+              "in": "query",
+              "wire": null,
+              "description": "Limit to projects the authenticated user owns",
+              "required": false,
+              "schema": {
+                "type": "boolean"
+              }
+            },
+            {
+              "name": "min_access_level",
+              "in": "query",
+              "wire": null,
+              "description": "Only projects where the user has at least this access level. GitLab's scale: 10 guest, 20 reporter, 30 developer, 40 maintainer, 50 owner",
+              "required": false,
+              "schema": {
+                "enum": [
+                  10,
+                  20,
+                  30,
+                  40,
+                  50
+                ],
+                "type": "integer"
+              }
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "wire": null,
+              "description": "1-based page number",
+              "required": false,
+              "schema": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            {
+              "name": "per_page",
+              "in": "query",
+              "wire": null,
+              "description": "Results per page, at most 100",
+              "required": false,
+              "schema": {
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "input_schema": {
+            "properties": {
+              "membership": {
+                "type": "boolean"
+              },
+              "min_access_level": {
+                "enum": [
+                  10,
+                  20,
+                  30,
+                  40,
+                  50
+                ],
+                "type": "integer"
+              },
+              "owned": {
+                "type": "boolean"
+              },
+              "page": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "per_page": {
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "search": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "body_schema": null,
+          "response_schema": {
+            "items": {
+              "properties": {
+                "default_branch": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "http_url_to_repo": {
+                  "description": "The HTTPS clone URL. Cloning is not a connector operation — this is the address a git client is given",
+                  "format": "uri",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The project's numeric id — this is the `project_id` every other operation in this connector takes",
+                  "type": "integer"
+                },
+                "last_activity_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "path_with_namespace": {
+                  "description": "The namespaced path, `group/subgroup/project`. Human-facing only: it cannot be passed as `project_id`",
+                  "type": "string"
+                },
+                "visibility": {
+                  "description": "`private`, `internal` or `public`",
+                  "type": "string"
+                },
+                "web_url": {
+                  "format": "uri",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "path_with_namespace"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "credentials": [
+            [
+              "gitlab.oauth_token"
+            ],
+            [
+              "gitlab.token"
+            ]
+          ],
+          "hosts": [
+            "{origin}"
+          ],
+          "flux": "op gitlab-project-list(search: String, membership: Bool, owned: Bool, min_access_level: Number, page: Number, per_page: Number) -> Any\n  description \"List projects the authenticated user can reach, optionally narrowed by a search term — this is how a caller obtains the numeric project id every other operation requires\"\n  risk \"low\"\n  idempotency \"idempotent\"\n  effects [\"read\", \"network\"]\n  expose true\n\n  base = \"{origin}/api/v4\"\n  url = fmt(\"{base}/projects\")\n  response = http.request(method: \"GET\", query: { membership, min_access_level, owned, page, per_page, search }, url)\n  return response\n",
           "status": {
             "works": false,
             "issues": [
@@ -173312,6 +176040,9 @@
           },
           "credentials": [
             [
+              "gitlab.oauth_token"
+            ],
+            [
               "gitlab.token"
             ]
           ],
@@ -173473,6 +176204,9 @@
           },
           "credentials": [
             [
+              "gitlab.oauth_token"
+            ],
+            [
               "gitlab.token"
             ]
           ],
@@ -173628,6 +176362,9 @@
             "type": "object"
           },
           "credentials": [
+            [
+              "gitlab.oauth_token"
+            ],
             [
               "gitlab.token"
             ]
@@ -173830,6 +176567,9 @@
           },
           "credentials": [
             [
+              "gitlab.oauth_token"
+            ],
+            [
               "gitlab.token"
             ]
           ],
@@ -173983,6 +176723,9 @@
           },
           "credentials": [
             [
+              "gitlab.oauth_token"
+            ],
+            [
               "gitlab.token"
             ]
           ],
@@ -174121,6 +176864,9 @@
           },
           "credentials": [
             [
+              "gitlab.oauth_token"
+            ],
+            [
               "gitlab.token"
             ]
           ],
@@ -174156,7 +176902,42 @@
           "approval": "operator",
           "docs_url": "https://docs.gitlab.com/administration/",
           "binds": "endpoint.origin",
+          "also_services": [
+            "login"
+          ],
           "level": "connection"
+        },
+        {
+          "name": "oauth_client_id",
+          "label": "GitLab OAuth application id",
+          "help": "Create an application under Admin -> Applications (self-managed) or User Settings -> Applications (gitlab.com), with the redirect URI your deployment serves. This is the application id, which is public",
+          "example": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+          "required": false,
+          "docs_url": "https://docs.gitlab.com/integration/oauth_provider/",
+          "binds": "oauth.client_id",
+          "level": "operator"
+        },
+        {
+          "name": "oauth_redirect_uri",
+          "label": "GitLab OAuth redirect URI",
+          "help": "The callback address this deployment serves, registered as a redirect URI on the application above. GitLab matches it exactly, so it must be the same string in both places — including the scheme, any port, and no trailing slash",
+          "example": "https://exchange.internal/api/oauth/callback",
+          "format": "url",
+          "required": false,
+          "docs_url": "https://docs.gitlab.com/integration/oauth_provider/",
+          "binds": "oauth.redirect_uri",
+          "level": "operator"
+        },
+        {
+          "name": "oauth_client_secret",
+          "label": "GitLab OAuth application secret",
+          "help": "The application secret issued beside the id above. Supplied once by whoever runs this deployment, never by an end user",
+          "format": "token",
+          "required": false,
+          "secret": true,
+          "docs_url": "https://docs.gitlab.com/integration/oauth_provider/",
+          "binds": "oauth.client_secret",
+          "level": "operator"
         },
         {
           "name": "token",

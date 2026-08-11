@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+        subject: crate::Subject::Unstated,
     },
 ];
 
@@ -47,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://developers.webflow.com/data/reference/authentication"),
         binds: "credential.webflow.token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"token\",\"label\":\"Webflow API token\",\"help\":\"Generate a Site API token from your site's Settings -> Apps & Integrations -> API access, or register an OAuth app at developers.webflow.com for a token scoped across sites. A Site API token only ever sees the one site it was generated for; supply a per-site token for a single-site connection or an OAuth token for one that must span several\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://developers.webflow.com/data/reference/authentication\",\"binds\":\"credential.webflow.token\"}",
     },
 ];

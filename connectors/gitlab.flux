@@ -14,6 +14,30 @@ op gitlab-user-get -> Any
   response = http.request(method: "GET", url)
   return response
 
+op gitlab-group-list(search: String, min_access_level: Number, page: Number, per_page: Number) -> Any
+  description "List the groups the authenticated user is a member of, optionally narrowed by a search term"
+  risk "low"
+  idempotency "idempotent"
+  effects ["read", "network"]
+  expose true
+
+  base = "{origin}/api/v4"
+  url = fmt("{base}/groups")
+  response = http.request(method: "GET", query: { min_access_level, page, per_page, search }, url)
+  return response
+
+op gitlab-project-list(search: String, membership: Bool, owned: Bool, min_access_level: Number, page: Number, per_page: Number) -> Any
+  description "List projects the authenticated user can reach, optionally narrowed by a search term — this is how a caller obtains the numeric project id every other operation requires"
+  risk "low"
+  idempotency "idempotent"
+  effects ["read", "network"]
+  expose true
+
+  base = "{origin}/api/v4"
+  url = fmt("{base}/projects")
+  response = http.request(method: "GET", query: { membership, min_access_level, owned, page, per_page, search }, url)
+  return response
+
 op gitlab-issue-list(project_id: Number, state: String, page: Number, per_page: Number) -> Any
   description "List issues in a project, optionally filtered by state, newest activity first"
   risk "low"

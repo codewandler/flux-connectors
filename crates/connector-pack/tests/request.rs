@@ -104,6 +104,10 @@ struct Declared {
     /// The further request positions the same value also reaches (C-229) — `providers/algolia.toml`
     /// is the shipped case, where one application id composes the host *and* travels as a header.
     also_binds: Vec<String>,
+    /// The further **services** whose base URL this one value also fills (C-529) —
+    /// `providers/gitlab.toml` is the shipped case, where one operator-approved origin serves both
+    /// the REST API and the OAuth endpoints of a single deployment.
+    also_services: Vec<String>,
     /// The declared placeholder value, when the field declares one. Several deliberately do not —
     /// a realistic-looking placeholder for an opaque id reads as a real one belonging to a real
     /// organisation, and for a secret it has already tripped GitHub's push protection.
@@ -111,6 +115,19 @@ struct Declared {
 }
 
 impl Declared {
+    /// **Whether this field supplies a value for `service`'s base URL** (C-529).
+    ///
+    /// `None` means the field applies to every service the connector has. A named head service
+    /// matches itself, and `also_services` extends the same one address to a sibling surface of the
+    /// same deployment — GitLab's REST API and its OAuth endpoints, which share an origin because
+    /// they share a server.
+    fn fills(&self, service: &str) -> bool {
+        match self.service.as_deref() {
+            None => true,
+            Some(head) => head == service || self.also_services.iter().any(|s| s == service),
+        }
+    }
+
     /// The configuration *variable* this field binds, when it binds one this pack resolves.
     ///
     /// The five non-secret binding kinds the request evaluator resolves: a templated base URL's
@@ -269,6 +286,7 @@ struct Block {
     service: Option<String>,
     binds: Option<String>,
     also_binds: Vec<String>,
+    also_services: Vec<String>,
     example: Option<String>,
 }
 
@@ -288,6 +306,7 @@ impl Block {
             service: self.service,
             binds,
             also_binds: self.also_binds,
+            also_services: self.also_services,
             example: self.example,
         }
     }
@@ -340,6 +359,8 @@ fn declared_config(connector: &str) -> Vec<Declared> {
                 block.binds = Some(value);
             } else if let Some(values) = strings(line, "also_binds") {
                 block.also_binds = values;
+            } else if let Some(values) = strings(line, "also_services") {
+                block.also_services = values;
             } else if let Some(value) = value_of(line, "example") {
                 block.example = Some(value);
             }
@@ -365,12 +386,7 @@ fn declared_config(connector: &str) -> Vec<Declared> {
 fn declared_for(module: &Module) -> BTreeMap<String, String> {
     declared_config(&module.connector)
         .into_iter()
-        .filter(|field| {
-            field
-                .service
-                .as_ref()
-                .is_none_or(|service| *service == module.service)
-        })
+        .filter(|field| field.fills(&module.service))
         .filter_map(|field| field.variable().map(|variable| (variable, field.value())))
         .collect()
 }
@@ -384,12 +400,7 @@ fn declared_for(module: &Module) -> BTreeMap<String, String> {
 fn pinned_headers_for(module: &Module) -> BTreeSet<String> {
     declared_config(&module.connector)
         .into_iter()
-        .filter(|field| {
-            field
-                .service
-                .as_ref()
-                .is_none_or(|service| *service == module.service)
-        })
+        .filter(|field| field.fills(&module.service))
         .flat_map(|field| {
             field
                 .pinned_headers()
@@ -896,12 +907,7 @@ fn the_declared_configuration_agrees_with_every_templated_base_url() {
         let declared = declared_for(&module);
         let endpoints: BTreeSet<String> = declared_config(&module.connector)
             .into_iter()
-            .filter(|field| {
-                field
-                    .service
-                    .as_ref()
-                    .is_none_or(|service| *service == module.service)
-            })
+            .filter(|field| field.fills(&module.service))
             .filter(|field| field.binds.starts_with("endpoint."))
             .filter_map(|field| field.variable())
             .collect();

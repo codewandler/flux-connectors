@@ -28,12 +28,14 @@ static AUTH: &[crate::Credential] = &[
         leaf: "api_key",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "DD-API-KEY", prefix: "" },
+        subject: crate::Subject::Unstated,
     },
     crate::Credential {
         name: "datadog.application_key",
         leaf: "application_key",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "DD-APPLICATION-KEY", prefix: "" },
+        subject: crate::Subject::Unstated,
     },
 ];
 
@@ -53,6 +55,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://docs.datadoghq.com/account_management/api-app-keys/"),
         binds: "credential.datadog.api_key",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"api_key\",\"label\":\"Datadog API Key\",\"help\":\"Organization Settings > API Keys in the Datadog app. Sent as DD-API-KEY on every request, always together with the Application Key\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://docs.datadoghq.com/account_management/api-app-keys/\",\"binds\":\"credential.datadog.api_key\"}",
     },
     crate::ConfigField {
@@ -69,6 +72,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://docs.datadoghq.com/account_management/api-app-keys/"),
         binds: "credential.datadog.application_key",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"application_key\",\"label\":\"Datadog Application Key\",\"help\":\"Organization Settings > Application Keys in the Datadog app, scoped to the user who creates it. Sent as DD-APPLICATION-KEY on every request, always together with the API Key\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://docs.datadoghq.com/account_management/api-app-keys/\",\"binds\":\"credential.datadog.application_key\"}",
     },
 ];

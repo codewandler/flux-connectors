@@ -12,7 +12,7 @@
 //! secret under `data.data`), in delete semantics (v2 versions everything, and `DELETE` on a *data*
 //! path only soft-deletes the current version), and in whether a mount can serve both at once (it
 //! cannot). v2 is chosen anyway, because versioning and undelete are exactly what one wants of a
-//! credential store, and `sbf/secrets` — the precedent for the `tenants/` prefix this crate's
+//! credential store, and the vendor's own internal secret store — the precedent for the `tenants/` prefix this crate's
 //! default [`Layout`] renders — is already on v2.
 //!
 //! # The transport is a seam

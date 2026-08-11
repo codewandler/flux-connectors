@@ -395,6 +395,113 @@ pub enum Acquisition {
         /// A literal appended to the resolved user half before the `user:secret` join.
         user_suffix: &'static str,
     },
+    /// **The host runs an OAuth2 grant and places the resulting access token** (C-525).
+    ///
+    /// Read as a placement instruction this is [`Static`](Self::Static) too — a freshly granted
+    /// access token goes onto the request exactly as a pasted one does. What the variant adds is
+    /// the only thing a host cannot derive from anything else in the catalogue: **which endpoints
+    /// the grant runs against, which grants this credential allows, and what it asks for.**
+    ///
+    /// It is on this axis rather than on [`Credential`] because that is what this axis *is* — how
+    /// stored material becomes the value that is placed — and because [`Minted`](Self::Minted)
+    /// settled the same question the same way: a variant costs nothing until something uses it,
+    /// whereas a field on `Credential` rewrites every generated table for a fact most connectors
+    /// never declare.
+    ///
+    /// **Nothing in this repository performs the grant.** An authorize endpoint is a browser
+    /// redirect and a token endpoint's response body *is* a credential, so neither is a connector
+    /// operation and neither is emitted into a `.flux` module. This variant is the declaration a
+    /// host reads before doing it itself.
+    OAuth2(&'static OAuth2),
+}
+
+/// How a host obtains an OAuth2-backed credential. Mirrors `connector_spec::OAuth2Spec`.
+///
+/// **Carries no secret and has no field one could occupy.** [`client_id`](Self::client_id) is
+/// public by specification (RFC 6749 §2.2); the client *secret* is a `[[config]]` binding the host
+/// resolves from its own store and never appears here, in a provider TOML, or in any generated
+/// artifact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OAuth2 {
+    /// The declared endpoint name whose base URL [`authorize_path`](Self::authorize_path) and
+    /// [`token_path`](Self::token_path) resolve against. Empty means the connector's own base URL.
+    ///
+    /// It is a name rather than a URL because the endpoint's host allow-list is what admits the
+    /// token exchange through the egress gate; a bare URL would name a host nothing had admitted.
+    pub endpoint: &'static str,
+    /// The authorize endpoint path, joined onto the endpoint base URL.
+    pub authorize_path: &'static str,
+    /// The token endpoint path. Every grant and every refresh POSTs here.
+    pub token_path: &'static str,
+    /// The OAuth2 client id. Public by specification — see the type's own documentation.
+    pub client_id: &'static str,
+    /// The scopes the grant requests.
+    pub scopes: &'static [&'static str],
+    /// The grants a host may run for this credential. A grant absent from this list is one the
+    /// connector does not allow, not one the host may try anyway.
+    pub grants: &'static [OAuthGrant],
+    /// The loopback redirect an [`OAuthGrant::AuthorizationCode`] login binds.
+    pub redirect: Option<OAuthRedirect>,
+}
+
+/// One token grant an [`OAuth2`] credential allows. Mirrors `connector_spec::OAuthGrant`.
+///
+/// Closed, for the reason [`Placement`] is: a grant this did not recognise would have to become
+/// *some* grant, and every wrong answer either sends a credential to an endpoint that does not
+/// expect it or runs a flow the connector never allowed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OAuthGrant {
+    /// Browser redirect plus loopback callback, with PKCE.
+    AuthorizationCode,
+    /// The resource-owner password grant. RFC 6749 §4.3.2 makes discarding the password a MUST for
+    /// the client, and a host running this one is that client.
+    Password,
+    /// Exchange a stored refresh token for a fresh access token.
+    RefreshToken,
+    /// The two-legged client-credentials grant, with no user.
+    ClientCredentials,
+}
+
+/// The loopback redirect an `authorization_code` login binds. Mirrors
+/// `connector_spec::OAuthRedirect`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OAuthRedirect {
+    /// The loopback port to bind.
+    pub port: u16,
+    /// The callback path the browser is redirected to.
+    pub path: &'static str,
+}
+
+/// **Whose authority a credential carries when it is used** (C-528). Mirrors
+/// `connector_spec::Subject`.
+///
+/// The "on behalf of" axis, independent of every other one: [`Placement`] says where the value goes,
+/// [`Acquisition`] says how it is obtained, and this says *who the vendor thinks is acting* once it
+/// arrives. Slack is the case that forces it — one OAuth v2 grant returns a workspace bot token and
+/// a signed-in user's token in one response, placed identically and acquired identically, differing
+/// only in who they can act as.
+///
+/// A host reads this to bound a credential's reach and to decide where it may be stored: an
+/// app-subject credential is provisioned once for a tenant, a user-subject one once per person, and
+/// keeping a user token at a tenant-wide address would let one member act as another.
+///
+/// # `Unstated` is a real answer and must be handled
+///
+/// It means *"nobody has reviewed this credential for its subject"* — not "app". Every connector
+/// shipped before C-528 carries it, including genuinely ambiguous ones: GitHub's single
+/// `github.token` covers both an App installation token and a personal access token, which are
+/// opposite answers. **A consumer that needs the distinction refuses on `Unstated`** rather than
+/// assuming; assuming `App` over-grants, and assuming `User` silently fails.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Subject {
+    /// Not reviewed. Carries no claim in either direction — refuse rather than choose one.
+    #[default]
+    Unstated,
+    /// The integration itself: Slack's `xoxb-` bot token, a GitHub App installation token.
+    App,
+    /// The person who granted it — "on behalf of": Slack's `xoxp-` user token, an Atlassian 3LO
+    /// token, a personal access token.
+    User,
 }
 
 /// One credential a connector declares: what it is called, where its value is kept, and how it
@@ -419,6 +526,11 @@ pub struct Credential {
     pub acquire: Acquisition,
     /// Where that value goes on the request.
     pub place: Placement,
+    /// Whose authority the value carries once it arrives — see [`Subject`].
+    ///
+    /// Unlike the three fields above, this one has a meaningful *unreviewed* state, and every
+    /// connector shipped before C-528 is in it. Read [`Subject::Unstated`] before branching on this.
+    pub subject: Subject,
 }
 
 /// One string pair in a generated declaration (query, header or payload mapping).
@@ -511,6 +623,14 @@ pub struct ConfigField {
     pub docs_url: Option<&'static str>,
     pub binds: &'static str,
     pub also_binds: &'static [&'static str],
+    /// The further services whose base URL this one value also fills (C-529).
+    ///
+    /// Empty for the ordinary field. When it is not, [`service`](Self::service) remains the address
+    /// the value is stored under and the services named here resolve their `{variable}` from that
+    /// same address — one question, one value, one [`approval`](Self::approval). A host composing a
+    /// URL for a sibling service must consult this or it will report an unbound placeholder for a
+    /// value the operator has already supplied.
+    pub also_services: &'static [&'static str],
     /// Canonical JSON for the complete form declaration, including choices.
     pub declaration_json: &'static str,
 }

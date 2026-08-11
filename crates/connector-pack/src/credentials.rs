@@ -711,6 +711,7 @@ mod tests {
             leaf: "bot_token",
             acquire: catalog::Acquisition::Static,
             place: catalog::Placement::Query { name: "token" },
+            subject: catalog::Subject::App,
         }]));
         Box::leak(Box::new(provider))
     }

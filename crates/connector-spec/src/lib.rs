@@ -115,7 +115,9 @@ pub use connector_address::{
     address, credential, Error as AddressError, Gid, Oip, Pid, DEFAULT_SERVICE,
 };
 
-pub use auth::{AuthMethod, AuthRequirement, AuthScheme, OAuth2Spec, OAuthGrant, OAuthRedirect};
+pub use auth::{
+    AuthMethod, AuthRequirement, AuthScheme, OAuth2Spec, OAuthGrant, OAuthRedirect, Subject,
+};
 pub use config::{Approval, Binding, Choice, ConfigField, Format, Level, Pin, Position};
 pub use credential::{CredentialRef, InstanceId, Layout, TenantInstances, TenantLayout};
 pub use graph::{

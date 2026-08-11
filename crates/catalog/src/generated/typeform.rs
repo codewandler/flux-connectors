@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "access_token",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+        subject: crate::Subject::Unstated,
     },
 ];
 
@@ -47,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://www.typeform.com/developers/get-started/personal-access-token/"),
         binds: "credential.typeform.access_token",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"access_token\",\"label\":\"Typeform access token\",\"help\":\"Create one under Account (top-left menu next to your username) → Personal tokens in Typeform, or supply the access token from an OAuth2 app's authorization flow. Typeform shows a newly created personal token once\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://www.typeform.com/developers/get-started/personal-access-token/\",\"binds\":\"credential.typeform.access_token\"}",
     },
 ];

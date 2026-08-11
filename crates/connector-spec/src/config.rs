@@ -646,6 +646,22 @@ pub enum Binding<'a> {
     OAuthClientId,
     /// The OAuth app's client secret — `oauth.client_secret`. Operator level, and secret.
     OAuthClientSecret,
+    /// The redirect URI registered with the OAuth app — `oauth.redirect_uri`. Operator level, and
+    /// **not** secret (C-531).
+    ///
+    /// It is the third half of one registration. A client id, a client secret and a redirect URI are
+    /// issued together when somebody registers an application with the vendor, so they are supplied
+    /// together, by the same person, at the same level. Leaving this one out was the reason a hosted
+    /// deployment had nowhere to put its callback: [`OAuth2Spec::redirect`](crate::OAuth2Spec)
+    /// models a **loopback port and path** — the shape RFC 8252 §7.3 describes for a native app on
+    /// the operator's own machine — and a service reached at `https://exchange.internal/…` cannot be
+    /// spelled that way.
+    ///
+    /// **The connector still declares no destination.** This is a slot a host fills, exactly like
+    /// `endpoint.origin`; the vendor does not choose your callback, you register it with them. What
+    /// the connector supplies is the *question*, so an operator is asked for it during setup rather
+    /// than discovering the mismatch on the vendor's error page after a failed grant.
+    OAuthRedirectUri,
 }
 
 impl<'a> Binding<'a> {
@@ -662,7 +678,9 @@ impl<'a> Binding<'a> {
     /// time, rather than on every call — not *which* of these two levels supplies it.
     pub fn level(self) -> Level {
         match self {
-            Self::OAuthClientId | Self::OAuthClientSecret => Level::Operator,
+            Self::OAuthClientId | Self::OAuthClientSecret | Self::OAuthRedirectUri => {
+                Level::Operator
+            }
             Self::Endpoint { .. }
             | Self::Request { .. }
             | Self::ChannelQuery { .. }
@@ -685,7 +703,7 @@ impl<'a> Binding<'a> {
             Self::ChannelQuery { .. } => "channel_query",
             Self::Credential { .. } => "credential",
             Self::Username { .. } => "username",
-            Self::OAuthClientId | Self::OAuthClientSecret => "oauth",
+            Self::OAuthClientId | Self::OAuthClientSecret | Self::OAuthRedirectUri => "oauth",
         }
     }
 
@@ -700,6 +718,7 @@ impl<'a> Binding<'a> {
             Self::ChannelQuery { parameter, .. } => parameter,
             Self::OAuthClientId => "client_id",
             Self::OAuthClientSecret => "client_secret",
+            Self::OAuthRedirectUri => "redirect_uri",
         }
     }
 
@@ -722,7 +741,8 @@ impl<'a> Binding<'a> {
             | Self::Request { .. }
             | Self::ChannelQuery { .. }
             | Self::Username { .. }
-            | Self::OAuthClientId => false,
+            | Self::OAuthClientId
+            | Self::OAuthRedirectUri => false,
         }
     }
 
@@ -749,7 +769,8 @@ impl<'a> Binding<'a> {
             Self::Credential { .. }
             | Self::Username { .. }
             | Self::OAuthClientId
-            | Self::OAuthClientSecret => Ok(()),
+            | Self::OAuthClientSecret
+            | Self::OAuthRedirectUri => Ok(()),
         }
     }
 }
@@ -811,11 +832,13 @@ pub fn parse_binding(binds: &str) -> Result<Binding<'_>, String> {
     match binds {
         "oauth.client_id" => Ok(Binding::OAuthClientId),
         "oauth.client_secret" => Ok(Binding::OAuthClientSecret),
+        "oauth.redirect_uri" => Ok(Binding::OAuthRedirectUri),
         _ => Err(format!(
             "{binds:?} is not a binding. A configuration value goes to exactly one of: \
              `endpoint.<variable>`, `path.<variable>`, `query.<name>`, `header.<name>`, \
              `channel.<binding>.query.<parameter>`, \
-             `credential.<name>`, `username.<name>`, `oauth.client_id`, `oauth.client_secret`"
+             `credential.<name>`, `username.<name>`, `oauth.client_id`, `oauth.client_secret`, \
+             `oauth.redirect_uri`"
         )),
     }
 }
@@ -940,6 +963,35 @@ pub struct ConfigField {
     /// carries is [`binds`](Self::binds)' target.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub also_binds: Vec<String>,
+    /// **The further services whose base URL this one value also fills** — empty for all but the
+    /// vendors whose surfaces share a deployment (C-529).
+    ///
+    /// A self-managed GitLab serves its REST API at `{origin}/api/v4` and its OAuth2 authorize and
+    /// token endpoints at `{origin}` — the same server, so the same fact. Modelled without this,
+    /// that connector needs a second `[[config]]` field binding `endpoint.origin` for the OAuth
+    /// service, and the operator is asked one question twice. Two slots that must agree and are not
+    /// forced to is how a token exchange ends up pointed at a host the API never approved, and it is
+    /// the Contentful defect the service dimension exists to prevent, running the other way.
+    ///
+    /// So this is **one address, filling several placeholders**. [`service`](Self::service) stays the
+    /// head and remains the key the value is stored under; the services named here resolve their
+    /// `{variable}` from that same address. One question, one value, one
+    /// [`approval`](Self::approval).
+    ///
+    /// # Why it is explicit rather than derived
+    ///
+    /// "The same `{variable}` in two base URLs is one slot" would be a shorter rule and a wrong one.
+    /// Contentful declares `delivery_space_id` and `management_space_id`, both binding
+    /// `endpoint.space_id` in different services, and they are deliberately **two** values: keyed as
+    /// one, a management write went to whichever space the delivery reads had been configured with —
+    /// a `200` from a real server rather than a refusal. Sharing is therefore something an author
+    /// states, and the default stays two slots.
+    ///
+    /// Only an `endpoint.` binding may carry entries here; the loader refuses any other. A
+    /// credential or a request pin has no per-service placeholder for a second service to fill, so
+    /// an entry on one would name a service without doing anything there.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub also_services: Vec<String>,
 }
 
 impl ConfigField {
@@ -1325,6 +1377,7 @@ mod tests {
             docs_url: None,
             binds: "endpoint.app_id".to_owned(),
             also_binds: vec!["header.X-Algolia-Application-Id".to_owned()],
+            also_services: Vec::new(),
         };
 
         assert_eq!(
@@ -1358,6 +1411,7 @@ mod tests {
         // A malformed destination makes the whole set unreadable rather than silently shorter.
         let broken = ConfigField {
             also_binds: vec!["cookie.session".to_owned()],
+            also_services: Vec::new(),
             ..field
         };
         assert_eq!(broken.bindings(), None);
@@ -1381,6 +1435,7 @@ mod tests {
             docs_url: None,
             binds: "username.twilio.basic_auth".to_owned(),
             also_binds: vec!["path.AccountSid".to_owned()],
+            also_services: Vec::new(),
         };
 
         assert_eq!(field.slot(), Some("twilio.basic_auth"));

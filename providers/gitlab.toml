@@ -4,7 +4,7 @@
 # way Stripe or GitHub do, so this is authored the same way zendesk, freshdesk, github and notion
 # already are: by reading `docs.gitlab.com/ee/api/*` directly. When ingest (C-4) and the overlay
 # (C-6) exist and GitLab's own description becomes usable, this file becomes `[spec]` plus a
-# `[[patch.operations]]` selection reproducing the seven operations below. Until then, drift is
+# `[[patch.operations]]` selection reproducing the nine operations below. Until then, drift is
 # undetectable by machine (`docs/designs/provider-operation-inventory.md` §6.7).
 #
 # ---------------------------------------------------------------------------------------------
@@ -17,18 +17,15 @@
 # project" — `278964` or `gitlab-org%2Fgitlab`. The encoded form is what a human actually has: nobody
 # carries a project's numeric id in their head, they have `group/subgroup/project` from the URL bar.
 #
-# It is also the form this pipeline cannot produce. `crates/connector-flux/src/op.rs` interpolates
-# every path and query value **verbatim** into a `fmt` template — "nothing percent-encodes them" is
-# stated there in exactly those words — and flux registers no URL-encoding op
-# (`../flux/crates/flux-flow/docs/ops-reference.md:15`, C-30 unimplemented). AGENTS.md's standing
-# demonstration of what that costs is `zendesk-ticket-search`, non-functional because an unescaped
-# `&` injects a parameter rather than filtering by one; a raw `/` in a path segment is the same
-# failure moved one position to the left, corrupting the segment boundary the moment it is
-# interpolated, and a *caller*-supplied `%2F` would still need the caller to have percent-encoded it
-# themselves — the outcome this story explicitly forbids ("do not hand a model a parameter it must
-# pre-encode itself").
+# It is also a form this pipeline still cannot produce, and the reason narrowed rather than went
+# away. C-30 landed structured query encoding in Flux 0.54, so a *query* value is now percent-encoded
+# with RFC 3986 semantics — but `:id` is a **path** segment, and the path is still composed with
+# `fmt`. A raw `/` there corrupts the segment boundary the moment it is interpolated, and a
+# *caller*-supplied `%2F` would still require the caller to have percent-encoded it themselves — the
+# outcome C-166 explicitly forbids ("do not hand a model a parameter it must pre-encode itself").
 #
-# So this connector takes the branch `providers/stripe.toml` took for the same reason: **the numeric
+# So the numeric-id rule below is unchanged, and it is now precisely a *path* rule rather than a
+# general one. This connector takes the branch `providers/stripe.toml` took for the same reason: **the numeric
 # id only.** Every project-scoped operation below types its project parameter as a JSON Schema
 # `integer` — not a `string` with a `pattern`, because unlike a Stripe object id (`ch_…`) a numeric
 # id needs no pattern to be safe, an `integer` cannot carry a `/` or a `%` at all. That is safe by
@@ -41,15 +38,19 @@
 # connector rather than of this comment.
 #
 # ---------------------------------------------------------------------------------------------
-# WHY THERE IS NO FREE-TEXT QUERY FILTER, for the same underlying reason.
+# FREE-TEXT QUERY FILTERS: WITHHELD ON THE PUBLISHED READS, CARRIED ON THE NEW ONES (C-30, C-527).
 #
-# `gitlab-issue-list`, `gitlab-merge-request-list` and `gitlab-branch-list` all could take a
-# free-text `search` filter on the real API. None of them do here: a search string is exactly the
-# shape `zendesk-ticket-search` already demonstrates cannot survive unencoded interpolation — a
-# space is misleadingly rescued by URL parsing, but `&`, `#` and `+` are not. The only query
-# parameters declared are a closed `state` enum (whose values are plain lowercase words with no
-# unsafe character) and integer pagination (`page`, `per_page`), both safe by construction for the
-# same reason the project id is.
+# This block used to say no operation may take a free-text `search`, because a search string could
+# not survive unencoded interpolation — `&`, `#` and `+` would reshape the request. C-30 closed that
+# in Flux 0.54: a scalar query value travels in the structured `http.request(query: …)` map and the
+# URL carries path data only.
+#
+# `gitlab-issue-list`, `gitlab-merge-request-list` and `gitlab-branch-list` still decline the filter,
+# but now for a compatibility reason rather than a safety one — their request bytes are published,
+# and widening them is a separate reviewed change. `gitlab-group-list` and `gitlab-project-list` are
+# new and therefore carry `search`.
+#
+# Arrays remain refused; their wire shape is undeclared and C-30 refuses one rather than guessing.
 #
 # ---------------------------------------------------------------------------------------------
 # The origin is one generic, value-free configuration declaration. `gitlab.com` stays the default;
@@ -83,10 +84,15 @@ api_version = "v4"
 # vendor's REST prefix after policy has selected either the reviewed default or an approved pin.
 base_url = "{origin}/api/v4"
 
-description = "GitLab: read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only"
+description = "GitLab: discover reachable groups and projects; read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only"
 
-# Every operation authenticates the same way.
-default_auth = [{ credentials = ["gitlab.token"] }]
+# Either credential authenticates every operation, and the two are alternatives rather than a pair
+# (C-530): a deployment provisions one static token org-wide, or each user completes an OAuth2 grant
+# and acts as themselves. A host picks; this file only says both are valid.
+default_auth = [
+  { credentials = ["gitlab.oauth_token"] },
+  { credentials = ["gitlab.token"] },
+]
 
 # The "Test connection" button. `GET /user` takes no parameters and cannot do anything except prove
 # the token resolves — it returns the authenticated user, which is also the read a settings page
@@ -108,11 +114,48 @@ scheme = "bearer"
 # older `PRIVATE-TOKEN: <token>` header, but the bearer form is documented, is what GitLab's own
 # OAuth2-flavoured docs lead with, and is what the story specifies).
 env = ["GITLAB_TOKEN"]
+# C-528: a GitLab personal access token acts as **the person who created it** — every call is
+# attributed to that user and bounded by their permissions. It is not an integration identity, and a
+# host that stored one at a tenant-wide address would let any member act as its creator.
+subject = "user"
 description = "GitLab personal access token sent as a bearer. A token scoped to read_api is enough for every read below; the api scope is required for gitlab-issue-create"
 
+[[auth]]
+# **The delegated credential: an operator registers one OAuth application, and each person grants it**
+# (C-530). The static token above stays for the org-wide arrangement where one credential is
+# provisioned once; this is the "on behalf of" arrangement, where a signed-in user completes the
+# grant and the host stores the result for that user alone.
+#
+# Both are declared because they are genuinely different deployments of the same connector, and
+# `default_auth` below admits either. Nothing here chooses between them — that is the host's, and it
+# is why `subject` exists.
+name = "gitlab.oauth_token"
+scheme = "bearer"
+subject = "user"
+description = "GitLab OAuth2 access token obtained on behalf of a signed-in user. Bounded by that user's own permissions, never by the application's"
+
+# The host runs every grant; nothing this repository emits performs OAuth. `endpoint` names the
+# declared `login` service rather than carrying a URL, which is the property that keeps the token
+# exchange inside the egress allow-list — `http_hosts` derives from declared base URLs, so a URL
+# written here would name a host nothing had admitted. It also means a self-managed instance's OAuth
+# endpoints follow the one operator-approved origin automatically, instead of being a second
+# destination somebody could point elsewhere.
+[auth.oauth2]
+endpoint = "login"
+authorize_path = "/oauth/authorize"
+token_path = "/oauth/token"
+# `read_repository` is here for a reason worth stating: it is what lets the resulting token clone
+# over HTTPS. Cloning is not a connector operation — git speaks its own wire protocol — but the
+# credential a git client is handed is this one, and a scope absent from this list is one the
+# connector does not request.
+scopes = ["read_api", "read_user", "read_repository"]
+# `refresh_token` is not optional in practice. A GitLab OAuth access token expires in two hours by
+# default, and an unattended fleet outlives that; without the refresh grant the connection dies mid-run.
+grants = ["authorization_code", "refresh_token"]
+
 # ---------------------------------------------------------------------------------------------
-# Operations — 7: the parameterless verify read, plus the six the story names, all addressed by
-# numeric project id only.
+# Operations — 9: the parameterless verify read, the two discovery reads that produce a numeric
+# project id (C-527), and the six the story names, all addressed by numeric project id only.
 #
 # Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
 # alphanumerics, `_` and `-` only (C-8, C-23).
@@ -124,10 +167,33 @@ description = "GitLab personal access token sent as a bearer. A token scoped to 
 # to a service, and there is no other service here to attach it to. It carries `tags` and
 # nothing else, which is what keeps `default` implicit and this file emitting the same
 # `gitlab.flux` it emitted before.
+#
+# `legacy = true` (C-458) is what preserves that after `login` was added below: it keeps the
+# published, address-elided `default` service exactly as it was while a named sibling exists, at the
+# cost of every member having to state `service` explicitly — which is the point, since a new member
+# must not enter the address-elided service by silence.
 name = "default"
+legacy = true
 tags = ["source-control", "issue-tracking"]
 
+[[services]]
+# **The vendor's OAuth2 endpoints, which are not under `/api/v4`** (C-529).
+#
+# Declared as a service because that is how this repository names an endpoint whose base URL differs
+# from the connector's, and because `http_hosts` derives from declared base URLs — a token exchange
+# against a host nothing declared is one the egress gate refuses. `OAuth2Spec.endpoint` below names
+# this service rather than carrying a URL of its own, which is the property that keeps it that way:
+# a field holding a destination is a field that can hold a destination somebody chose.
+#
+# It declares no operations, and must not. An authorize endpoint is a browser redirect and a token
+# endpoint's response body *is* a credential, so neither is a connector operation — AGENTS.md
+# § Authentication contract. The host runs the grant; this service exists so the host knows where.
+name = "login"
+description = "GitLab's OAuth2 authorize and token endpoints, at the instance origin."
+base_url = "{origin}"
+
 [[operations]]
+service = "default"
 id = "gitlab-user-get"
 method = "GET"
 direction = "read"
@@ -142,8 +208,116 @@ required = ["id", "username", "state"]
 properties = { id = { type = "integer", description = "The user's global id" }, username = { type = "string" }, name = { type = "string" }, state = { type = "string", description = "`active`, `blocked`, or one of GitLab's other account states" }, web_url = { type = "string", format = "uri" }, avatar_url = { type = "string", format = "uri" } }
 
 # ---------------------------------------------------------------------------------------------
+# DISCOVERY — the two reads that answer "what can this token reach?" (C-527)
+#
+# Every project-scoped operation below takes `{project_id}` as given, and the file's opening comment
+# explains at length why that id must be the numeric one: a caller who has only `group/project` from
+# the URL bar cannot use this connector. These two operations are what makes that constraint livable
+# rather than a dead end — `gitlab-project-list` is how a caller *obtains* the numeric id, and
+# `gitlab-group-list` is how it narrows the search first.
+#
+# **`search` is a caller-supplied string, and that is now safe.** The file's second opening comment
+# withheld every free-text filter because nothing percent-encoded a query value and `&`, `#` and `+`
+# would reshape the request. C-30 closed exactly that in Flux 0.54: scalar query values travel in a
+# structured `http.request(query: ...)` map with RFC 3986 semantics. The constraint that remains is
+# the *array* one, which is why nothing here selects an array-valued filter — and why the existing
+# operations below keep their narrower parameter sets, since widening them moves published bytes.
+# ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
+id = "gitlab-group-list"
+method = "GET"
+direction = "read"
+path = "/groups"
+description = "List the groups the authenticated user is a member of, optionally narrowed by a search term"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "search"
+description = "Narrow the result to groups whose name or path matches this term. Free text; the runtime percent-encodes it"
+required = false
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "min_access_level"
+description = "Only groups where the user has at least this access level. GitLab's scale: 10 guest, 20 reporter, 30 developer, 40 maintainer, 50 owner"
+required = false
+schema = { type = "integer", enum = [10, 20, 30, 40, 50] }
+
+[[operations.params.query]]
+name = "page"
+description = "1-based page number"
+required = false
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.query]]
+name = "per_page"
+description = "Results per page, at most 100"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100 }
+
+[operations.response_schema]
+type = "array"
+items = { type = "object", required = ["id", "name", "path", "full_path"], properties = { id = { type = "integer", description = "The group's numeric id — what a project query's `id` refers to" }, name = { type = "string" }, path = { type = "string" }, full_path = { type = "string", description = "The namespaced path, `group/subgroup`" }, description = { type = "string" }, visibility = { type = "string", description = "`private`, `internal` or `public`" }, web_url = { type = "string", format = "uri" } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+service = "default"
+id = "gitlab-project-list"
+method = "GET"
+direction = "read"
+path = "/projects"
+description = "List projects the authenticated user can reach, optionally narrowed by a search term — this is how a caller obtains the numeric project id every other operation requires"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "search"
+description = "Narrow the result to projects whose name or path matches this term. Free text; the runtime percent-encodes it"
+required = false
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "membership"
+description = "Limit to projects the authenticated user is a member of"
+required = false
+schema = { type = "boolean" }
+
+[[operations.params.query]]
+name = "owned"
+description = "Limit to projects the authenticated user owns"
+required = false
+schema = { type = "boolean" }
+
+[[operations.params.query]]
+name = "min_access_level"
+description = "Only projects where the user has at least this access level. GitLab's scale: 10 guest, 20 reporter, 30 developer, 40 maintainer, 50 owner"
+required = false
+schema = { type = "integer", enum = [10, 20, 30, 40, 50] }
+
+[[operations.params.query]]
+name = "page"
+description = "1-based page number"
+required = false
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.query]]
+name = "per_page"
+description = "Results per page, at most 100"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100 }
+
+[operations.response_schema]
+type = "array"
+items = { type = "object", required = ["id", "name", "path_with_namespace"], properties = { id = { type = "integer", description = "The project's numeric id — this is the `project_id` every other operation in this connector takes" }, name = { type = "string" }, path = { type = "string" }, path_with_namespace = { type = "string", description = "The namespaced path, `group/subgroup/project`. Human-facing only: it cannot be passed as `project_id`" }, description = { type = "string" }, default_branch = { type = "string" }, visibility = { type = "string", description = "`private`, `internal` or `public`" }, web_url = { type = "string", format = "uri" }, http_url_to_repo = { type = "string", format = "uri", description = "The HTTPS clone URL. Cloning is not a connector operation — this is the address a git client is given" }, last_activity_at = { type = "string", format = "date-time" } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+service = "default"
 id = "gitlab-issue-list"
 method = "GET"
 direction = "read"
@@ -184,6 +358,7 @@ items = { type = "object", required = ["id", "iid", "project_id", "title", "stat
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "gitlab-issue-get"
 method = "GET"
 direction = "read"
@@ -218,6 +393,7 @@ properties = { id = { type = "integer", description = "The issue's global id" },
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "gitlab-issue-create"
 method = "POST"
 direction = "write"
@@ -258,6 +434,7 @@ properties = { id = { type = "integer", description = "The new issue's global id
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "gitlab-merge-request-list"
 method = "GET"
 direction = "read"
@@ -298,6 +475,7 @@ items = { type = "object", required = ["id", "iid", "project_id", "title", "stat
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "gitlab-pipeline-get"
 method = "GET"
 direction = "read"
@@ -326,6 +504,7 @@ properties = { id = { type = "integer", description = "The pipeline's own id, wh
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "gitlab-branch-list"
 method = "GET"
 direction = "read"
@@ -366,6 +545,13 @@ items = { type = "object", required = ["name", "commit"], properties = { name = 
 
 [[config]]
 name = "origin"
+service = "default"
+# **One deployment, one origin question** (C-529). The API surface and the OAuth surface are the same
+# GitLab server, so they are the same fact — and asking twice is not merely redundant. Two slots that
+# must agree and are not forced to is how a token exchange gets pointed at a host the API never
+# approved, which is the whole reason `approval = "operator"` is below. The head service keeps the
+# address; `login` resolves `{origin}` from this same value, under this same approval.
+also_services = ["login"]
 label = "GitLab origin"
 help = "The HTTPS origin only, without `/api/v4` or another path. Leave the default for GitLab.com; a self-managed origin requires deployment/operator approval before it becomes active"
 example = "https://gitlab.company.example"
@@ -376,8 +562,54 @@ approval = "operator"
 docs_url = "https://docs.gitlab.com/administration/"
 binds = "endpoint.origin"
 
+# ---------------------------------------------------------------------------------------------
+# The OAuth application, registered once by whoever runs the product (C-530).
+#
+# These are **operator** level and the level is derived, never authored: it is a consequence of
+# binding `oauth.*`. That derivation is the thing protecting an end user here — asking a tenant for a
+# client secret would hand them the product's own credential, which the configuration contract calls
+# out as a real defect in both directions.
+#
+# The client id is public by specification (RFC 6749 §2.2) and the secret is not, which is the whole
+# difference between the two declarations below.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "oauth_client_id"
+service = "default"
+label = "GitLab OAuth application id"
+help = "Create an application under Admin -> Applications (self-managed) or User Settings -> Applications (gitlab.com), with the redirect URI your deployment serves. This is the application id, which is public"
+example = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+format = "text"
+required = false
+docs_url = "https://docs.gitlab.com/integration/oauth_provider/"
+binds = "oauth.client_id"
+
+[[config]]
+name = "oauth_redirect_uri"
+service = "default"
+label = "GitLab OAuth redirect URI"
+help = "The callback address this deployment serves, registered as a redirect URI on the application above. GitLab matches it exactly, so it must be the same string in both places — including the scheme, any port, and no trailing slash"
+example = "https://exchange.internal/api/oauth/callback"
+format = "url"
+required = false
+docs_url = "https://docs.gitlab.com/integration/oauth_provider/"
+binds = "oauth.redirect_uri"
+
+[[config]]
+name = "oauth_client_secret"
+service = "default"
+label = "GitLab OAuth application secret"
+help = "The application secret issued beside the id above. Supplied once by whoever runs this deployment, never by an end user"
+format = "token"
+secret = true
+required = false
+docs_url = "https://docs.gitlab.com/integration/oauth_provider/"
+binds = "oauth.client_secret"
+
 [[config]]
 name = "token"
+service = "default"
 label = "GitLab personal access token"
 help = "Create one in the selected GitLab installation's User Settings -> Access Tokens. Grant read_api for every read below, or api if you also want gitlab-issue-create to work"
 format = "token"

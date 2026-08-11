@@ -28,6 +28,7 @@ static AUTH: &[crate::Credential] = &[
         leaf: "api_key",
         acquire: crate::Acquisition::Static,
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+        subject: crate::Subject::Unstated,
     },
 ];
 
@@ -47,6 +48,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://mailchimp.com/developer/marketing/docs/fundamentals/"),
         binds: "endpoint.dc",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"server_prefix\",\"label\":\"Mailchimp datacentre\",\"help\":\"The short region code in front of `api.mailchimp.com` for your account, like us14 or us6. Find it three ways, whichever is easiest: it is the first part of the URL on your Mailchimp API keys page; it is the last part of your API key, after the final - character; or, on an OAuth connection, the OAuth metadata endpoint returns it. Enter the code alone, not a full URL\",\"example\":\"us14\",\"format\":\"subdomain\",\"docs_url\":\"https://mailchimp.com/developer/marketing/docs/fundamentals/\",\"binds\":\"endpoint.dc\"}",
     },
     crate::ConfigField {
@@ -63,6 +65,7 @@ static CONFIG: &[crate::ConfigField] = &[
         docs_url: Some("https://mailchimp.com/developer/marketing/guides/quick-start/"),
         binds: "credential.mailchimp.api_key",
         also_binds: &[],
+        also_services: &[],
         declaration_json: "{\"name\":\"api_key\",\"label\":\"Mailchimp API key\",\"help\":\"Generate one under Account & billing, Extras, API keys in your Mailchimp account. It grants everything your Mailchimp user can do, so treat it as a password. Copy the datacentre code above from the same page before you leave it\",\"format\":\"token\",\"secret\":true,\"docs_url\":\"https://mailchimp.com/developer/marketing/guides/quick-start/\",\"binds\":\"credential.mailchimp.api_key\"}",
     },
 ];

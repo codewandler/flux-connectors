@@ -14,6 +14,40 @@
 
 ## [Unreleased]
 
+### New
+
+- **GitLab can sign a person in, instead of asking them to paste a token.** A GitLab connection can
+  now be authorized by the person using it, so calls are made with their own permissions rather than
+  a shared credential's. The older arrangement still works unchanged: an organisation that prefers to
+  provide one access token for everyone can keep doing exactly that. A connection chooses one of the
+  two; both are offered.
+- **A self-managed GitLab is asked for its address once.** Point a connection at your own GitLab and
+  both its API and its sign-in pages follow that single approved address together. There is no second
+  place to fill in, and no way for the two to end up pointing somewhere different.
+- **GitHub and GitLab can now be browsed rather than guessed at.** You can list the organisations a
+  connection can reach, the repositories inside them, and — on GitLab — the groups and projects
+  available to you, complete with the address you would clone from. Until now every call needed the
+  owner, repository or project identifier supplied up front, with nothing to look them up with.
+- **GitHub connections have a Test connection check.** It reports which account the configured token
+  is acting as, so a settings page can confirm a connection works before anything depends on it.
+- **A GitLab connection asks for the callback address your deployment serves.** Registering a
+  GitLab application gives you an application id, a secret and a redirect address; all three are now
+  collected together during setup. Previously only a callback on the same machine could be described,
+  so a hosted installation had nowhere to record the address it actually serves and only found out
+  when a sign-in attempt was rejected.
+- **A connection can say whose permissions a credential carries.** Credentials that act as the
+  integration itself are now distinguishable from credentials that act on behalf of a specific
+  person. Where that has not been reviewed yet, it says so plainly rather than guessing — so nothing
+  is quietly treated as more or less privileged than it is.
+
+### Action needed
+
+- **If you build against the credential or configuration data directly, two additions need
+  handling.** Credentials now describe whose permissions they carry, configuration fields can name
+  additional services they apply to, and credentials can describe a sign-in flow. Code that lists
+  every possible credential type, or constructs these entries by hand, needs updating to account for
+  them. Reading the data is unaffected.
+
 ## [0.20.0] — 2026-08-04
 
 ### Action needed

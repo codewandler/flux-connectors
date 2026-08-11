@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 
 use connector_flux::emit_operation;
 use connector_spec::{
-    Approval, AuthScheme, Connector, Format, Idempotency, OperationDirection, Risk,
+    Approval, AuthScheme, Connector, Format, Idempotency, Level, OperationDirection, Risk,
 };
 
 #[path = "../../connector-spec/tests/support/shipped_provider.rs"]
@@ -46,6 +46,11 @@ const DEFAULT_ORIGIN: &str = "https://gitlab.com";
 const TOKEN: &str = "gitlab.token";
 const TOKEN_ENV: &str = "GITLAB_TOKEN";
 
+/// The delegated credential (C-530): obtained by an OAuth2 grant the host runs on behalf of a
+/// signed-in user, and therefore bounded by that user's own permissions rather than the
+/// application's.
+const OAUTH_TOKEN: &str = "gitlab.oauth_token";
+
 /// The caller-facing name every project-scoped operation gives its numeric project id. One constant
 /// so the test below cannot drift from the connector without a compile-time reminder of why it
 /// matters — see the module documentation.
@@ -56,6 +61,23 @@ const PROJECT_ID: &str = "project_id";
 /// read and takes no parameters).
 const OPERATIONS: &[(&str, Risk, Idempotency, bool)] = &[
     ("gitlab-user-get", Risk::Low, Idempotency::Idempotent, false),
+    // The two discovery reads (C-527), and the decision this table exists to make explicit. Neither
+    // addresses a project, because they are what a caller uses to *find* one: every other operation
+    // here takes a numeric `project_id`, and until now nothing in the connector could produce it.
+    // `gitlab-project-list` returns that id — and `http_url_to_repo` beside it, which is the clone
+    // address a git client is given, since cloning is not a connector operation.
+    (
+        "gitlab-group-list",
+        Risk::Low,
+        Idempotency::Idempotent,
+        false,
+    ),
+    (
+        "gitlab-project-list",
+        Risk::Low,
+        Idempotency::Idempotent,
+        false,
+    ),
     (
         "gitlab-issue-list",
         Risk::Low,
@@ -161,16 +183,34 @@ fn the_gitlab_connector_loads_and_authenticates_with_a_bearer_personal_access_to
             "operation `{id}` has no description — every description here is a model's tool contract"
         );
 
+        // **Two alternatives, not two requirements** (C-530). Every operation authenticates with
+        // either the delegated OAuth token or the static personal access token, and each alternative
+        // is a single credential. That is one connector serving two genuinely different
+        // deployments — an org-wide token provisioned once, or a grant each user completes for
+        // themselves — and nothing here chooses between them: `subject` is what lets a host decide.
         let effective = connector.effective_auth(operation);
         assert_eq!(
             effective.len(),
-            1,
-            "operation `{id}` has {} auth alternatives; gitlab is single-mechanism",
+            2,
+            "operation `{id}` has {} auth alternatives; gitlab offers the delegated grant and the \
+             static token",
             effective.len()
         );
         assert!(
-            effective[0].contains(TOKEN) && effective[0].len() == 1,
-            "operation `{id}` names a credential other than the personal access token"
+            effective.iter().all(|alternative| alternative.len() == 1),
+            "operation `{id}` requires two credentials at once; each alternative is one credential"
+        );
+        assert!(
+            effective
+                .iter()
+                .any(|alternative| alternative.contains(TOKEN)),
+            "operation `{id}` no longer accepts the personal access token"
+        );
+        assert!(
+            effective
+                .iter()
+                .any(|alternative| alternative.contains(OAUTH_TOKEN)),
+            "operation `{id}` no longer accepts the delegated OAuth token"
         );
     }
 
@@ -320,17 +360,50 @@ fn every_gitlab_operation_emits_an_analyzable_module() {
     }
 }
 
-/// The two `[[config]]` fields: an operator-approved origin and the personal access token. The
-/// origin is a non-secret connection setting whose reviewed default preserves GitLab.com; the
-/// token remains secret and bound to the credential it declares.
+/// The four `[[config]]` fields, and the level each one derives.
+///
+/// Two are **connection** level, supplied per tenant: the operator-approved origin, whose reviewed
+/// default preserves GitLab.com, and the personal access token. Two are **operator** level, supplied
+/// once by whoever runs the product: the OAuth application's id and secret (C-530). The split is not
+/// authored — `Level` derives from `binds`, which is what stops an end user ever being asked for the
+/// product's own client secret.
 #[test]
-fn the_config_surface_asks_for_the_origin_and_token_and_nothing_else() {
+fn the_config_surface_asks_for_the_origin_the_token_and_the_oauth_app() {
     let connector = load();
 
     assert_eq!(
         connector.config.len(),
-        2,
-        "gitlab needs one endpoint choice and one credential, with no GitLab-only side channel"
+        5,
+        "gitlab needs one endpoint choice, one credential and one OAuth app registration — id, \
+         secret and redirect URI — with no GitLab-only side channel"
+    );
+    let level_of = |binds: &str| {
+        connector
+            .config
+            .iter()
+            .find(|field| field.binds == binds)
+            .unwrap_or_else(|| panic!("gitlab declares no field binding `{binds}`"))
+    };
+    for (binds, secret) in [
+        ("oauth.client_id", false),
+        ("oauth.client_secret", true),
+        // The third half of the registration (C-531): issued with the other two, supplied by the
+        // same person, and public — it travels in the authorize request as a query parameter.
+        ("oauth.redirect_uri", false),
+    ] {
+        let field = level_of(binds);
+        assert_eq!(
+            field.level(),
+            Some(Level::Operator),
+            "`{binds}` must be operator level — asking a tenant for it hands them the product's own \
+             application"
+        );
+        assert_eq!(field.secret, secret, "`{binds}` has the wrong secrecy");
+    }
+    assert_eq!(
+        level_of("endpoint.origin").level(),
+        Some(Level::Connection),
+        "the origin is chosen per connection, not once per vendor"
     );
     let origin = connector
         .config_field("origin")
