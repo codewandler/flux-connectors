@@ -241,6 +241,16 @@ export interface ConfigField {
   docs_url?: string
   binds: string
   also_binds?: string[]
+  /**
+   * The further services whose base URL this one value also fills. Omitted for the ordinary field,
+   * which fills one.
+   *
+   * `service` above stays the address the value is stored under; the services named here resolve
+   * their own `{variable}` from that same address — one question, one value, one `approval`. A
+   * self-managed GitLab serves its API and its OAuth endpoints from one origin, so asking twice
+   * would be two settings that must agree and are not forced to.
+   */
+  also_services?: string[]
   /** Derived from `binds`, never selected by the provider author. */
   level: 'operator' | 'connection'
 }
