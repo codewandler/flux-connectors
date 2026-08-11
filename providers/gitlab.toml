@@ -4,7 +4,7 @@
 # way Stripe or GitHub do, so this is authored the same way zendesk, freshdesk, github and notion
 # already are: by reading `docs.gitlab.com/ee/api/*` directly. When ingest (C-4) and the overlay
 # (C-6) exist and GitLab's own description becomes usable, this file becomes `[spec]` plus a
-# `[[patch.operations]]` selection reproducing the seven operations below. Until then, drift is
+# `[[patch.operations]]` selection reproducing the nine operations below. Until then, drift is
 # undetectable by machine (`docs/designs/provider-operation-inventory.md` §6.7).
 #
 # ---------------------------------------------------------------------------------------------
@@ -17,18 +17,15 @@
 # project" — `278964` or `gitlab-org%2Fgitlab`. The encoded form is what a human actually has: nobody
 # carries a project's numeric id in their head, they have `group/subgroup/project` from the URL bar.
 #
-# It is also the form this pipeline cannot produce. `crates/connector-flux/src/op.rs` interpolates
-# every path and query value **verbatim** into a `fmt` template — "nothing percent-encodes them" is
-# stated there in exactly those words — and flux registers no URL-encoding op
-# (`../flux/crates/flux-flow/docs/ops-reference.md:15`, C-30 unimplemented). AGENTS.md's standing
-# demonstration of what that costs is `zendesk-ticket-search`, non-functional because an unescaped
-# `&` injects a parameter rather than filtering by one; a raw `/` in a path segment is the same
-# failure moved one position to the left, corrupting the segment boundary the moment it is
-# interpolated, and a *caller*-supplied `%2F` would still need the caller to have percent-encoded it
-# themselves — the outcome this story explicitly forbids ("do not hand a model a parameter it must
-# pre-encode itself").
+# It is also a form this pipeline still cannot produce, and the reason narrowed rather than went
+# away. C-30 landed structured query encoding in Flux 0.54, so a *query* value is now percent-encoded
+# with RFC 3986 semantics — but `:id` is a **path** segment, and the path is still composed with
+# `fmt`. A raw `/` there corrupts the segment boundary the moment it is interpolated, and a
+# *caller*-supplied `%2F` would still require the caller to have percent-encoded it themselves — the
+# outcome C-166 explicitly forbids ("do not hand a model a parameter it must pre-encode itself").
 #
-# So this connector takes the branch `providers/stripe.toml` took for the same reason: **the numeric
+# So the numeric-id rule below is unchanged, and it is now precisely a *path* rule rather than a
+# general one. This connector takes the branch `providers/stripe.toml` took for the same reason: **the numeric
 # id only.** Every project-scoped operation below types its project parameter as a JSON Schema
 # `integer` — not a `string` with a `pattern`, because unlike a Stripe object id (`ch_…`) a numeric
 # id needs no pattern to be safe, an `integer` cannot carry a `/` or a `%` at all. That is safe by
@@ -41,15 +38,19 @@
 # connector rather than of this comment.
 #
 # ---------------------------------------------------------------------------------------------
-# WHY THERE IS NO FREE-TEXT QUERY FILTER, for the same underlying reason.
+# FREE-TEXT QUERY FILTERS: WITHHELD ON THE PUBLISHED READS, CARRIED ON THE NEW ONES (C-30, C-527).
 #
-# `gitlab-issue-list`, `gitlab-merge-request-list` and `gitlab-branch-list` all could take a
-# free-text `search` filter on the real API. None of them do here: a search string is exactly the
-# shape `zendesk-ticket-search` already demonstrates cannot survive unencoded interpolation — a
-# space is misleadingly rescued by URL parsing, but `&`, `#` and `+` are not. The only query
-# parameters declared are a closed `state` enum (whose values are plain lowercase words with no
-# unsafe character) and integer pagination (`page`, `per_page`), both safe by construction for the
-# same reason the project id is.
+# This block used to say no operation may take a free-text `search`, because a search string could
+# not survive unencoded interpolation — `&`, `#` and `+` would reshape the request. C-30 closed that
+# in Flux 0.54: a scalar query value travels in the structured `http.request(query: …)` map and the
+# URL carries path data only.
+#
+# `gitlab-issue-list`, `gitlab-merge-request-list` and `gitlab-branch-list` still decline the filter,
+# but now for a compatibility reason rather than a safety one — their request bytes are published,
+# and widening them is a separate reviewed change. `gitlab-group-list` and `gitlab-project-list` are
+# new and therefore carry `search`.
+#
+# Arrays remain refused; their wire shape is undeclared and C-30 refuses one rather than guessing.
 #
 # ---------------------------------------------------------------------------------------------
 # The origin is one generic, value-free configuration declaration. `gitlab.com` stays the default;
@@ -83,7 +84,7 @@ api_version = "v4"
 # vendor's REST prefix after policy has selected either the reviewed default or an approved pin.
 base_url = "{origin}/api/v4"
 
-description = "GitLab: read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only"
+description = "GitLab: discover reachable groups and projects; read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only"
 
 # Every operation authenticates the same way.
 default_auth = [{ credentials = ["gitlab.token"] }]
@@ -111,8 +112,8 @@ env = ["GITLAB_TOKEN"]
 description = "GitLab personal access token sent as a bearer. A token scoped to read_api is enough for every read below; the api scope is required for gitlab-issue-create"
 
 # ---------------------------------------------------------------------------------------------
-# Operations — 7: the parameterless verify read, plus the six the story names, all addressed by
-# numeric project id only.
+# Operations — 9: the parameterless verify read, the two discovery reads that produce a numeric
+# project id (C-527), and the six the story names, all addressed by numeric project id only.
 #
 # Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
 # alphanumerics, `_` and `-` only (C-8, C-23).
@@ -140,6 +141,111 @@ idempotency = "idempotent"
 type = "object"
 required = ["id", "username", "state"]
 properties = { id = { type = "integer", description = "The user's global id" }, username = { type = "string" }, name = { type = "string" }, state = { type = "string", description = "`active`, `blocked`, or one of GitLab's other account states" }, web_url = { type = "string", format = "uri" }, avatar_url = { type = "string", format = "uri" } }
+
+# ---------------------------------------------------------------------------------------------
+# DISCOVERY — the two reads that answer "what can this token reach?" (C-527)
+#
+# Every project-scoped operation below takes `{project_id}` as given, and the file's opening comment
+# explains at length why that id must be the numeric one: a caller who has only `group/project` from
+# the URL bar cannot use this connector. These two operations are what makes that constraint livable
+# rather than a dead end — `gitlab-project-list` is how a caller *obtains* the numeric id, and
+# `gitlab-group-list` is how it narrows the search first.
+#
+# **`search` is a caller-supplied string, and that is now safe.** The file's second opening comment
+# withheld every free-text filter because nothing percent-encoded a query value and `&`, `#` and `+`
+# would reshape the request. C-30 closed exactly that in Flux 0.54: scalar query values travel in a
+# structured `http.request(query: ...)` map with RFC 3986 semantics. The constraint that remains is
+# the *array* one, which is why nothing here selects an array-valued filter — and why the existing
+# operations below keep their narrower parameter sets, since widening them moves published bytes.
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "gitlab-group-list"
+method = "GET"
+direction = "read"
+path = "/groups"
+description = "List the groups the authenticated user is a member of, optionally narrowed by a search term"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "search"
+description = "Narrow the result to groups whose name or path matches this term. Free text; the runtime percent-encodes it"
+required = false
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "min_access_level"
+description = "Only groups where the user has at least this access level. GitLab's scale: 10 guest, 20 reporter, 30 developer, 40 maintainer, 50 owner"
+required = false
+schema = { type = "integer", enum = [10, 20, 30, 40, 50] }
+
+[[operations.params.query]]
+name = "page"
+description = "1-based page number"
+required = false
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.query]]
+name = "per_page"
+description = "Results per page, at most 100"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100 }
+
+[operations.response_schema]
+type = "array"
+items = { type = "object", required = ["id", "name", "path", "full_path"], properties = { id = { type = "integer", description = "The group's numeric id — what a project query's `id` refers to" }, name = { type = "string" }, path = { type = "string" }, full_path = { type = "string", description = "The namespaced path, `group/subgroup`" }, description = { type = "string" }, visibility = { type = "string", description = "`private`, `internal` or `public`" }, web_url = { type = "string", format = "uri" } } }
+
+# ---------------------------------------------------------------------------------------------
+
+[[operations]]
+id = "gitlab-project-list"
+method = "GET"
+direction = "read"
+path = "/projects"
+description = "List projects the authenticated user can reach, optionally narrowed by a search term — this is how a caller obtains the numeric project id every other operation requires"
+risk = "low"
+idempotency = "idempotent"
+
+[[operations.params.query]]
+name = "search"
+description = "Narrow the result to projects whose name or path matches this term. Free text; the runtime percent-encodes it"
+required = false
+schema = { type = "string", minLength = 1 }
+
+[[operations.params.query]]
+name = "membership"
+description = "Limit to projects the authenticated user is a member of"
+required = false
+schema = { type = "boolean" }
+
+[[operations.params.query]]
+name = "owned"
+description = "Limit to projects the authenticated user owns"
+required = false
+schema = { type = "boolean" }
+
+[[operations.params.query]]
+name = "min_access_level"
+description = "Only projects where the user has at least this access level. GitLab's scale: 10 guest, 20 reporter, 30 developer, 40 maintainer, 50 owner"
+required = false
+schema = { type = "integer", enum = [10, 20, 30, 40, 50] }
+
+[[operations.params.query]]
+name = "page"
+description = "1-based page number"
+required = false
+schema = { type = "integer", minimum = 1 }
+
+[[operations.params.query]]
+name = "per_page"
+description = "Results per page, at most 100"
+required = false
+schema = { type = "integer", minimum = 1, maximum = 100 }
+
+[operations.response_schema]
+type = "array"
+items = { type = "object", required = ["id", "name", "path_with_namespace"], properties = { id = { type = "integer", description = "The project's numeric id — this is the `project_id` every other operation in this connector takes" }, name = { type = "string" }, path = { type = "string" }, path_with_namespace = { type = "string", description = "The namespaced path, `group/subgroup/project`. Human-facing only: it cannot be passed as `project_id`" }, description = { type = "string" }, default_branch = { type = "string" }, visibility = { type = "string", description = "`private`, `internal` or `public`" }, web_url = { type = "string", format = "uri" }, http_url_to_repo = { type = "string", format = "uri", description = "The HTTPS clone URL. Cloning is not a connector operation — this is the address a git client is given" }, last_activity_at = { type = "string", format = "date-time" } } }
 
 # ---------------------------------------------------------------------------------------------
 

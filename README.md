@@ -16,9 +16,9 @@ queryable Rust catalogue, and a flux Tool pack.
 > this repository is `crates/connectors-api` — `publish = false`, loopback-only, and the thing that has
 > actually sent bytes to a vendor. See [Current limitations](#current-limitations).
 
-The repository currently contains **829 curated connector operations across 55 providers and 66
+The repository currently contains **835 curated connector operations across 55 providers and 66
 services**, plus 53 events and 5 channel bindings. It also publishes 77 Flux-owned core operations, node
-kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **1102
+kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **1108
 committed, reviewable artifacts** without contacting a vendor. Browse them in the
 [catalogue explorer](https://flux.codewandler.org/explorer).
 
@@ -75,7 +75,7 @@ cargo run -p connector-cli -- build
 On a clean checkout, `diff` reports:
 
 ```text
-1102 artifacts up to date (55 providers checked)
+1108 artifacts up to date (55 providers checked)
 ```
 
 Then inspect [`connectors/zendesk.flux`](connectors/zendesk.flux), browse the
@@ -167,7 +167,7 @@ fails closed:
   among them** — C-87 published both, and today 82 config fields across 42 providers travel
   identically into `web/public/catalog.json` and into 46 `connectors/*.connector.toml` manifests
   (more manifests than providers because a multi-service connector emits one per service), alongside
-  `verify` on 42 of them. A host can now render a settings page and find the "Test connection"
+  `verify` on 43 of them. A host can now render a settings page and find the "Test connection"
   operation from the artifact alone.
 - **Freshdesk ships with no credential at all**, deliberately. Its `base64(<api_key>:X)` places the
   secret in a position the current IR cannot mark as secret. Emitting it would bypass secret gating

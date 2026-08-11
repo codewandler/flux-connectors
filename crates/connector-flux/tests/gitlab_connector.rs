@@ -56,6 +56,23 @@ const PROJECT_ID: &str = "project_id";
 /// read and takes no parameters).
 const OPERATIONS: &[(&str, Risk, Idempotency, bool)] = &[
     ("gitlab-user-get", Risk::Low, Idempotency::Idempotent, false),
+    // The two discovery reads (C-527), and the decision this table exists to make explicit. Neither
+    // addresses a project, because they are what a caller uses to *find* one: every other operation
+    // here takes a numeric `project_id`, and until now nothing in the connector could produce it.
+    // `gitlab-project-list` returns that id — and `http_url_to_repo` beside it, which is the clone
+    // address a git client is given, since cloning is not a connector operation.
+    (
+        "gitlab-group-list",
+        Risk::Low,
+        Idempotency::Idempotent,
+        false,
+    ),
+    (
+        "gitlab-project-list",
+        Risk::Low,
+        Idempotency::Idempotent,
+        false,
+    ),
     (
         "gitlab-issue-list",
         Risk::Low,

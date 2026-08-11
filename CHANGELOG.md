@@ -9,6 +9,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **GitHub and GitLab can answer what a token reaches** (C-527). GitHub gains `github-user-get`,
+  `github-org-list`, `github-org-repo-list` and `github-user-repo-list`; GitLab gains
+  `gitlab-group-list` and `gitlab-project-list`. Every forge operation previously took `{owner}`/
+  `{repo}` or a numeric `{project_id}` as given, so a caller holding a valid token could enumerate
+  nothing. `gitlab-project-list` returns that numeric id and `http_url_to_repo` beside it — the HTTPS
+  clone address, declared because cloning is not a connector operation. GitHub also declares
+  `verify = "github-user-get"`; it had none, so a host reading its manifest had no Test connection
+  read. The catalogue moves 829 → 835 operations and 1102 → 1108 artifacts; the five originally
+  published GitHub operations keep their Flux bytes.
+
+  Three reviewed gates asserted that nothing percent-encodes a query value and enforced "every query
+  parameter is an integer". **C-30 invalidated that premise** — a scalar now travels in the
+  structured `http.request(query: …)` map with RFC 3986 semantics. The rule was corrected to the two
+  properties it was a proxy for, both strictly stronger: every query parameter is a scalar, and no
+  query value reaches the URL, checked on every operation rather than four exempted ids. The
+  published reads keep their narrow parameter sets as a compatibility bound on shipped request
+  bytes, now labelled as such.
+
 - **The published catalogue carries a credential's OAuth2 acquisition** (C-525). `catalog::Acquisition`
   gains an `OAuth2` variant holding a `&'static catalog::OAuth2`, with `catalog::OAuthGrant` and
   `catalog::OAuthRedirect` beside it, mirroring `connector_spec::OAuth2Spec` field for field in

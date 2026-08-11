@@ -1,5 +1,5 @@
-# GitHub REST API — five hand-authored public contracts plus four exact selections from GitHub's
-# first-party OpenAPI document. The five existing operations stay inline because their ids and Flux
+# GitHub REST API — five hand-authored public contracts plus eight exact selections from GitHub's
+# first-party OpenAPI document (four collection reads, four discovery reads). The five existing operations stay inline because their ids and Flux
 # bytes are already published; the document is upstream evidence for the new collection reads, not
 # permission to expose its 1,216 operations. Each addition is therefore one `[[patch.operations]]`
 # block and `patch.select` remains empty.
@@ -60,13 +60,20 @@ base_url = "https://api.github.com"
 # scalar after it into that table.
 const_headers = { "Accept" = "application/vnd.github+json" }
 
-description = "GitHub REST API: read repositories, commits, issues, pull requests and Actions workflow runs, and write issues and issue comments"
+description = "GitHub REST API: discover the authenticated user, their organisations and reachable repositories; read repositories, commits, issues, pull requests and Actions workflow runs; and write issues and issue comments"
 
 # One credential covers the whole selection. GitHub Apps' installation tokens, fine-grained personal
 # access tokens and classic PATs all present identically as `Authorization: Bearer <token>`, so the
 # token *type* is operator configuration rather than connector shape; what differs between them is
 # which scopes the token carries, which is not something this file can or should assert.
 default_auth = [{ credentials = ["github.token"] }]
+
+# The "Test connection" button (C-527). `GET /user` takes no parameters and cannot do anything
+# except prove the token resolves — it returns the authenticated user, which is also what a settings
+# page shows as "connected as …". This connector declared no `verify` at all until now, so a host
+# reading its manifest had nothing to call; a `verify` must be a read, and the loader refuses a
+# `high` or `destructive` one.
+verify = "github-user-get"
 
 # ---------------------------------------------------------------------------------------------
 # First-party REST OpenAPI — pinned, scrubbed and provenanced by C-469.
@@ -85,8 +92,9 @@ upstream_version = "1.1.4"
 fetched_at = "2026-08-02T00:00:00Z"
 sha256 = "a7a3293268f062d09eb576806f0e5af271c039b9427f9852c8280c8fecc692e7"
 
-# Only integer pagination is caller-visible. Query values are not percent-encoded yet, so every
-# string, array and boolean filter is explicitly omitted and an upstream rename fails closed.
+# Only integer pagination is caller-visible on THIS operation, and it stays that way because these
+# are published request bytes rather than because a string would be unsafe — C-30 closed that. An
+# upstream rename still fails closed.
 [[patch.operations]]
 select = "issues/list-for-repo"
 direction = "read"
@@ -144,6 +152,61 @@ idempotency = "idempotent"
 omit.query = ["sha", "path", "author", "committer", "since", "until"]
 
 # ---------------------------------------------------------------------------------------------
+# DISCOVERY — the reads that answer "what can this token reach?" (C-527)
+#
+# Every operation above takes `{owner}` and `{repo}` as given. That is the whole gap this block
+# closes: a caller holding only a token had no way to *find* an organisation or a repository, so the
+# connector could describe a repository it could not help anyone name. These four are the entry
+# points, and `github-user-get` is additionally this connector's `verify` — until now it declared
+# none at all, which is why a settings page had no Test connection read to call.
+#
+# **These carry scalar string filters, and the operations above still do not.** That asymmetry is
+# deliberate, not drift. The omissions above were written when nothing percent-encoded a query value
+# and a `&` in one injected a parameter; C-30 closed that in Flux 0.54 with a structured
+# `http.request(query: ...)` map, so a scalar string is now encoded with RFC 3986 semantics and is
+# safe by construction. Widening the published operations above is a separate change that moves
+# request bytes already in the catalogue, and it is not this story's.
+#
+# Arrays remain refused, which is why nothing here selects one.
+# ---------------------------------------------------------------------------------------------
+
+[[patch.operations]]
+select = "users/get-authenticated"
+direction = "read"
+rename = "github-user-get"
+description = "Get the authenticated user — the identity the configured token acts as"
+risk = "low"
+idempotency = "idempotent"
+
+[[patch.operations]]
+select = "orgs/list-for-authenticated-user"
+direction = "read"
+rename = "github-org-list"
+description = "List the organisations the authenticated user belongs to, with bounded integer pagination"
+risk = "low"
+idempotency = "idempotent"
+
+[[patch.operations]]
+select = "repos/list-for-org"
+direction = "read"
+rename = "github-org-repo-list"
+description = "List an organisation's repositories, filtered by type and ordered, with bounded integer pagination"
+risk = "low"
+idempotency = "idempotent"
+
+[[patch.operations]]
+select = "repos/list-for-authenticated-user"
+direction = "read"
+rename = "github-user-repo-list"
+description = "List the repositories the authenticated user can access, filtered by visibility, affiliation and type"
+risk = "low"
+idempotency = "idempotent"
+# `since` and `before` are RFC 3339 timestamps that page by repository *creation* date, and they
+# interact with `sort`/`direction` in a way the vendor documents only in prose. Omitted rather than
+# published as two more caller-visible knobs whose combined behaviour this file cannot state.
+omit.query = ["since", "before"]
+
+# ---------------------------------------------------------------------------------------------
 # Credentials
 # ---------------------------------------------------------------------------------------------
 
@@ -155,24 +218,31 @@ env = ["GITHUB_TOKEN"]
 description = "GitHub token sent as a bearer — a GitHub App installation token, a fine-grained PAT, or a classic PAT"
 
 # ---------------------------------------------------------------------------------------------
-# Operations — 9: five established calls plus four spec-backed collection reads
+# Operations — 13: five established calls, four spec-backed collection reads, and four discovery
+# reads (C-527).
 #
-# WHY THERE IS NO CALLER-SUPPLIED STRING QUERY. Nothing in this pipeline percent-encodes a query
-# value: the emitter interpolates it verbatim into a `fmt` template and flux registers no
-# URL-encoding op (C-30 is unimplemented; `crates/connector-flux/src/op.rs`).
-# `zendesk-ticket-search` is the standing demonstration and AGENTS.md lists it under *Intentional
-# gaps* — a value carrying `&` does not filter, it injects a parameter. The new repository-scoped
-# issue list therefore omits `state`, `labels`, `assignee` and every other string filter while
-# retaining only integer `per_page` and `page`. Pull-request collections and every search endpoint
-# remain excluded pending C-30.
+# WHY THE ESTABLISHED OPERATIONS CARRY NO STRING QUERY, AND THE NEW ONES DO. This block used to say
+# that nothing in the pipeline percent-encodes a query value — the emitter interpolated it verbatim
+# into a `fmt` template — which made every string filter an injection and `zendesk-ticket-search`
+# the standing demonstration. **C-30 closed that in Flux 0.54.** A scalar query value now travels in
+# the structured `http.request(query: …)` map with RFC 3986 semantics, and the URL carries path data
+# only.
 #
-# The path surface, by contrast, is genuinely safe rather than merely untested: `{owner}` and
-# `{repo}` are GitHub names restricted to `[A-Za-z0-9._-]`, and `{issue_number}` / `{pull_number}`
-# are integers. None of those can carry a character that changes the shape of the request. That
-# asymmetry is the whole selection principle for this connector.
+# So the omissions above are no longer a safety property; they are a **compatibility** one. Those
+# operations' request bytes are published, and widening them moves bytes already in the catalogue —
+# a separate reviewed change, not a side effect of adding new reads. The discovery reads below are
+# new, so they carry the filters the vendor offers.
 #
-# `crates/connector-flux/tests/github_connector.rs` asserts those omissions on both the IR and the
-# emitted URL, so this stays a property of the connector rather than of this comment.
+# Arrays remain refused: their wire shape is undeclared and C-30 refuses one with
+# `UnencodableQueryValue` rather than guessing a vendor convention.
+#
+# The path surface is safe for its own reason, unchanged: `{owner}` and `{repo}` are GitHub names
+# restricted to `[A-Za-z0-9._-]`, and `{issue_number}` / `{pull_number}` are integers. None can
+# carry a character that changes the shape of the request.
+#
+# `crates/connector-flux/tests/github_connector.rs` asserts the real property on every operation —
+# every query parameter is a scalar, and no query value reaches the URL — so this stays a property
+# of the connector rather than of this comment.
 #
 # Op ids are hyphen-separated, not dotted: flux-lang's `is_valid_decl_name` admits ASCII
 # alphanumerics, `_` and `-` only (C-8, C-23).

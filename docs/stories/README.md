@@ -10,8 +10,8 @@ the stories, not the generated region. New work? Copy [`_TEMPLATE.md`](_TEMPLATE
 ## Status
 
 **Snapshot: v0.20.0 (re-measured 2026-08-11).** Measured with `ls providers/*.toml | wc -l` and
-`cargo run -p connector-cli -- build`: 55 provider definitions compile to a fixed point of 1102
-artifacts ("55 providers, 1102 artifacts up to date; nothing written"). The publishable host seam
+`cargo run -p connector-cli -- build`: 55 provider definitions compile to a fixed point of 1108
+artifacts ("55 providers, 1108 artifacts up to date; nothing written"). The publishable host seam
 is prepared on the engine line recorded in `crates/connector-cli/tests/flux_engine_line.rs`
 (`ENGINE_LINE`) — not repeated here, because a version quoted in prose is the hand-typed figure
 AGENTS.md warns about; [C-521](C-521-move-the-flux-engine-line-to-0-58.md) owns the next bump. The
@@ -508,6 +508,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-516 — Connector operation direction is explicit at the ToolSpec seam](C-516-explicit-operation-direction.md) · Bridge · 829 operations now carry reviewed read/write direction; stable spec identities fail closed and Flux remains the sole gather-admission authority
 - [C-522 — Name the connector domain once across the Flux family](C-522-name-the-connector-domain-once.md) · Surfaces · Connector, Service, Operation, Event Type and Channel Binding need one definition; Provider remains only the published compatibility type
 - [C-525 — The published catalogue carries a credential's OAuth2 acquisition](C-525-publish-oauth2-acquisition-in-the-catalogue.md) · Bridge · OAuth2Spec is modelled in the IR and reaches the explorer's catalog.json and the emitted manifest, but NOT crates/catalog — the one artifact Exchange and autodev link. Declaring an OAuth2 connector before this ships a marking no host can read
+- [C-527 — GitHub and GitLab can answer what a token reaches](C-527-forge-discovery-reads.md) · Connector · Every forge operation took {owner}/{repo} or {project_id} as given, so a caller holding only a token could not find an organisation, a group or a repository — the connector described a repository nobody could name
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

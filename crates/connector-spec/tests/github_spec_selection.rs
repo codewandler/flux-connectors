@@ -33,7 +33,7 @@ const ORIGINAL_FLUX: [(&str, &str); 5] = [
     ),
 ];
 
-const SELECTED: [(&str, &str, &str, &[&str]); 4] = [
+const SELECTED: [(&str, &str, &str, &[&str]); 8] = [
     (
         "issues/list-for-repo",
         "github-issue-list",
@@ -79,6 +79,28 @@ const SELECTED: [(&str, &str, &str, &[&str]); 4] = [
         "/repos/{owner}/{repo}/commits",
         &["sha", "path", "author", "committer", "since", "until"],
     ),
+    // The four discovery reads (C-527). They omit far less than the four above, and that is the
+    // point rather than an inconsistency: the omissions above are frozen request bytes, while these
+    // are new operations selected after C-30 made a scalar string query safe to carry.
+    ("users/get-authenticated", "github-user-get", "/user", &[]),
+    (
+        "orgs/list-for-authenticated-user",
+        "github-org-list",
+        "/user/orgs",
+        &[],
+    ),
+    (
+        "repos/list-for-org",
+        "github-org-repo-list",
+        "/orgs/{org}/repos",
+        &[],
+    ),
+    (
+        "repos/list-for-authenticated-user",
+        "github-user-repo-list",
+        "/user/repos",
+        &["since", "before"],
+    ),
 ];
 
 #[test]
@@ -93,7 +115,7 @@ fn the_five_published_operations_keep_their_flux_bytes() {
 }
 
 #[test]
-fn exactly_four_operation_ids_are_selected_without_a_sweep() {
+fn every_selected_operation_id_is_opted_in_one_at_a_time() {
     let loaded = shipped_provider::load("github");
     assert!(
         loaded.patch.select.is_empty(),
@@ -125,13 +147,26 @@ fn exactly_four_operation_ids_are_selected_without_a_sweep() {
             "github-pull-files-list",
             "github-workflow-run-list",
             "github-commit-list",
+            "github-user-get",
+            "github-org-list",
+            "github-org-repo-list",
+            "github-user-repo-list",
         ],
         "an unselected GitHub operation leaked into the connector"
     );
 }
 
+/// The four frozen collection reads, whose request bytes are published and must not widen. The
+/// discovery reads added by C-527 are deliberately not in this list — see the assertion below.
+const FROZEN_PAGINATED_READS: [&str; 4] = [
+    "github-issue-list",
+    "github-pull-files-list",
+    "github-workflow-run-list",
+    "github-commit-list",
+];
+
 #[test]
-fn the_four_reads_keep_only_integer_pagination_and_real_response_shapes() {
+fn every_selected_read_is_a_safe_get_with_a_real_response_shape() {
     let loaded = shipped_provider::load("github");
     let expected: BTreeMap<&str, &str> = SELECTED
         .iter()
@@ -153,6 +188,11 @@ fn the_four_reads_keep_only_integer_pagination_and_real_response_shapes() {
             "{id} gained a request body"
         );
 
+        // **Every selected read's query surface is optional and scalar.** Scalar is what C-30's
+        // structured `query` map encodes; an array or object has no declared wire shape and is
+        // refused at emission. This replaced an "integer only" rule that was a proxy for the same
+        // property back when nothing percent-encoded a query value.
+        const SCALARS: [&str; 4] = ["string", "integer", "number", "boolean"];
         let query: Vec<&str> = operation
             .params
             .query
@@ -163,16 +203,24 @@ fn the_four_reads_keep_only_integer_pagination_and_real_response_shapes() {
                     "{id}.{} became required",
                     parameter.name
                 );
-                assert_eq!(
-                    parameter.schema["type"],
-                    serde_json::json!("integer"),
-                    "{id}.{} is not injection-safe integer pagination",
+                let declared = parameter.schema["type"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{id}.{} declares no query type", parameter.name));
+                assert!(
+                    SCALARS.contains(&declared),
+                    "{id}.{} is a {declared}, which has no declared query wire shape (C-30)",
                     parameter.name
                 );
                 parameter.name.as_str()
             })
             .collect();
-        assert_eq!(query, ["per_page", "page"]);
+
+        // The frozen four are held to their exact published surface; widening one is a change to
+        // bytes already in the catalogue, not a side effect of selecting a new operation.
+        if FROZEN_PAGINATED_READS.contains(&id) {
+            assert_eq!(query, ["per_page", "page"], "{id} widened");
+        }
+
         assert!(
             operation.response_schema.is_some(),
             "{id} lost GitHub's documented 200 JSON response"

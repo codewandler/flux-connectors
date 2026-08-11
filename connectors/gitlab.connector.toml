@@ -4,30 +4,34 @@ generator = "flux-connectors 0.20.0"
 connector = "gitlab"
 gid = "com.gitlab.api:v4"
 vendor = "GitLab"
-description = "GitLab: read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only"
+description = "GitLab: discover reachable groups and projects; read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only"
 runtime = "http"
 base_url = "{origin}/api/v4"
 api_version = "v4"
 module = "gitlab.flux"
-operations = ["gitlab-user-get", "gitlab-issue-list", "gitlab-issue-get", "gitlab-issue-create", "gitlab-merge-request-list", "gitlab-pipeline-get", "gitlab-branch-list"]
+operations = ["gitlab-user-get", "gitlab-group-list", "gitlab-project-list", "gitlab-issue-list", "gitlab-issue-get", "gitlab-issue-create", "gitlab-merge-request-list", "gitlab-pipeline-get", "gitlab-branch-list"]
 verify = "gitlab-user-get"
 
 [operation_directions]
 gitlab-branch-list = "read"
+gitlab-group-list = "read"
 gitlab-issue-create = "write"
 gitlab-issue-get = "read"
 gitlab-issue-list = "read"
 gitlab-merge-request-list = "read"
 gitlab-pipeline-get = "read"
+gitlab-project-list = "read"
 gitlab-user-get = "read"
 
 [operation_semantic_effects]
 gitlab-branch-list = []
+gitlab-group-list = []
 gitlab-issue-create = []
 gitlab-issue-get = []
 gitlab-issue-list = []
 gitlab-merge-request-list = []
 gitlab-pipeline-get = []
+gitlab-project-list = []
 gitlab-user-get = []
 
 [[auth]]

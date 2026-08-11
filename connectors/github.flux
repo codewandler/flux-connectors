@@ -122,3 +122,55 @@ op github-commit-list(owner: String, repo: String, per_page: Number, page: Numbe
   Accept = "application/vnd.github+json"
   response = http.request(headers: { Accept }, method: "GET", query: { page, per_page }, url)
   return response
+
+op github-user-get -> Any
+  description "Get the authenticated user — the identity the configured token acts as"
+  risk "low"
+  idempotency "idempotent"
+  effects ["read", "network"]
+  expose true
+
+  base = "https://api.github.com"
+  url = fmt("{base}/user")
+  Accept = "application/vnd.github+json"
+  response = http.request(headers: { Accept }, method: "GET", url)
+  return response
+
+op github-org-list(per_page: Number, page: Number) -> Any
+  description "List the organisations the authenticated user belongs to, with bounded integer pagination"
+  risk "low"
+  idempotency "idempotent"
+  effects ["read", "network"]
+  expose true
+
+  base = "https://api.github.com"
+  url = fmt("{base}/user/orgs")
+  Accept = "application/vnd.github+json"
+  response = http.request(headers: { Accept }, method: "GET", query: { page, per_page }, url)
+  return response
+
+op github-org-repo-list(org: String, type: String, sort: String, direction: String, per_page: Number, page: Number) -> Any
+  description "List an organisation's repositories, filtered by type and ordered, with bounded integer pagination"
+  risk "low"
+  idempotency "idempotent"
+  effects ["read", "network"]
+  expose true
+
+  base = "https://api.github.com"
+  url = fmt("{base}/orgs/{org}/repos")
+  Accept = "application/vnd.github+json"
+  response = http.request(headers: { Accept }, method: "GET", query: { direction, page, per_page, sort, type }, url)
+  return response
+
+op github-user-repo-list(visibility: String, affiliation: String, type: String, sort: String, direction: String, per_page: Number, page: Number) -> Any
+  description "List the repositories the authenticated user can access, filtered by visibility, affiliation and type"
+  risk "low"
+  idempotency "idempotent"
+  effects ["read", "network"]
+  expose true
+
+  base = "https://api.github.com"
+  url = fmt("{base}/user/repos")
+  Accept = "application/vnd.github+json"
+  response = http.request(headers: { Accept }, method: "GET", query: { affiliation, direction, page, per_page, sort, type, visibility }, url)
+  return response
