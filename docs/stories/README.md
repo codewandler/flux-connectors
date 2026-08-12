@@ -168,6 +168,10 @@ _Seventeen connectors share structure that nothing currently names. `zendesk`, `
 _[connector-pipeline.md](connector-pipeline.md) drew two front-ends over one IR: a hand-authored_
 - [C-409 — The spec front-end, proven by retiring manager-sdk (epic)](C-409-spec-front-end-epic.md) · Spec · EPIC — the `[spec]` half of the pipeline was designed in C-2 and never built; all 53 providers are hand-authored and seam.rs:160 refuses a spec-backed one outright. babelforce forces it: 397 operations across 5 documents, which nobody is hand-authoring
 
+### Test Suite Cost
+- [C-543 — Run the test suite as parallel processes](C-543-run-the-test-suite-as-parallel-processes.md) · Build · cargo test runs integration-test binaries one process at a time on a 20-core machine; cargo-nextest attacks the wall-clock half independently of C-533's link-count half — named as adjacent-but-separate in C-533's notes
+- [C-544 — Parallelise the provider compile loop](C-544-parallelise-the-provider-compile-loop.md) · Build · pipeline.rs runs 55 independent provider compile() calls sequentially — 29.3s at 1 of 20 cores (C-533's measurement); every full build, diff, and fixed-point test pays that floor
+
 ### Tool Pack
 - [C-113 — The connector Tool pack — the flux interop layer (epic)](C-113-tool-pack-epic.md) · Bridge · EPIC — flux REMOVED flux-plugin-zendesk pending 'a flux-connectors interop layer'; D-200/D-201/D-202 are blocked on this and examples/zendesk.triage.flux is the written acceptance target. A Tool pack delegates to flux's own http.request, so flux keeps every byte of egress
 - [C-452 — The pack cannot evaluate an array body, so the first indexed wire path turns its gate red](C-452-pack-cannot-evaluate-an-array-body.md) · Bridge · found by the C-185 review. The emitter can now build an array body; `eval` has no Node::List arm and refuses at request.rs:1330. Nothing in the catalogue uses one yet, so the gate is green TODAY — the first provider to write `wire = \"x[0].y\"` turns it red
