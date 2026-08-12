@@ -1,0 +1,473 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Vercel access token sent as a bearer",
+      "env": [
+        "VERCEL_TOKEN"
+      ],
+      "name": "vercel.token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.vercel.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.vercel.token",
+      "docs_url": "https://vercel.com/docs/rest-api#creating-an-access-token",
+      "format": "token",
+      "help": "Create one at vercel.com/account/tokens (personal) or via an Integration's OAuth flow. Scope it to the narrowest team or project you can",
+      "label": "Access token",
+      "level": "connection",
+      "name": "token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "query.teamId",
+      "docs_url": "https://vercel.com/docs/rest-api/reference/welcome#authentication",
+      "example": "team_1a2b3c4d5e6f7g8h9i0j",
+      "format": "text",
+      "help": "The team this connection acts on behalf of. Find it under Team Settings -> General -> Team ID, or in the URL of your team's dashboard. Every call this connector makes is scoped to it; a personal (non-team) account is not supported",
+      "label": "Vercel team id",
+      "level": "connection",
+      "name": "team_id",
+      "required": true,
+      "secret": false,
+      "service": "default"
+    }
+  ],
+  "connector": "vercel",
+  "default_auth": [
+    [
+      "vercel.token"
+    ]
+  ],
+  "description": "Vercel: list and inspect projects and deployments, and cancel an in-progress deployment",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "vercel.token"
+        ]
+      ],
+      "description": "List the projects of the team this connector is installed for. The team is pinned at install time and is not a parameter, so every call returns that team's projects and no other account's",
+      "direction": "read",
+      "endpoint": {
+        "teamId": [
+          "query"
+        ]
+      },
+      "expose": true,
+      "id": "vercel-projects-list",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "teamId",
+            "value": "{teamId}"
+          }
+        ],
+        "url": "{base}/v10/projects"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "vercel.token"
+        ]
+      ],
+      "description": "Get one project of the team this connector is installed for, by its id or name. A project belonging to any other account is a 404 here: the team is pinned at install time and is not a parameter",
+      "direction": "read",
+      "endpoint": {
+        "teamId": [
+          "query"
+        ]
+      },
+      "expose": true,
+      "id": "vercel-project-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The project's id (prj_…) or its name",
+          "name": "idOrName",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "teamId",
+            "value": "{teamId}"
+          }
+        ],
+        "url": "{base}/v9/projects/{idOrName}"
+      },
+      "response_schema": {
+        "properties": {
+          "accountId": {
+            "description": "The personal or team account id that owns this project",
+            "type": "string"
+          },
+          "framework": {
+            "description": "The detected framework, or null when none is set",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "description": "The project's own id (prj_…), stable across renames",
+            "type": "string"
+          },
+          "live": {
+            "description": "Whether the project currently has a production deployment",
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "paused": {
+            "description": "Whether the project is paused and will not build or serve traffic",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "accountId"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "vercel.token"
+        ]
+      ],
+      "description": "List the deployments of the team this connector is installed for, newest first, optionally filtered to one project. The team is pinned at install time and is not a parameter, so every call returns that team's deployments and no other account's",
+      "direction": "read",
+      "endpoint": {
+        "teamId": [
+          "query"
+        ]
+      },
+      "expose": true,
+      "id": "vercel-deployments-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Filter to deployments of one project, by its id or name",
+          "name": "projectId",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "projectId",
+            "value": {
+              "$param": "projectId"
+            }
+          },
+          {
+            "name": "teamId",
+            "value": "{teamId}"
+          }
+        ],
+        "url": "{base}/v7/deployments"
+      },
+      "response_schema": {
+        "properties": {
+          "deployments": {
+            "items": {
+              "properties": {
+                "created": {
+                  "description": "Creation timestamp, milliseconds",
+                  "type": "number"
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "creator": {
+                  "type": "object"
+                },
+                "inspectorUrl": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The project name at the time this deployment was created",
+                  "type": "string"
+                },
+                "projectId": {
+                  "type": "string"
+                },
+                "readyState": {
+                  "enum": [
+                    "BLOCKED",
+                    "BUILDING",
+                    "CANCELED",
+                    "DELETED",
+                    "ERROR",
+                    "INITIALIZING",
+                    "QUEUED",
+                    "READY"
+                  ],
+                  "type": "string"
+                },
+                "target": {
+                  "description": "production, staging, or null for a preview deployment",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "uid": {
+                  "description": "The deployment's unique id",
+                  "type": "string"
+                },
+                "url": {
+                  "description": "Null when the deployment has not finished uploading",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uid",
+                "name",
+                "url",
+                "created",
+                "createdAt",
+                "readyState",
+                "type",
+                "projectId",
+                "creator",
+                "inspectorUrl"
+              ],
+              "type": "object"
+            },
+            "pagination": {
+              "properties": {
+                "count": {
+                  "description": "Items in this page",
+                  "type": "integer"
+                },
+                "next": {
+                  "description": "Timestamp for the next page, or null",
+                  "nullable": true,
+                  "type": "number"
+                },
+                "prev": {
+                  "description": "Timestamp for the previous page, or null",
+                  "nullable": true,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "count",
+                "next",
+                "prev"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "deployments",
+          "pagination"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "vercel.token"
+        ]
+      ],
+      "description": "Get one deployment of the team this connector is installed for, by its id or its unique hostname. A deployment belonging to any other account fails here: the team is pinned at install time and is not a parameter",
+      "direction": "read",
+      "endpoint": {
+        "teamId": [
+          "query"
+        ]
+      },
+      "expose": true,
+      "id": "vercel-deployment-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The deployment's id (dpl_…) or its unique hostname",
+          "name": "idOrUrl",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "teamId",
+            "value": "{teamId}"
+          }
+        ],
+        "url": "{base}/v13/deployments/{idOrUrl}"
+      },
+      "response_schema": {
+        "properties": {
+          "id": {
+            "description": "The deployment's unique id",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "readyState": {
+            "enum": [
+              "BLOCKED",
+              "BUILDING",
+              "CANCELED",
+              "ERROR",
+              "INITIALIZING",
+              "QUEUED",
+              "READY"
+            ],
+            "type": "string"
+          },
+          "target": {
+            "description": "production, staging, or null for a preview deployment",
+            "nullable": true,
+            "type": "string"
+          },
+          "url": {
+            "description": "Present on the owner and reduced-team views; absent on the anonymous view",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "readyState"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "vercel.token"
+        ]
+      ],
+      "description": "Cancel a deployment of the team this connector is installed for, stopping it before it completes; refused with 400 if it already finished (READY, ERROR or CANCELED). The team is pinned at install time and is not a parameter, so this cannot reach a deployment of another account",
+      "direction": "write",
+      "endpoint": {
+        "teamId": [
+          "query"
+        ]
+      },
+      "expose": true,
+      "id": "vercel-deployment-cancel",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The deployment's id (dpl_…) to cancel",
+          "name": "id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "query": [
+          {
+            "name": "teamId",
+            "value": "{teamId}"
+          }
+        ],
+        "url": "{base}/v12/deployments/{id}/cancel"
+      },
+      "response_schema": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "readyState": {
+            "description": "Always CANCELED on success",
+            "enum": [
+              "BLOCKED",
+              "BUILDING",
+              "CANCELED",
+              "ERROR",
+              "INITIALIZING",
+              "QUEUED",
+              "READY"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "readyState"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "base_url": "https://api.vercel.com",
+      "name": "default",
+      "tags": [
+        "infrastructure",
+        "developer-tools"
+      ]
+    }
+  ],
+  "vendor": "Vercel",
+  "verify": "vercel-projects-list"
+}

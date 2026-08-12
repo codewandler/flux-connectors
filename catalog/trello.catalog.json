@@ -1,0 +1,711 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Trello API key, identifying the Power-Up registration a call is made through. Travels as the `key` query parameter on every request, always together with the token; neither authenticates a call alone",
+      "env": [
+        "TRELLO_API_KEY"
+      ],
+      "name": "trello.key",
+      "scheme": {
+        "kind": "query",
+        "name": "key"
+      },
+      "subject": "unstated"
+    },
+    {
+      "description": "Trello API token, granting access to one member's account. Travels as the `token` query parameter on every request, always together with the key; a token is only valid against the key it was minted for",
+      "env": [
+        "TRELLO_API_TOKEN"
+      ],
+      "name": "trello.token",
+      "scheme": {
+        "kind": "query",
+        "name": "token"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.trello.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.trello.key",
+      "docs_url": "https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/",
+      "format": "token",
+      "help": "Generate one at trello.com/power-ups/admin: open (or create) a Power-Up, then the API Key tab. Do this first — the token below is minted against this key and only works with it",
+      "label": "Trello API key",
+      "level": "connection",
+      "name": "api_key",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "credential.trello.token",
+      "docs_url": "https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/",
+      "format": "token",
+      "help": "From the same API Key page, follow the manual token link and click Allow. The token grants access to everything your Trello account can see, so treat it as a password",
+      "label": "Trello API token",
+      "level": "connection",
+      "name": "api_token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "trello",
+  "default_auth": [
+    [
+      "trello.key",
+      "trello.token"
+    ]
+  ],
+  "description": "Trello boards and cards: list the boards a token can see, read a board and its lists, read a list's cards, create a card, and archive one. Authenticates every request with an API key and a token together, both in the query string",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "trello.key",
+          "trello.token"
+        ]
+      ],
+      "description": "List every board the token's own member can see, newest activity first. Takes no argument — `me` resolves to whoever the token belongs to. Also this connector's `verify`: a bounded read that runs unattended and needs nothing configured beyond the credential pair",
+      "direction": "read",
+      "expose": true,
+      "id": "trello-board-list",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/members/me/boards"
+      },
+      "response_schema": {
+        "items": {
+          "properties": {
+            "closed": {
+              "description": "Whether the board is archived. An archived board still reads",
+              "type": "boolean"
+            },
+            "dateLastActivity": {
+              "description": "When anything on the board last changed",
+              "type": "string"
+            },
+            "desc": {
+              "description": "The board's description, as Markdown",
+              "type": "string"
+            },
+            "id": {
+              "description": "The board's id — what trello-board-get and trello-board-lists address it by",
+              "type": "string"
+            },
+            "idMemberCreator": {
+              "description": "The member who created the board",
+              "type": "string"
+            },
+            "idOrganization": {
+              "description": "The Workspace this board belongs to, or null for a personal board",
+              "type": "string"
+            },
+            "labelNames": {
+              "description": "The board's six label colours mapped to the names it gives them",
+              "type": "object"
+            },
+            "name": {
+              "type": "string"
+            },
+            "prefs": {
+              "description": "Board settings — visibility, voting, card covers, background and more. Left untyped rather than enumerated in full; see Trello's own Board object reference",
+              "type": "object"
+            },
+            "shortLink": {
+              "description": "The short id appearing in a board URL",
+              "type": "string"
+            },
+            "shortUrl": {
+              "format": "uri",
+              "type": "string"
+            },
+            "starred": {
+              "type": "boolean"
+            },
+            "subscribed": {
+              "description": "Whether the token's member follows this board",
+              "type": "boolean"
+            },
+            "url": {
+              "description": "The board's page — the link to give a human",
+              "format": "uri",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "closed",
+            "url"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "trello.key",
+          "trello.token"
+        ]
+      ],
+      "description": "Get one board by id, with its settings and current state",
+      "direction": "read",
+      "expose": true,
+      "id": "trello-board-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The board's id, from trello-board-list's `id` — or the short id in a board's own URL, which Trello accepts here too",
+          "name": "id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/boards/{id}"
+      },
+      "response_schema": {
+        "properties": {
+          "closed": {
+            "description": "Whether the board is archived",
+            "type": "boolean"
+          },
+          "dateLastActivity": {
+            "description": "When anything on the board last changed",
+            "type": "string"
+          },
+          "desc": {
+            "description": "The board's description, as Markdown",
+            "type": "string"
+          },
+          "id": {
+            "description": "The board's id",
+            "type": "string"
+          },
+          "idMemberCreator": {
+            "description": "The member who created the board",
+            "type": "string"
+          },
+          "idOrganization": {
+            "description": "The Workspace this board belongs to, or null for a personal board",
+            "type": "string"
+          },
+          "labelNames": {
+            "description": "The board's six label colours mapped to the names it gives them",
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefs": {
+            "description": "Board settings — visibility, voting, card covers, background and more. Left untyped rather than enumerated in full; see Trello's own Board object reference",
+            "type": "object"
+          },
+          "shortLink": {
+            "description": "The short id appearing in a board URL",
+            "type": "string"
+          },
+          "shortUrl": {
+            "format": "uri",
+            "type": "string"
+          },
+          "starred": {
+            "type": "boolean"
+          },
+          "subscribed": {
+            "description": "Whether the token's member follows this board",
+            "type": "boolean"
+          },
+          "url": {
+            "description": "The board's page — the link to give a human",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "closed",
+          "url"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "trello.key",
+          "trello.token"
+        ]
+      ],
+      "description": "List the open lists (columns) on a board, left to right. Each carries the `id` trello-list-cards and trello-card-create take",
+      "direction": "read",
+      "expose": true,
+      "id": "trello-board-lists",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The board's id, from trello-board-list's `id`",
+          "name": "id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/boards/{id}/lists"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "trello.key",
+          "trello.token"
+        ]
+      ],
+      "description": "List the open cards in one list, in board order. Archived cards are not returned",
+      "direction": "read",
+      "expose": true,
+      "id": "trello-list-cards",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The list's id, from trello-board-lists",
+          "name": "id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/lists/{id}/cards"
+      },
+      "response_schema": {
+        "items": {
+          "properties": {
+            "badges": {
+              "description": "Counts Trello renders on the card front — comments, attachments, checklist progress, due state. Left untyped rather than enumerated in full",
+              "type": "object"
+            },
+            "closed": {
+              "description": "Whether the card is archived",
+              "type": "boolean"
+            },
+            "dateLastActivity": {
+              "type": "string"
+            },
+            "desc": {
+              "description": "The card's description, as Markdown",
+              "type": "string"
+            },
+            "due": {
+              "description": "The due date, or null",
+              "type": "string"
+            },
+            "dueComplete": {
+              "description": "Whether the due date has been ticked off",
+              "type": "boolean"
+            },
+            "id": {
+              "description": "The card's id — what trello-card-archive addresses it by",
+              "type": "string"
+            },
+            "idBoard": {
+              "description": "The board the card belongs to",
+              "type": "string"
+            },
+            "idLabels": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "idList": {
+              "description": "The list the card currently sits in",
+              "type": "string"
+            },
+            "idMembers": {
+              "description": "The members assigned to the card, as ids. Identifies named people — read it for what the calling flow needs and do not persist it beyond that",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "idShort": {
+              "description": "The card's per-board number, as shown in its UI",
+              "type": "integer"
+            },
+            "labels": {
+              "description": "The card's labels, expanded. Left untyped rather than enumerated",
+              "items": {
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "name": {
+              "description": "The card's title, as it reads on the board",
+              "type": "string"
+            },
+            "pos": {
+              "description": "The card's sort position within its list",
+              "type": "number"
+            },
+            "shortLink": {
+              "type": "string"
+            },
+            "shortUrl": {
+              "format": "uri",
+              "type": "string"
+            },
+            "subscribed": {
+              "type": "boolean"
+            },
+            "url": {
+              "description": "The card's page — the link to give a human",
+              "format": "uri",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "closed",
+            "idList",
+            "idBoard",
+            "url"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "trello.key",
+          "trello.token"
+        ]
+      ],
+      "description": "Create a card at the bottom of a list. The card is created unassigned, with no due date and no labels; Trello notifies whoever watches the list",
+      "direction": "write",
+      "expose": true,
+      "id": "trello-card-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The list to create the card in, from trello-board-lists. The only field Trello requires",
+          "name": "list_id",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "idList"
+        },
+        {
+          "description": "The card's title, as it will read on the board. Trello permits a card with no name and renders it blank, so pass one",
+          "name": "name",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "The card's description, as Markdown. Trello renders it on the card's back",
+          "name": "description",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "desc"
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "desc": {
+              "$param": "description"
+            },
+            "idList": {
+              "$param": "list_id"
+            },
+            "name": {
+              "$param": "name"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/cards"
+      },
+      "response_schema": {
+        "properties": {
+          "badges": {
+            "description": "Counts Trello renders on the card front. Left untyped rather than enumerated in full",
+            "type": "object"
+          },
+          "closed": {
+            "description": "Whether the card is archived; false on a card just created",
+            "type": "boolean"
+          },
+          "dateLastActivity": {
+            "type": "string"
+          },
+          "desc": {
+            "type": "string"
+          },
+          "due": {
+            "description": "The due date, or null",
+            "type": "string"
+          },
+          "dueComplete": {
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The created card's id — what trello-card-archive addresses it by afterwards",
+            "type": "string"
+          },
+          "idBoard": {
+            "type": "string"
+          },
+          "idLabels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "idList": {
+            "description": "The list the card was created in",
+            "type": "string"
+          },
+          "idMembers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "idShort": {
+            "description": "The card's per-board number, as shown in its UI",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pos": {
+            "description": "The card's sort position within its list",
+            "type": "number"
+          },
+          "shortLink": {
+            "type": "string"
+          },
+          "shortUrl": {
+            "format": "uri",
+            "type": "string"
+          },
+          "url": {
+            "description": "The card's page — the link to give a human",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "closed",
+          "idList",
+          "idBoard",
+          "url"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "trello.key",
+          "trello.token"
+        ]
+      ],
+      "description": "Archive a card, or restore an archived one. Archiving is reversible and destroys nothing: the card leaves its list and stays readable in the board's archive",
+      "direction": "write",
+      "expose": true,
+      "id": "trello-card-archive",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The card's id, from trello-list-cards or from trello-card-create's response",
+          "name": "id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "true archives the card; false restores it to the list it was archived from",
+          "name": "closed",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "closed": {
+              "$param": "closed"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "PUT",
+        "url": "{base}/cards/{id}"
+      },
+      "response_schema": {
+        "properties": {
+          "badges": {
+            "description": "Counts Trello renders on the card front. Left untyped rather than enumerated in full",
+            "type": "object"
+          },
+          "closed": {
+            "description": "The card's archived state after this call — echo it back to confirm the change landed",
+            "type": "boolean"
+          },
+          "dateLastActivity": {
+            "type": "string"
+          },
+          "desc": {
+            "type": "string"
+          },
+          "due": {
+            "type": "string"
+          },
+          "dueComplete": {
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The card's id",
+            "type": "string"
+          },
+          "idBoard": {
+            "type": "string"
+          },
+          "idLabels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "idList": {
+            "description": "The list the card belongs to. An archived card keeps it, which is how a restore knows where to put it back",
+            "type": "string"
+          },
+          "idMembers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "idShort": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pos": {
+            "type": "number"
+          },
+          "shortLink": {
+            "type": "string"
+          },
+          "shortUrl": {
+            "format": "uri",
+            "type": "string"
+          },
+          "url": {
+            "description": "The card's page — the link to give a human",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "closed",
+          "idList",
+          "idBoard",
+          "url"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "1",
+      "base_url": "https://api.trello.com/1",
+      "gid": "com.trello.api:1",
+      "name": "default",
+      "tags": [
+        "project-management"
+      ]
+    }
+  ],
+  "vendor": "Trello",
+  "verify": "trello-board-list"
+}

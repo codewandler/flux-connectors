@@ -1,0 +1,940 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "PagerDuty REST API access key, sent as the Authorization header after the literal `Token token=`. A read-only key satisfies the four read operations; the two incident writes need a full-access key",
+      "env": [
+        "PAGERDUTY_API_TOKEN"
+      ],
+      "name": "pagerduty.api_token",
+      "scheme": {
+        "kind": "header",
+        "name": "Authorization",
+        "prefix": "Token token="
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.pagerduty.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.pagerduty.api_token",
+      "docs_url": "https://developer.pagerduty.com/docs/authentication",
+      "format": "token",
+      "help": "Create a REST API key in PagerDuty under Integrations, then API Access Keys. A read-only key is enough to list incidents, services and on-calls; acknowledging or resolving an incident needs a full-access key. PagerDuty shows the key once, when it is created",
+      "label": "PagerDuty API access key",
+      "level": "connection",
+      "name": "api_token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "pagerduty",
+  "default_auth": [
+    [
+      "pagerduty.api_token"
+    ]
+  ],
+  "description": "PagerDuty incident response: read incidents, services and who is on call, and acknowledge or resolve an incident",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "pagerduty.api_token"
+        ]
+      ],
+      "description": "List the incidents this key can see, across every service it has access to. Returns one page; read `more` to learn whether another page exists, and page by adding `limit` to `offset`. No status, service, team or time filter is offered by this connector — see pagerduty-incident-get to inspect one incident in full",
+      "direction": "read",
+      "expose": true,
+      "id": "pagerduty-incident-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Maximum number of incidents to return in this page. PagerDuty caps this at 100",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Number of incidents to skip before this page begins. To read the next page, add the `limit` just used to the `offset` just used — this is not a page number",
+          "name": "offset",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "headers": {
+          "Accept": "application/vnd.pagerduty+json;version=2"
+        },
+        "method": "GET",
+        "query": [
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          },
+          {
+            "name": "offset",
+            "value": {
+              "$param": "offset"
+            }
+          }
+        ],
+        "url": "{base}/incidents"
+      },
+      "response_schema": {
+        "properties": {
+          "incidents": {
+            "description": "This page's incidents",
+            "items": {
+              "properties": {
+                "acknowledgements": {
+                  "description": "Who has acknowledged the incident and when, each `{at, acknowledger}`. Empty unless status is acknowledged",
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "alert_counts": {
+                  "description": "How many alerts rolled up into this incident, `{all, triggered, resolved}`",
+                  "type": "object"
+                },
+                "assignments": {
+                  "description": "Who the incident is currently assigned to, each `{at, assignee}` where `assignee` is a user reference",
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "escalation_policy": {
+                  "description": "A reference to the escalation policy governing this incident",
+                  "type": "object"
+                },
+                "html_url": {
+                  "description": "The PagerDuty web UI URL a human would open",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The incident's own id — pass this as `id` to pagerduty-incident-get, -acknowledge or -resolve",
+                  "type": "string"
+                },
+                "incident_key": {
+                  "description": "The deduplication key the triggering integration supplied, when it supplied one",
+                  "type": "string"
+                },
+                "incident_number": {
+                  "description": "The account-scoped sequence number PagerDuty displays, distinct from `id`",
+                  "type": "integer"
+                },
+                "last_status_change_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "priority": {
+                  "description": "A reference to the account's configured priority level, when the account uses priorities; null otherwise",
+                  "type": "object"
+                },
+                "resolved_at": {
+                  "description": "Null until the incident is resolved",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "self": {
+                  "description": "The API URL of this incident",
+                  "type": "string"
+                },
+                "service": {
+                  "description": "A reference to the service this incident is on: `{id, type, summary, self, html_url}`. Pass its `id` to nothing here — pagerduty-service-list returns the full representation",
+                  "type": "object"
+                },
+                "status": {
+                  "description": "triggered means nobody has taken it; acknowledged means somebody is working it and escalation has paused; resolved is terminal",
+                  "enum": [
+                    "triggered",
+                    "acknowledged",
+                    "resolved"
+                  ],
+                  "type": "string"
+                },
+                "summary": {
+                  "description": "A short human-readable label for the incident, usually its title",
+                  "type": "string"
+                },
+                "teams": {
+                  "description": "References to the teams the incident is visible to",
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "incident"
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "urgency": {
+                  "description": "Whether the service's escalation policy pages immediately (high) or notifies without paging (low)",
+                  "enum": [
+                    "high",
+                    "low"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "The limit this page was read with",
+            "type": "integer"
+          },
+          "more": {
+            "description": "True when another page exists past this one. This is the only continuation signal PagerDuty sends — there is no cursor",
+            "type": "boolean"
+          },
+          "offset": {
+            "description": "The offset this page was read from",
+            "type": "integer"
+          },
+          "total": {
+            "description": "The total matching incidents. Null unless the request asked for it, which this connector does not",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "incidents"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "pagerduty.api_token"
+        ]
+      ],
+      "description": "Fetch one incident in full, including its current status, urgency, service, assignments and acknowledgements. Read this before acknowledging or resolving, because PagerDuty refuses a status change that does not follow from the incident's current status",
+      "direction": "read",
+      "expose": true,
+      "id": "pagerduty-incident-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The incident's own id, from pagerduty-incident-list's `id` field. Not the `incident_number` PagerDuty's web UI displays",
+          "name": "id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "headers": {
+          "Accept": "application/vnd.pagerduty+json;version=2"
+        },
+        "method": "GET",
+        "url": "{base}/incidents/{id}"
+      },
+      "response_schema": {
+        "properties": {
+          "incident": {
+            "description": "The incident, in the same shape pagerduty-incident-list's array carries",
+            "properties": {
+              "acknowledgements": {
+                "description": "Each `{at, acknowledger}`. Empty unless status is acknowledged",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "alert_counts": {
+                "description": "`{all, triggered, resolved}`",
+                "type": "object"
+              },
+              "assignments": {
+                "description": "Each `{at, assignee}`, where `assignee` is a user reference",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "escalation_policy": {
+                "type": "object"
+              },
+              "first_trigger_log_entry": {
+                "description": "A reference to the log entry that opened the incident",
+                "type": "object"
+              },
+              "html_url": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "incident_key": {
+                "type": "string"
+              },
+              "incident_number": {
+                "type": "integer"
+              },
+              "last_status_change_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "priority": {
+                "description": "Null unless the account uses priorities",
+                "type": "object"
+              },
+              "resolve_reason": {
+                "description": "Why the incident was resolved, when it was resolved by being merged into another; null otherwise",
+                "type": "object"
+              },
+              "resolved_at": {
+                "description": "Null until the incident is resolved",
+                "format": "date-time",
+                "type": "string"
+              },
+              "self": {
+                "type": "string"
+              },
+              "service": {
+                "description": "A reference to the service this incident is on",
+                "type": "object"
+              },
+              "status": {
+                "enum": [
+                  "triggered",
+                  "acknowledged",
+                  "resolved"
+                ],
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "teams": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "title": {
+                "type": "string"
+              },
+              "type": {
+                "const": "incident"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "urgency": {
+                "enum": [
+                  "high",
+                  "low"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "status"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "incident"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "pagerduty.api_token"
+        ]
+      ],
+      "description": "List the services this key can see. A service is what incidents are opened against and what an escalation policy is attached to, so this is how to discover the ids and names behind an incident's `service` reference. Also this connector's connection test",
+      "direction": "read",
+      "expose": true,
+      "id": "pagerduty-service-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Maximum number of services to return in this page. PagerDuty caps this at 100",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Number of services to skip before this page begins. To read the next page, add the `limit` just used to the `offset` just used",
+          "name": "offset",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "headers": {
+          "Accept": "application/vnd.pagerduty+json;version=2"
+        },
+        "method": "GET",
+        "query": [
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          },
+          {
+            "name": "offset",
+            "value": {
+              "$param": "offset"
+            }
+          }
+        ],
+        "url": "{base}/services"
+      },
+      "response_schema": {
+        "properties": {
+          "limit": {
+            "type": "integer"
+          },
+          "more": {
+            "description": "True when another page exists past this one",
+            "type": "boolean"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "services": {
+            "description": "This page's services",
+            "items": {
+              "properties": {
+                "acknowledgement_timeout": {
+                  "description": "Seconds after which an acknowledged incident re-triggers. Null when an acknowledgement never expires",
+                  "type": "integer"
+                },
+                "auto_resolve_timeout": {
+                  "description": "Seconds after which an unacknowledged incident auto-resolves. Null when the service never auto-resolves",
+                  "type": "integer"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "escalation_policy": {
+                  "description": "A reference to the escalation policy this service pages through",
+                  "type": "object"
+                },
+                "html_url": {
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The service's own id",
+                  "type": "string"
+                },
+                "integrations": {
+                  "description": "References to the integrations that can open incidents on this service",
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "last_incident_timestamp": {
+                  "description": "When this service last opened an incident; null if it never has",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "self": {
+                  "type": "string"
+                },
+                "status": {
+                  "description": "The service's current health as PagerDuty sees it: active means no open incidents, warning and critical mean open incidents of increasing urgency, maintenance means a maintenance window is in effect, disabled means the service accepts no new incidents",
+                  "enum": [
+                    "active",
+                    "warning",
+                    "critical",
+                    "maintenance",
+                    "disabled"
+                  ],
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "teams": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "type": {
+                  "const": "service"
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "Null unless the request asked for it, which this connector does not",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "services"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "pagerduty.api_token"
+        ]
+      ],
+      "description": "List who is currently on call, as one entry per escalation policy, escalation level and user. An entry with no `schedule` is a user attached directly to an escalation level rather than through a rotation. Time filtering is not offered by this connector, so this answers `who is on call now`",
+      "direction": "read",
+      "expose": true,
+      "id": "pagerduty-oncall-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Maximum number of on-call entries to return in this page. PagerDuty caps this at 100",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Number of on-call entries to skip before this page begins. To read the next page, add the `limit` just used to the `offset` just used",
+          "name": "offset",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "headers": {
+          "Accept": "application/vnd.pagerduty+json;version=2"
+        },
+        "method": "GET",
+        "query": [
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          },
+          {
+            "name": "offset",
+            "value": {
+              "$param": "offset"
+            }
+          }
+        ],
+        "url": "{base}/oncalls"
+      },
+      "response_schema": {
+        "properties": {
+          "limit": {
+            "type": "integer"
+          },
+          "more": {
+            "description": "True when another page exists past this one",
+            "type": "boolean"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "oncalls": {
+            "description": "This page's on-call entries. One user can appear more than once — once per escalation policy and level they cover",
+            "items": {
+              "properties": {
+                "end": {
+                  "description": "When this on-call period ends. Null for a permanent, non-rotating assignment",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "escalation_level": {
+                  "description": "Which level of that policy this entry sits at. Level 1 is paged first",
+                  "type": "integer"
+                },
+                "escalation_policy": {
+                  "description": "A reference to the escalation policy this entry covers: `{id, type, summary, self, html_url}`",
+                  "type": "object"
+                },
+                "schedule": {
+                  "description": "A reference to the on-call schedule that placed this user here. Null when the user is attached to the escalation level directly rather than through a rotation",
+                  "type": "object"
+                },
+                "start": {
+                  "description": "When this on-call period began. Null for a permanent, non-rotating assignment",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "user": {
+                  "description": "A reference to the person on call: `{id, type, summary, self, html_url}`, where `summary` is their display name",
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "Null unless the request asked for it, which this connector does not",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "oncalls"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "pagerduty.api_token"
+        ]
+      ],
+      "description": "Acknowledge one incident, on behalf of a named PagerDuty user. This stops the escalation clock and tells the rotation that somebody is working the incident; it does not close it. PagerDuty refuses the change if the incident is already resolved, and answers that as data rather than as a failure",
+      "direction": "write",
+      "expose": true,
+      "id": "pagerduty-incident-acknowledge",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The incident's own id, from pagerduty-incident-list's `id` field",
+          "name": "id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The login address of the PagerDuty user this acknowledgement is recorded against. It must belong to a user in this PagerDuty account; PagerDuty answers 400 otherwise. A REST API key carries no user identity of its own, which is why this cannot be inferred",
+          "name": "from_email",
+          "position": "header",
+          "required": true,
+          "schema": {
+            "format": "email",
+            "minLength": 3,
+            "type": "string"
+          },
+          "wire": "From"
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "incident": {
+              "status": "acknowledged",
+              "type": "incident_reference"
+            }
+          }
+        },
+        "headers": {
+          "Accept": "application/vnd.pagerduty+json;version=2",
+          "From": {
+            "$param": "from_email"
+          },
+          "content-type": "application/json"
+        },
+        "method": "PUT",
+        "url": "{base}/incidents/{id}"
+      },
+      "response_schema": {
+        "properties": {
+          "incident": {
+            "description": "The incident after the update, in the shape pagerduty-incident-get returns. Read `status` back to confirm the acknowledgement took effect",
+            "properties": {
+              "acknowledgements": {
+                "description": "Each `{at, acknowledger}`; the acknowledger is the user named by the From header",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "html_url": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "incident_number": {
+                "type": "integer"
+              },
+              "last_status_change_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "service": {
+                "type": "object"
+              },
+              "status": {
+                "description": "`acknowledged` after a successful call",
+                "enum": [
+                  "triggered",
+                  "acknowledged",
+                  "resolved"
+                ],
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "type": {
+                "const": "incident"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "urgency": {
+                "enum": [
+                  "high",
+                  "low"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "status"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "incident"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "pagerduty.api_token"
+        ]
+      ],
+      "description": "Resolve one incident, on behalf of a named PagerDuty user. This closes it: it leaves the open-incident view and notifications stop. If the underlying condition is still live, the next alert opens a brand-new incident rather than reopening this one, so resolve only what is actually fixed",
+      "direction": "write",
+      "expose": true,
+      "id": "pagerduty-incident-resolve",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The incident's own id, from pagerduty-incident-list's `id` field",
+          "name": "id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The login address of the PagerDuty user this resolution is recorded against. It must belong to a user in this PagerDuty account; PagerDuty answers 400 otherwise. A REST API key carries no user identity of its own, which is why this cannot be inferred",
+          "name": "from_email",
+          "position": "header",
+          "required": true,
+          "schema": {
+            "format": "email",
+            "minLength": 3,
+            "type": "string"
+          },
+          "wire": "From"
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "incident": {
+              "status": "resolved",
+              "type": "incident_reference"
+            }
+          }
+        },
+        "headers": {
+          "Accept": "application/vnd.pagerduty+json;version=2",
+          "From": {
+            "$param": "from_email"
+          },
+          "content-type": "application/json"
+        },
+        "method": "PUT",
+        "url": "{base}/incidents/{id}"
+      },
+      "response_schema": {
+        "properties": {
+          "incident": {
+            "description": "The incident after the update. Read `status` back to confirm the resolution took effect",
+            "properties": {
+              "html_url": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "incident_number": {
+                "type": "integer"
+              },
+              "last_status_change_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "resolved_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "service": {
+                "type": "object"
+              },
+              "status": {
+                "description": "`resolved` after a successful call",
+                "enum": [
+                  "triggered",
+                  "acknowledged",
+                  "resolved"
+                ],
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "type": {
+                "const": "incident"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "urgency": {
+                "enum": [
+                  "high",
+                  "low"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "status"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "incident"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "base_url": "https://api.pagerduty.com",
+      "name": "default",
+      "tags": [
+        "incident-response"
+      ]
+    }
+  ],
+  "vendor": "PagerDuty",
+  "verify": "pagerduty-service-list"
+}

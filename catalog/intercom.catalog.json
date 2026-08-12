@@ -1,0 +1,784 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Intercom access token sent as a bearer — an OAuth app token or a workspace access token",
+      "env": [
+        "INTERCOM_ACCESS_TOKEN"
+      ],
+      "name": "intercom.access_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.intercom.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "endpoint.host",
+      "choices": [
+        {
+          "label": "United States",
+          "value": "api.intercom.io"
+        },
+        {
+          "label": "European Union",
+          "value": "api.eu.intercom.io"
+        },
+        {
+          "label": "Australia",
+          "value": "api.au.intercom.io"
+        }
+      ],
+      "docs_url": "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/",
+      "example": "api.intercom.io",
+      "format": "hostname",
+      "help": "Which region this Intercom workspace is hosted in. Pick United States, European Union or Australia — Intercom assigns the region when the workspace is created and it does not change. If you are not sure, look at the URL you use Intercom at: app.intercom.com is the US region, app.eu.intercom.com the EU one and app.au.intercom.com the Australian one. A token issued for one region returns 401 against another, exactly as a revoked token would",
+      "label": "Intercom region",
+      "level": "connection",
+      "name": "host",
+      "required": true,
+      "secret": false,
+      "service": "default"
+    }
+  ],
+  "connector": "intercom",
+  "default_auth": [
+    [
+      "intercom.access_token"
+    ]
+  ],
+  "description": "Intercom contacts and conversations: read and create contacts, read a conversation, reply to it, and note it",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "intercom.access_token"
+        ]
+      ],
+      "description": "Get one Intercom contact by id — its role, email, name, custom attributes, tags and the companies it belongs to",
+      "direction": "read",
+      "endpoint": {
+        "host": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "intercom-contact-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The contact's Intercom id — a 24-character lowercase hexadecimal string such as `63a0979a5eeebeb3d8ba5be3`, not its email or your own external id",
+          "name": "contact_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errors/0/code",
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/contacts/{contact_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "avatar": {
+            "description": "`{type, image_url}` or null — an object, not a URL string",
+            "type": "object"
+          },
+          "companies": {
+            "description": "The same wrapper shape — companies at `.data`",
+            "type": "object"
+          },
+          "created_at": {
+            "description": "Unix seconds — an integer, not an ISO string",
+            "type": "integer"
+          },
+          "custom_attributes": {
+            "description": "The workspace's own attributes, keyed by name. Which keys exist is per workspace, so none is declared",
+            "type": "object"
+          },
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "external_id": {
+            "description": "Your own id for this person, or null. Intercom's identity model treats this and `email` as the two identifiers",
+            "type": "string"
+          },
+          "has_hard_bounced": {
+            "description": "Their address bounced permanently; mail to it will not arrive",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The 24-character Intercom id, which is what this operation takes",
+            "type": "string"
+          },
+          "last_contacted_at": {
+            "description": "Unix seconds, or null",
+            "type": "integer"
+          },
+          "last_replied_at": {
+            "description": "Unix seconds, or null",
+            "type": "integer"
+          },
+          "last_seen_at": {
+            "description": "Unix seconds of the last time Intercom saw this person, or null. This is the field that says whether a contact is live",
+            "type": "integer"
+          },
+          "location": {
+            "description": "Intercom's IP-derived guess: `{type, country, region, city}`",
+            "type": "object"
+          },
+          "marked_email_as_spam": {
+            "type": "boolean"
+          },
+          "name": {
+            "description": "Null unless set",
+            "type": "string"
+          },
+          "notes": {
+            "description": "The same wrapper shape — notes at `.data`",
+            "type": "object"
+          },
+          "owner_id": {
+            "description": "The admin who owns the contact, or null",
+            "type": "integer"
+          },
+          "phone": {
+            "description": "Null unless set",
+            "type": "string"
+          },
+          "role": {
+            "description": "`user` for an identified person or `lead` for an unidentified visitor. A lead can be merged into a user later, which changes the id a flow should hold",
+            "type": "string"
+          },
+          "signed_up_at": {
+            "description": "Unix seconds, or null for a contact that never signed up",
+            "type": "integer"
+          },
+          "social_profiles": {
+            "description": "The same wrapper shape",
+            "type": "object"
+          },
+          "tags": {
+            "description": "A PAGINATED WRAPPER, not an array: `{type, data, url, total_count, has_more}`. The tags are at `.data`, and `has_more` true means there are more than were returned",
+            "type": "object"
+          },
+          "type": {
+            "const": "contact"
+          },
+          "unsubscribed_from_emails": {
+            "description": "TRUE MEANS DO NOT EMAIL THIS PERSON. Check it before a flow sends anything",
+            "type": "boolean"
+          },
+          "updated_at": {
+            "description": "Unix seconds",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "description": "The workspace the contact belongs to — Intercom's app id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "intercom.access_token"
+        ]
+      ],
+      "description": "Create an email-identified Intercom contact. A contact created here is visible to every teammate in the workspace and is counted against its contact quota; creating one twice creates two contacts unless the workspace deduplicates on email",
+      "direction": "write",
+      "endpoint": {
+        "host": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "intercom-contact-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "`user` for an identified person or `lead` for an unidentified visitor. A lead is merged into a user if that person later signs up",
+          "name": "role",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "enum": [
+              "user",
+              "lead"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "description": "The contact's email address, which is how this operation identifies them. Intercom does not verify it",
+          "name": "email",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "format": "email",
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errors/0/code",
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "email": {
+              "$param": "email"
+            },
+            "role": {
+              "$param": "role"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/contacts"
+      },
+      "response_schema": {
+        "properties": {
+          "avatar": {
+            "description": "`{type, image_url}` or null",
+            "type": "object"
+          },
+          "companies": {
+            "description": "The paginated wrapper shape",
+            "type": "object"
+          },
+          "created_at": {
+            "description": "Unix seconds — an integer, not an ISO string",
+            "type": "integer"
+          },
+          "custom_attributes": {
+            "type": "object"
+          },
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "id": {
+            "description": "The new contact's id — the only handle on the record this call created, and what a following note addresses",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "description": "Null until Intercom sees the person",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "description": "The paginated wrapper shape",
+            "type": "object"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "role": {
+            "description": "Echoes back `user` or `lead` as sent",
+            "type": "string"
+          },
+          "signed_up_at": {
+            "description": "Null on a contact created this way",
+            "type": "integer"
+          },
+          "tags": {
+            "description": "The paginated wrapper shape, empty on a new contact",
+            "type": "object"
+          },
+          "type": {
+            "const": "contact"
+          },
+          "unsubscribed_from_emails": {
+            "type": "boolean"
+          },
+          "updated_at": {
+            "description": "Unix seconds",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "intercom.access_token"
+        ]
+      ],
+      "description": "Get one conversation by id, with its state, the contacts on it and its message parts in Intercom's default rendering",
+      "direction": "read",
+      "endpoint": {
+        "host": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "intercom-conversation-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The conversation's Intercom id — a decimal string such as `123`, as it appears in the inbox URL",
+          "name": "conversation_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errors/0/code",
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/conversations/{conversation_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "admin_assignee_id": {
+            "description": "The assigned admin, or null when unassigned",
+            "type": "integer"
+          },
+          "ai_agent_participated": {
+            "description": "Whether Intercom's own AI agent replied in this conversation, which is worth knowing before a second automation replies too",
+            "type": "boolean"
+          },
+          "contacts": {
+            "description": "The customers on the conversation, as `{type, contacts: […]}` — a wrapper, not an array",
+            "type": "object"
+          },
+          "conversation_parts": {
+            "description": "THE MESSAGES, nested twice: `{type, conversation_parts: […], total_count}`. Each part carries `part_type` (`comment`, `note`, `assignment`, `close`), `body` as HTML, `author` and `created_at`. Only a page of them is returned — check `total_count`",
+            "type": "object"
+          },
+          "conversation_rating": {
+            "description": "The customer's rating of the conversation, or null: `{rating, remark, created_at, contact, teammate}`",
+            "type": "object"
+          },
+          "created_at": {
+            "description": "Unix seconds",
+            "type": "integer"
+          },
+          "custom_attributes": {
+            "type": "object"
+          },
+          "id": {
+            "description": "The conversation id, a decimal string",
+            "type": "string"
+          },
+          "open": {
+            "description": "True while the conversation is unresolved — **including while it is snoozed**. Use with `state` rather than instead of it",
+            "type": "boolean"
+          },
+          "priority": {
+            "description": "`priority` or `not_priority` — Intercom's own two-valued flag, not a severity scale",
+            "type": "string"
+          },
+          "read": {
+            "description": "Whether a teammate has read it",
+            "type": "boolean"
+          },
+          "snoozed_until": {
+            "description": "Unix seconds when a snoozed conversation reopens, or null",
+            "type": "integer"
+          },
+          "source": {
+            "description": "How it started: `{type, id, delivered_as, subject, body, author, attachments}` — the first message, and `author` is who sent it",
+            "type": "object"
+          },
+          "state": {
+            "description": "The inbox state. `snoozed` is a *kind of open*: see `open` beside it",
+            "enum": [
+              "open",
+              "closed",
+              "snoozed"
+            ],
+            "type": "string"
+          },
+          "statistics": {
+            "description": "Timing aggregates — first response time, last close time and so on — or null",
+            "type": "object"
+          },
+          "tags": {
+            "description": "The paginated wrapper shape — tags at `.data`",
+            "type": "object"
+          },
+          "team_assignee_id": {
+            "description": "The assigned team, or null",
+            "type": "integer"
+          },
+          "teammates": {
+            "description": "The admins on it, same wrapper shape, or null",
+            "type": "object"
+          },
+          "title": {
+            "description": "The subject, or null — most conversations have none",
+            "type": "string"
+          },
+          "type": {
+            "const": "conversation"
+          },
+          "updated_at": {
+            "description": "Unix seconds",
+            "type": "integer"
+          },
+          "waiting_since": {
+            "description": "Unix seconds since the customer has been waiting for a reply, or null when they are not. This is the SLA-relevant field",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "state"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "intercom.access_token"
+        ]
+      ],
+      "description": "Reply to a conversation as an admin. With message_type `comment` the reply is delivered to the end user by email or in-app message and cannot be un-sent; with `note` it is an internal comment only teammates see",
+      "direction": "write",
+      "endpoint": {
+        "host": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "intercom-conversation-reply",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The conversation to reply to",
+          "name": "conversation_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "`comment` to reply to the end user, who receives it by email or in-app message, or `note` for an internal comment only teammates see. There is no default: state which audience you mean",
+          "name": "message_type",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "enum": [
+              "comment",
+              "note"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "description": "The id of the admin the reply is attributed to. The customer sees this teammate's name and avatar, so it must be an admin the operator is entitled to write as",
+          "name": "admin_id",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The reply text as HTML; must not be blank. Intercom renders it in the customer's inbox or messenger",
+          "name": "body",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errors/0/code",
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "admin_id": {
+              "$param": "admin_id"
+            },
+            "body": {
+              "$param": "body"
+            },
+            "message_type": {
+              "$param": "message_type"
+            },
+            "type": "admin"
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/conversations/{conversation_id}/reply"
+      },
+      "response_schema": {
+        "properties": {
+          "admin_assignee_id": {
+            "type": "integer"
+          },
+          "contacts": {
+            "description": "`{type, contacts: […]}` — who the reply went to, when `message_type` was `comment`",
+            "type": "object"
+          },
+          "conversation_parts": {
+            "description": "WHERE THE SENT REPLY IS: `{type, conversation_parts: […], total_count}`, and the reply is the last entry. Its `part_type` is `comment` (delivered to the customer) or `note` (internal), which is the only confirmation of which audience was written to",
+            "type": "object"
+          },
+          "created_at": {
+            "description": "Unix seconds — of the conversation, not of this reply",
+            "type": "integer"
+          },
+          "custom_attributes": {
+            "type": "object"
+          },
+          "id": {
+            "description": "The conversation's id, unchanged by the reply",
+            "type": "string"
+          },
+          "open": {
+            "description": "True while unresolved, including while snoozed",
+            "type": "boolean"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "snoozed_until": {
+            "type": "integer"
+          },
+          "source": {
+            "description": "The conversation's first message, not this reply",
+            "type": "object"
+          },
+          "state": {
+            "description": "The state after the reply. An admin comment on a closed conversation reopens it",
+            "enum": [
+              "open",
+              "closed",
+              "snoozed"
+            ],
+            "type": "string"
+          },
+          "statistics": {
+            "type": "object"
+          },
+          "tags": {
+            "type": "object"
+          },
+          "team_assignee_id": {
+            "type": "integer"
+          },
+          "type": {
+            "const": "conversation"
+          },
+          "updated_at": {
+            "description": "Unix seconds, moved by this reply",
+            "type": "integer"
+          },
+          "waiting_since": {
+            "description": "Null after an admin reply, since the customer is no longer waiting",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "state"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "intercom.access_token"
+        ]
+      ],
+      "description": "Add an internal note to a contact, visible to teammates in the workspace and never to the contact. Adding the same note twice adds two notes",
+      "direction": "write",
+      "endpoint": {
+        "host": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "intercom-contact-note-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The contact to note",
+          "name": "contact_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The note text as HTML; must not be blank",
+          "name": "body",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The id of the admin the note is attributed to. Intercom treats this as optional; this operation requires it so every note has an author",
+          "name": "admin_id",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errors/0/code",
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "admin_id": {
+              "$param": "admin_id"
+            },
+            "body": {
+              "$param": "body"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/contacts/{contact_id}/notes"
+      },
+      "response_schema": {
+        "properties": {
+          "author": {
+            "description": "The admin it is attributed to: `{type, id, name, email, job_title, away_mode_enabled}`. This is what the required `admin_id` produced",
+            "type": "object"
+          },
+          "body": {
+            "description": "The note as stored, HTML",
+            "type": "string"
+          },
+          "contact": {
+            "description": "The contact it was attached to, as `{type, id}` — **nullable** in Intercom's schema, so confirm it rather than assuming the note landed on a person",
+            "type": "object"
+          },
+          "created_at": {
+            "description": "Unix seconds — an integer, e.g. 1674589321",
+            "type": "integer"
+          },
+          "id": {
+            "description": "The note's own id",
+            "type": "string"
+          },
+          "type": {
+            "const": "note"
+          }
+        },
+        "required": [
+          "type",
+          "id"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "base_url": "https://{host}",
+      "name": "default",
+      "tags": [
+        "support"
+      ]
+    }
+  ],
+  "vendor": "Intercom"
+}

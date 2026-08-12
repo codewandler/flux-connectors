@@ -1,0 +1,998 @@
+{
+  "$defs": {
+    "auth": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "env": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "hazard": {
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "oauth2": {
+          "$ref": "#/$defs/oauth2"
+        },
+        "scheme": {
+          "$ref": "#/$defs/scheme"
+        },
+        "subject": {
+          "enum": [
+            "unstated",
+            "app",
+            "user"
+          ]
+        },
+        "token_endpoint_quirks": {
+          "items": {
+            "$ref": "#/$defs/token_endpoint_quirk"
+          },
+          "type": "array"
+        },
+        "user_env": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "user_suffix": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "scheme",
+        "subject"
+      ],
+      "type": "object"
+    },
+    "body": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "encoding": {
+              "const": "json"
+            },
+            "template": {
+              "$ref": "#/$defs/body_template"
+            }
+          },
+          "required": [
+            "encoding",
+            "template"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "encoding": {
+              "const": "form"
+            },
+            "fields": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/value_template"
+                  }
+                },
+                "required": [
+                  "name",
+                  "value",
+                  "required"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "encoding",
+            "fields"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "body_template": {
+      "description": "A JSON body: literals, nested objects and arrays, `$param` splices at caller leaves. Nothing else has a spelling.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/param_splice"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/body_template"
+          },
+          "not": {
+            "required": [
+              "$param"
+            ]
+          },
+          "type": "object"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/body_template"
+          },
+          "type": "array"
+        },
+        {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        }
+      ]
+    },
+    "channel": {
+      "additionalProperties": false,
+      "properties": {
+        "connect": {
+          "type": "object"
+        },
+        "cursor": {
+          "type": "string"
+        },
+        "delivery_id": {
+          "$ref": "#/$defs/selector"
+        },
+        "description": {
+          "type": "string"
+        },
+        "discriminator": {
+          "$ref": "#/$defs/selector"
+        },
+        "events": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "interval": {
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "oip": {
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "payload_root": {
+          "type": "boolean"
+        },
+        "reply": {
+          "additionalProperties": false,
+          "properties": {
+            "bind": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "oip": {
+              "type": "string"
+            },
+            "operation": {
+              "type": "string"
+            },
+            "result": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation"
+          ],
+          "type": "object"
+        },
+        "service": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "setup": {
+          "type": "object"
+        },
+        "subscription": {
+          "type": "object"
+        },
+        "transport": {
+          "enum": [
+            "webhook",
+            "socket",
+            "poll"
+          ]
+        },
+        "verification": {
+          "additionalProperties": false,
+          "properties": {
+            "hmac": {
+              "type": "object"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "verified": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "verified"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "service",
+        "transport",
+        "verification"
+      ],
+      "type": "object"
+    },
+    "config_field": {
+      "additionalProperties": false,
+      "properties": {
+        "also_binds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "also_services": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "approval": {
+          "enum": [
+            "none",
+            "operator"
+          ]
+        },
+        "binds": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "choices": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value",
+              "label"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "default": {
+          "type": "string"
+        },
+        "docs_url": {
+          "type": "string"
+        },
+        "example": {
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "text",
+            "subdomain",
+            "hostname",
+            "url",
+            "origin",
+            "email",
+            "token"
+          ]
+        },
+        "help": {
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "level": {
+          "enum": [
+            "operator",
+            "connection"
+          ]
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "secret": {
+          "type": "boolean"
+        },
+        "service": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "service",
+        "label",
+        "format",
+        "required",
+        "approval",
+        "secret",
+        "binds",
+        "level"
+      ],
+      "type": "object"
+    },
+    "event": {
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "oip": {
+          "type": "string"
+        },
+        "schema": {
+          "$ref": "#/$defs/json_schema"
+        },
+        "service": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "when": {
+          "additionalProperties": {
+            "$ref": "#/$defs/json_schema"
+          },
+          "type": "object"
+        },
+        "wire_value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "service",
+        "default"
+      ],
+      "type": "object"
+    },
+    "json_schema": {
+      "description": "A JSON Schema value, carried verbatim from the vendor's declaration.",
+      "type": [
+        "object",
+        "boolean"
+      ]
+    },
+    "oauth2": {
+      "additionalProperties": false,
+      "description": "The complete OAuth2 declaration. Deliberately, no field exists for a registration value: the client identifier and secret are per-deployment, published only as operator-level configuration requirements through the `binds` grammar (C-536).",
+      "properties": {
+        "authorize_path": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "grants": {
+          "items": {
+            "enum": [
+              "authorization_code",
+              "password",
+              "refresh_token",
+              "client_credentials"
+            ]
+          },
+          "type": "array"
+        },
+        "redirect": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "port": {
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "port",
+            "path"
+          ],
+          "type": "object"
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "token_path": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "operation": {
+      "additionalProperties": false,
+      "properties": {
+        "auth": {
+          "$ref": "#/$defs/requirements"
+        },
+        "description": {
+          "type": "string"
+        },
+        "direction": {
+          "enum": [
+            "read",
+            "write"
+          ]
+        },
+        "endpoint": {
+          "additionalProperties": {
+            "items": {
+              "enum": [
+                "origin",
+                "host",
+                "path",
+                "query",
+                "header"
+              ]
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "type": "object"
+        },
+        "expose": {
+          "type": "boolean"
+        },
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "idempotency": {
+          "enum": [
+            "idempotent",
+            "non_idempotent",
+            "conditional"
+          ]
+        },
+        "params": {
+          "items": {
+            "$ref": "#/$defs/param"
+          },
+          "type": "array"
+        },
+        "quirks": {
+          "$ref": "#/$defs/quirks"
+        },
+        "repeatability_condition": {
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/request"
+        },
+        "response_schema": {
+          "$ref": "#/$defs/json_schema"
+        },
+        "risk": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "destructive"
+          ]
+        },
+        "semantic_effects": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "service": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "service",
+        "direction",
+        "risk",
+        "idempotency",
+        "semantic_effects",
+        "expose",
+        "auth",
+        "request"
+      ],
+      "type": "object"
+    },
+    "param": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "position": {
+          "enum": [
+            "path",
+            "query",
+            "header",
+            "body"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "schema": {
+          "$ref": "#/$defs/json_schema"
+        },
+        "wire": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "position",
+        "required",
+        "schema"
+      ],
+      "type": "object"
+    },
+    "param_splice": {
+      "additionalProperties": false,
+      "description": "The whole value of the named caller parameter.",
+      "properties": {
+        "$param": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "$param"
+      ],
+      "type": "object"
+    },
+    "quirks": {
+      "additionalProperties": false,
+      "properties": {
+        "error_envelope": {
+          "additionalProperties": false,
+          "properties": {
+            "code_pointer": {
+              "type": "string"
+            },
+            "message_pointer": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "message_pointer"
+          ],
+          "type": "object"
+        },
+        "pagination": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "page": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "max_pages": {
+                      "type": "integer"
+                    },
+                    "page_param": {
+                      "type": "string"
+                    },
+                    "page_size": {
+                      "type": "integer"
+                    },
+                    "size_param": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "page_param",
+                    "max_pages"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "page"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "cursor": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "cursor_param": {
+                      "type": "string"
+                    },
+                    "max_pages": {
+                      "type": "integer"
+                    },
+                    "next_cursor_pointer": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "cursor_param",
+                    "next_cursor_pointer",
+                    "max_pages"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "cursor"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "rate_limit": {
+          "additionalProperties": false,
+          "properties": {
+            "bucket": {
+              "type": "string"
+            },
+            "per_seconds": {
+              "type": "integer"
+            },
+            "requests": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "requests",
+            "per_seconds"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "request": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "$ref": "#/$defs/body"
+        },
+        "headers": {
+          "additionalProperties": {
+            "$ref": "#/$defs/value_template"
+          },
+          "type": "object"
+        },
+        "method": {
+          "enum": [
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "HEAD",
+            "OPTIONS"
+          ]
+        },
+        "query": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "value": {
+                "$ref": "#/$defs/value_template"
+              }
+            },
+            "required": [
+              "name",
+              "value"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "url": {
+          "pattern": "^\\{base\\}/",
+          "type": "string"
+        }
+      },
+      "required": [
+        "method",
+        "url"
+      ],
+      "type": "object"
+    },
+    "requirements": {
+      "description": "Auth alternatives: OR of AND-groups of declared credential names.",
+      "items": {
+        "items": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "type": "array"
+    },
+    "scheme": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "bearer",
+            "basic",
+            "header",
+            "query",
+            "signing"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "selector": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "header",
+            "body"
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "name"
+      ],
+      "type": "object"
+    },
+    "service": {
+      "additionalProperties": false,
+      "properties": {
+        "api_version": {
+          "type": "string"
+        },
+        "base_url": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "gid": {
+          "type": "string"
+        },
+        "legacy": {
+          "type": "boolean"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "roles": {
+          "items": {
+            "enum": [
+              "llm_catalogue"
+            ]
+          },
+          "type": "array"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "base_url"
+      ],
+      "type": "object"
+    },
+    "token_endpoint_quirk": {
+      "additionalProperties": false,
+      "properties": {
+        "attribution": {
+          "type": "string"
+        },
+        "behaviour": {
+          "type": "string"
+        },
+        "grant": {
+          "type": "string"
+        },
+        "measured": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "grant",
+        "behaviour",
+        "attribution",
+        "measured"
+      ],
+      "type": "object"
+    },
+    "value_template": {
+      "description": "A literal (which may interpolate `{endpoint-slot}` placeholders) or a `$param` splice — the closed vocabulary, in value position.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/param_splice"
+        }
+      ]
+    }
+  },
+  "$id": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One canonical, deterministic catalog document per provider (Decision 0022, C-536): the complete published connector surface, including an explicit request template per operation. The template vocabulary is closed and total — literal values, `{var}` interpolation over caller parameters and endpoint slots, and `$param` splices — and the oauth2 object deliberately has no field for a registration value: the client identifier and secret are per-deployment, published only as operator-level configuration requirements through the `binds` grammar.",
+  "properties": {
+    "$schema": {
+      "const": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json"
+    },
+    "auth": {
+      "items": {
+        "$ref": "#/$defs/auth"
+      },
+      "type": "array"
+    },
+    "authority": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "channels": {
+      "items": {
+        "$ref": "#/$defs/channel"
+      },
+      "type": "array"
+    },
+    "config": {
+      "items": {
+        "$ref": "#/$defs/config_field"
+      },
+      "type": "array"
+    },
+    "connector": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "default_auth": {
+      "$ref": "#/$defs/requirements"
+    },
+    "description": {
+      "type": "string"
+    },
+    "events": {
+      "items": {
+        "$ref": "#/$defs/event"
+      },
+      "type": "array"
+    },
+    "generator": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "operations": {
+      "items": {
+        "$ref": "#/$defs/operation"
+      },
+      "type": "array"
+    },
+    "runtime": {
+      "enum": [
+        "http",
+        "socket",
+        "process",
+        "container",
+        "plugin",
+        "remote"
+      ]
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "services": {
+      "items": {
+        "$ref": "#/$defs/service"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "vendor": {
+      "type": "string"
+    },
+    "verify": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema_version",
+    "generator",
+    "connector",
+    "runtime",
+    "services",
+    "operations"
+  ],
+  "title": "flux-connectors canonical catalog document",
+  "type": "object"
+}

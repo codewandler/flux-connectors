@@ -1,0 +1,1639 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Stripe secret key sent as a bearer. A live key moves real money; a test key does not. A restricted key limited to Charges, PaymentIntents, Refunds, Customers and Balance is sufficient",
+      "env": [
+        "STRIPE_SECRET_KEY"
+      ],
+      "name": "stripe.secret_key",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    },
+    {
+      "description": "Stripe webhook endpoint signing secret, used to verify inbound events. Never sent to Stripe",
+      "env": [
+        "STRIPE_WEBHOOK_SIGNING_SECRET"
+      ],
+      "name": "stripe.webhook_signing_secret",
+      "scheme": {
+        "kind": "signing"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.stripe.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.stripe.secret_key",
+      "docs_url": "https://docs.stripe.com/keys",
+      "format": "token",
+      "help": "From the Stripe dashboard under Developers → API keys. **A test key and a live key are different values.** The test key begins `sk_test` and acts only on test data; the live key begins `sk_live` and moves real money out of your account — a refund made with it is a real refund. Check the Test mode toggle in the dashboard before you copy. A restricted key (`rk_live` / `rk_test`) with write access to Charges, PaymentIntents and Refunds and read access to Customers and Balance is safer and is enough for this connector",
+      "label": "Secret key",
+      "level": "connection",
+      "name": "secret_key",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "stripe",
+  "default_auth": [
+    [
+      "stripe.secret_key"
+    ]
+  ],
+  "description": "Stripe payments and billing: read balances, customers, charges, payment intents, refunds, country specs, events, exchange rates and billing meters; capture, cancel and refund a payment",
+  "events": [
+    {
+      "default": true,
+      "description": "A payment intent completed and the money was taken. The customer has been charged",
+      "group": "Payments",
+      "name": "payment_intent.succeeded",
+      "oip": "com.stripe.api:v1#payment_intent.succeeded",
+      "schema": {
+        "properties": {
+          "created": {
+            "description": "Unix timestamp",
+            "type": "integer"
+          },
+          "data": {
+            "description": "The payload envelope; the payment intent itself is at `data.object`",
+            "properties": {
+              "object": {
+                "description": "The payment intent, in the API version the endpoint is pinned to",
+                "type": "object"
+              }
+            },
+            "required": [
+              "object"
+            ],
+            "type": "object"
+          },
+          "id": {
+            "description": "The event's own id, `evt_…`, which is what deduplicates a redelivery",
+            "type": "string"
+          },
+          "livemode": {
+            "type": "boolean"
+          },
+          "object": {
+            "const": "event"
+          },
+          "type": {
+            "const": "payment_intent.succeeded"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "data"
+        ],
+        "type": "object"
+      },
+      "service": "default"
+    },
+    {
+      "default": true,
+      "description": "A payment intent failed — the card was declined, the authentication was abandoned, or the bank refused it. No money was taken",
+      "group": "Payments",
+      "name": "payment_intent.payment_failed",
+      "oip": "com.stripe.api:v1#payment_intent.payment_failed",
+      "schema": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "data": {
+            "description": "The payment intent is at `data.object`; the decline reason is on its `last_payment_error`",
+            "properties": {
+              "object": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "object"
+            ],
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "livemode": {
+            "type": "boolean"
+          },
+          "object": {
+            "const": "event"
+          },
+          "type": {
+            "const": "payment_intent.payment_failed"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "data"
+        ],
+        "type": "object"
+      },
+      "service": "default"
+    },
+    {
+      "default": true,
+      "description": "A charge was refunded, in whole or in part. Fires for a refund made through this connector as well as one made by a human in the Stripe dashboard, so a flow that triggers on it must not assume it caused the refund",
+      "group": "Payments",
+      "name": "charge.refunded",
+      "oip": "com.stripe.api:v1#charge.refunded",
+      "schema": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "data": {
+            "description": "The charge is at `data.object`; `amount_refunded` says how much of it has now been returned",
+            "properties": {
+              "object": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "object"
+            ],
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "livemode": {
+            "type": "boolean"
+          },
+          "object": {
+            "const": "event"
+          },
+          "type": {
+            "const": "charge.refunded"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "data"
+        ],
+        "type": "object"
+      },
+      "service": "default"
+    },
+    {
+      "default": false,
+      "description": "A customer disputed a charge with their bank. Money and a dispute fee are withheld immediately, and there is a deadline to submit evidence — this is a case for a human, not for an automated reply",
+      "group": "Disputes",
+      "name": "charge.dispute.created",
+      "oip": "com.stripe.api:v1#charge.dispute.created",
+      "schema": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "data": {
+            "description": "The dispute is at `data.object`; `evidence_details.due_by` is the deadline and `charge` is the charge it contests",
+            "properties": {
+              "object": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "object"
+            ],
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "livemode": {
+            "type": "boolean"
+          },
+          "object": {
+            "const": "event"
+          },
+          "type": {
+            "const": "charge.dispute.created"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "data"
+        ],
+        "type": "object"
+      },
+      "service": "default"
+    }
+  ],
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "stripe.secret_key"
+        ]
+      ],
+      "description": "Get the account's current balance — what is available to pay out and what is still pending, per currency. Takes no parameters, and reports the balance of whichever mode the key belongs to: a test key returns the test balance",
+      "direction": "read",
+      "expose": true,
+      "id": "stripe-balance-get",
+      "idempotency": "idempotent",
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/error/code",
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v1/balance"
+      },
+      "response_schema": {
+        "properties": {
+          "available": {
+            "description": "Funds available to pay out now, one entry per currency, each `{amount, currency}` with `amount` in the currency's smallest unit",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "livemode": {
+            "description": "False for a test-mode key. The clearest signal available of which mode this connection is in",
+            "type": "boolean"
+          },
+          "object": {
+            "const": "balance"
+          },
+          "pending": {
+            "description": "Funds not yet available, same shape as `available`",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "object",
+          "available",
+          "pending"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "stripe.secret_key"
+        ]
+      ],
+      "description": "Get one customer by id: name, email, phone, billing address, default payment method and account balance. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires. A deleted customer is returned with `deleted: true` and almost no other fields",
+      "direction": "read",
+      "expose": true,
+      "id": "stripe-customer-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The customer's id, `cus_` followed by an opaque identifier — not their email address and not a merchant-side reference",
+          "name": "customer",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 5,
+            "pattern": "^cus_[A-Za-z0-9]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/error/code",
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v1/customers/{customer}"
+      },
+      "response_schema": {
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "deleted": {
+            "description": "Present and true only for a deleted customer, which is returned rather than 404'd",
+            "type": "boolean"
+          },
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "object": {
+            "const": "customer"
+          }
+        },
+        "required": [
+          "id",
+          "object"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "stripe.secret_key"
+        ]
+      ],
+      "description": "Get one charge by id: amount, currency, whether it was captured, whether it was refunded and how much of it, the card's last four digits and brand, and the failure or decline reason if it did not succeed. `amount` is in the currency's smallest unit — 1000 is ten dollars, and also ten thousand yen",
+      "direction": "read",
+      "expose": true,
+      "id": "stripe-charge-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The charge's id, `ch_` followed by an opaque identifier. A payment intent id (`pi_…`) does not address this endpoint — read it with `stripe-payment-intent-get` instead",
+          "name": "charge",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 4,
+            "pattern": "^ch_[A-Za-z0-9]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/error/code",
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v1/charges/{charge}"
+      },
+      "response_schema": {
+        "properties": {
+          "amount": {
+            "description": "In the currency's smallest unit",
+            "type": "integer"
+          },
+          "amount_captured": {
+            "type": "integer"
+          },
+          "amount_refunded": {
+            "description": "How much of `amount` has already been refunded, in the same unit. A full refund makes this equal `amount`",
+            "type": "integer"
+          },
+          "captured": {
+            "type": "boolean"
+          },
+          "currency": {
+            "description": "Three-letter ISO code, lowercase",
+            "type": "string"
+          },
+          "failure_message": {
+            "description": "Why the charge failed, in prose a human can read. Absent on a successful charge",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "const": "charge"
+          },
+          "refunded": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "succeeded",
+              "pending",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "amount",
+          "currency",
+          "status"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "stripe.secret_key"
+        ]
+      ],
+      "description": "Get one payment intent by id — the modern shape of a payment, covering the whole lifecycle from creation to capture. Its `status` is what says where the payment stands; `requires_capture` means the money is authorized but not yet taken",
+      "direction": "read",
+      "expose": true,
+      "id": "stripe-payment-intent-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The payment intent's id, `pi_` followed by an opaque identifier. The client secret (`pi_…_secret_…`) is a different value and must never be sent here",
+          "name": "payment_intent",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 4,
+            "pattern": "^pi_[A-Za-z0-9]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/error/code",
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v1/payment_intents/{payment_intent}"
+      },
+      "response_schema": {
+        "properties": {
+          "amount": {
+            "description": "In the currency's smallest unit",
+            "type": "integer"
+          },
+          "amount_received": {
+            "type": "integer"
+          },
+          "capture_method": {
+            "enum": [
+              "automatic",
+              "automatic_async",
+              "manual"
+            ],
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "latest_charge": {
+            "description": "The id of the charge this intent produced, which is what `stripe-charge-refund-create` refunds",
+            "type": "string"
+          },
+          "object": {
+            "const": "payment_intent"
+          },
+          "status": {
+            "description": "`requires_capture` is the state `stripe-payment-intent-capture` acts on; `succeeded` means the money has been taken",
+            "enum": [
+              "requires_payment_method",
+              "requires_confirmation",
+              "requires_action",
+              "processing",
+              "requires_capture",
+              "canceled",
+              "succeeded"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "amount",
+          "currency",
+          "status"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "stripe.secret_key"
+        ]
+      ],
+      "description": "Get one refund by id: its amount, the charge it belongs to, its reason and its status. A refund that reports `pending` has not reached the customer's bank yet, and one that reports `failed` means the money came back — the customer was not paid",
+      "direction": "read",
+      "expose": true,
+      "id": "stripe-refund-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The refund's id, `re_` followed by an opaque identifier",
+          "name": "refund",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 4,
+            "pattern": "^re_[A-Za-z0-9]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/error/code",
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v1/refunds/{refund}"
+      },
+      "response_schema": {
+        "properties": {
+          "amount": {
+            "type": "integer"
+          },
+          "charge": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "const": "refund"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "requires_action",
+              "succeeded",
+              "failed",
+              "canceled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "amount",
+          "currency",
+          "status"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "stripe.secret_key"
+        ]
+      ],
+      "description": "Capture an authorized payment intent, charging the customer the **full** authorized amount. Only a payment intent in `requires_capture` can be captured; a partial capture needs an `amount` this connector cannot send. Stripe answers 402 with an `error.code` such as `card_declined` when the capture is refused, and that arrives as data rather than as a failure",
+      "direction": "write",
+      "expose": true,
+      "id": "stripe-payment-intent-capture",
+      "idempotency": "conditional",
+      "params": [
+        {
+          "description": "The id of the payment intent to capture, `pi_` followed by an opaque identifier. It must be in `requires_capture` — check with `stripe-payment-intent-get` first",
+          "name": "payment_intent",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 4,
+            "pattern": "^pi_[A-Za-z0-9]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "A unique string — a UUID is the convention — identifying this capture attempt. Stripe replays the first result for 24 hours rather than capturing again, so a retry with the same key is safe and a retry with a new key charges the customer twice. Generate it once per intent you mean to capture, and reuse it across retries",
+          "name": "idempotency_key",
+          "position": "header",
+          "required": true,
+          "schema": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "Idempotency-Key"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/error/code",
+          "message_pointer": "/error/message"
+        }
+      },
+      "repeatability_condition": "the connector requires an `Idempotency-Key` header on every call, and Stripe replays a keyed POST from its own cache for 24 hours rather than re-executing it, so a retried capture captures once and returns the first result",
+      "request": {
+        "headers": {
+          "Idempotency-Key": {
+            "$param": "idempotency_key"
+          }
+        },
+        "method": "POST",
+        "url": "{base}/v1/payment_intents/{payment_intent}/capture"
+      },
+      "response_schema": {
+        "properties": {
+          "amount": {
+            "type": "integer"
+          },
+          "amount_received": {
+            "description": "What was actually taken. Equals `amount` after a full capture",
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "latest_charge": {
+            "type": "string"
+          },
+          "object": {
+            "const": "payment_intent"
+          },
+          "status": {
+            "description": "`succeeded` after a successful capture",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "status"
+        ],
+        "type": "object"
+      },
+      "risk": "destructive",
+      "semantic_effects": [
+        "money"
+      ],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "stripe.secret_key"
+        ]
+      ],
+      "description": "Cancel a payment intent, releasing any authorization hold on the customer's card. This cannot be undone — a canceled intent is final, and collecting the payment afterwards means creating a new one. An intent that has already succeeded cannot be canceled; refund it instead",
+      "direction": "write",
+      "expose": true,
+      "id": "stripe-payment-intent-cancel",
+      "idempotency": "conditional",
+      "params": [
+        {
+          "description": "The id of the payment intent to cancel, `pi_` followed by an opaque identifier",
+          "name": "payment_intent",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 4,
+            "pattern": "^pi_[A-Za-z0-9]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "A unique string — a UUID is the convention — identifying this cancellation attempt. Stripe replays the first result for 24 hours rather than acting again. Reuse it across retries of the same cancellation",
+          "name": "idempotency_key",
+          "position": "header",
+          "required": true,
+          "schema": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "Idempotency-Key"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/error/code",
+          "message_pointer": "/error/message"
+        }
+      },
+      "repeatability_condition": "the connector requires an `Idempotency-Key` header on every call, and Stripe replays a keyed POST from its own cache for 24 hours rather than re-executing it, so a retried cancel cancels once rather than racing a second attempt",
+      "request": {
+        "headers": {
+          "Idempotency-Key": {
+            "$param": "idempotency_key"
+          }
+        },
+        "method": "POST",
+        "url": "{base}/v1/payment_intents/{payment_intent}/cancel"
+      },
+      "response_schema": {
+        "properties": {
+          "canceled_at": {
+            "description": "Unix timestamp",
+            "type": "integer"
+          },
+          "cancellation_reason": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "const": "payment_intent"
+          },
+          "status": {
+            "const": "canceled"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "status"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "stripe.secret_key"
+        ]
+      ],
+      "description": "Refund a charge **in full** and irreversibly: the entire un-refunded amount goes back to the customer's original payment method, usually within five to ten business days. A partial refund needs an `amount` this connector cannot send. Stripe's fee on the original charge is not returned. There is no way to undo a refund — collecting the money again means charging the customer again",
+      "direction": "write",
+      "expose": true,
+      "id": "stripe-charge-refund-create",
+      "idempotency": "conditional",
+      "params": [
+        {
+          "description": "The id of the charge to refund, `ch_` followed by an opaque identifier. A payment intent's charge is its `latest_charge`, which `stripe-payment-intent-get` reports",
+          "name": "charge",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 4,
+            "pattern": "^ch_[A-Za-z0-9]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "A unique string — a UUID is the convention — identifying this refund. Stripe replays the first result for 24 hours rather than refunding again, so a retry with the same key is safe and a retry with a new key refunds the customer twice. Generate it once per refund you intend and reuse it across every retry",
+          "name": "idempotency_key",
+          "position": "header",
+          "required": true,
+          "schema": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "Idempotency-Key"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/error/code",
+          "message_pointer": "/error/message"
+        }
+      },
+      "repeatability_condition": "the connector requires an `Idempotency-Key` header on every call, and Stripe replays a keyed POST from its own cache for 24 hours rather than re-executing it, so a retried refund refunds once — without the key a retry would move money twice",
+      "request": {
+        "headers": {
+          "Idempotency-Key": {
+            "$param": "idempotency_key"
+          }
+        },
+        "method": "POST",
+        "url": "{base}/v1/charges/{charge}/refunds"
+      },
+      "response_schema": {
+        "properties": {
+          "amount": {
+            "description": "What was refunded, in the currency's smallest unit",
+            "type": "integer"
+          },
+          "charge": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "const": "refund"
+          },
+          "status": {
+            "description": "`pending` is the normal answer — the money has not reached the customer's bank yet. `failed` means it came back and the customer was not paid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "amount",
+          "currency",
+          "status"
+        ],
+        "type": "object"
+      },
+      "risk": "destructive",
+      "semantic_effects": [
+        "money"
+      ],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "stripe.secret_key"
+        ]
+      ],
+      "description": "List country-specific requirements, supported currencies and payment capabilities without changing an account",
+      "direction": "read",
+      "expose": true,
+      "id": "stripe-country-spec-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 10.",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          }
+        ],
+        "url": "{base}/v1/country_specs"
+      },
+      "response_schema": {
+        "description": "",
+        "properties": {
+          "data": {
+            "items": {
+              "description": "Stripe needs to collect certain pieces of information about each account\ncreated. These requirements can differ depending on the account's country. The\nCountry Specs API makes these rules available to your integration.\n\nYou can also view the information from this API call as [an online\nguide](/docs/connect/required-verification-information).",
+              "properties": {
+                "default_currency": {
+                  "description": "The default currency for this country. This applies to both payment methods and bank accounts.",
+                  "maxLength": 5000,
+                  "type": "string"
+                },
+                "id": {
+                  "description": "Unique identifier for the object. Represented as the ISO country code for this country.",
+                  "maxLength": 5000,
+                  "type": "string"
+                },
+                "object": {
+                  "description": "String representing the object's type. Objects of the same type share the same value.",
+                  "enum": [
+                    "country_spec"
+                  ],
+                  "type": "string"
+                },
+                "supported_bank_account_currencies": {
+                  "additionalProperties": {
+                    "items": {
+                      "maxLength": 5000,
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "description": "Currencies that can be accepted in the specific country (for transfers).",
+                  "type": "object"
+                },
+                "supported_payment_currencies": {
+                  "description": "Currencies that can be accepted in the specified country (for payments).",
+                  "items": {
+                    "maxLength": 5000,
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "supported_payment_methods": {
+                  "description": "Payment methods available in the specified country. You may need to enable some payment methods (e.g., [ACH](https://stripe.com/docs/ach)) on your account before they appear in this list. The `stripe` payment method refers to [charging through your platform](https://stripe.com/docs/connect/destination-charges).",
+                  "items": {
+                    "maxLength": 5000,
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "supported_transfer_countries": {
+                  "description": "Countries that can accept transfers from the specified country.",
+                  "items": {
+                    "maxLength": 5000,
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "verification_fields": {
+                  "description": "",
+                  "properties": {
+                    "company": {
+                      "description": "",
+                      "properties": {
+                        "additional": {
+                          "description": "Additional fields which are only required for some users.",
+                          "items": {
+                            "maxLength": 5000,
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "minimum": {
+                          "description": "Fields which every account must eventually provide.",
+                          "items": {
+                            "maxLength": 5000,
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "additional",
+                        "minimum"
+                      ],
+                      "title": "CountrySpecVerificationFieldDetails",
+                      "type": "object",
+                      "x-expandableFields": []
+                    },
+                    "individual": {
+                      "description": "",
+                      "properties": {
+                        "additional": {
+                          "description": "Additional fields which are only required for some users.",
+                          "items": {
+                            "maxLength": 5000,
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "minimum": {
+                          "description": "Fields which every account must eventually provide.",
+                          "items": {
+                            "maxLength": 5000,
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "additional",
+                        "minimum"
+                      ],
+                      "title": "CountrySpecVerificationFieldDetails",
+                      "type": "object",
+                      "x-expandableFields": []
+                    }
+                  },
+                  "required": [
+                    "company",
+                    "individual"
+                  ],
+                  "title": "CountrySpecVerificationFields",
+                  "type": "object",
+                  "x-expandableFields": [
+                    "company",
+                    "individual"
+                  ]
+                }
+              },
+              "required": [
+                "default_currency",
+                "id",
+                "object",
+                "supported_bank_account_currencies",
+                "supported_payment_currencies",
+                "supported_payment_methods",
+                "supported_transfer_countries",
+                "verification_fields"
+              ],
+              "title": "CountrySpec",
+              "type": "object",
+              "x-expandableFields": [
+                "verification_fields"
+              ],
+              "x-resourceId": "country_spec"
+            },
+            "type": "array"
+          },
+          "has_more": {
+            "description": "True if this list has another page of items after this one that can be fetched.",
+            "type": "boolean"
+          },
+          "object": {
+            "description": "String representing the object's type. Objects of the same type share the same value. Always has the value `list`.",
+            "enum": [
+              "list"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "description": "The URL where this list can be accessed.",
+            "maxLength": 5000,
+            "pattern": "^/v1/country_specs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "has_more",
+          "object",
+          "url"
+        ],
+        "title": "CountrySpecList",
+        "type": "object",
+        "x-expandableFields": [
+          "data"
+        ]
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "stripe.secret_key"
+        ]
+      ],
+      "description": "List Stripe account events for operational visibility without replaying or changing an event",
+      "direction": "read",
+      "expose": true,
+      "id": "stripe-event-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 10.",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          }
+        ],
+        "url": "{base}/v1/events"
+      },
+      "response_schema": {
+        "description": "",
+        "properties": {
+          "data": {
+            "items": {
+              "description": "Snapshot events allow you to track and react to activity in your Stripe integration. When\nthe state of another API resource changes, Stripe creates an `Event` object that contains\nall the relevant information associated with that action, including the affected API\nresource. For example, a successful payment triggers a `charge.succeeded` event, which\ncontains the `Charge` in the event's data property. Some actions trigger multiple events.\nFor example, if you create a new subscription for a customer, it triggers both a\n`customer.subscription.created` event and a `charge.succeeded` event.\n\nConfigure an event destination in your account to listen for events that represent actions\nyour integration needs to respond to. Additionally, you can retrieve an individual event or\na list of events from the API.\n\n[Connect](https://docs.stripe.com/connect) platforms can also receive event notifications\nthat occur in their connected accounts. These events include an account attribute that\nidentifies the relevant connected account.\n\nYou can access events through the [Retrieve Event API](https://docs.stripe.com/api/events#retrieve_event)\nfor 30 days.",
+              "properties": {
+                "account": {
+                  "description": "The connected account that originates the event.",
+                  "maxLength": 5000,
+                  "type": "string"
+                },
+                "api_version": {
+                  "description": "The Stripe API version used to render `data` when the event was created. The contents of `data` never change, so this value remains static regardless of the API version currently in use. This property is populated only for events created on or after October 31, 2014.",
+                  "maxLength": 5000,
+                  "nullable": true,
+                  "type": "string"
+                },
+                "context": {
+                  "description": "Authentication context needed to fetch the event or related object.",
+                  "maxLength": 5000,
+                  "type": "string"
+                },
+                "created": {
+                  "description": "Time at which the object was created. Measured in seconds since the Unix epoch.",
+                  "format": "unix-time",
+                  "type": "integer"
+                },
+                "data": {
+                  "description": "",
+                  "properties": {
+                    "object": {
+                      "additionalProperties": true,
+                      "description": "Object containing the API resource relevant to the event. For example, an `invoice.created` event will have a full [invoice object](https://api.stripe.com#invoice_object) as the value of the object key.",
+                      "type": "object"
+                    },
+                    "previous_attributes": {
+                      "additionalProperties": true,
+                      "description": "Object containing the names of the updated attributes and their values prior to the event (only included in events of type `*.updated`). If an array attribute has any updated elements, this object contains the entire array. In Stripe API versions 2017-04-06 or earlier, an updated array attribute in this object includes only the updated array elements.",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "object"
+                  ],
+                  "title": "NotificationEventData",
+                  "type": "object",
+                  "x-expandableFields": []
+                },
+                "id": {
+                  "description": "Unique identifier for the object.",
+                  "maxLength": 5000,
+                  "type": "string"
+                },
+                "livemode": {
+                  "description": "If the object exists in live mode, the value is `true`. If the object exists in test mode, the value is `false`.",
+                  "type": "boolean"
+                },
+                "object": {
+                  "description": "String representing the object's type. Objects of the same type share the same value.",
+                  "enum": [
+                    "event"
+                  ],
+                  "type": "string"
+                },
+                "pending_webhooks": {
+                  "description": "Number of webhooks that haven't been successfully delivered (for example, to return a 20x response) to the URLs you specify.",
+                  "type": "integer"
+                },
+                "request": {
+                  "anyOf": [
+                    {
+                      "description": "",
+                      "properties": {
+                        "id": {
+                          "description": "ID of the API request that caused the event. If null, the event was automatic (e.g., Stripe's automatic subscription handling). Request logs are available in the [dashboard](https://dashboard.stripe.com/logs), but currently not in the API.",
+                          "maxLength": 5000,
+                          "nullable": true,
+                          "type": "string"
+                        },
+                        "idempotency_key": {
+                          "description": "The idempotency key transmitted during the request, if any. *Note: This property is populated only for events on or after May 23, 2017*.",
+                          "maxLength": 5000,
+                          "nullable": true,
+                          "type": "string"
+                        }
+                      },
+                      "title": "NotificationEventRequest",
+                      "type": "object",
+                      "x-expandableFields": []
+                    }
+                  ],
+                  "description": "Information on the API request that triggers the event.",
+                  "nullable": true
+                },
+                "type": {
+                  "description": "Description of the event (for example, `invoice.created` or `charge.refunded`).",
+                  "maxLength": 5000,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "created",
+                "data",
+                "id",
+                "livemode",
+                "object",
+                "pending_webhooks",
+                "type"
+              ],
+              "title": "NotificationEvent",
+              "type": "object",
+              "x-expandableFields": [
+                "data",
+                "request"
+              ],
+              "x-resourceId": "event"
+            },
+            "type": "array"
+          },
+          "has_more": {
+            "description": "True if this list has another page of items after this one that can be fetched.",
+            "type": "boolean"
+          },
+          "object": {
+            "description": "String representing the object's type. Objects of the same type share the same value. Always has the value `list`.",
+            "enum": [
+              "list"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "description": "The URL where this list can be accessed.",
+            "maxLength": 5000,
+            "pattern": "^/v1/events",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "has_more",
+          "object",
+          "url"
+        ],
+        "title": "NotificationEventList",
+        "type": "object",
+        "x-expandableFields": [
+          "data"
+        ]
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "stripe.secret_key"
+        ]
+      ],
+      "description": "List current Stripe exchange rates without creating a conversion or moving funds",
+      "direction": "read",
+      "expose": true,
+      "id": "stripe-exchange-rate-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "A limit on the number of objects to be returned. Limit can range between 1 and total number of supported payout currencies, and the default is the max.",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          }
+        ],
+        "url": "{base}/v1/exchange_rates"
+      },
+      "response_schema": {
+        "description": "",
+        "properties": {
+          "data": {
+            "items": {
+              "description": "[Deprecated] The `ExchangeRate` APIs are deprecated. Please use the [FX Quotes API](https://docs.stripe.com/payments/currencies/localize-prices/fx-quotes-api) instead.\n\n`ExchangeRate` objects allow you to determine the rates that Stripe is currently\nusing to convert from one currency to another. Since this number is variable\nthroughout the day, there are various reasons why you might want to know the current\nrate (for example, to dynamically price an item for a user with a default\npayment in a foreign currency).\n\nPlease refer to our [Exchange Rates API](https://docs.stripe.com/fx-rates) guide for more details.\n\n*[Note: this integration path is supported but no longer recommended]* Additionally,\nyou can guarantee that a charge is made with an exchange rate that you expect is\ncurrent. To do so, you must pass in the exchange_rate to charges endpoints. If the\nvalue is no longer up to date, the charge won't go through. Please refer to our\n[Using with charges](https://docs.stripe.com/exchange-rates) guide for more details.\n\n-----\n\n&nbsp;\n\n*This Exchange Rates API is a Beta Service and is subject to Stripe's terms of service. You may use the API solely for the purpose of transacting on Stripe. For example, the API may be queried in order to:*\n\n- *localize prices for processing payments on Stripe*\n- *reconcile Stripe transactions*\n- *determine how much money to send to a connected account*\n- *determine app fees to charge a connected account*\n\n*Using this Exchange Rates API beta for any purpose other than to transact on Stripe is strictly prohibited and constitutes a violation of Stripe's terms of service.*",
+              "properties": {
+                "id": {
+                  "description": "Unique identifier for the object. Represented as the three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html) in lowercase.",
+                  "maxLength": 5000,
+                  "type": "string"
+                },
+                "object": {
+                  "description": "String representing the object's type. Objects of the same type share the same value.",
+                  "enum": [
+                    "exchange_rate"
+                  ],
+                  "type": "string"
+                },
+                "rates": {
+                  "additionalProperties": {
+                    "type": "number"
+                  },
+                  "description": "Hash where the keys are supported currencies and the values are the exchange rate at which the base id currency converts to the key currency.",
+                  "type": "object"
+                }
+              },
+              "required": [
+                "id",
+                "object",
+                "rates"
+              ],
+              "title": "ExchangeRate",
+              "type": "object",
+              "x-expandableFields": [],
+              "x-resourceId": "exchange_rate"
+            },
+            "type": "array"
+          },
+          "has_more": {
+            "description": "True if this list has another page of items after this one that can be fetched.",
+            "type": "boolean"
+          },
+          "object": {
+            "description": "String representing the object's type. Objects of the same type share the same value. Always has the value `list`.",
+            "enum": [
+              "list"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "description": "The URL where this list can be accessed.",
+            "maxLength": 5000,
+            "pattern": "^/v1/exchange_rates",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "has_more",
+          "object",
+          "url"
+        ],
+        "title": "ExchangeRateList",
+        "type": "object",
+        "x-expandableFields": [
+          "data"
+        ]
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "stripe.secret_key"
+        ]
+      ],
+      "description": "List usage-billing meter definitions without creating, changing or deactivating one",
+      "direction": "read",
+      "expose": true,
+      "id": "stripe-billing-meter-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 10.",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          }
+        ],
+        "url": "{base}/v1/billing/meters"
+      },
+      "response_schema": {
+        "description": "",
+        "properties": {
+          "data": {
+            "items": {
+              "description": "Meters specify how to aggregate meter events over a billing period. Meter events represent the actions that customers take in your system. Meters attach to prices and form the basis of the bill.\n\nRelated guide: [Usage based billing](https://docs.stripe.com/billing/subscriptions/usage-based)",
+              "properties": {
+                "created": {
+                  "description": "Time at which the object was created. Measured in seconds since the Unix epoch.",
+                  "format": "unix-time",
+                  "type": "integer"
+                },
+                "customer_mapping": {
+                  "description": "",
+                  "properties": {
+                    "event_payload_key": {
+                      "description": "The key in the meter event payload to use for mapping the event to a customer.",
+                      "maxLength": 5000,
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "The method for mapping a meter event to a customer.",
+                      "enum": [
+                        "by_id"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "event_payload_key",
+                    "type"
+                  ],
+                  "title": "BillingMeterResourceCustomerMappingSettings",
+                  "type": "object",
+                  "x-expandableFields": []
+                },
+                "default_aggregation": {
+                  "description": "",
+                  "properties": {
+                    "formula": {
+                      "description": "Specifies how events are aggregated.",
+                      "enum": [
+                        "count",
+                        "last",
+                        "sum"
+                      ],
+                      "type": "string",
+                      "x-stripeBypassValidation": true
+                    }
+                  },
+                  "required": [
+                    "formula"
+                  ],
+                  "title": "BillingMeterResourceAggregationSettings",
+                  "type": "object",
+                  "x-expandableFields": []
+                },
+                "display_name": {
+                  "description": "The meter's name.",
+                  "maxLength": 5000,
+                  "type": "string"
+                },
+                "event_name": {
+                  "description": "The name of the meter event to record usage for. Corresponds with the `event_name` field on meter events.",
+                  "maxLength": 5000,
+                  "type": "string"
+                },
+                "event_time_window": {
+                  "description": "The time window which meter events have been pre-aggregated for, if any.",
+                  "enum": [
+                    "day",
+                    "hour"
+                  ],
+                  "nullable": true,
+                  "type": "string"
+                },
+                "id": {
+                  "description": "Unique identifier for the object.",
+                  "maxLength": 5000,
+                  "type": "string"
+                },
+                "livemode": {
+                  "description": "If the object exists in live mode, the value is `true`. If the object exists in test mode, the value is `false`.",
+                  "type": "boolean"
+                },
+                "object": {
+                  "description": "String representing the object's type. Objects of the same type share the same value.",
+                  "enum": [
+                    "billing.meter"
+                  ],
+                  "type": "string"
+                },
+                "status": {
+                  "description": "The meter's status.",
+                  "enum": [
+                    "active",
+                    "inactive"
+                  ],
+                  "type": "string"
+                },
+                "status_transitions": {
+                  "description": "",
+                  "properties": {
+                    "deactivated_at": {
+                      "description": "The time the meter was deactivated, if any. Measured in seconds since Unix epoch.",
+                      "format": "unix-time",
+                      "nullable": true,
+                      "type": "integer"
+                    }
+                  },
+                  "title": "BillingMeterResourceBillingMeterStatusTransitions",
+                  "type": "object",
+                  "x-expandableFields": []
+                },
+                "updated": {
+                  "description": "Time at which the object was last updated. Measured in seconds since the Unix epoch.",
+                  "format": "unix-time",
+                  "type": "integer"
+                },
+                "value_settings": {
+                  "description": "",
+                  "properties": {
+                    "event_payload_key": {
+                      "description": "The key in the meter event payload to use as the value for this meter.",
+                      "maxLength": 5000,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "event_payload_key"
+                  ],
+                  "title": "BillingMeterResourceBillingMeterValue",
+                  "type": "object",
+                  "x-expandableFields": []
+                }
+              },
+              "required": [
+                "created",
+                "customer_mapping",
+                "default_aggregation",
+                "display_name",
+                "event_name",
+                "id",
+                "livemode",
+                "object",
+                "status",
+                "status_transitions",
+                "updated",
+                "value_settings"
+              ],
+              "title": "BillingMeter",
+              "type": "object",
+              "x-expandableFields": [
+                "customer_mapping",
+                "default_aggregation",
+                "status_transitions",
+                "value_settings"
+              ],
+              "x-resourceId": "billing.meter"
+            },
+            "type": "array"
+          },
+          "has_more": {
+            "description": "True if this list has another page of items after this one that can be fetched.",
+            "type": "boolean"
+          },
+          "object": {
+            "description": "String representing the object's type. Objects of the same type share the same value. Always has the value `list`.",
+            "enum": [
+              "list"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "description": "The URL where this list can be accessed.",
+            "maxLength": 5000,
+            "pattern": "^/v1/billing/meters",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "has_more",
+          "object",
+          "url"
+        ],
+        "title": "BillingMeterResourceBillingMeterList",
+        "type": "object",
+        "x-expandableFields": [
+          "data"
+        ]
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v1",
+      "base_url": "https://api.stripe.com",
+      "gid": "com.stripe.api:v1",
+      "name": "default",
+      "tags": [
+        "payments"
+      ]
+    }
+  ],
+  "vendor": "Stripe",
+  "verify": "stripe-balance-get"
+}

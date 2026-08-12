@@ -1,0 +1,560 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Fly access token, preferably scoped to the app or organization this connection manages",
+      "env": [
+        "FLY_API_TOKEN"
+      ],
+      "name": "fly.api_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "io.fly.api",
+  "connector": "fly",
+  "default_auth": [
+    [
+      "fly.api_token"
+    ]
+  ],
+  "description": "Fly.io Machines: discover regions and inspect, create, start, stop, restart or delete Machines",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "fly.api_token"
+        ]
+      ],
+      "description": "List Fly's available regions and identify the nearest one; also verifies the configured access token",
+      "direction": "read",
+      "expose": true,
+      "id": "fly-regions-list",
+      "idempotency": "idempotent",
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/status",
+          "message_pointer": "/error"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/platform/regions"
+      },
+      "response_schema": {
+        "properties": {
+          "nearest": {
+            "type": "string"
+          },
+          "regions": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "machines"
+    },
+    {
+      "auth": [
+        [
+          "fly.api_token"
+        ]
+      ],
+      "description": "List every Machine in one Fly app, without optional state filters or lease details",
+      "direction": "read",
+      "expose": true,
+      "id": "fly-machines-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Fly app name whose Machines to list",
+          "name": "app_name",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/status",
+          "message_pointer": "/error"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/apps/{app_name}/machines"
+      },
+      "response_schema": {
+        "items": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "private_ip": {
+              "type": "string"
+            },
+            "region": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "machines"
+    },
+    {
+      "auth": [
+        [
+          "fly.api_token"
+        ]
+      ],
+      "description": "Get one Fly Machine's current configuration, state, region, addresses and recent events",
+      "direction": "read",
+      "expose": true,
+      "id": "fly-machine-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Fly app containing the Machine",
+          "name": "app_name",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Fly Machine id",
+          "name": "machine_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/status",
+          "message_pointer": "/error"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/apps/{app_name}/machines/{machine_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "config": {
+            "type": "object"
+          },
+          "events": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "private_ip": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "machines"
+    },
+    {
+      "auth": [
+        [
+          "fly.api_token"
+        ]
+      ],
+      "description": "List the recorded lifecycle events for one Fly Machine; this is history, not a durable event subscription",
+      "direction": "read",
+      "expose": true,
+      "id": "fly-machine-events-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Fly app containing the Machine",
+          "name": "app_name",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Fly Machine id whose event history to read",
+          "name": "machine_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/status",
+          "message_pointer": "/error"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/apps/{app_name}/machines/{machine_id}/events"
+      },
+      "response_schema": {
+        "items": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "timestamp": {
+              "type": "integer"
+            },
+            "type": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "machines"
+    },
+    {
+      "auth": [
+        [
+          "fly.api_token"
+        ]
+      ],
+      "description": "Create and launch a Fly Machine from one image using Fly's generated name and region placement; this begins billable compute",
+      "direction": "write",
+      "expose": true,
+      "id": "fly-machine-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "Fly app in which to create the Machine",
+          "name": "app_name",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "OCI image reference for the Machine, such as registry.fly.io/example:deployment-01",
+          "name": "image",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "config.image"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/status",
+          "message_pointer": "/error"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "config": {
+              "image": {
+                "$param": "image"
+              }
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/apps/{app_name}/machines"
+      },
+      "response_schema": {
+        "properties": {
+          "config": {
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "private_ip": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "machines"
+    },
+    {
+      "auth": [
+        [
+          "fly.api_token"
+        ]
+      ],
+      "description": "Start a stopped Fly Machine, restoring service and beginning billable compute",
+      "direction": "write",
+      "expose": true,
+      "id": "fly-machine-start",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "Fly app containing the Machine",
+          "name": "app_name",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Fly Machine id to start",
+          "name": "machine_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/status",
+          "message_pointer": "/error"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/apps/{app_name}/machines/{machine_id}/start"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "machines"
+    },
+    {
+      "auth": [
+        [
+          "fly.api_token"
+        ]
+      ],
+      "description": "Stop a running Fly Machine using the API's default signal and timeout, interrupting its service",
+      "direction": "write",
+      "expose": true,
+      "id": "fly-machine-stop",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "Fly app containing the Machine",
+          "name": "app_name",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Fly Machine id to stop",
+          "name": "machine_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/status",
+          "message_pointer": "/error"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/apps/{app_name}/machines/{machine_id}/stop"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "machines"
+    },
+    {
+      "auth": [
+        [
+          "fly.api_token"
+        ]
+      ],
+      "description": "Restart a Fly Machine using the API's default signal and timeout, causing a service interruption",
+      "direction": "write",
+      "expose": true,
+      "id": "fly-machine-restart",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "Fly app containing the Machine",
+          "name": "app_name",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Fly Machine id to restart",
+          "name": "machine_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/status",
+          "message_pointer": "/error"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/apps/{app_name}/machines/{machine_id}/restart"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "machines"
+    },
+    {
+      "auth": [
+        [
+          "fly.api_token"
+        ]
+      ],
+      "description": "Permanently delete a stopped Fly Machine. Forced deletion is intentionally unavailable, so a running Machine is refused instead of killed implicitly",
+      "direction": "write",
+      "expose": true,
+      "id": "fly-machine-delete",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "Fly app containing the Machine",
+          "name": "app_name",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Fly Machine id to delete permanently",
+          "name": "machine_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/status",
+          "message_pointer": "/error"
+        }
+      },
+      "request": {
+        "method": "DELETE",
+        "url": "{base}/apps/{app_name}/machines/{machine_id}"
+      },
+      "risk": "destructive",
+      "semantic_effects": [],
+      "service": "machines"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v1",
+      "base_url": "https://api.machines.dev/v1",
+      "description": "Fly Machines lifecycle and event history",
+      "gid": "io.fly.api/machines:v1",
+      "name": "machines",
+      "tags": [
+        "infrastructure"
+      ]
+    }
+  ],
+  "vendor": "Fly.io",
+  "verify": "fly-regions-list"
+}

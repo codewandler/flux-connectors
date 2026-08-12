@@ -1,0 +1,1405 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "GitLab personal access token sent as a bearer. A token scoped to read_api is enough for every read below; the api scope is required for gitlab-issue-create",
+      "env": [
+        "GITLAB_TOKEN"
+      ],
+      "name": "gitlab.token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "user"
+    },
+    {
+      "description": "GitLab OAuth2 access token obtained on behalf of a signed-in user. Bounded by that user's own permissions, never by the application's",
+      "name": "gitlab.oauth_token",
+      "oauth2": {
+        "authorize_path": "/oauth/authorize",
+        "endpoint": "login",
+        "grants": [
+          "authorization_code",
+          "refresh_token"
+        ],
+        "scopes": [
+          "read_api",
+          "read_user",
+          "read_repository"
+        ],
+        "token_path": "/oauth/token"
+      },
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "user"
+    }
+  ],
+  "authority": "com.gitlab.api",
+  "config": [
+    {
+      "also_services": [
+        "login"
+      ],
+      "approval": "operator",
+      "binds": "endpoint.origin",
+      "default": "https://gitlab.com",
+      "docs_url": "https://docs.gitlab.com/administration/",
+      "example": "https://gitlab.company.example",
+      "format": "origin",
+      "help": "The HTTPS origin only, without `/api/v4` or another path. Leave the default for GitLab.com; a self-managed origin requires deployment/operator approval before it becomes active",
+      "label": "GitLab origin",
+      "level": "connection",
+      "name": "origin",
+      "required": false,
+      "secret": false,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "oauth.client_id",
+      "docs_url": "https://docs.gitlab.com/integration/oauth_provider/",
+      "example": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+      "format": "text",
+      "help": "Create an application under Admin -> Applications (self-managed) or User Settings -> Applications (gitlab.com), with the redirect URI your deployment serves. This is the application id, which is public",
+      "label": "GitLab OAuth application id",
+      "level": "operator",
+      "name": "oauth_client_id",
+      "required": false,
+      "secret": false,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "oauth.redirect_uri",
+      "docs_url": "https://docs.gitlab.com/integration/oauth_provider/",
+      "example": "https://exchange.internal/api/oauth/callback",
+      "format": "url",
+      "help": "The callback address this deployment serves, registered as a redirect URI on the application above. GitLab matches it exactly, so it must be the same string in both places — including the scheme, any port, and no trailing slash",
+      "label": "GitLab OAuth redirect URI",
+      "level": "operator",
+      "name": "oauth_redirect_uri",
+      "required": false,
+      "secret": false,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "oauth.client_secret",
+      "docs_url": "https://docs.gitlab.com/integration/oauth_provider/",
+      "format": "token",
+      "help": "The application secret issued beside the id above. Supplied once by whoever runs this deployment, never by an end user",
+      "label": "GitLab OAuth application secret",
+      "level": "operator",
+      "name": "oauth_client_secret",
+      "required": false,
+      "secret": true,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "credential.gitlab.token",
+      "docs_url": "https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html",
+      "format": "token",
+      "help": "Create one in the selected GitLab installation's User Settings -> Access Tokens. Grant read_api for every read below, or api if you also want gitlab-issue-create to work",
+      "label": "GitLab personal access token",
+      "level": "connection",
+      "name": "token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "gitlab",
+  "default_auth": [
+    [
+      "gitlab.oauth_token"
+    ],
+    [
+      "gitlab.token"
+    ]
+  ],
+  "description": "GitLab: discover reachable groups and projects; read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "gitlab.oauth_token"
+        ],
+        [
+          "gitlab.token"
+        ]
+      ],
+      "description": "Get the currently authenticated user. Takes no parameters; used as the verify read to prove a token resolves",
+      "direction": "read",
+      "endpoint": {
+        "origin": [
+          "origin"
+        ]
+      },
+      "expose": true,
+      "id": "gitlab-user-get",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/user"
+      },
+      "response_schema": {
+        "properties": {
+          "avatar_url": {
+            "format": "uri",
+            "type": "string"
+          },
+          "id": {
+            "description": "The user's global id",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "description": "`active`, `blocked`, or one of GitLab's other account states",
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "web_url": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "state"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "gitlab.oauth_token"
+        ],
+        [
+          "gitlab.token"
+        ]
+      ],
+      "description": "List the groups the authenticated user is a member of, optionally narrowed by a search term",
+      "direction": "read",
+      "endpoint": {
+        "origin": [
+          "origin"
+        ]
+      },
+      "expose": true,
+      "id": "gitlab-group-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Narrow the result to groups whose name or path matches this term. Free text; the runtime percent-encodes it",
+          "name": "search",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Only groups where the user has at least this access level. GitLab's scale: 10 guest, 20 reporter, 30 developer, 40 maintainer, 50 owner",
+          "name": "min_access_level",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              10,
+              20,
+              30,
+              40,
+              50
+            ],
+            "type": "integer"
+          }
+        },
+        {
+          "description": "1-based page number",
+          "name": "page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Results per page, at most 100",
+          "name": "per_page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "min_access_level",
+            "value": {
+              "$param": "min_access_level"
+            }
+          },
+          {
+            "name": "page",
+            "value": {
+              "$param": "page"
+            }
+          },
+          {
+            "name": "per_page",
+            "value": {
+              "$param": "per_page"
+            }
+          },
+          {
+            "name": "search",
+            "value": {
+              "$param": "search"
+            }
+          }
+        ],
+        "url": "{base}/groups"
+      },
+      "response_schema": {
+        "items": {
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "full_path": {
+              "description": "The namespaced path, `group/subgroup`",
+              "type": "string"
+            },
+            "id": {
+              "description": "The group's numeric id — what a project query's `id` refers to",
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "visibility": {
+              "description": "`private`, `internal` or `public`",
+              "type": "string"
+            },
+            "web_url": {
+              "format": "uri",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "path",
+            "full_path"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "gitlab.oauth_token"
+        ],
+        [
+          "gitlab.token"
+        ]
+      ],
+      "description": "List projects the authenticated user can reach, optionally narrowed by a search term — this is how a caller obtains the numeric project id every other operation requires",
+      "direction": "read",
+      "endpoint": {
+        "origin": [
+          "origin"
+        ]
+      },
+      "expose": true,
+      "id": "gitlab-project-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Narrow the result to projects whose name or path matches this term. Free text; the runtime percent-encodes it",
+          "name": "search",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Limit to projects the authenticated user is a member of",
+          "name": "membership",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Limit to projects the authenticated user owns",
+          "name": "owned",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Only projects where the user has at least this access level. GitLab's scale: 10 guest, 20 reporter, 30 developer, 40 maintainer, 50 owner",
+          "name": "min_access_level",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              10,
+              20,
+              30,
+              40,
+              50
+            ],
+            "type": "integer"
+          }
+        },
+        {
+          "description": "1-based page number",
+          "name": "page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Results per page, at most 100",
+          "name": "per_page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "membership",
+            "value": {
+              "$param": "membership"
+            }
+          },
+          {
+            "name": "min_access_level",
+            "value": {
+              "$param": "min_access_level"
+            }
+          },
+          {
+            "name": "owned",
+            "value": {
+              "$param": "owned"
+            }
+          },
+          {
+            "name": "page",
+            "value": {
+              "$param": "page"
+            }
+          },
+          {
+            "name": "per_page",
+            "value": {
+              "$param": "per_page"
+            }
+          },
+          {
+            "name": "search",
+            "value": {
+              "$param": "search"
+            }
+          }
+        ],
+        "url": "{base}/projects"
+      },
+      "response_schema": {
+        "items": {
+          "properties": {
+            "default_branch": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "http_url_to_repo": {
+              "description": "The HTTPS clone URL. Cloning is not a connector operation — this is the address a git client is given",
+              "format": "uri",
+              "type": "string"
+            },
+            "id": {
+              "description": "The project's numeric id — this is the `project_id` every other operation in this connector takes",
+              "type": "integer"
+            },
+            "last_activity_at": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "path_with_namespace": {
+              "description": "The namespaced path, `group/subgroup/project`. Human-facing only: it cannot be passed as `project_id`",
+              "type": "string"
+            },
+            "visibility": {
+              "description": "`private`, `internal` or `public`",
+              "type": "string"
+            },
+            "web_url": {
+              "format": "uri",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "path_with_namespace"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "gitlab.oauth_token"
+        ],
+        [
+          "gitlab.token"
+        ]
+      ],
+      "description": "List issues in a project, optionally filtered by state, newest activity first",
+      "direction": "read",
+      "endpoint": {
+        "origin": [
+          "origin"
+        ]
+      },
+      "expose": true,
+      "id": "gitlab-issue-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The project's numeric id, e.g. 278964 — visible on the project's overview page. GitLab also accepts a URL-encoded namespaced path (`group%2Fproject`) on this same segment, but this pipeline has no percent-encoder, so only the numeric id is accepted here",
+          "name": "project_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Filter by issue state",
+          "name": "state",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "opened",
+              "closed"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "description": "1-based page number",
+          "name": "page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Results per page",
+          "name": "per_page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "page",
+            "value": {
+              "$param": "page"
+            }
+          },
+          {
+            "name": "per_page",
+            "value": {
+              "$param": "per_page"
+            }
+          },
+          {
+            "name": "state",
+            "value": {
+              "$param": "state"
+            }
+          }
+        ],
+        "url": "{base}/projects/{project_id}/issues"
+      },
+      "response_schema": {
+        "description": "The matching issues",
+        "items": {
+          "properties": {
+            "assignees": {
+              "description": "Each `{id, username, name}`",
+              "items": {
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "author": {
+              "description": "`{id, username, name}`",
+              "type": "object"
+            },
+            "closed_at": {
+              "description": "Null while open",
+              "format": "date-time",
+              "type": "string"
+            },
+            "confidential": {
+              "type": "boolean"
+            },
+            "created_at": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "description": {
+              "description": "Markdown body, or null",
+              "type": "string"
+            },
+            "downvotes": {
+              "type": "integer"
+            },
+            "id": {
+              "description": "The issue's global id, unique across the whole GitLab instance",
+              "type": "integer"
+            },
+            "iid": {
+              "description": "The project-scoped issue number shown in GitLab's UI and URL — what gitlab-issue-get takes",
+              "type": "integer"
+            },
+            "labels": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "milestone": {
+              "description": "The milestone, or null",
+              "type": "object"
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "state": {
+              "enum": [
+                "opened",
+                "closed"
+              ],
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "upvotes": {
+              "type": "integer"
+            },
+            "web_url": {
+              "format": "uri",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "project_id",
+            "title",
+            "state"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "gitlab.oauth_token"
+        ],
+        [
+          "gitlab.token"
+        ]
+      ],
+      "description": "Get one issue by its project-scoped number (iid), not its global id",
+      "direction": "read",
+      "endpoint": {
+        "origin": [
+          "origin"
+        ]
+      },
+      "expose": true,
+      "id": "gitlab-issue-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The project's numeric id. GitLab also accepts a URL-encoded namespaced path (`group%2Fproject`) on this same segment, but this pipeline has no percent-encoder, so only the numeric id is accepted here",
+          "name": "project_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "The project-scoped issue number — the number shown in GitLab's UI and in the issue's URL, not the global id",
+          "name": "issue_iid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/projects/{project_id}/issues/{issue_iid}"
+      },
+      "response_schema": {
+        "properties": {
+          "assignees": {
+            "description": "Each `{id, username, name}`",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "author": {
+            "description": "`{id, username, name}`",
+            "type": "object"
+          },
+          "closed_at": {
+            "description": "Null while open",
+            "format": "date-time",
+            "type": "string"
+          },
+          "confidential": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "description": "Markdown body, or null",
+            "type": "string"
+          },
+          "downvotes": {
+            "type": "integer"
+          },
+          "id": {
+            "description": "The issue's global id",
+            "type": "integer"
+          },
+          "iid": {
+            "description": "The project-scoped number this operation takes",
+            "type": "integer"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "milestone": {
+            "description": "The milestone, or null",
+            "type": "object"
+          },
+          "project_id": {
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "opened",
+              "closed"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "upvotes": {
+            "type": "integer"
+          },
+          "web_url": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "iid",
+          "project_id",
+          "title",
+          "state"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "gitlab.oauth_token"
+        ],
+        [
+          "gitlab.token"
+        ]
+      ],
+      "description": "Open a new issue on a project. Visible immediately to everyone with access to the project (the whole world, if the project is public) and notifies its watchers",
+      "direction": "write",
+      "endpoint": {
+        "origin": [
+          "origin"
+        ]
+      },
+      "expose": true,
+      "id": "gitlab-issue-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The project's numeric id. GitLab also accepts a URL-encoded namespaced path (`group%2Fproject`) on this same segment, but this pipeline has no percent-encoder, so only the numeric id is accepted here",
+          "name": "project_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "The issue title; the only required field",
+          "name": "title",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The issue body as Markdown",
+          "name": "description",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Comma-separated label names, e.g. \"bug,urgent\" — GitLab's issue-create endpoint takes labels as one comma-separated string, not an array. A name the project does not have yet is created",
+          "name": "labels",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "description": {
+              "$param": "description"
+            },
+            "labels": {
+              "$param": "labels"
+            },
+            "title": {
+              "$param": "title"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/projects/{project_id}/issues"
+      },
+      "response_schema": {
+        "properties": {
+          "author": {
+            "description": "The account the token belongs to — a created issue is attributed to it",
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "description": "The new issue's global id",
+            "type": "integer"
+          },
+          "iid": {
+            "description": "The project-scoped number to address it by afterwards, with gitlab-issue-get",
+            "type": "integer"
+          },
+          "labels": {
+            "description": "The labels that were applied; a name the project did not have is created by this call",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "project_id": {
+            "type": "integer"
+          },
+          "state": {
+            "description": "`opened` on a freshly created issue",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "web_url": {
+            "description": "The issue's page — the link to give a human",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "iid",
+          "project_id",
+          "title",
+          "state"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "gitlab.oauth_token"
+        ],
+        [
+          "gitlab.token"
+        ]
+      ],
+      "description": "List merge requests in a project, optionally filtered by state, newest activity first",
+      "direction": "read",
+      "endpoint": {
+        "origin": [
+          "origin"
+        ]
+      },
+      "expose": true,
+      "id": "gitlab-merge-request-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The project's numeric id. GitLab also accepts a URL-encoded namespaced path (`group%2Fproject`) on this same segment, but this pipeline has no percent-encoder, so only the numeric id is accepted here",
+          "name": "project_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Filter by merge request state. Omit to list every state",
+          "name": "state",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "opened",
+              "closed",
+              "locked",
+              "merged"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "description": "1-based page number",
+          "name": "page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Results per page",
+          "name": "per_page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "page",
+            "value": {
+              "$param": "page"
+            }
+          },
+          {
+            "name": "per_page",
+            "value": {
+              "$param": "per_page"
+            }
+          },
+          {
+            "name": "state",
+            "value": {
+              "$param": "state"
+            }
+          }
+        ],
+        "url": "{base}/projects/{project_id}/merge_requests"
+      },
+      "response_schema": {
+        "description": "The matching merge requests",
+        "items": {
+          "properties": {
+            "author": {
+              "description": "`{id, username, name}`",
+              "type": "object"
+            },
+            "closed_at": {
+              "description": "Null unless closed without merging",
+              "format": "date-time",
+              "type": "string"
+            },
+            "created_at": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "description": {
+              "description": "Markdown body, or null",
+              "type": "string"
+            },
+            "draft": {
+              "description": "Whether it is marked as a draft; GitLab refuses to merge a draft until it is marked ready",
+              "type": "boolean"
+            },
+            "id": {
+              "description": "The merge request's global id",
+              "type": "integer"
+            },
+            "iid": {
+              "description": "The project-scoped number shown in GitLab's UI and URL",
+              "type": "integer"
+            },
+            "merged_at": {
+              "description": "Null unless merged",
+              "format": "date-time",
+              "type": "string"
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "sha": {
+              "description": "The commit SHA currently at the tip of the source branch",
+              "type": "string"
+            },
+            "source_branch": {
+              "type": "string"
+            },
+            "state": {
+              "enum": [
+                "opened",
+                "closed",
+                "locked",
+                "merged"
+              ],
+              "type": "string"
+            },
+            "target_branch": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "web_url": {
+              "format": "uri",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "project_id",
+            "title",
+            "state"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "gitlab.oauth_token"
+        ],
+        [
+          "gitlab.token"
+        ]
+      ],
+      "description": "Get one CI/CD pipeline's status and timing by its id",
+      "direction": "read",
+      "endpoint": {
+        "origin": [
+          "origin"
+        ]
+      },
+      "expose": true,
+      "id": "gitlab-pipeline-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The project's numeric id. GitLab also accepts a URL-encoded namespaced path (`group%2Fproject`) on this same segment, but this pipeline has no percent-encoder, so only the numeric id is accepted here",
+          "name": "project_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "The pipeline's numeric id, as shown in its GitLab CI/CD URL",
+          "name": "pipeline_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/projects/{project_id}/pipelines/{pipeline_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "duration": {
+            "description": "Run time in seconds, null while not yet finished",
+            "type": "integer"
+          },
+          "finished_at": {
+            "description": "Null while still running",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "The pipeline's own id, what this operation takes",
+            "type": "integer"
+          },
+          "iid": {
+            "description": "The project-scoped pipeline number, distinct from `id`",
+            "type": "integer"
+          },
+          "project_id": {
+            "type": "integer"
+          },
+          "ref": {
+            "description": "The branch or tag name that triggered it",
+            "type": "string"
+          },
+          "sha": {
+            "description": "The commit SHA the pipeline ran against",
+            "type": "string"
+          },
+          "source": {
+            "description": "What triggered it, e.g. `push`, `web`, `schedule`, `api`, `merge_request_event`",
+            "type": "string"
+          },
+          "started_at": {
+            "description": "Null before it starts running",
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "created",
+              "waiting_for_resource",
+              "preparing",
+              "pending",
+              "running",
+              "success",
+              "failed",
+              "canceled",
+              "skipped",
+              "manual",
+              "scheduled"
+            ],
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "web_url": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "status",
+          "ref"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "gitlab.oauth_token"
+        ],
+        [
+          "gitlab.token"
+        ]
+      ],
+      "description": "List a project's repository branches",
+      "direction": "read",
+      "endpoint": {
+        "origin": [
+          "origin"
+        ]
+      },
+      "expose": true,
+      "id": "gitlab-branch-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The project's numeric id. GitLab also accepts a URL-encoded namespaced path (`group%2Fproject`) on this same segment, but this pipeline has no percent-encoder, so only the numeric id is accepted here",
+          "name": "project_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "1-based page number",
+          "name": "page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Results per page",
+          "name": "per_page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "page",
+            "value": {
+              "$param": "page"
+            }
+          },
+          {
+            "name": "per_page",
+            "value": {
+              "$param": "per_page"
+            }
+          }
+        ],
+        "url": "{base}/projects/{project_id}/repository/branches"
+      },
+      "response_schema": {
+        "description": "The project's branches",
+        "items": {
+          "properties": {
+            "can_push": {
+              "description": "Whether the authenticated token's user can push to this branch",
+              "type": "boolean"
+            },
+            "commit": {
+              "description": "The branch tip: `{id, short_id, title, author_name, authored_date, message}`",
+              "type": "object"
+            },
+            "default": {
+              "description": "Whether this is the project's default branch",
+              "type": "boolean"
+            },
+            "developers_can_merge": {
+              "type": "boolean"
+            },
+            "developers_can_push": {
+              "type": "boolean"
+            },
+            "merged": {
+              "description": "Whether this branch has been merged into the project's default branch",
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "protected": {
+              "type": "boolean"
+            },
+            "web_url": {
+              "format": "uri",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "commit"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v4",
+      "base_url": "{origin}/api/v4",
+      "gid": "com.gitlab.api:v4",
+      "legacy": true,
+      "name": "default",
+      "tags": [
+        "source-control",
+        "issue-tracking"
+      ]
+    },
+    {
+      "api_version": "v4",
+      "base_url": "{origin}",
+      "description": "GitLab's OAuth2 authorize and token endpoints, at the instance origin.",
+      "gid": "com.gitlab.api/login:v4",
+      "name": "login"
+    }
+  ],
+  "vendor": "GitLab",
+  "verify": "gitlab-user-get"
+}

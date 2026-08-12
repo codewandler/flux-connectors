@@ -1,0 +1,1012 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Bitbucket Cloud Access Token, sent as a bearer token. A Workspace Access Token is valid for exactly one workspace, which is the same boundary this connector's pinned `workspace` describes; scope it to repository:read plus pullrequest:write for the writes below",
+      "env": [
+        "BITBUCKET_ACCESS_TOKEN"
+      ],
+      "name": "bitbucket.access_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "org.bitbucket.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.bitbucket.access_token",
+      "docs_url": "https://support.atlassian.com/bitbucket-cloud/docs/using-access-tokens/",
+      "format": "token",
+      "help": "Create one in the workspace's settings under Security -> Access tokens -> Create Workspace Access Token, with the Repositories: Read and Pull requests: Write scopes. Bitbucket shows the token once. Create it in the same workspace you name below, so the token reaches no further than this connection does",
+      "label": "Bitbucket access token",
+      "level": "connection",
+      "name": "access_token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "path.workspace",
+      "docs_url": "https://support.atlassian.com/bitbucket-cloud/docs/what-is-a-workspace/",
+      "example": "acme-engineering",
+      "format": "text",
+      "help": "The workspace this connection manages, as its slug — the single path segment right after bitbucket.org/ in any of its URLs. In https://bitbucket.org/acme-engineering/widget-service the workspace is acme-engineering, not acme-engineering/widget-service and not the full URL. Find it under Workspace settings -> Overview. One connection manages one workspace",
+      "label": "Bitbucket workspace",
+      "level": "connection",
+      "name": "workspace",
+      "required": true,
+      "secret": false,
+      "service": "default"
+    }
+  ],
+  "connector": "bitbucket",
+  "default_auth": [
+    [
+      "bitbucket.access_token"
+    ]
+  ],
+  "description": "Bitbucket Cloud repositories and pull requests for one pinned workspace: list the workspace's repositories, read one, list and read its open pull requests, open a pull request, comment on one, and approve one",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "bitbucket.access_token"
+        ]
+      ],
+      "description": "List the repositories in this connection's workspace, with each one's slug, name, description, main branch and privacy. Takes no argument at all: the workspace is pinned when the connection is made, so this reads exactly the workspace the operator chose and no other. Returns Bitbucket's first page only; this connector declares no page or filter parameters, and the response's `next` field carries the URL of the following page. The `slug` returned here is what every other operation in this connector takes as `repo_slug`. Also this connector's `verify`: a bounded read that runs unattended and needs nothing beyond the token and the pinned workspace",
+      "direction": "read",
+      "endpoint": {
+        "workspace": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "bitbucket-repository-list",
+      "idempotency": "idempotent",
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/repositories/{workspace}"
+      },
+      "response_schema": {
+        "properties": {
+          "next": {
+            "description": "The URL of the next page, absent on the last one. This connector cannot follow it — see its header note on pagination",
+            "format": "uri",
+            "type": "string"
+          },
+          "page": {
+            "description": "The 1-based page this response is",
+            "type": "integer"
+          },
+          "pagelen": {
+            "description": "How many values a page holds; 10 by default",
+            "type": "integer"
+          },
+          "size": {
+            "description": "The total number of repositories, when Bitbucket computes it",
+            "type": "integer"
+          },
+          "values": {
+            "items": {
+              "properties": {
+                "created_on": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "fork_policy": {
+                  "description": "allow_forks, no_public_forks, or no_forks",
+                  "type": "string"
+                },
+                "full_name": {
+                  "description": "`workspace/slug`. Note that this is two segments: `repo_slug` is the second one alone",
+                  "type": "string"
+                },
+                "has_issues": {
+                  "description": "Whether the repository's own issue tracker is enabled",
+                  "type": "boolean"
+                },
+                "has_wiki": {
+                  "type": "boolean"
+                },
+                "is_private": {
+                  "description": "Whether the repository is visible only to the workspace",
+                  "type": "boolean"
+                },
+                "language": {
+                  "description": "The primary language Bitbucket detected, empty when it detected none",
+                  "type": "string"
+                },
+                "links": {
+                  "description": "Bitbucket's hypermedia links for this repository, including `html.href` — the page to give a human",
+                  "type": "object"
+                },
+                "mainbranch": {
+                  "description": "The default branch — the `destination_branch` most pull requests target",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "name": {
+                  "description": "The repository's display name",
+                  "type": "string"
+                },
+                "project": {
+                  "description": "The Bitbucket project grouping this repository. Left untyped rather than enumerated",
+                  "type": "object"
+                },
+                "scm": {
+                  "description": "Always `git` on Bitbucket Cloud today",
+                  "type": "string"
+                },
+                "size": {
+                  "description": "The repository's size in bytes",
+                  "type": "integer"
+                },
+                "slug": {
+                  "description": "The repository's URL segment — pass this as `repo_slug` to every other operation here",
+                  "type": "string"
+                },
+                "updated_on": {
+                  "description": "When the repository last changed",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "uuid": {
+                  "description": "The repository's stable identifier, in braces. Survives a rename, which `slug` does not",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "bitbucket.access_token"
+        ]
+      ],
+      "description": "Read one repository in this connection's workspace by its slug, with its main branch, privacy, project and size. Use it to confirm a repository exists and to learn its default branch before opening a pull request against it",
+      "direction": "read",
+      "endpoint": {
+        "workspace": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "bitbucket-repository-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The repository's URL segment, from bitbucket-repository-list's `slug` — the part after the workspace in a Bitbucket URL. Not the `workspace/slug` pair Bitbucket calls a full name",
+          "name": "repo_slug",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/repositories/{workspace}/{repo_slug}"
+      },
+      "response_schema": {
+        "properties": {
+          "created_on": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "fork_policy": {
+            "description": "allow_forks, no_public_forks, or no_forks",
+            "type": "string"
+          },
+          "full_name": {
+            "description": "`workspace/slug`",
+            "type": "string"
+          },
+          "has_issues": {
+            "type": "boolean"
+          },
+          "has_wiki": {
+            "type": "boolean"
+          },
+          "is_private": {
+            "type": "boolean"
+          },
+          "language": {
+            "type": "string"
+          },
+          "links": {
+            "description": "Bitbucket's hypermedia links, including `html.href` — the page to give a human",
+            "type": "object"
+          },
+          "mainbranch": {
+            "description": "The default branch — the branch a pull request usually targets",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "description": "The account owning the repository. Identifies a named person for a personal workspace — read it for what the calling flow needs and do not persist it beyond that",
+            "type": "object"
+          },
+          "project": {
+            "description": "The Bitbucket project grouping this repository. Left untyped rather than enumerated",
+            "type": "object"
+          },
+          "scm": {
+            "type": "string"
+          },
+          "size": {
+            "description": "The repository's size in bytes",
+            "type": "integer"
+          },
+          "slug": {
+            "description": "The repository's URL segment",
+            "type": "string"
+          },
+          "updated_on": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "uuid": {
+            "description": "The repository's stable identifier, in braces",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uuid",
+          "name",
+          "slug",
+          "full_name"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "bitbucket.access_token"
+        ]
+      ],
+      "description": "List the open pull requests on one repository in this connection's workspace, newest activity first. Returns OPEN pull requests only — that is Bitbucket's default and this connector declares no `state` parameter to change it (see its header note), so merged and declined pull requests are not returned. Returns Bitbucket's first page only; the response's `next` field carries the URL of the following page. Each value's `id` is what bitbucket-pull-request-get, -comment and -approve take",
+      "direction": "read",
+      "endpoint": {
+        "workspace": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "bitbucket-pull-request-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The repository's URL segment, from bitbucket-repository-list's `slug`",
+          "name": "repo_slug",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/repositories/{workspace}/{repo_slug}/pullrequests"
+      },
+      "response_schema": {
+        "properties": {
+          "next": {
+            "description": "The URL of the next page, absent on the last one",
+            "format": "uri",
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pagelen": {
+            "description": "How many values a page holds; 10 by default",
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "values": {
+            "items": {
+              "properties": {
+                "author": {
+                  "description": "The account that opened it. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that",
+                  "type": "object"
+                },
+                "close_source_branch": {
+                  "description": "Whether merging will delete the source branch",
+                  "type": "boolean"
+                },
+                "comment_count": {
+                  "type": "integer"
+                },
+                "created_on": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "description": {
+                  "description": "The pull request's body, as Markdown",
+                  "type": "string"
+                },
+                "destination": {
+                  "description": "Where the change would land",
+                  "properties": {
+                    "branch": {
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "id": {
+                  "description": "The pull request's number within its repository — what the other pull-request operations address it by",
+                  "type": "integer"
+                },
+                "links": {
+                  "description": "Bitbucket's hypermedia links, including `html.href` — the pull request's page, the link to give a human",
+                  "type": "object"
+                },
+                "source": {
+                  "description": "Where the change comes from",
+                  "properties": {
+                    "branch": {
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "state": {
+                  "description": "OPEN, MERGED, DECLINED or SUPERSEDED. Always OPEN here, because this call declares no state filter",
+                  "type": "string"
+                },
+                "task_count": {
+                  "type": "integer"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "updated_on": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "bitbucket.access_token"
+        ]
+      ],
+      "description": "Read one pull request by its number, including its description, its source and destination branches, its current state and who is participating. Reads a merged or declined pull request too, unlike bitbucket-pull-request-list",
+      "direction": "read",
+      "endpoint": {
+        "workspace": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "bitbucket-pull-request-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The repository's URL segment, from bitbucket-repository-list's `slug`",
+          "name": "repo_slug",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The pull request's number within its repository, from bitbucket-pull-request-list's `id` — the number in its Bitbucket URL",
+          "name": "pull_request_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "author": {
+            "description": "The account that opened it. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that",
+            "type": "object"
+          },
+          "close_source_branch": {
+            "type": "boolean"
+          },
+          "comment_count": {
+            "type": "integer"
+          },
+          "created_on": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "description": "The pull request's body, as Markdown",
+            "type": "string"
+          },
+          "destination": {
+            "description": "Where the change would land",
+            "properties": {
+              "branch": {
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "commit": {
+                "properties": {
+                  "hash": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "id": {
+            "description": "The pull request's number within its repository",
+            "type": "integer"
+          },
+          "links": {
+            "description": "Bitbucket's hypermedia links, including `html.href` — the link to give a human",
+            "type": "object"
+          },
+          "merge_commit": {
+            "description": "The commit the merge produced, null while the pull request is open",
+            "properties": {
+              "hash": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "participants": {
+            "description": "Everyone who has touched the pull request, each with their `approved` flag and `role`. Left untyped rather than enumerated; this is the field bitbucket-pull-request-approve writes into",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "description": "Why it was declined, empty otherwise",
+            "type": "string"
+          },
+          "reviewers": {
+            "description": "The accounts asked to review. Left untyped rather than enumerated",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "source": {
+            "description": "Where the change comes from",
+            "properties": {
+              "branch": {
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "commit": {
+                "properties": {
+                  "hash": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "state": {
+            "description": "OPEN, MERGED, DECLINED or SUPERSEDED",
+            "type": "string"
+          },
+          "task_count": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_on": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "state"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "bitbucket.access_token"
+        ]
+      ],
+      "description": "Open a pull request from one branch to another in a repository of this connection's workspace. Both branches must already exist and be pushed. Bitbucket does not deduplicate: opening the same source-to-destination pull request twice creates two of them, and notifies the repository's watchers twice. The created pull request, with its assigned `id`, is in the response",
+      "direction": "write",
+      "endpoint": {
+        "workspace": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "bitbucket-pull-request-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The repository's URL segment, from bitbucket-repository-list's `slug`",
+          "name": "repo_slug",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The pull request's title, as it will read in the list. Bitbucket requires one",
+          "name": "title",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The branch holding the change, exactly as it is named in the repository — the branch this pull request would merge from",
+          "name": "source_branch",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "source.branch.name"
+        },
+        {
+          "description": "The branch the change would merge into. Bitbucket's own default is the repository's main branch, which bitbucket-repository-get returns as `mainbranch.name` — name it explicitly rather than assuming it",
+          "name": "destination_branch",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "destination.branch.name"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "destination": {
+              "branch": {
+                "name": {
+                  "$param": "destination_branch"
+                }
+              }
+            },
+            "source": {
+              "branch": {
+                "name": {
+                  "$param": "source_branch"
+                }
+              }
+            },
+            "title": {
+              "$param": "title"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/repositories/{workspace}/{repo_slug}/pullrequests"
+      },
+      "response_schema": {
+        "properties": {
+          "author": {
+            "description": "The account the token belongs to. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that",
+            "type": "object"
+          },
+          "close_source_branch": {
+            "description": "False unless the repository defaults it otherwise; this connector does not set it",
+            "type": "boolean"
+          },
+          "created_on": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "destination": {
+            "properties": {
+              "branch": {
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "id": {
+            "description": "The new pull request's number — what bitbucket-pull-request-comment and -approve address it by",
+            "type": "integer"
+          },
+          "links": {
+            "description": "Bitbucket's hypermedia links, including `html.href` — the new pull request's page, the link to give a human",
+            "type": "object"
+          },
+          "source": {
+            "properties": {
+              "branch": {
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "state": {
+            "description": "OPEN on a pull request just created",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_on": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "state"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "bitbucket.access_token"
+        ]
+      ],
+      "description": "Add a top-level comment to a pull request. The comment is attributed to the account the token belongs to and notifies everyone participating; Bitbucket sends no un-notification, so a comment posted in error can be deleted but not un-seen. This posts a general comment on the pull request, never an inline comment on a line of the diff",
+      "direction": "write",
+      "endpoint": {
+        "workspace": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "bitbucket-pull-request-comment",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The repository's URL segment, from bitbucket-repository-list's `slug`",
+          "name": "repo_slug",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The pull request's number, from bitbucket-pull-request-list's `id`",
+          "name": "pull_request_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "The comment text, as Markdown. Bitbucket renders it and returns the rendered HTML alongside the raw text",
+          "name": "body",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "content.raw"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "content": {
+              "raw": {
+                "$param": "body"
+              }
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments"
+      },
+      "response_schema": {
+        "properties": {
+          "content": {
+            "description": "The comment as stored and as rendered",
+            "properties": {
+              "html": {
+                "description": "Bitbucket's rendering of it",
+                "type": "string"
+              },
+              "markup": {
+                "type": "string"
+              },
+              "raw": {
+                "description": "The Markdown that was sent",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "created_on": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The comment's id within the pull request",
+            "type": "integer"
+          },
+          "links": {
+            "description": "Bitbucket's hypermedia links, including `html.href` — the comment's anchor on the pull request page",
+            "type": "object"
+          },
+          "updated_on": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "user": {
+            "description": "The account the comment is attributed to — the token's own. Identifies a named person; read it for what the calling flow needs and do not persist it beyond that",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "content"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "bitbucket.access_token"
+        ]
+      ],
+      "description": "Approve a pull request as the account this connection's token belongs to. This records a review that a human may not have performed, and in a repository with an approval merge check it can release a merge that gate was configured to hold — treat it as an assertion about a review, not as a bookmark. Bitbucket answers a repeat approval with 409 rather than approving twice. Sends no body: the approver is the token's own account",
+      "direction": "write",
+      "endpoint": {
+        "workspace": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "bitbucket-pull-request-approve",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The repository's URL segment, from bitbucket-repository-list's `slug`",
+          "name": "repo_slug",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The pull request's number, from bitbucket-pull-request-list's `id`",
+          "name": "pull_request_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/approve"
+      },
+      "response_schema": {
+        "properties": {
+          "approved": {
+            "description": "True once the approval landed",
+            "type": "boolean"
+          },
+          "participated_on": {
+            "description": "When the approval was recorded",
+            "format": "date-time",
+            "type": "string"
+          },
+          "role": {
+            "description": "PARTICIPANT or REVIEWER — how the token's account relates to this pull request",
+            "type": "string"
+          },
+          "state": {
+            "description": "approved, changes_requested, or null",
+            "type": "string"
+          },
+          "user": {
+            "description": "The account the approval is attributed to — the token's own. Identifies a named person; read it for what the calling flow needs and do not persist it beyond that",
+            "type": "object"
+          }
+        },
+        "required": [
+          "approved"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "2.0",
+      "base_url": "https://api.bitbucket.org/2.0",
+      "gid": "org.bitbucket.api:2.0",
+      "name": "default",
+      "tags": [
+        "source-control"
+      ]
+    }
+  ],
+  "vendor": "Bitbucket",
+  "verify": "bitbucket-repository-list"
+}

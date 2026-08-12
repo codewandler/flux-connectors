@@ -1,0 +1,361 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Asana access token sent as a bearer — a personal access token or an OAuth-issued one",
+      "env": [
+        "ASANA_ACCESS_TOKEN"
+      ],
+      "name": "asana.access_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.asana.api",
+  "connector": "asana",
+  "default_auth": [
+    [
+      "asana.access_token"
+    ]
+  ],
+  "description": "Asana work management: read tasks and projects, create and update tasks, comment on a task",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "asana.access_token"
+        ]
+      ],
+      "description": "Get one task — its name, notes, assignee, due date, completion state and the projects it belongs to. The task is under `data` in the response",
+      "direction": "read",
+      "expose": true,
+      "id": "asana-task-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The task's `gid`, a decimal string such as `1201234567890123`. It is not the number in the task's web URL for a subtask",
+          "name": "task_gid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/1.0/tasks/{task_gid}"
+      },
+      "response_schema": {
+        "properties": {
+          "data": {
+            "description": "The task resource, in Asana's default field set. Individual fields are not enumerated here — recording the envelope is what a consumer cannot infer; the resource's own shape is in Asana's reference",
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "asana.access_token"
+        ]
+      ],
+      "description": "Create a task in a workspace. It is created unassigned and in no project, so nobody is notified; move it or assign it in Asana afterwards. The created task is under `data` in the response",
+      "direction": "write",
+      "expose": true,
+      "id": "asana-task-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The task's name, as it appears in a task list",
+          "name": "name",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "data.name"
+        },
+        {
+          "description": "The `gid` of the workspace to create the task in. A task's workspace is permanent — it cannot be changed after creation",
+          "name": "workspace",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "wire": "data.workspace"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "data": {
+              "name": {
+                "$param": "name"
+              },
+              "workspace": {
+                "$param": "workspace"
+              }
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/api/1.0/tasks"
+      },
+      "response_schema": {
+        "properties": {
+          "data": {
+            "description": "The created task, in Asana's default field set. Its `gid` is what later calls address it by",
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "asana.access_token"
+        ]
+      ],
+      "description": "Mark a task complete or incomplete. Asana's update is sparse: only completion changes, and every other field of the task is left as it was. The updated task is under `data` in the response",
+      "direction": "write",
+      "expose": true,
+      "id": "asana-task-update",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The `gid` of the task to update",
+          "name": "task_gid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "True to complete the task, false to re-open it. Completing a task also completes nothing else — subtasks stay as they are",
+          "name": "completed",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "type": "boolean"
+          },
+          "wire": "data.completed"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "data": {
+              "completed": {
+                "$param": "completed"
+              }
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "PUT",
+        "url": "{base}/api/1.0/tasks/{task_gid}"
+      },
+      "response_schema": {
+        "properties": {
+          "data": {
+            "description": "The task as it stands after the update, in Asana's default field set",
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "asana.access_token"
+        ]
+      ],
+      "description": "Add a comment to a task. Asana calls a comment a story. It is attributed to the token's owner, notifies every follower of the task by email and in-app, and cannot be un-sent. The created story is under `data` in the response",
+      "direction": "write",
+      "expose": true,
+      "id": "asana-task-story-add",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The `gid` of the task to comment on",
+          "name": "task_gid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "The comment text, as plain text. Asana renders `@` mentions only in the `html_text` form, which this operation does not send",
+          "name": "text",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "data.text"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "data": {
+              "text": {
+                "$param": "text"
+              }
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/api/1.0/tasks/{task_gid}/stories"
+      },
+      "response_schema": {
+        "properties": {
+          "data": {
+            "description": "The created story: its `gid`, `created_at`, `created_by` and `text`",
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "asana.access_token"
+        ]
+      ],
+      "description": "Get one project — its name, notes, owner, team, current status and whether it is archived. The project is under `data` in the response",
+      "direction": "read",
+      "expose": true,
+      "id": "asana-project-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The project's `gid`, a decimal string. It is the number in the project's web URL",
+          "name": "project_gid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/1.0/projects/{project_gid}"
+      },
+      "response_schema": {
+        "properties": {
+          "data": {
+            "description": "The project resource, in Asana's default field set",
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "1.0",
+      "base_url": "https://app.asana.com",
+      "gid": "com.asana.api:1.0",
+      "name": "default",
+      "tags": [
+        "project-management"
+      ]
+    }
+  ],
+  "vendor": "Asana"
+}

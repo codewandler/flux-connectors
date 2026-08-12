@@ -1,0 +1,404 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Airtable access token sent as a bearer — a personal access token or an OAuth-issued one",
+      "env": [
+        "AIRTABLE_ACCESS_TOKEN"
+      ],
+      "name": "airtable.access_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.airtable.api",
+  "connector": "airtable",
+  "default_auth": [
+    [
+      "airtable.access_token"
+    ]
+  ],
+  "description": "Airtable records: read, create, update and delete a record in a base's table",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "airtable.access_token"
+        ]
+      ],
+      "description": "Read one record from a table — its cell values are under `fields` in the response, keyed by column name. Returns every column the token can see, in Airtable's default JSON cell format: narrowing or reformatting them needs the `fields[]` and `cellFormat` query parameters this connector cannot encode",
+      "direction": "read",
+      "expose": true,
+      "id": "airtable-record-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The base's id, the `app…` segment in the base's URL in Airtable",
+          "name": "base_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^app[A-Za-z0-9]+$",
+            "type": "string"
+          },
+          "wire": "baseId"
+        },
+        {
+          "description": "The table's id, the `tbl…` segment in the table's URL in Airtable. Airtable also routes this segment on a table *name*, which this connector does not accept: a name is interpolated into the URL unencoded, so one containing a space or a `/` would address the wrong route",
+          "name": "table_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^tbl[A-Za-z0-9]+$",
+            "type": "string"
+          },
+          "wire": "tableIdOrName"
+        },
+        {
+          "description": "The record's id, `rec…`. It is what a create returns and what the record's own URL ends with",
+          "name": "record_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^rec[A-Za-z0-9]+$",
+            "type": "string"
+          },
+          "wire": "recordId"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/error/type",
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v0/{base_id}/{table_id}/{record_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "createdTime": {
+            "description": "When the record was created",
+            "format": "date-time",
+            "type": "string"
+          },
+          "fields": {
+            "description": "The record's cell values, keyed by column name. Individual columns are not enumerated: they are the base's own schema, which differs per base and changes at runtime — recording the envelope is what a consumer cannot infer",
+            "type": "object"
+          },
+          "id": {
+            "description": "The record's id",
+            "pattern": "^rec[A-Za-z0-9]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "createdTime",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "airtable.access_token"
+        ]
+      ],
+      "description": "Create one record in a table. Cell values are supplied under `fields`, keyed by column name, and must already be in the exact JSON form each column expects — Airtable's `typecast` coercion cannot be requested yet (see the connector's notes). The created record, with its `rec…` id, is in the response",
+      "direction": "write",
+      "expose": true,
+      "id": "airtable-record-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The base's id, the `app…` segment in the base's URL in Airtable",
+          "name": "base_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^app[A-Za-z0-9]+$",
+            "type": "string"
+          },
+          "wire": "baseId"
+        },
+        {
+          "description": "The table's id, the `tbl…` segment in the table's URL in Airtable. The name form is not accepted — see `airtable-record-get`",
+          "name": "table_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^tbl[A-Za-z0-9]+$",
+            "type": "string"
+          },
+          "wire": "tableIdOrName"
+        },
+        {
+          "description": "The record's cell values, as an object keyed by the table's column names — `{\"Name\": \"Acme\", \"Status\": \"Open\"}`. Each value must match its column's type: a single-select takes one of its configured option names, a linked-record column takes an array of `rec…` ids, a date takes an ISO 8601 string. An unknown column name is rejected, not ignored",
+          "name": "cell_values",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "description": "A map from column name to cell value. Untyped here because the columns are the base's own schema",
+            "type": "object"
+          },
+          "wire": "fields"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/error/type",
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "fields": {
+              "$param": "cell_values"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/v0/{base_id}/{table_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "createdTime": {
+            "description": "When the record was created",
+            "format": "date-time",
+            "type": "string"
+          },
+          "fields": {
+            "description": "The created record's cell values as Airtable stored them, keyed by column name. Computed and formula columns appear here having been evaluated",
+            "type": "object"
+          },
+          "id": {
+            "description": "The created record's id — what later calls address it by",
+            "pattern": "^rec[A-Za-z0-9]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "createdTime",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "airtable.access_token"
+        ]
+      ],
+      "description": "Update one record's cell values. The write is sparse: only the columns named in `fields` change and every other column of the record is left exactly as it was. Values must already be in the form each column expects — `typecast` coercion cannot be requested yet. The updated record is in the response",
+      "direction": "write",
+      "expose": true,
+      "id": "airtable-record-update",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The base's id, the `app…` segment in the base's URL in Airtable",
+          "name": "base_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^app[A-Za-z0-9]+$",
+            "type": "string"
+          },
+          "wire": "baseId"
+        },
+        {
+          "description": "The table's id, the `tbl…` segment in the table's URL in Airtable. The name form is not accepted — see `airtable-record-get`",
+          "name": "table_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^tbl[A-Za-z0-9]+$",
+            "type": "string"
+          },
+          "wire": "tableIdOrName"
+        },
+        {
+          "description": "The id of the record to update",
+          "name": "record_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^rec[A-Za-z0-9]+$",
+            "type": "string"
+          },
+          "wire": "recordId"
+        },
+        {
+          "description": "The columns to change, as an object keyed by the table's column names. Columns not named here keep their current values. Setting a column to `null` clears it, which is the only way to empty a cell through this operation",
+          "name": "cell_values",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "description": "A map from column name to cell value. Untyped here because the columns are the base's own schema",
+            "type": "object"
+          },
+          "wire": "fields"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/error/type",
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "fields": {
+              "$param": "cell_values"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "PATCH",
+        "url": "{base}/v0/{base_id}/{table_id}/{record_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "createdTime": {
+            "description": "When the record was created — unchanged by an update",
+            "format": "date-time",
+            "type": "string"
+          },
+          "fields": {
+            "description": "The record's cell values after the update, keyed by column name. Every column is returned, not only the changed ones",
+            "type": "object"
+          },
+          "id": {
+            "description": "The record's id",
+            "pattern": "^rec[A-Za-z0-9]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "createdTime",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "airtable.access_token"
+        ]
+      ],
+      "description": "Delete one record and every cell value in it. There is no API route back: Airtable's trash and revision history are UI features on a retention window, not endpoints, so a flux run cannot undo this. Responds `{\"id\": …, \"deleted\": true}`",
+      "direction": "write",
+      "expose": true,
+      "id": "airtable-record-delete",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The base's id, the `app…` segment in the base's URL in Airtable",
+          "name": "base_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^app[A-Za-z0-9]+$",
+            "type": "string"
+          },
+          "wire": "baseId"
+        },
+        {
+          "description": "The table's id, the `tbl…` segment in the table's URL in Airtable. The name form is not accepted — see `airtable-record-get`",
+          "name": "table_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^tbl[A-Za-z0-9]+$",
+            "type": "string"
+          },
+          "wire": "tableIdOrName"
+        },
+        {
+          "description": "The id of the record to delete",
+          "name": "record_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^rec[A-Za-z0-9]+$",
+            "type": "string"
+          },
+          "wire": "recordId"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/error/type",
+          "message_pointer": "/error/message"
+        }
+      },
+      "request": {
+        "method": "DELETE",
+        "url": "{base}/v0/{base_id}/{table_id}/{record_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "deleted": {
+            "description": "Always `true` on a 2xx. Airtable reports a record that was already gone as a 404 rather than as `false`",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The id of the record that was deleted",
+            "pattern": "^rec[A-Za-z0-9]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "deleted"
+        ],
+        "type": "object"
+      },
+      "risk": "destructive",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v0",
+      "base_url": "https://api.airtable.com",
+      "gid": "com.airtable.api:v0",
+      "name": "default",
+      "tags": [
+        "database"
+      ]
+    }
+  ],
+  "vendor": "Airtable"
+}

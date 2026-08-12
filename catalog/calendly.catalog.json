@@ -1,0 +1,631 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Calendly access token sent as a bearer — a personal access token or an OAuth-issued one",
+      "env": [
+        "CALENDLY_ACCESS_TOKEN"
+      ],
+      "name": "calendly.access_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.calendly.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.calendly.access_token",
+      "docs_url": "https://developer.calendly.com/getting-started",
+      "format": "token",
+      "help": "Create one under Integrations & apps → API & Webhooks → Personal access tokens in Calendly. Calendly shows it once",
+      "label": "Calendly access token",
+      "level": "connection",
+      "name": "access_token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "calendly",
+  "default_auth": [
+    [
+      "calendly.access_token"
+    ]
+  ],
+  "description": "Calendly scheduling: read the authenticated user, event types, scheduled events and their invitees",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "calendly.access_token"
+        ]
+      ],
+      "description": "Get the authenticated user: their own resource URI, name, scheduling slug, account email and current organization. The URI in the response is the value later operations expect as their `user` query parameter",
+      "direction": "read",
+      "expose": true,
+      "id": "calendly-user-me",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/users/me"
+      },
+      "response_schema": {
+        "properties": {
+          "resource": {
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "current_organization": {
+                "description": "URI of the organization this user currently belongs to",
+                "type": "string"
+              },
+              "email": {
+                "description": "The account owner's own email — not an invitee's",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "description": "The scheduling-page slug, e.g. the last segment of `https://calendly.com/{slug}`",
+                "type": "string"
+              },
+              "timezone": {
+                "description": "IANA timezone name, e.g. `America/New_York`",
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "uri": {
+                "description": "This user's own canonical URI, e.g. `https://api.calendly.com/users/{uuid}`. Pass this whole string — not just its trailing id — as the `user` argument to calendly-event-type-list and calendly-scheduled-event-list",
+                "type": "string"
+              }
+            },
+            "required": [
+              "uri",
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "resource"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "calendly.access_token"
+        ]
+      ],
+      "description": "List event types owned by a user — the bookable meeting templates (name, duration, scheduling link). Takes the user's own URI, not a bare id",
+      "direction": "read",
+      "expose": true,
+      "id": "calendly-event-type-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The full URI of the Calendly user to list event types for, e.g. `https://api.calendly.com/users/{uuid}` — the `uri` field from calendly-user-me's response. Pass the whole URI unchanged, never just its trailing id",
+          "name": "user",
+          "position": "query",
+          "required": true,
+          "schema": {
+            "minLength": 33,
+            "pattern": "^https://api\\.calendly\\.com/users/[A-Za-z0-9-]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Results per page; Calendly caps this at 100",
+          "name": "count",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "default": 20,
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "count",
+            "value": {
+              "$param": "count"
+            }
+          },
+          {
+            "name": "user",
+            "value": {
+              "$param": "user"
+            }
+          }
+        ],
+        "url": "{base}/event_types"
+      },
+      "response_schema": {
+        "properties": {
+          "collection": {
+            "description": "The user's event types",
+            "items": {
+              "properties": {
+                "active": {
+                  "description": "Whether the event type currently accepts new bookings",
+                  "type": "boolean"
+                },
+                "color": {
+                  "description": "Hex color Calendly's UI displays this event type in",
+                  "type": "string"
+                },
+                "duration": {
+                  "description": "Meeting length in minutes",
+                  "type": "integer"
+                },
+                "kind": {
+                  "description": "`solo` or `group`",
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "scheduling_url": {
+                  "description": "The public booking page for this event type",
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "uri": {
+                  "description": "This event type's own canonical URI",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "name",
+                "active"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "pagination": {
+            "description": "Cursor pagination. `next_page_token` is deliberately not a declared parameter here — it is an opaque server-issued token this connector does not attempt to re-encode; page through by reading `next_page` from the response instead",
+            "type": "object"
+          }
+        },
+        "required": [
+          "collection"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "calendly.access_token"
+        ]
+      ],
+      "description": "List a user's scheduled events (past and upcoming bookings). Takes the user's own URI, not a bare id",
+      "direction": "read",
+      "expose": true,
+      "id": "calendly-scheduled-event-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The full URI of the Calendly user to list scheduled events for, e.g. `https://api.calendly.com/users/{uuid}` — the `uri` field from calendly-user-me's response. Pass the whole URI unchanged, never just its trailing id",
+          "name": "user",
+          "position": "query",
+          "required": true,
+          "schema": {
+            "minLength": 33,
+            "pattern": "^https://api\\.calendly\\.com/users/[A-Za-z0-9-]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Filter to `active` (not canceled) or `canceled` events",
+          "name": "status",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "active",
+              "canceled"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "description": "Results per page; Calendly caps this at 100",
+          "name": "count",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "default": 20,
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "count",
+            "value": {
+              "$param": "count"
+            }
+          },
+          {
+            "name": "status",
+            "value": {
+              "$param": "status"
+            }
+          },
+          {
+            "name": "user",
+            "value": {
+              "$param": "user"
+            }
+          }
+        ],
+        "url": "{base}/scheduled_events"
+      },
+      "response_schema": {
+        "properties": {
+          "collection": {
+            "items": {
+              "properties": {
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "end_time": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "event_type": {
+                  "description": "URI of the event type this booking was made against",
+                  "type": "string"
+                },
+                "invitees_counter": {
+                  "properties": {
+                    "active": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                },
+                "location": {
+                  "description": "Conferencing or physical-location details. Calendly documents several location kinds with different shapes (video call, phone, in person, custom), so no single object shape is declared here rather than guessing one"
+                },
+                "name": {
+                  "description": "The event type's name at the time of booking",
+                  "type": "string"
+                },
+                "start_time": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "`active` or `canceled`",
+                  "type": "string"
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "uri": {
+                  "description": "This event's own canonical URI; its trailing segment is the bare UUID calendly-scheduled-event-get and calendly-invitee-list take as their path parameter",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "name",
+                "status",
+                "start_time",
+                "end_time"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "pagination": {
+            "description": "Cursor pagination; see calendly-event-type-list's response_schema comment for why no cursor parameter is declared",
+            "type": "object"
+          }
+        },
+        "required": [
+          "collection"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "calendly.access_token"
+        ]
+      ],
+      "description": "Get one scheduled event by id",
+      "direction": "read",
+      "expose": true,
+      "id": "calendly-scheduled-event-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The event's bare UUID — the last path segment of its own `uri`, e.g. the tail of `https://api.calendly.com/scheduled_events/{uuid}`. Pass only the UUID here, never the full URI",
+          "name": "uuid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "maxLength": 36,
+            "minLength": 36,
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/title",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/scheduled_events/{uuid}"
+      },
+      "response_schema": {
+        "properties": {
+          "resource": {
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "end_time": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "event_type": {
+                "description": "URI of the event type this booking was made against",
+                "type": "string"
+              },
+              "invitees_counter": {
+                "properties": {
+                  "active": {
+                    "type": "integer"
+                  },
+                  "limit": {
+                    "type": "integer"
+                  },
+                  "total": {
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "location": {
+                "description": "Conferencing or physical-location details; shape varies by kind and is not enumerated here — see calendly-scheduled-event-list's response_schema comment"
+              },
+              "name": {
+                "description": "The event type's name at the time of booking",
+                "type": "string"
+              },
+              "start_time": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "description": "`active` or `canceled`",
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "uri",
+              "name",
+              "status",
+              "start_time",
+              "end_time"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "resource"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "calendly.access_token"
+        ]
+      ],
+      "description": "List a scheduled event's invitees. Each invitee is personal data about a named third party — their name, email and any answers they gave to the event type's custom questions. Read it only for what the calling flow needs and do not persist or repeat it beyond that",
+      "direction": "read",
+      "expose": true,
+      "id": "calendly-invitee-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The event's bare UUID — the last path segment of its own `uri`. Pass only the UUID here, never the full URI",
+          "name": "uuid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "maxLength": 36,
+            "minLength": 36,
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Filter to `active` (not canceled) or `canceled` invitees",
+          "name": "status",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "active",
+              "canceled"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "description": "Results per page; Calendly caps this at 100",
+          "name": "count",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "default": 20,
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/title",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "count",
+            "value": {
+              "$param": "count"
+            }
+          },
+          {
+            "name": "status",
+            "value": {
+              "$param": "status"
+            }
+          }
+        ],
+        "url": "{base}/scheduled_events/{uuid}/invitees"
+      },
+      "response_schema": {
+        "properties": {
+          "collection": {
+            "description": "The event's invitees — personal data",
+            "items": {
+              "properties": {
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "email": {
+                  "description": "The invitee's own email address — personal data, never an example value",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The invitee's own name — personal data, never an example value",
+                  "type": "string"
+                },
+                "questions_and_answers": {
+                  "description": "The invitee's free-text answers to the event type's custom booking questions — personal data, shape not enumerated further",
+                  "type": "array"
+                },
+                "status": {
+                  "description": "`active` or `canceled`",
+                  "type": "string"
+                },
+                "timezone": {
+                  "description": "IANA timezone name the invitee booked in",
+                  "type": "string"
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "email",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "pagination": {
+            "description": "Cursor pagination; see calendly-event-type-list's response_schema comment for why no cursor parameter is declared",
+            "type": "object"
+          }
+        },
+        "required": [
+          "collection"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "base_url": "https://api.calendly.com",
+      "name": "default",
+      "tags": [
+        "scheduling"
+      ]
+    }
+  ],
+  "vendor": "Calendly",
+  "verify": "calendly-user-me"
+}

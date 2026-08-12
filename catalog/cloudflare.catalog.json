@@ -1,0 +1,620 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Cloudflare API Token, sent as a bearer token, scoped to Zone:Read, DNS:Edit and Cache Purge on the zones this connector should reach",
+      "env": [
+        "CLOUDFLARE_API_TOKEN"
+      ],
+      "name": "cloudflare.api_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.cloudflare.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.cloudflare.api_token",
+      "docs_url": "https://developers.cloudflare.com/fundamentals/api/get-started/create-token/",
+      "format": "token",
+      "help": "Create one at My Profile -> API Tokens -> Create Token, using the \"Edit zone DNS\" template or a custom token with Zone:Read, DNS:Edit and Cache Purge permissions on the zones you want this connector to reach. Cloudflare shows the token once",
+      "label": "Cloudflare API token",
+      "level": "connection",
+      "name": "api_token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "path.zone_id",
+      "docs_url": "https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/",
+      "example": "023e105f4ecef8ad9ca31a8372d0c353",
+      "format": "text",
+      "help": "The zone (domain) this connection manages, as 32 lowercase hex characters. Find it on the zone's Overview page in the Cloudflare dashboard, bottom right under \"Zone ID\", or by running the connector's \"List zones\" operation. One connection manages one zone",
+      "label": "Cloudflare zone id",
+      "level": "connection",
+      "name": "zone_id",
+      "required": true,
+      "secret": false,
+      "service": "default"
+    }
+  ],
+  "connector": "cloudflare",
+  "default_auth": [
+    [
+      "cloudflare.api_token"
+    ]
+  ],
+  "description": "Cloudflare zones and DNS: list zones, list and manage DNS records for a zone, and purge a zone's cache",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "cloudflare.api_token"
+        ]
+      ],
+      "description": "List the zones (domains) this API token can see, with each zone's id, name, status and assigned Cloudflare name servers. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note). The zone `id` returned here is the value an operator pins as this connection's `zone_id`; every other operation in this connector is already scoped to that one zone and does not take it as an argument",
+      "direction": "read",
+      "expose": true,
+      "id": "cloudflare-zone-list",
+      "idempotency": "idempotent",
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errors/0/code",
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/zones"
+      },
+      "response_schema": {
+        "properties": {
+          "errors": {
+            "items": {
+              "properties": {
+                "code": {
+                  "type": "integer"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "result": {
+            "items": {
+              "properties": {
+                "id": {
+                  "description": "The zone's id, 32 lowercase hex characters — pass this as `zone_id` to every other operation",
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The registrable domain, e.g. example.com",
+                  "type": "string"
+                },
+                "name_servers": {
+                  "description": "The Cloudflare name servers this zone's registrar should point at",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "paused": {
+                  "description": "True when Cloudflare is bypassed for this zone",
+                  "type": "boolean"
+                },
+                "status": {
+                  "description": "active, pending, initializing, moved, deleted, deactivated, or read only",
+                  "type": "string"
+                },
+                "type": {
+                  "description": "full (Cloudflare is authoritative) or partial (CNAME setup)",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "result_info": {
+            "description": "Pagination totals for this response: page, per_page, count and total_count",
+            "properties": {
+              "count": {
+                "type": "integer"
+              },
+              "page": {
+                "type": "integer"
+              },
+              "per_page": {
+                "type": "integer"
+              },
+              "total_count": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "result"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "cloudflare.api_token"
+        ]
+      ],
+      "description": "List the DNS records in a zone: each record's id, type, name, content, TTL and whether it is proxied through Cloudflare. Returns Cloudflare's first page only; this connector declares no page or filter parameters (see the connector's header note)",
+      "direction": "read",
+      "endpoint": {
+        "zone_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "cloudflare-dns-record-list",
+      "idempotency": "idempotent",
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errors/0/code",
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/zones/{zone_id}/dns_records"
+      },
+      "response_schema": {
+        "properties": {
+          "errors": {
+            "items": {
+              "properties": {
+                "code": {
+                  "type": "integer"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "result": {
+            "items": {
+              "properties": {
+                "comment": {
+                  "description": "An operator-set note, empty string when none",
+                  "type": "string"
+                },
+                "content": {
+                  "description": "The record's value; its shape depends on `type` — an IP for A/AAAA, a hostname for CNAME, arbitrary text for TXT",
+                  "type": "string"
+                },
+                "created_on": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The record's id, 32 lowercase hex characters",
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                },
+                "locked": {
+                  "type": "boolean"
+                },
+                "modified_on": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The DNS name, e.g. www.example.com or example.com for the apex",
+                  "type": "string"
+                },
+                "proxiable": {
+                  "description": "Whether Cloudflare can proxy this record's type",
+                  "type": "boolean"
+                },
+                "proxied": {
+                  "description": "Whether Cloudflare currently proxies traffic for it, hiding the origin IP",
+                  "type": "boolean"
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "ttl": {
+                  "description": "Time to live in seconds; 1 means \"automatic\"",
+                  "type": "integer"
+                },
+                "type": {
+                  "description": "A, AAAA, CNAME, TXT, MX, NS, SRV or CAA, among others",
+                  "type": "string"
+                },
+                "zone_id": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "result_info": {
+            "properties": {
+              "count": {
+                "type": "integer"
+              },
+              "page": {
+                "type": "integer"
+              },
+              "per_page": {
+                "type": "integer"
+              },
+              "total_count": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "result"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "cloudflare.api_token"
+        ]
+      ],
+      "description": "Create a DNS record in a zone. Cloudflare does not deduplicate: creating the same name/type/content pair twice makes two records, so this is not idempotent. The created record, with its assigned id, is in the response",
+      "direction": "write",
+      "endpoint": {
+        "zone_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "cloudflare-dns-record-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The DNS record type",
+          "name": "type",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "enum": [
+              "A",
+              "AAAA",
+              "CNAME",
+              "TXT",
+              "MX",
+              "NS",
+              "SRV",
+              "CAA"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "description": "The DNS name, e.g. www.example.com or example.com for the apex",
+          "name": "name",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "The record's value; its shape depends on `type` — an IP for A/AAAA, a hostname for CNAME, arbitrary text for TXT",
+          "name": "content",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errors/0/code",
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "content": {
+              "$param": "content"
+            },
+            "name": {
+              "$param": "name"
+            },
+            "type": {
+              "$param": "type"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/zones/{zone_id}/dns_records"
+      },
+      "response_schema": {
+        "properties": {
+          "errors": {
+            "items": {
+              "properties": {
+                "code": {
+                  "type": "integer"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "result": {
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "created_on": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "modified_on": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "proxiable": {
+                "type": "boolean"
+              },
+              "proxied": {
+                "type": "boolean"
+              },
+              "ttl": {
+                "type": "integer"
+              },
+              "type": {
+                "type": "string"
+              },
+              "zone_id": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "result"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "cloudflare.api_token"
+        ]
+      ],
+      "description": "Delete one DNS record. There is no API route back: Cloudflare's dashboard \"recently deleted\" surface is a retention-window UI feature, not an endpoint, so a flux run cannot undo this. Responds with just the deleted record's id",
+      "direction": "write",
+      "endpoint": {
+        "zone_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "cloudflare-dns-record-delete",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The record's id, 32 lowercase hex characters, as returned by cloudflare-dns-record-list or cloudflare-dns-record-create",
+          "name": "dns_record_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^[0-9a-f]{32}$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errors/0/code",
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "method": "DELETE",
+        "url": "{base}/zones/{zone_id}/dns_records/{dns_record_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "errors": {
+            "items": {
+              "properties": {
+                "code": {
+                  "type": "integer"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "result": {
+            "properties": {
+              "id": {
+                "description": "The deleted record's id",
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "result"
+        ],
+        "type": "object"
+      },
+      "risk": "destructive",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "cloudflare.api_token"
+        ]
+      ],
+      "description": "Purge every cached asset for a zone, immediately, for every visitor worldwide. There is no partial or selective purge in this connector (see its header note) — every call empties the whole zone's edge cache. Repeating it changes nothing further, but each call can spike load on the origin as the cache refills, so it should not be called more often than a real cache-affecting change warrants",
+      "direction": "write",
+      "endpoint": {
+        "zone_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "cloudflare-cache-purge",
+      "idempotency": "conditional",
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errors/0/code",
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "repeatability_condition": "`purge_everything` names a target state rather than applying a delta, so a repeat leaves the zone exactly where the first call left it — purging an already-empty edge cache is a no-op. Conditional rather than idempotent because the cache refills from origin between calls, so a stored result must never be served in place of running it",
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "purge_everything": true
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/zones/{zone_id}/purge_cache"
+      },
+      "response_schema": {
+        "properties": {
+          "errors": {
+            "items": {
+              "properties": {
+                "code": {
+                  "type": "integer"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "result": {
+            "properties": {
+              "id": {
+                "description": "The purged zone's id, echoed back",
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "result"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v4",
+      "base_url": "https://api.cloudflare.com/client/v4",
+      "gid": "com.cloudflare.api:v4",
+      "name": "default",
+      "tags": [
+        "infrastructure"
+      ]
+    }
+  ],
+  "vendor": "Cloudflare",
+  "verify": "cloudflare-zone-list"
+}

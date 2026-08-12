@@ -1,0 +1,431 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Notion integration token sent as a bearer — an internal integration token or an OAuth-issued access token",
+      "env": [
+        "NOTION_TOKEN"
+      ],
+      "name": "notion.token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.notion.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.notion.token",
+      "docs_url": "https://developers.notion.com/docs/authorization",
+      "format": "token",
+      "help": "Create an integration at notion.so/my-integrations and copy its Internal Integration Secret. **Then share your pages with it**: in Notion, open each page or database, use the ••• menu → Connections → and add your integration. An integration can only see content that has been shared with it this way, so a token that is otherwise valid returns a 404 for a page you can see in your browser until you do. Sharing a parent page shares everything under it",
+      "label": "Integration token",
+      "level": "connection",
+      "name": "token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "notion",
+  "default_auth": [
+    [
+      "notion.token"
+    ]
+  ],
+  "description": "Notion workspace: read a page's properties, query a database, search shared content, and create a page",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "notion.token"
+        ]
+      ],
+      "description": "Get the bot user this integration authenticates as, confirming the token resolves and naming the workspace it belongs to. Takes no parameters",
+      "direction": "read",
+      "expose": true,
+      "id": "notion-user-me",
+      "idempotency": "idempotent",
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/code",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "headers": {
+          "Notion-Version": "2022-06-28"
+        },
+        "method": "GET",
+        "url": "{base}/v1/users/me"
+      },
+      "response_schema": {
+        "properties": {
+          "bot": {
+            "description": "The integration's owner and workspace name",
+            "type": "object"
+          },
+          "id": {
+            "description": "The bot user's id",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "object": {
+            "const": "user"
+          },
+          "type": {
+            "const": "bot"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "notion.token"
+        ]
+      ],
+      "description": "Get one page's properties, parent, icon, cover and timestamps. This does NOT return the page's text — in Notion a page's content is a separate tree of blocks, which this connector cannot read",
+      "direction": "read",
+      "expose": true,
+      "id": "notion-page-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The page's id, a UUID. It is the last path segment of the page's URL, where it appears without hyphens — either spelling is accepted",
+          "name": "page_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 32,
+            "pattern": "^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/code",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "headers": {
+          "Notion-Version": "2022-06-28"
+        },
+        "method": "GET",
+        "url": "{base}/v1/pages/{page_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "archived": {
+            "type": "boolean"
+          },
+          "created_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_edited_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "object": {
+            "const": "page"
+          },
+          "parent": {
+            "description": "Where the page lives: `{type: \"database_id\", database_id}`, `{type: \"page_id\", page_id}` or `{type: \"workspace\"}`",
+            "type": "object"
+          },
+          "properties": {
+            "description": "The page's property values, keyed by property name. For a page in a database the keys are that database's own columns, so they are known only at runtime; for a page with a page parent there is exactly one, `title`",
+            "type": "object"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "notion.token"
+        ]
+      ],
+      "description": "Query a database and return its first page of entries (up to 100), unfiltered and in the database's default order. Each entry is a page, and its `properties` are keyed by that database's own column names. Direction remains conservatively authored as write pending individual review; POST is transport only and supplied no evidence",
+      "direction": "write",
+      "expose": true,
+      "id": "notion-database-query",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The database's id, a UUID. Open the database as a full page in Notion and it is the last path segment of the URL — not the id of a page inside it",
+          "name": "database_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 32,
+            "pattern": "^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/code",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "headers": {
+          "Notion-Version": "2022-06-28"
+        },
+        "method": "POST",
+        "url": "{base}/v1/databases/{database_id}/query"
+      },
+      "response_schema": {
+        "properties": {
+          "has_more": {
+            "description": "True when the database holds more entries than this page returned. This connector cannot fetch them — the cursor is an opaque token and no query parameter is encodable (C-30)",
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "description": "The cursor for the next page. Unusable here, for the reason given on `has_more`",
+            "type": "string"
+          },
+          "object": {
+            "const": "list"
+          },
+          "results": {
+            "description": "The matching pages, each with its own `properties` object keyed by the database's column names",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "notion.token"
+        ]
+      ],
+      "description": "Search the pages and databases shared with this integration by title, returning the first page of matches (up to 100). Notion matches on title only — it does not search page text. Direction remains conservatively authored as write pending individual review; POST is transport only and supplied no evidence",
+      "direction": "write",
+      "expose": true,
+      "id": "notion-search",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The text to match against page and database titles. An empty string returns everything shared with the integration",
+          "name": "query",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/code",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "query": {
+              "$param": "query"
+            }
+          }
+        },
+        "headers": {
+          "Notion-Version": "2022-06-28",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/v1/search"
+      },
+      "response_schema": {
+        "properties": {
+          "has_more": {
+            "description": "True when more matches exist than this page returned. This connector cannot fetch them — see notion-database-query",
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": "string"
+          },
+          "object": {
+            "const": "list"
+          },
+          "results": {
+            "description": "The matching pages and databases, newest first",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "notion.token"
+        ]
+      ],
+      "description": "Create a new empty page as a child of an existing page. The page is created with a title and no content — this connector cannot write page body text, which in Notion is a separate tree of blocks. The parent page must be shared with this integration",
+      "direction": "write",
+      "expose": true,
+      "id": "notion-page-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The id of the existing page to create this page inside, a UUID. It must be a page, not a database, and it must be shared with this integration",
+          "name": "parent_page_id",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 32,
+            "pattern": "^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "wire": "parent.page_id"
+        },
+        {
+          "description": "The page title as Notion rich text: a list of runs, each `{\"text\": {\"content\": \"...\"}}`. A plain title is one run — `[{\"text\": {\"content\": \"My page\"}}]`",
+          "name": "title",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "items": {
+              "properties": {
+                "text": {
+                  "properties": {
+                    "content": {
+                      "description": "The literal text of this run",
+                      "type": "string"
+                    },
+                    "link": {
+                      "description": "An optional link on this run, `{\"url\": \"...\"}`",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "content"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "text"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "wire": "properties.title"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/code",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "parent": {
+              "page_id": {
+                "$param": "parent_page_id"
+              }
+            },
+            "properties": {
+              "title": {
+                "$param": "title"
+              }
+            }
+          }
+        },
+        "headers": {
+          "Notion-Version": "2022-06-28",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/v1/pages"
+      },
+      "response_schema": {
+        "properties": {
+          "created_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "The created page's id, which is what later calls address it by",
+            "type": "string"
+          },
+          "object": {
+            "const": "page"
+          },
+          "parent": {
+            "type": "object"
+          },
+          "url": {
+            "description": "The created page's Notion URL",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v1",
+      "base_url": "https://api.notion.com",
+      "gid": "com.notion.api:v1",
+      "name": "default",
+      "tags": [
+        "knowledge-base"
+      ]
+    }
+  ],
+  "vendor": "Notion",
+  "verify": "notion-user-me"
+}

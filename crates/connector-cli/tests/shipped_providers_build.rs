@@ -168,12 +168,18 @@ fn every_shipped_provider_compiles() {
             ),
             "a build of {provider} must plan its catalog table"
         );
+        // The canonical document (C-536) is provider-unit too, and the schema it validates
+        // against is a constant of the generator, planned on every run.
+        assert!(
+            plans(&artifacts, &format!("catalog/{provider}.catalog.json")),
+            "a build of {provider} must plan its canonical catalog document"
+        );
         assert_eq!(
             artifacts.len(),
-            2 * services.len() + 1 + operations,
+            2 * services.len() + 3 + operations,
             "{provider} publishes {operations} operations across {} service(s), so a build plans a \
-             module and a manifest per service, one catalog table, and one rendering per operation; \
-             it planned {} artifacts",
+             module and a manifest per service, one catalog table, one canonical document, the \
+             document schema, and one rendering per operation; it planned {} artifacts",
             services.len(),
             artifacts.len()
         );

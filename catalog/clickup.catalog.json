@@ -1,0 +1,804 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "ClickUp personal API token, sent as the raw value of the Authorization header with no scheme word. Grant access to the workspaces, spaces and lists the operations below need to read or write",
+      "env": [
+        "CLICKUP_TOKEN"
+      ],
+      "name": "clickup.token",
+      "scheme": {
+        "kind": "header",
+        "name": "Authorization"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.clickup.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.clickup.token",
+      "docs_url": "https://developer.clickup.com/docs/authentication",
+      "format": "token",
+      "help": "Copy it from ClickUp under your avatar -> Settings -> Apps. ClickUp shows the full token there each time; treat it like a password — it is sent raw, with no scheme word, on every request",
+      "label": "ClickUp personal API token",
+      "level": "connection",
+      "name": "token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "clickup",
+  "default_auth": [
+    [
+      "clickup.token"
+    ]
+  ],
+  "description": "ClickUp: list workspaces and a space's folders, and read, list, create and update tasks in a list",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "clickup.token"
+        ]
+      ],
+      "description": "List the workspaces (called \"teams\" in ClickUp's API) the token can see. Takes no parameters; used as the verify read to prove a token resolves, and as the source of the workspace-level context a space id is nested under",
+      "direction": "read",
+      "expose": true,
+      "id": "clickup-team-list",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/team"
+      },
+      "response_schema": {
+        "properties": {
+          "teams": {
+            "description": "Every workspace the token can see",
+            "items": {
+              "properties": {
+                "avatar": {
+                  "description": "Workspace avatar image URL, or null",
+                  "format": "uri",
+                  "type": "string"
+                },
+                "color": {
+                  "description": "Hex color ClickUp's UI displays this workspace in",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The workspace's id",
+                  "type": "string"
+                },
+                "members": {
+                  "description": "Each `{user: {id, username, email, color, profilePicture}}`",
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "teams"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "clickup.token"
+        ]
+      ],
+      "description": "List a space's folders. Each folder's own lists are nested inline in the response — read a folder's `lists` field for the list ids clickup-list-task-list and clickup-task-create take, rather than looking for a separate folder-to-list operation",
+      "direction": "read",
+      "expose": true,
+      "id": "clickup-space-folder-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The space's id, visible in ClickUp's UI URL (app.clickup.com/{team_id}/v/o/s/{space_id}) — this connector has no operation that lists a workspace's spaces, the same way providers/gitlab.toml expects a project's numeric id from its URL rather than from a lookup",
+          "name": "space_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Include archived folders",
+          "name": "archived",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "archived",
+            "value": {
+              "$param": "archived"
+            }
+          }
+        ],
+        "url": "{base}/space/{space_id}/folder"
+      },
+      "response_schema": {
+        "properties": {
+          "folders": {
+            "description": "The space's folders",
+            "items": {
+              "properties": {
+                "hidden": {
+                  "type": "boolean"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "lists": {
+                  "description": "The lists inside this folder, each with at least `{id, name}` — the list id later operations take. Read this field rather than calling a separate folder-to-list operation; none is declared",
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "orderindex": {
+                  "type": "integer"
+                },
+                "override_statuses": {
+                  "description": "Whether this folder overrides the space's default statuses",
+                  "type": "boolean"
+                },
+                "task_count": {
+                  "description": "The folder's task count, as a string",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "folders"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "clickup.token"
+        ]
+      ],
+      "description": "List tasks in a list, most recently created first by default",
+      "direction": "read",
+      "expose": true,
+      "id": "clickup-list-task-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The list's id — from clickup-space-folder-list's `folders[].lists[].id`, or from ClickUp's own UI URL",
+          "name": "list_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Include archived tasks",
+          "name": "archived",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "0-based page number",
+          "name": "page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Sort field",
+          "name": "order_by",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "id",
+              "created",
+              "updated",
+              "due_date"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "description": "Reverse the sort order",
+          "name": "reverse",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Include closed tasks; excluded by default",
+          "name": "include_closed",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "archived",
+            "value": {
+              "$param": "archived"
+            }
+          },
+          {
+            "name": "include_closed",
+            "value": {
+              "$param": "include_closed"
+            }
+          },
+          {
+            "name": "order_by",
+            "value": {
+              "$param": "order_by"
+            }
+          },
+          {
+            "name": "page",
+            "value": {
+              "$param": "page"
+            }
+          },
+          {
+            "name": "reverse",
+            "value": {
+              "$param": "reverse"
+            }
+          }
+        ],
+        "url": "{base}/list/{list_id}/task"
+      },
+      "response_schema": {
+        "properties": {
+          "last_page": {
+            "description": "Whether this is the final page",
+            "type": "boolean"
+          },
+          "tasks": {
+            "description": "The matching tasks",
+            "items": {
+              "properties": {
+                "archived": {
+                  "type": "boolean"
+                },
+                "assignees": {
+                  "description": "Each an assigned user object",
+                  "type": "array"
+                },
+                "creator": {
+                  "description": "`{id, username, email, color, profilePicture}`",
+                  "type": "object"
+                },
+                "date_closed": {
+                  "description": "Unix epoch milliseconds, as a string, or null",
+                  "type": "string"
+                },
+                "date_created": {
+                  "description": "Unix epoch milliseconds, as a string",
+                  "type": "string"
+                },
+                "date_updated": {
+                  "description": "Unix epoch milliseconds, as a string",
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "due_date": {
+                  "description": "Unix epoch milliseconds, as a string, or null",
+                  "type": "string"
+                },
+                "folder": {
+                  "description": "`{id, name}`",
+                  "type": "object"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "list": {
+                  "description": "`{id, name}`",
+                  "type": "object"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "orderindex": {
+                  "type": "string"
+                },
+                "priority": {
+                  "description": "`{id, priority, color}`, or null",
+                  "type": "object"
+                },
+                "space": {
+                  "description": "`{id}`",
+                  "type": "object"
+                },
+                "start_date": {
+                  "description": "Unix epoch milliseconds, as a string, or null",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "`{status, color, orderindex, type}`",
+                  "type": "object"
+                },
+                "time_estimate": {
+                  "description": "Milliseconds, or null",
+                  "type": "integer"
+                },
+                "url": {
+                  "description": "The task's ClickUp page",
+                  "format": "uri",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "tasks"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "clickup.token"
+        ]
+      ],
+      "description": "Get one task by id",
+      "direction": "read",
+      "expose": true,
+      "id": "clickup-task-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The task's id, from clickup-list-task-list or ClickUp's own UI URL",
+          "name": "task_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Include the task's subtasks in the response",
+          "name": "include_subtasks",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "include_subtasks",
+            "value": {
+              "$param": "include_subtasks"
+            }
+          }
+        ],
+        "url": "{base}/task/{task_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "assignees": {
+            "type": "array"
+          },
+          "creator": {
+            "description": "`{id, username, email, color, profilePicture}`",
+            "type": "object"
+          },
+          "custom_fields": {
+            "type": "array"
+          },
+          "description": {
+            "type": "string"
+          },
+          "due_date": {
+            "description": "Unix epoch milliseconds, as a string, or null",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "points": {
+            "description": "Sprint points, or null",
+            "type": "number"
+          },
+          "priority": {
+            "description": "`{id, priority, color}`, or null",
+            "type": "object"
+          },
+          "status": {
+            "description": "`{id, status, color, orderindex, type}`",
+            "type": "object"
+          },
+          "team_id": {
+            "type": "string"
+          },
+          "time_estimate": {
+            "description": "Milliseconds, or null",
+            "type": "integer"
+          },
+          "url": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "clickup.token"
+        ]
+      ],
+      "description": "Create a task in a list. Created with `notify_all` left at its default (false), so nobody is emailed by this call",
+      "direction": "write",
+      "expose": true,
+      "id": "clickup-task-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The list's id to create the task in — from clickup-space-folder-list's `folders[].lists[].id`, or from ClickUp's own UI URL",
+          "name": "list_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The task's name, as it appears in ClickUp's list view. The only vendor-required field",
+          "name": "name",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The task's plain-text description",
+          "name": "description",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "The status to create the task in, e.g. \"to do\" — must be one of the list's own configured statuses. Omit to use the list's default status",
+          "name": "status",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "1 (urgent), 2 (high), 3 (normal) or 4 (low). Omit for no priority",
+          "name": "priority",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Due date/time as Unix epoch milliseconds",
+          "name": "due_date",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "description": {
+              "$param": "description"
+            },
+            "due_date": {
+              "$param": "due_date"
+            },
+            "name": {
+              "$param": "name"
+            },
+            "priority": {
+              "$param": "priority"
+            },
+            "status": {
+              "$param": "status"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/list/{list_id}/task"
+      },
+      "response_schema": {
+        "properties": {
+          "creator": {
+            "description": "The account the token belongs to — a created task is attributed to it",
+            "type": "object"
+          },
+          "date_created": {
+            "description": "Unix epoch milliseconds, as a string",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "description": "The created task's id — what clickup-task-get and clickup-task-update address it by afterwards",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "description": "`{status, color, orderindex, type}`",
+            "type": "object"
+          },
+          "url": {
+            "description": "The task's page — the link to give a human",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "clickup.token"
+        ]
+      ],
+      "description": "Update a task's plain fields (name, description, status, priority, due date). Every field below is optional and ClickUp's update is sparse: an omitted field is left unchanged. Reassigning or rewatching the task is not supported by this operation — ClickUp takes those as {add, rem} deltas naming specific people, which this connector does not declare",
+      "direction": "write",
+      "expose": true,
+      "id": "clickup-task-update",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The task's id to update",
+          "name": "task_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The task's new name. Omit to leave it unchanged",
+          "name": "name",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The task's new plain-text description. Omit to leave it unchanged",
+          "name": "description",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "The task's new status, e.g. \"complete\" — must be one of the list's own configured statuses. Omit to leave it unchanged",
+          "name": "status",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "1 (urgent), 2 (high), 3 (normal) or 4 (low). Omit to leave it unchanged",
+          "name": "priority",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Due date/time as Unix epoch milliseconds. Omit to leave it unchanged",
+          "name": "due_date",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "description": {
+              "$param": "description"
+            },
+            "due_date": {
+              "$param": "due_date"
+            },
+            "name": {
+              "$param": "name"
+            },
+            "priority": {
+              "$param": "priority"
+            },
+            "status": {
+              "$param": "status"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "PUT",
+        "url": "{base}/task/{task_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "date_updated": {
+            "description": "Unix epoch milliseconds, as a string",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "description": "`{id, status, color, orderindex, type}`",
+            "type": "object"
+          },
+          "url": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v2",
+      "base_url": "https://api.clickup.com/api/v2",
+      "gid": "com.clickup.api:v2",
+      "name": "default",
+      "tags": [
+        "project-management"
+      ]
+    }
+  ],
+  "vendor": "ClickUp",
+  "verify": "clickup-team-list"
+}

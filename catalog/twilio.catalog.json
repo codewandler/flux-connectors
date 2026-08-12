@@ -1,0 +1,1898 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Twilio Account SID and Auth Token, sent as HTTP Basic credentials",
+      "env": [
+        "TWILIO_AUTH_TOKEN"
+      ],
+      "name": "twilio.basic_auth",
+      "scheme": {
+        "kind": "basic"
+      },
+      "subject": "unstated",
+      "user_env": [
+        "TWILIO_ACCOUNT_SID"
+      ]
+    },
+    {
+      "description": "The same Auth Token as twilio.basic_auth, used here to verify X-Twilio-Signature on inbound status callbacks. Never sent to Twilio",
+      "env": [
+        "TWILIO_AUTH_TOKEN"
+      ],
+      "name": "twilio.webhook_signing_secret",
+      "scheme": {
+        "kind": "signing"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.twilio.api",
+  "channels": [
+    {
+      "description": "Message delivery-status callbacks. Twilio POSTs form-encoded to the StatusCallback URL supplied when a message is created, signing the URL and the parameters with the Auth Token",
+      "events": [
+        "message.status_callback"
+      ],
+      "name": "message-status-callback",
+      "oip": "com.twilio.api:2010-04-01#message-status-callback",
+      "payload": {
+        "error_code": "ErrorCode",
+        "message_sid": "MessageSid",
+        "sender": "From",
+        "status": "MessageStatus",
+        "to": "To"
+      },
+      "service": "default",
+      "setup": {
+        "docs_url": "https://www.twilio.com/docs/messaging/guides/track-outbound-message-status",
+        "steps": [
+          "Open console.twilio.com and choose the phone number or Messaging Service this connection sends from",
+          "Paste the Request URL shown above into its status-callback field, exactly as shown — the signature covers the URL, so a redirect or a rewritten host breaks every delivery",
+          "Or, if messages are created by another system, have it pass the same URL as the `StatusCallback` parameter",
+          "Copy the Auth Token from the console into this connection's signing secret field — it is the same value as the Auth Token above"
+        ]
+      },
+      "transport": "webhook",
+      "verification": {
+        "hmac": {
+          "algorithm": "sha1",
+          "encoding": "base64",
+          "header": "X-Twilio-Signature",
+          "secret": "twilio.webhook_signing_secret",
+          "signed": "{url}{sorted_form}"
+        },
+        "kind": "hmac",
+        "verified": true
+      }
+    },
+    {
+      "description": "Call status callbacks. Twilio POSTs form-encoded to the StatusCallback URL configured for the call or the answering number, signed exactly as the messaging callback is",
+      "events": [
+        "call.status_callback"
+      ],
+      "name": "call-status-callback",
+      "oip": "com.twilio.api:2010-04-01#call-status-callback",
+      "payload": {
+        "call_sid": "CallSid",
+        "caller": "From",
+        "direction": "Direction",
+        "duration": "CallDuration",
+        "status": "CallStatus",
+        "to": "To"
+      },
+      "service": "default",
+      "setup": {
+        "docs_url": "https://www.twilio.com/docs/voice/twiml/number#attributes-statusCallback",
+        "steps": [
+          "Open console.twilio.com and choose the phone number this connection answers or dials on",
+          "Paste the Request URL shown above into its call status-callback field, exactly as shown — the signature covers the URL",
+          "Select the call events to report: initiated, ringing, answered, completed",
+          "Copy the Auth Token from the console into this connection's signing secret field"
+        ]
+      },
+      "transport": "webhook",
+      "verification": {
+        "hmac": {
+          "algorithm": "sha1",
+          "encoding": "base64",
+          "header": "X-Twilio-Signature",
+          "secret": "twilio.webhook_signing_secret",
+          "signed": "{url}{sorted_form}"
+        },
+        "kind": "hmac",
+        "verified": true
+      }
+    }
+  ],
+  "config": [
+    {
+      "also_binds": [
+        "path.AccountSid"
+      ],
+      "approval": "none",
+      "binds": "username.twilio.basic_auth",
+      "docs_url": "https://www.twilio.com/docs/iam/api/account",
+      "example": "ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "format": "token",
+      "help": "Copy this from the Twilio Console dashboard — it starts with AC and is the same value used to sign in to the API, not your login email",
+      "label": "Account SID",
+      "level": "connection",
+      "name": "account_sid",
+      "required": true,
+      "secret": false,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "credential.twilio.basic_auth",
+      "docs_url": "https://www.twilio.com/docs/iam/api/account",
+      "format": "token",
+      "help": "Your primary Auth Token from the Twilio Console dashboard. Twilio shows it masked by default — click to reveal it",
+      "label": "Auth Token",
+      "level": "connection",
+      "name": "auth_token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "twilio",
+  "default_auth": [
+    [
+      "twilio.basic_auth"
+    ]
+  ],
+  "description": "Twilio programmable messaging and voice: read the account, messages, calls, recordings, usage and conferences",
+  "events": [
+    {
+      "default": true,
+      "description": "A message's delivery status changed. Twilio POSTs this, form-encoded, to the StatusCallback URL supplied when the message was created",
+      "group": "Messaging",
+      "name": "message.status_callback",
+      "oip": "com.twilio.api:2010-04-01#message.status_callback",
+      "schema": {
+        "properties": {
+          "ApiVersion": {
+            "type": "string"
+          },
+          "ErrorCode": {
+            "description": "Present only when MessageStatus is failed or undelivered",
+            "type": "string"
+          },
+          "From": {
+            "description": "The sender",
+            "type": "string"
+          },
+          "MessageSid": {
+            "type": "string"
+          },
+          "MessageStatus": {
+            "enum": [
+              "accepted",
+              "queued",
+              "sending",
+              "sent",
+              "failed",
+              "delivered",
+              "undelivered",
+              "receiving",
+              "received",
+              "read"
+            ],
+            "type": "string"
+          },
+          "To": {
+            "description": "The recipient",
+            "type": "string"
+          }
+        },
+        "required": [
+          "MessageSid",
+          "MessageStatus"
+        ],
+        "type": "object"
+      },
+      "service": "default"
+    },
+    {
+      "default": true,
+      "description": "A call's status changed. Twilio POSTs this, form-encoded, to the StatusCallback URL configured for the call or the answering number",
+      "group": "Voice",
+      "name": "call.status_callback",
+      "oip": "com.twilio.api:2010-04-01#call.status_callback",
+      "schema": {
+        "properties": {
+          "ApiVersion": {
+            "type": "string"
+          },
+          "CallDuration": {
+            "description": "Seconds, sent as a numeric string; present only once the call has ended",
+            "type": "string"
+          },
+          "CallSid": {
+            "type": "string"
+          },
+          "CallStatus": {
+            "enum": [
+              "queued",
+              "ringing",
+              "in-progress",
+              "completed",
+              "busy",
+              "failed",
+              "no-answer",
+              "canceled"
+            ],
+            "type": "string"
+          },
+          "Direction": {
+            "enum": [
+              "inbound",
+              "outbound-api",
+              "outbound-dial"
+            ],
+            "type": "string"
+          },
+          "From": {
+            "description": "The calling party",
+            "type": "string"
+          },
+          "Timestamp": {
+            "description": "RFC 2822, not ISO 8601",
+            "type": "string"
+          },
+          "To": {
+            "description": "The called party",
+            "type": "string"
+          }
+        },
+        "required": [
+          "CallSid",
+          "CallStatus"
+        ],
+        "type": "object"
+      },
+      "service": "default"
+    }
+  ],
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "twilio.basic_auth"
+        ]
+      ],
+      "description": "Verify credentials by fetching the authenticated Twilio account",
+      "direction": "read",
+      "expose": true,
+      "id": "twilio-account-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The Account SID — the same identifier entered as this connection's Basic-auth username",
+          "name": "account_sid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/Accounts/{account_sid}.json"
+      },
+      "response_schema": {
+        "properties": {
+          "date_created": {
+            "description": "RFC 2822, not ISO 8601",
+            "type": "string"
+          },
+          "date_updated": {
+            "description": "RFC 2822, not ISO 8601",
+            "type": "string"
+          },
+          "friendly_name": {
+            "description": "The account's display name, set by whoever created it",
+            "type": "string"
+          },
+          "owner_account_sid": {
+            "description": "The parent account's SID when this is a subaccount; equal to sid for a primary account",
+            "type": "string"
+          },
+          "sid": {
+            "description": "The account's own SID — the same value configured as this connection's username",
+            "type": "string"
+          },
+          "status": {
+            "description": "closed is terminal",
+            "enum": [
+              "active",
+              "suspended",
+              "closed"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "description": "A Trial account has sending and calling restrictions a Full account does not",
+            "enum": [
+              "Trial",
+              "Full"
+            ],
+            "type": "string"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sid"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "twilio.basic_auth"
+        ]
+      ],
+      "description": "List messages sent from or received by this account",
+      "direction": "read",
+      "expose": true,
+      "id": "twilio-message-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The Account SID — the same identifier entered as this connection's Basic-auth username",
+          "name": "account_sid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Page number, 0-based",
+          "name": "page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "default": 0,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "wire": "Page"
+        },
+        {
+          "description": "Messages per page; Twilio caps this at 1000",
+          "name": "page_size",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "default": 50,
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "wire": "PageSize"
+        }
+      ],
+      "quirks": {
+        "pagination": {
+          "page": {
+            "max_pages": 10,
+            "page_param": "Page",
+            "page_size": 50,
+            "size_param": "PageSize"
+          }
+        }
+      },
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "Page",
+            "value": {
+              "$param": "page"
+            }
+          },
+          {
+            "name": "PageSize",
+            "value": {
+              "$param": "page_size"
+            }
+          }
+        ],
+        "url": "{base}/Accounts/{account_sid}/Messages.json"
+      },
+      "response_schema": {
+        "properties": {
+          "first_page_uri": {
+            "type": "string"
+          },
+          "messages": {
+            "description": "This page's messages, oldest or newest first depending on no filter being applied — Twilio does not document a stable default order",
+            "items": {
+              "properties": {
+                "account_sid": {
+                  "type": "string"
+                },
+                "api_version": {
+                  "type": "string"
+                },
+                "body": {
+                  "description": "The message text, truncated by Twilio at 1600 characters",
+                  "type": "string"
+                },
+                "date_created": {
+                  "description": "RFC 2822, not ISO 8601",
+                  "type": "string"
+                },
+                "date_sent": {
+                  "description": "RFC 2822, not ISO 8601; null until Twilio actually sends it",
+                  "type": "string"
+                },
+                "date_updated": {
+                  "description": "RFC 2822, not ISO 8601",
+                  "type": "string"
+                },
+                "direction": {
+                  "enum": [
+                    "inbound",
+                    "outbound-api",
+                    "outbound-call",
+                    "outbound-reply"
+                  ],
+                  "type": "string"
+                },
+                "error_code": {
+                  "description": "Null unless status is failed or undelivered",
+                  "type": "integer"
+                },
+                "error_message": {
+                  "description": "Null unless status is failed or undelivered",
+                  "type": "string"
+                },
+                "from": {
+                  "description": "The sender, as an E.164 phone number, short code or alphanumeric sender id",
+                  "type": "string"
+                },
+                "messaging_service_sid": {
+                  "description": "Set when the message was sent through a Messaging Service rather than a bare phone number; null otherwise",
+                  "type": "string"
+                },
+                "num_media": {
+                  "description": "Sent as a numeric string",
+                  "type": "string"
+                },
+                "num_segments": {
+                  "description": "Sent as a numeric string, not a JSON number — Twilio quirk, not a typo here",
+                  "type": "string"
+                },
+                "price": {
+                  "description": "Sent as a numeric string, negative for an outbound charge; null until the message settles",
+                  "type": "string"
+                },
+                "price_unit": {
+                  "description": "ISO 4217 currency code, e.g. the account's billing currency",
+                  "type": "string"
+                },
+                "sid": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "accepted",
+                    "scheduled",
+                    "queued",
+                    "sending",
+                    "sent",
+                    "failed",
+                    "delivered",
+                    "undelivered",
+                    "receiving",
+                    "received",
+                    "read",
+                    "canceled"
+                  ],
+                  "type": "string"
+                },
+                "to": {
+                  "description": "The recipient, as an E.164 phone number or a channel address",
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "sid"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_page_uri": {
+            "description": "Null on the last page",
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "previous_page_uri": {
+            "description": "Null on the first page",
+            "type": "string"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "twilio.basic_auth"
+        ]
+      ],
+      "description": "Fetch one message",
+      "direction": "read",
+      "expose": true,
+      "id": "twilio-message-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The Account SID — the same identifier entered as this connection's Basic-auth username",
+          "name": "account_sid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "The message's SID, `SM…` or `MM…`",
+          "name": "message_sid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/Accounts/{account_sid}/Messages/{message_sid}.json"
+      },
+      "response_schema": {
+        "properties": {
+          "account_sid": {
+            "type": "string"
+          },
+          "api_version": {
+            "type": "string"
+          },
+          "body": {
+            "description": "The message text, truncated by Twilio at 1600 characters",
+            "type": "string"
+          },
+          "date_created": {
+            "description": "RFC 2822, not ISO 8601",
+            "type": "string"
+          },
+          "date_sent": {
+            "description": "RFC 2822, not ISO 8601; null until Twilio actually sends it",
+            "type": "string"
+          },
+          "date_updated": {
+            "description": "RFC 2822, not ISO 8601",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "inbound",
+              "outbound-api",
+              "outbound-call",
+              "outbound-reply"
+            ],
+            "type": "string"
+          },
+          "error_code": {
+            "description": "Null unless status is failed or undelivered",
+            "type": "integer"
+          },
+          "error_message": {
+            "description": "Null unless status is failed or undelivered",
+            "type": "string"
+          },
+          "from": {
+            "description": "The sender, as an E.164 phone number, short code or alphanumeric sender id",
+            "type": "string"
+          },
+          "messaging_service_sid": {
+            "description": "Set when the message was sent through a Messaging Service; null otherwise",
+            "type": "string"
+          },
+          "num_media": {
+            "description": "Sent as a numeric string",
+            "type": "string"
+          },
+          "num_segments": {
+            "description": "Sent as a numeric string",
+            "type": "string"
+          },
+          "price": {
+            "description": "Sent as a numeric string; null until the message settles",
+            "type": "string"
+          },
+          "price_unit": {
+            "type": "string"
+          },
+          "sid": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "accepted",
+              "scheduled",
+              "queued",
+              "sending",
+              "sent",
+              "failed",
+              "delivered",
+              "undelivered",
+              "receiving",
+              "received",
+              "read",
+              "canceled"
+            ],
+            "type": "string"
+          },
+          "subresource_uris": {
+            "description": "Links to this message's media and feedback sub-resources",
+            "type": "object"
+          },
+          "to": {
+            "description": "The recipient, as an E.164 phone number or a channel address",
+            "type": "string"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sid"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "twilio.basic_auth"
+        ]
+      ],
+      "description": "List calls made from or received by this account",
+      "direction": "read",
+      "expose": true,
+      "id": "twilio-call-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The Account SID — the same identifier entered as this connection's Basic-auth username",
+          "name": "account_sid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Filter by call status",
+          "name": "status",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "queued",
+              "ringing",
+              "in-progress",
+              "completed",
+              "busy",
+              "failed",
+              "no-answer",
+              "canceled"
+            ],
+            "type": "string"
+          },
+          "wire": "Status"
+        },
+        {
+          "description": "Page number, 0-based",
+          "name": "page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "default": 0,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "wire": "Page"
+        },
+        {
+          "description": "Calls per page; Twilio caps this at 1000",
+          "name": "page_size",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "default": 50,
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "wire": "PageSize"
+        }
+      ],
+      "quirks": {
+        "pagination": {
+          "page": {
+            "max_pages": 10,
+            "page_param": "Page",
+            "page_size": 50,
+            "size_param": "PageSize"
+          }
+        }
+      },
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "Page",
+            "value": {
+              "$param": "page"
+            }
+          },
+          {
+            "name": "PageSize",
+            "value": {
+              "$param": "page_size"
+            }
+          },
+          {
+            "name": "Status",
+            "value": {
+              "$param": "status"
+            }
+          }
+        ],
+        "url": "{base}/Accounts/{account_sid}/Calls.json"
+      },
+      "response_schema": {
+        "properties": {
+          "calls": {
+            "items": {
+              "properties": {
+                "account_sid": {
+                  "type": "string"
+                },
+                "answered_by": {
+                  "description": "Set only when answering-machine detection ran: human, machine_start, machine_end_beep, machine_end_silence, machine_end_other, or fax. Null otherwise",
+                  "type": "string"
+                },
+                "api_version": {
+                  "type": "string"
+                },
+                "caller_name": {
+                  "description": "CNAM lookup result, when requested; null otherwise",
+                  "type": "string"
+                },
+                "direction": {
+                  "enum": [
+                    "inbound",
+                    "outbound-api",
+                    "outbound-dial"
+                  ],
+                  "type": "string"
+                },
+                "duration": {
+                  "description": "Seconds, sent as a numeric string; empty until the call completes",
+                  "type": "string"
+                },
+                "end_time": {
+                  "description": "RFC 2822, not ISO 8601; null until the call ends",
+                  "type": "string"
+                },
+                "forwarded_from": {
+                  "description": "The number a carrier reports this call as forwarded from, when the carrier provides it",
+                  "type": "string"
+                },
+                "from": {
+                  "description": "The calling party",
+                  "type": "string"
+                },
+                "from_formatted": {
+                  "description": "A human-readable rendering of `from`",
+                  "type": "string"
+                },
+                "parent_call_sid": {
+                  "description": "Set when this call is a child leg (e.g. a conference or forwarded leg); null otherwise",
+                  "type": "string"
+                },
+                "phone_number_sid": {
+                  "description": "The Twilio number involved, when one was",
+                  "type": "string"
+                },
+                "price": {
+                  "description": "Sent as a numeric string, negative for an outbound charge; null until the call settles",
+                  "type": "string"
+                },
+                "price_unit": {
+                  "type": "string"
+                },
+                "sid": {
+                  "type": "string"
+                },
+                "start_time": {
+                  "description": "RFC 2822, not ISO 8601",
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "queued",
+                    "ringing",
+                    "in-progress",
+                    "completed",
+                    "busy",
+                    "failed",
+                    "no-answer",
+                    "canceled"
+                  ],
+                  "type": "string"
+                },
+                "to": {
+                  "description": "The called party, as an E.164 phone number or SIP address",
+                  "type": "string"
+                },
+                "to_formatted": {
+                  "description": "A human-readable rendering of `to`",
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "sid"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "first_page_uri": {
+            "type": "string"
+          },
+          "next_page_uri": {
+            "description": "Null on the last page",
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "previous_page_uri": {
+            "description": "Null on the first page",
+            "type": "string"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "calls"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "twilio.basic_auth"
+        ]
+      ],
+      "description": "Fetch one call",
+      "direction": "read",
+      "expose": true,
+      "id": "twilio-call-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The Account SID — the same identifier entered as this connection's Basic-auth username",
+          "name": "account_sid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "The call's SID, `CA…`",
+          "name": "call_sid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/Accounts/{account_sid}/Calls/{call_sid}.json"
+      },
+      "response_schema": {
+        "properties": {
+          "account_sid": {
+            "type": "string"
+          },
+          "answered_by": {
+            "description": "Set only when answering-machine detection ran; null otherwise",
+            "type": "string"
+          },
+          "api_version": {
+            "type": "string"
+          },
+          "caller_name": {
+            "description": "CNAM lookup result, when requested; null otherwise",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "inbound",
+              "outbound-api",
+              "outbound-dial"
+            ],
+            "type": "string"
+          },
+          "duration": {
+            "description": "Seconds, sent as a numeric string; empty until the call completes",
+            "type": "string"
+          },
+          "end_time": {
+            "description": "RFC 2822, not ISO 8601; null until the call ends",
+            "type": "string"
+          },
+          "forwarded_from": {
+            "type": "string"
+          },
+          "from": {
+            "description": "The calling party",
+            "type": "string"
+          },
+          "from_formatted": {
+            "type": "string"
+          },
+          "parent_call_sid": {
+            "description": "Set when this call is a child leg; null otherwise",
+            "type": "string"
+          },
+          "phone_number_sid": {
+            "type": "string"
+          },
+          "price": {
+            "description": "Sent as a numeric string; null until the call settles",
+            "type": "string"
+          },
+          "price_unit": {
+            "type": "string"
+          },
+          "sid": {
+            "type": "string"
+          },
+          "start_time": {
+            "description": "RFC 2822, not ISO 8601",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "ringing",
+              "in-progress",
+              "completed",
+              "busy",
+              "failed",
+              "no-answer",
+              "canceled"
+            ],
+            "type": "string"
+          },
+          "subresource_uris": {
+            "description": "Links to this call's recordings, notifications and other sub-resources",
+            "type": "object"
+          },
+          "to": {
+            "description": "The called party",
+            "type": "string"
+          },
+          "to_formatted": {
+            "type": "string"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sid"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "twilio.basic_auth"
+        ]
+      ],
+      "description": "List recordings for the configured Twilio account with bounded pagination",
+      "direction": "read",
+      "endpoint": {
+        "username.twilio.basic_auth": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "twilio-recording-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "A boolean parameter indicating whether to retrieve soft deleted recordings or not. Recordings metadata are kept after deletion for a retention period of 40 days.",
+          "name": "IncludeSoftDeleted",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "How many resources to return in each list page. The default is 50, and the maximum is 1000.",
+          "name": "PageSize",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "format": "int64",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "The page index. This value is simply for client state.",
+          "name": "Page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "IncludeSoftDeleted",
+            "value": {
+              "$param": "IncludeSoftDeleted"
+            }
+          },
+          {
+            "name": "Page",
+            "value": {
+              "$param": "Page"
+            }
+          },
+          {
+            "name": "PageSize",
+            "value": {
+              "$param": "PageSize"
+            }
+          }
+        ],
+        "url": "{base}/Accounts/{username.twilio.basic_auth}/Recordings.json"
+      },
+      "response_schema": {
+        "properties": {
+          "end": {
+            "type": "integer"
+          },
+          "first_page_uri": {
+            "format": "uri",
+            "type": "string"
+          },
+          "next_page_uri": {
+            "format": "uri",
+            "nullable": true,
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "previous_page_uri": {
+            "format": "uri",
+            "nullable": true,
+            "type": "string"
+          },
+          "recordings": {
+            "items": {
+              "properties": {
+                "account_sid": {
+                  "description": "The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording resource.",
+                  "maxLength": 34,
+                  "minLength": 34,
+                  "nullable": true,
+                  "pattern": "^AC[0-9a-fA-F]{32}$",
+                  "type": "string"
+                },
+                "api_version": {
+                  "description": "The API version used during the recording.",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "call_sid": {
+                  "description": "The SID of the [Call](https://www.twilio.com/docs/voice/api/call-resource) the Recording resource is associated with. This will always refer to the parent leg of a two-leg call.",
+                  "maxLength": 34,
+                  "minLength": 34,
+                  "nullable": true,
+                  "pattern": "^CA[0-9a-fA-F]{32}$",
+                  "type": "string"
+                },
+                "channels": {
+                  "description": "The number of channels in the recording resource. For information on specifying the number of channels in the downloaded recording file, check out [Fetch a Recording’s media file](https://www.twilio.com/docs/voice/api/recording#download-dual-channel-media-file).",
+                  "nullable": true,
+                  "type": "integer"
+                },
+                "conference_sid": {
+                  "description": "The Conference SID that identifies the conference associated with the recording, if a conference recording.",
+                  "maxLength": 34,
+                  "minLength": 34,
+                  "nullable": true,
+                  "pattern": "^CF[0-9a-fA-F]{32}$",
+                  "type": "string"
+                },
+                "date_created": {
+                  "description": "The date and time in GMT that the resource was created specified in [RFC 2822](https://www.ietf.org/rfc/rfc2822.txt) format.",
+                  "format": "date-time-rfc-2822",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "date_updated": {
+                  "description": "The date and time in GMT that the resource was last updated specified in [RFC 2822](https://www.ietf.org/rfc/rfc2822.txt) format.",
+                  "format": "date-time-rfc-2822",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "duration": {
+                  "description": "The length of the recording in seconds.",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "encryption_details": {
+                  "description": "How to decrypt the recording if it was encrypted using [Call Recording Encryption](https://www.twilio.com/docs/voice/tutorials/voice-recording-encryption) feature.",
+                  "nullable": true
+                },
+                "error_code": {
+                  "description": "The error code that describes why the recording is `absent`. The error code is described in our [Error Dictionary](https://www.twilio.com/docs/api/errors). This value is null if the recording `status` is not `absent`.",
+                  "nullable": true,
+                  "type": "integer"
+                },
+                "media_url": {
+                  "description": "The URL of the media file associated with this recording resource. When stored externally, this is the full URL location of the media file.",
+                  "format": "uri",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "price": {
+                  "description": "The one-time cost of creating the recording in the `price_unit` currency.",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "price_unit": {
+                  "description": "The currency used in the `price` property. Example: `USD`.",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "sid": {
+                  "description": "The unique string that that we created to identify the Recording resource.",
+                  "maxLength": 34,
+                  "minLength": 34,
+                  "nullable": true,
+                  "pattern": "^RE[0-9a-fA-F]{32}$",
+                  "type": "string"
+                },
+                "source": {
+                  "description": "How the recording was created. Can be: `DialVerb`, `Conference`, `OutboundAPI`, `Trunking`, `RecordVerb`, `StartCallRecordingAPI`, and `StartConferenceRecordingAPI`.",
+                  "enum": [
+                    "DialVerb",
+                    "Conference",
+                    "OutboundAPI",
+                    "Trunking",
+                    "RecordVerb",
+                    "StartCallRecordingAPI",
+                    "StartConferenceRecordingAPI"
+                  ],
+                  "type": "string"
+                },
+                "start_time": {
+                  "description": "The start time of the recording in GMT and in [RFC 2822](https://www.php.net/manual/en/class.datetime.php#datetime.constants.rfc2822) format.",
+                  "format": "date-time-rfc-2822",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "status": {
+                  "description": "The status of the recording. Can be: `processing`, `completed`, `absent` or `deleted`. For information about more detailed statuses on in-progress recordings, check out how to [Update a Recording Resource](https://www.twilio.com/docs/voice/api/recording#update-a-recording-resource).",
+                  "enum": [
+                    "in-progress",
+                    "paused",
+                    "stopped",
+                    "processing",
+                    "completed",
+                    "absent",
+                    "deleted"
+                  ],
+                  "type": "string"
+                },
+                "subresource_uris": {
+                  "description": "A list of related resources identified by their relative URIs.",
+                  "format": "uri-map",
+                  "nullable": true,
+                  "type": "object"
+                },
+                "uri": {
+                  "description": "The URI of the resource, relative to `https://api.twilio.com`.",
+                  "nullable": true,
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "start": {
+            "type": "integer"
+          },
+          "uri": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "title": "ListRecordingResponse",
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "twilio.basic_auth"
+        ]
+      ],
+      "description": "Fetch one recording's metadata from the configured Twilio account",
+      "direction": "read",
+      "endpoint": {
+        "username.twilio.basic_auth": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "twilio-recording-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The Twilio-provided string that uniquely identifies the Recording resource to fetch.",
+          "name": "Sid",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "maxLength": 34,
+            "minLength": 34,
+            "pattern": "^RE[0-9a-fA-F]{32}$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "A boolean parameter indicating whether to retrieve soft deleted recordings or not. Recordings metadata are kept after deletion for a retention period of 40 days.",
+          "name": "IncludeSoftDeleted",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "IncludeSoftDeleted",
+            "value": {
+              "$param": "IncludeSoftDeleted"
+            }
+          }
+        ],
+        "url": "{base}/Accounts/{username.twilio.basic_auth}/Recordings/{Sid}.json"
+      },
+      "response_schema": {
+        "properties": {
+          "account_sid": {
+            "description": "The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording resource.",
+            "maxLength": 34,
+            "minLength": 34,
+            "nullable": true,
+            "pattern": "^AC[0-9a-fA-F]{32}$",
+            "type": "string"
+          },
+          "api_version": {
+            "description": "The API version used during the recording.",
+            "nullable": true,
+            "type": "string"
+          },
+          "call_sid": {
+            "description": "The SID of the [Call](https://www.twilio.com/docs/voice/api/call-resource) the Recording resource is associated with. This will always refer to the parent leg of a two-leg call.",
+            "maxLength": 34,
+            "minLength": 34,
+            "nullable": true,
+            "pattern": "^CA[0-9a-fA-F]{32}$",
+            "type": "string"
+          },
+          "channels": {
+            "description": "The number of channels in the recording resource. For information on specifying the number of channels in the downloaded recording file, check out [Fetch a Recording’s media file](https://www.twilio.com/docs/voice/api/recording#download-dual-channel-media-file).",
+            "nullable": true,
+            "type": "integer"
+          },
+          "conference_sid": {
+            "description": "The Conference SID that identifies the conference associated with the recording, if a conference recording.",
+            "maxLength": 34,
+            "minLength": 34,
+            "nullable": true,
+            "pattern": "^CF[0-9a-fA-F]{32}$",
+            "type": "string"
+          },
+          "date_created": {
+            "description": "The date and time in GMT that the resource was created specified in [RFC 2822](https://www.ietf.org/rfc/rfc2822.txt) format.",
+            "format": "date-time-rfc-2822",
+            "nullable": true,
+            "type": "string"
+          },
+          "date_updated": {
+            "description": "The date and time in GMT that the resource was last updated specified in [RFC 2822](https://www.ietf.org/rfc/rfc2822.txt) format.",
+            "format": "date-time-rfc-2822",
+            "nullable": true,
+            "type": "string"
+          },
+          "duration": {
+            "description": "The length of the recording in seconds.",
+            "nullable": true,
+            "type": "string"
+          },
+          "encryption_details": {
+            "description": "How to decrypt the recording if it was encrypted using [Call Recording Encryption](https://www.twilio.com/docs/voice/tutorials/voice-recording-encryption) feature.",
+            "nullable": true
+          },
+          "error_code": {
+            "description": "The error code that describes why the recording is `absent`. The error code is described in our [Error Dictionary](https://www.twilio.com/docs/api/errors). This value is null if the recording `status` is not `absent`.",
+            "nullable": true,
+            "type": "integer"
+          },
+          "media_url": {
+            "description": "The URL of the media file associated with this recording resource. When stored externally, this is the full URL location of the media file.",
+            "format": "uri",
+            "nullable": true,
+            "type": "string"
+          },
+          "price": {
+            "description": "The one-time cost of creating the recording in the `price_unit` currency.",
+            "nullable": true,
+            "type": "string"
+          },
+          "price_unit": {
+            "description": "The currency used in the `price` property. Example: `USD`.",
+            "nullable": true,
+            "type": "string"
+          },
+          "sid": {
+            "description": "The unique string that that we created to identify the Recording resource.",
+            "maxLength": 34,
+            "minLength": 34,
+            "nullable": true,
+            "pattern": "^RE[0-9a-fA-F]{32}$",
+            "type": "string"
+          },
+          "source": {
+            "description": "How the recording was created. Can be: `DialVerb`, `Conference`, `OutboundAPI`, `Trunking`, `RecordVerb`, `StartCallRecordingAPI`, and `StartConferenceRecordingAPI`.",
+            "enum": [
+              "DialVerb",
+              "Conference",
+              "OutboundAPI",
+              "Trunking",
+              "RecordVerb",
+              "StartCallRecordingAPI",
+              "StartConferenceRecordingAPI"
+            ],
+            "type": "string"
+          },
+          "start_time": {
+            "description": "The start time of the recording in GMT and in [RFC 2822](https://www.php.net/manual/en/class.datetime.php#datetime.constants.rfc2822) format.",
+            "format": "date-time-rfc-2822",
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "description": "The status of the recording. Can be: `processing`, `completed`, `absent` or `deleted`. For information about more detailed statuses on in-progress recordings, check out how to [Update a Recording Resource](https://www.twilio.com/docs/voice/api/recording#update-a-recording-resource).",
+            "enum": [
+              "in-progress",
+              "paused",
+              "stopped",
+              "processing",
+              "completed",
+              "absent",
+              "deleted"
+            ],
+            "type": "string"
+          },
+          "subresource_uris": {
+            "description": "A list of related resources identified by their relative URIs.",
+            "format": "uri-map",
+            "nullable": true,
+            "type": "object"
+          },
+          "uri": {
+            "description": "The URI of the resource, relative to `https://api.twilio.com`.",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "twilio.basic_auth"
+        ]
+      ],
+      "description": "List usage records for the configured Twilio account with bounded pagination",
+      "direction": "read",
+      "endpoint": {
+        "username.twilio.basic_auth": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "twilio-usage-record-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Whether to include usage from the master account and all its subaccounts. Can be: `true` (the default) to include usage from the master account and all subaccounts or `false` to retrieve usage from only the specified account.",
+          "name": "IncludeSubaccounts",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "How many resources to return in each list page. The default is 50, and the maximum is 1000.",
+          "name": "PageSize",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "format": "int64",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "The page index. This value is simply for client state.",
+          "name": "Page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "IncludeSubaccounts",
+            "value": {
+              "$param": "IncludeSubaccounts"
+            }
+          },
+          {
+            "name": "Page",
+            "value": {
+              "$param": "Page"
+            }
+          },
+          {
+            "name": "PageSize",
+            "value": {
+              "$param": "PageSize"
+            }
+          }
+        ],
+        "url": "{base}/Accounts/{username.twilio.basic_auth}/Usage/Records.json"
+      },
+      "response_schema": {
+        "properties": {
+          "end": {
+            "type": "integer"
+          },
+          "first_page_uri": {
+            "format": "uri",
+            "type": "string"
+          },
+          "next_page_uri": {
+            "format": "uri",
+            "nullable": true,
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "previous_page_uri": {
+            "format": "uri",
+            "nullable": true,
+            "type": "string"
+          },
+          "start": {
+            "type": "integer"
+          },
+          "uri": {
+            "format": "uri",
+            "type": "string"
+          },
+          "usage_records": {
+            "items": {
+              "properties": {
+                "account_sid": {
+                  "description": "The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that accrued the usage.",
+                  "maxLength": 34,
+                  "minLength": 34,
+                  "nullable": true,
+                  "pattern": "^AC[0-9a-fA-F]{32}$",
+                  "type": "string"
+                },
+                "api_version": {
+                  "description": "The API version used to create the resource.",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "as_of": {
+                  "description": "Usage records up to date as of this timestamp, formatted as YYYY-MM-DDTHH:MM:SS+00:00. All timestamps are in GMT",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "category": {
+                  "description": "The category of usage. For more information, see [Usage Categories](https://www.twilio.com/docs/usage/api/usage-record#usage-categories).",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "count": {
+                  "description": "The number of usage events, such as the number of calls.",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "count_unit": {
+                  "description": "The units in which `count` is measured, such as `calls` for calls or `messages` for SMS.",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "description": {
+                  "description": "A plain-language description of the usage category.",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "end_date": {
+                  "description": "The last date for which usage is included in the UsageRecord. The date is specified in GMT and formatted as `YYYY-MM-DD`.",
+                  "format": "date",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "price": {
+                  "description": "The total price of the usage in the currency specified in `price_unit` and associated with the account.",
+                  "nullable": true,
+                  "type": "number"
+                },
+                "price_unit": {
+                  "description": "The currency in which `price` is measured, in [ISO 4127](https://www.iso.org/iso/home/standards/currency_codes.htm) format, such as `usd`, `eur`, and `jpy`.",
+                  "format": "currency",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "start_date": {
+                  "description": "The first date for which usage is included in this UsageRecord. The date is specified in GMT and formatted as `YYYY-MM-DD`.",
+                  "format": "date",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "subresource_uris": {
+                  "description": "A list of related resources identified by their URIs. For more information, see [List Subresources](https://www.twilio.com/docs/usage/api/usage-record#list-subresources).",
+                  "format": "uri-map",
+                  "nullable": true,
+                  "type": "object"
+                },
+                "uri": {
+                  "description": "The URI of the resource, relative to `https://api.twilio.com`.",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "usage": {
+                  "description": "The amount used to bill usage and measured in units described in `usage_unit`.",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "usage_unit": {
+                  "description": "The units in which `usage` is measured, such as `minutes` for calls or `messages` for SMS.",
+                  "nullable": true,
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "title": "ListUsageRecordResponse",
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "twilio.basic_auth"
+        ]
+      ],
+      "description": "List conferences for the configured Twilio account with bounded pagination",
+      "direction": "read",
+      "endpoint": {
+        "username.twilio.basic_auth": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "twilio-conference-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "How many resources to return in each list page. The default is 50, and the maximum is 1000.",
+          "name": "PageSize",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "format": "int64",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "The page index. This value is simply for client state.",
+          "name": "Page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "Page",
+            "value": {
+              "$param": "Page"
+            }
+          },
+          {
+            "name": "PageSize",
+            "value": {
+              "$param": "PageSize"
+            }
+          }
+        ],
+        "url": "{base}/Accounts/{username.twilio.basic_auth}/Conferences.json"
+      },
+      "response_schema": {
+        "properties": {
+          "conferences": {
+            "items": {
+              "properties": {
+                "account_sid": {
+                  "description": "The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created this Conference resource.",
+                  "maxLength": 34,
+                  "minLength": 34,
+                  "nullable": true,
+                  "pattern": "^AC[0-9a-fA-F]{32}$",
+                  "type": "string"
+                },
+                "api_version": {
+                  "description": "The API version used to create this conference.",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "call_sid_ending_conference": {
+                  "description": "The call SID that caused the conference to end.",
+                  "maxLength": 34,
+                  "minLength": 34,
+                  "nullable": true,
+                  "pattern": "^CA[0-9a-fA-F]{32}$",
+                  "type": "string"
+                },
+                "date_created": {
+                  "description": "The date and time in UTC that this resource was created specified in [RFC 2822](https://www.ietf.org/rfc/rfc2822.txt) format.",
+                  "format": "date-time-rfc-2822",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "date_updated": {
+                  "description": "The date and time in UTC that this resource was last updated, specified in [RFC 2822](https://www.ietf.org/rfc/rfc2822.txt) format.",
+                  "format": "date-time-rfc-2822",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "friendly_name": {
+                  "description": "A string that you assigned to describe this conference room. Maximum length is 128 characters.",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "reason_conference_ended": {
+                  "description": "The reason why a conference ended. When a conference is in progress, will be `null`. When conference is completed, can be: `conference-ended-via-api`, `participant-with-end-conference-on-exit-left`, `participant-with-end-conference-on-exit-kicked`, `last-participant-kicked`, or `last-participant-left`.",
+                  "enum": [
+                    "conference-ended-via-api",
+                    "participant-with-end-conference-on-exit-left",
+                    "participant-with-end-conference-on-exit-kicked",
+                    "last-participant-kicked",
+                    "last-participant-left"
+                  ],
+                  "type": "string"
+                },
+                "region": {
+                  "description": "A string that represents the Twilio Region where the conference audio was mixed. May be `us1`, `us2`, `ie1`,  `de1`, `sg1`, `br1`, `au1`, and `jp1`. Basic conference audio will always be mixed in `us1`. Global Conference audio will be mixed nearest to the majority of participants.",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "sid": {
+                  "description": "The unique, Twilio-provided string used to identify this Conference resource.",
+                  "maxLength": 34,
+                  "minLength": 34,
+                  "nullable": true,
+                  "pattern": "^CF[0-9a-fA-F]{32}$",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "The status of this conference. Can be: `init`, `in-progress`, or `completed`.",
+                  "enum": [
+                    "init",
+                    "in-progress",
+                    "completed"
+                  ],
+                  "type": "string"
+                },
+                "subresource_uris": {
+                  "description": "A list of related resources identified by their URIs relative to `https://api.twilio.com`.",
+                  "format": "uri-map",
+                  "nullable": true,
+                  "type": "object"
+                },
+                "uri": {
+                  "description": "The URI of this resource, relative to `https://api.twilio.com`.",
+                  "nullable": true,
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "end": {
+            "type": "integer"
+          },
+          "first_page_uri": {
+            "format": "uri",
+            "type": "string"
+          },
+          "next_page_uri": {
+            "format": "uri",
+            "nullable": true,
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "previous_page_uri": {
+            "format": "uri",
+            "nullable": true,
+            "type": "string"
+          },
+          "start": {
+            "type": "integer"
+          },
+          "uri": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "title": "ListConferenceResponse",
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "2010-04-01",
+      "base_url": "https://api.twilio.com/2010-04-01",
+      "gid": "com.twilio.api:2010-04-01",
+      "name": "default",
+      "tags": [
+        "telephony",
+        "messaging"
+      ]
+    }
+  ],
+  "vendor": "Twilio",
+  "verify": "twilio-account-get"
+}

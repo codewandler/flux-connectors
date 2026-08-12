@@ -1,0 +1,317 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Datadog API key. Identifies the organization; required on every request together with the Application Key — neither key alone authenticates a call",
+      "env": [
+        "DATADOG_API_KEY"
+      ],
+      "name": "datadog.api_key",
+      "scheme": {
+        "kind": "header",
+        "name": "DD-API-KEY"
+      },
+      "subject": "unstated"
+    },
+    {
+      "description": "Datadog Application Key, scoped to the user who created it. Required on every request together with the API Key — neither key alone authenticates a call",
+      "env": [
+        "DATADOG_APPLICATION_KEY"
+      ],
+      "name": "datadog.application_key",
+      "scheme": {
+        "kind": "header",
+        "name": "DD-APPLICATION-KEY"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.datadoghq.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.datadog.api_key",
+      "docs_url": "https://docs.datadoghq.com/account_management/api-app-keys/",
+      "format": "token",
+      "help": "Organization Settings > API Keys in the Datadog app. Sent as DD-API-KEY on every request, always together with the Application Key",
+      "label": "Datadog API Key",
+      "level": "connection",
+      "name": "api_key",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "credential.datadog.application_key",
+      "docs_url": "https://docs.datadoghq.com/account_management/api-app-keys/",
+      "format": "token",
+      "help": "Organization Settings > Application Keys in the Datadog app, scoped to the user who creates it. Sent as DD-APPLICATION-KEY on every request, always together with the API Key",
+      "label": "Datadog Application Key",
+      "level": "connection",
+      "name": "application_key",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "datadog",
+  "default_auth": [
+    [
+      "datadog.api_key",
+      "datadog.application_key"
+    ]
+  ],
+  "description": "Datadog monitoring: list and inspect monitors, list and inspect incidents. Authenticates every request with an API key and an Application key together",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "datadog.api_key",
+          "datadog.application_key"
+        ]
+      ],
+      "description": "List every monitor visible to this API key. Also this connector's `verify` — a bounded read that runs unattended, needing no argument",
+      "direction": "read",
+      "expose": true,
+      "id": "datadog-monitor-list",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/v1/monitor"
+      },
+      "response_schema": {
+        "items": {
+          "properties": {
+            "created": {
+              "description": "When this monitor was created",
+              "type": "string"
+            },
+            "creator": {
+              "description": "The user who created this monitor; may be absent for a system-authored monitor. Carries a name and an email address — personal data, never given an example value here",
+              "type": "object"
+            },
+            "id": {
+              "description": "Datadog's numeric id for this monitor",
+              "type": "integer"
+            },
+            "message": {
+              "description": "The notification message template; may embed @-mentions and template variables",
+              "type": "string"
+            },
+            "modified": {
+              "description": "When this monitor was last modified",
+              "type": "string"
+            },
+            "multi": {
+              "description": "Whether this is a multi-alert monitor grouped by tag",
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "options": {
+              "description": "Evaluation and notification settings (thresholds, notify_no_data, renotify_interval, evaluation_delay, and more) — left untyped rather than enumerated in full; see Datadog's own Monitor Options reference for the complete shape",
+              "type": "object"
+            },
+            "overall_state": {
+              "description": "The monitor's current alert state, e.g. \"OK\", \"Alert\", \"Warn\", \"No Data\"",
+              "type": "string"
+            },
+            "query": {
+              "description": "The monitor's evaluation query, in Datadog's own monitor query syntax",
+              "type": "string"
+            },
+            "tags": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": {
+              "description": "The monitor's evaluation type, e.g. \"metric alert\", \"query alert\", \"service check\", \"log alert\", \"composite\"",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "type",
+            "query",
+            "message",
+            "tags",
+            "overall_state",
+            "created",
+            "modified"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "datadog.api_key",
+          "datadog.application_key"
+        ]
+      ],
+      "description": "Get one monitor by id",
+      "direction": "read",
+      "expose": true,
+      "id": "datadog-monitor-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The monitor's id, from datadog-monitor-list",
+          "name": "monitor_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/v1/monitor/{monitor_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "created": {
+            "description": "When this monitor was created",
+            "type": "string"
+          },
+          "creator": {
+            "description": "The user who created this monitor; may be absent for a system-authored monitor. Carries a name and an email address — personal data, never given an example value here",
+            "type": "object"
+          },
+          "id": {
+            "description": "Datadog's numeric id for this monitor",
+            "type": "integer"
+          },
+          "message": {
+            "description": "The notification message template; may embed @-mentions and template variables",
+            "type": "string"
+          },
+          "modified": {
+            "description": "When this monitor was last modified",
+            "type": "string"
+          },
+          "multi": {
+            "description": "Whether this is a multi-alert monitor grouped by tag",
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "options": {
+            "description": "Evaluation and notification settings (thresholds, notify_no_data, renotify_interval, evaluation_delay, and more) — left untyped rather than enumerated in full; see Datadog's own Monitor Options reference for the complete shape",
+            "type": "object"
+          },
+          "overall_state": {
+            "description": "The monitor's current alert state, e.g. \"OK\", \"Alert\", \"Warn\", \"No Data\"",
+            "type": "string"
+          },
+          "query": {
+            "description": "The monitor's evaluation query, in Datadog's own monitor query syntax",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": {
+            "description": "The monitor's evaluation type, e.g. \"metric alert\", \"query alert\", \"service check\", \"log alert\", \"composite\"",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "query",
+          "message",
+          "tags",
+          "overall_state",
+          "created",
+          "modified"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "datadog.api_key",
+          "datadog.application_key"
+        ]
+      ],
+      "description": "List the organization's incidents",
+      "direction": "read",
+      "expose": true,
+      "id": "datadog-incident-list",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/v2/incidents"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "datadog.api_key",
+          "datadog.application_key"
+        ]
+      ],
+      "description": "Get one incident by id",
+      "direction": "read",
+      "expose": true,
+      "id": "datadog-incident-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The incident's id (a UUID), from datadog-incident-list",
+          "name": "incident_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/v2/incidents/{incident_id}"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "base_url": "https://api.datadoghq.com",
+      "name": "default",
+      "tags": [
+        "observability"
+      ]
+    }
+  ],
+  "vendor": "Datadog",
+  "verify": "datadog-monitor-list"
+}

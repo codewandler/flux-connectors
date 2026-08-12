@@ -30,12 +30,19 @@
 //! - **All-or-nothing.** Every provider is compiled before any file is written.
 //! - **Explicit.** Generation is a command a human runs and reviews as a diff — never a `build.rs`.
 
+// The canonical-document JSON Schema (`document::schema`) is one `json!` literal, and its nesting
+// is deeper than the macro's default expansion budget. Raising the limit is the sanctioned answer
+// (the error message's own suggestion); splitting the schema across several literals would trade a
+// compiler constant for a document a reader can no longer see whole.
+#![recursion_limit = "256"]
+
 pub mod artifact;
 pub mod catalog;
 pub mod cli;
 pub mod core_catalog;
 pub mod diff;
 pub mod discovery;
+pub mod document;
 mod inbound;
 pub mod migration;
 pub mod net;

@@ -1,0 +1,1796 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "authority": "com.freshdesk.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "endpoint.domain",
+      "docs_url": "https://support.freshdesk.com/en/support/solutions/articles/50000004820",
+      "example": "acme.freshdesk.com",
+      "format": "hostname",
+      "help": "Your full Freshdesk host, as it appears in the address bar — `acme.freshdesk.com`, including the `.freshdesk.com` part",
+      "label": "Freshdesk domain",
+      "level": "connection",
+      "name": "domain",
+      "required": true,
+      "secret": false,
+      "service": "default"
+    }
+  ],
+  "connector": "freshdesk",
+  "description": "Freshdesk ticketing: list, read, create and update tickets and the contacts they belong to",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [],
+      "description": "Verify credentials with a bounded contact read",
+      "direction": "read",
+      "endpoint": {
+        "domain": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "freshdesk-test",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Records to fetch; one is enough to prove the credential works",
+          "name": "per_page",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "per_page",
+            "value": {
+              "$param": "per_page"
+            }
+          }
+        ],
+        "url": "{base}/contacts"
+      },
+      "response_schema": {
+        "description": "The contacts, as a bare JSON array. With `per_page = 1` it holds one element; an empty array is still a successful credential check, because an account may genuinely have no contacts",
+        "items": {
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "email": {
+              "format": "email",
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [],
+      "description": "List and filter tickets",
+      "direction": "read",
+      "endpoint": {
+        "domain": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "freshdesk-ticket-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Filter by requester",
+          "name": "req_id",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "requester_id"
+        },
+        {
+          "description": "Filter by requester email",
+          "name": "req_email",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "format": "email",
+            "type": "string"
+          },
+          "wire": "email"
+        },
+        {
+          "description": "Filter by company id",
+          "name": "company_id",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Only tickets updated at or after this date",
+          "name": "updated",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "wire": "updated_since"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "company_id",
+            "value": {
+              "$param": "company_id"
+            }
+          },
+          {
+            "name": "email",
+            "value": {
+              "$param": "req_email"
+            }
+          },
+          {
+            "name": "requester_id",
+            "value": {
+              "$param": "req_id"
+            }
+          },
+          {
+            "name": "updated_since",
+            "value": {
+              "$param": "updated"
+            }
+          }
+        ],
+        "url": "{base}/tickets"
+      },
+      "response_schema": {
+        "description": "The matching tickets, as a bare JSON array with no envelope. The ticket bodies (`description`, `description_text`) are NOT included in a listing — read one ticket with `freshdesk-ticket-get` to get its text",
+        "items": {
+          "properties": {
+            "company_id": {
+              "type": "integer"
+            },
+            "created_at": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "due_by": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "fr_due_by": {
+              "description": "When a first response is due",
+              "format": "date-time",
+              "type": "string"
+            },
+            "fr_escalated": {
+              "description": "True when the first-response SLA was breached",
+              "type": "boolean"
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "is_escalated": {
+              "type": "boolean"
+            },
+            "priority": {
+              "description": "1 Low, 2 Medium, 3 High, 4 Urgent",
+              "enum": [
+                1,
+                2,
+                3,
+                4
+              ],
+              "type": "integer"
+            },
+            "requester_id": {
+              "description": "The contact who asked",
+              "type": "integer"
+            },
+            "responder_id": {
+              "description": "The agent it is assigned to; null when unassigned",
+              "type": "integer"
+            },
+            "source": {
+              "description": "How the ticket arrived: 1 Email, 2 Portal, 3 Phone, 7 Chat, 9 Feedback widget, 10 Outbound email",
+              "enum": [
+                1,
+                2,
+                3,
+                7,
+                9,
+                10
+              ],
+              "type": "integer"
+            },
+            "spam": {
+              "type": "boolean"
+            },
+            "status": {
+              "description": "2 Open, 3 Pending, 4 Resolved, 5 Closed",
+              "enum": [
+                2,
+                3,
+                4,
+                5
+              ],
+              "type": "integer"
+            },
+            "subject": {
+              "type": "string"
+            },
+            "type": {
+              "description": "The ticket type, e.g. `Question` or `Incident`. Null when unset",
+              "type": "string"
+            },
+            "updated_at": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [],
+      "description": "View one ticket",
+      "direction": "read",
+      "endpoint": {
+        "domain": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "freshdesk-ticket-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The ticket id",
+          "name": "id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/tickets/{id}"
+      },
+      "response_schema": {
+        "properties": {
+          "attachments": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "cc_emails": {
+            "items": {
+              "format": "email",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "company_id": {
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "custom_fields": {
+            "description": "The account's own ticket fields, keyed by field name — an object, unlike zendesk's array of `{id, value}` pairs",
+            "type": "object"
+          },
+          "description": {
+            "description": "The requester's opening message as **HTML**",
+            "type": "string"
+          },
+          "description_text": {
+            "description": "The same message as plain text. This is the one to summarize or quote",
+            "type": "string"
+          },
+          "due_by": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "email_config_id": {
+            "type": "integer"
+          },
+          "fr_due_by": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fr_escalated": {
+            "type": "boolean"
+          },
+          "fwd_emails": {
+            "items": {
+              "format": "email",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "group_id": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "is_escalated": {
+            "type": "boolean"
+          },
+          "priority": {
+            "description": "1 Low, 2 Medium, 3 High, 4 Urgent",
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "type": "integer"
+          },
+          "product_id": {
+            "type": "integer"
+          },
+          "reply_cc_emails": {
+            "items": {
+              "format": "email",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "requester_id": {
+            "type": "integer"
+          },
+          "responder_id": {
+            "description": "The assigned agent; null when unassigned",
+            "type": "integer"
+          },
+          "source": {
+            "description": "1 Email, 2 Portal, 3 Phone, 7 Chat, 9 Feedback widget, 10 Outbound email",
+            "enum": [
+              1,
+              2,
+              3,
+              7,
+              9,
+              10
+            ],
+            "type": "integer"
+          },
+          "spam": {
+            "type": "boolean"
+          },
+          "status": {
+            "description": "2 Open, 3 Pending, 4 Resolved, 5 Closed",
+            "enum": [
+              2,
+              3,
+              4,
+              5
+            ],
+            "type": "integer"
+          },
+          "structured_description": {
+            "description": "The message again, as `{description_contents: [{type, data: {content}}]}` — Freshdesk's block form",
+            "type": "object"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": {
+            "description": "The ticket type, e.g. `Question` or `Incident`. Null when unset",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [],
+      "description": "Create a ticket. The requester must be identified either by requester_id, or by phone together with name — Freshdesk states this only in prose and its required flags do not capture it",
+      "direction": "write",
+      "endpoint": {
+        "domain": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "freshdesk-ticket-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "Requester phone number. Supply with name, or supply requester_id instead",
+          "name": "phone",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Requester name. Supply with phone, or supply requester_id instead",
+          "name": "name",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Requester id. Supply this, or supply phone together with name",
+          "name": "requester_id",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Ticket subject",
+          "name": "subject",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Ticket description; HTML or long text",
+          "name": "description",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Ticket status: 2 open, 3 pending, 4 resolved, 5 closed",
+          "name": "status",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "default": 2,
+            "enum": [
+              2,
+              3,
+              4,
+              5
+            ],
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Ticket priority: 1 low, 2 medium, 3 high, 4 urgent",
+          "name": "priority",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "default": 2,
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Channel the ticket came in on",
+          "name": "source",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "default": 3,
+            "enum": [
+              1,
+              2,
+              3,
+              7,
+              8,
+              9,
+              10
+            ],
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Responding agent id",
+          "name": "responder_id",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Query type",
+          "name": "type",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Email config used for this ticket",
+          "name": "email_config_id",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Group the ticket is assigned to",
+          "name": "group_id",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Associated product",
+          "name": "product_id",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Ticket tags",
+          "name": "tags",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        {
+          "description": "Addresses to copy on the ticket",
+          "name": "cc_emails",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "items": {
+              "format": "email",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        {
+          "description": "Custom ticket field data",
+          "name": "custom_fields",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "additionalProperties": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "type": "object"
+          }
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "cc_emails": {
+              "$param": "cc_emails"
+            },
+            "custom_fields": {
+              "$param": "custom_fields"
+            },
+            "description": {
+              "$param": "description"
+            },
+            "email_config_id": {
+              "$param": "email_config_id"
+            },
+            "group_id": {
+              "$param": "group_id"
+            },
+            "name": {
+              "$param": "name"
+            },
+            "phone": {
+              "$param": "phone"
+            },
+            "priority": {
+              "$param": "priority"
+            },
+            "product_id": {
+              "$param": "product_id"
+            },
+            "requester_id": {
+              "$param": "requester_id"
+            },
+            "responder_id": {
+              "$param": "responder_id"
+            },
+            "source": {
+              "$param": "source"
+            },
+            "status": {
+              "$param": "status"
+            },
+            "subject": {
+              "$param": "subject"
+            },
+            "tags": {
+              "$param": "tags"
+            },
+            "type": {
+              "$param": "type"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/tickets"
+      },
+      "response_schema": {
+        "properties": {
+          "cc_emails": {
+            "items": {
+              "format": "email",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "company_id": {
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "description": "The opening message as HTML",
+            "type": "string"
+          },
+          "description_text": {
+            "description": "The opening message as plain text",
+            "type": "string"
+          },
+          "due_by": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fr_due_by": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fr_escalated": {
+            "type": "boolean"
+          },
+          "group_id": {
+            "type": "integer"
+          },
+          "id": {
+            "description": "The new ticket's id — the only place it is returned, and what every later call addresses",
+            "type": "integer"
+          },
+          "is_escalated": {
+            "type": "boolean"
+          },
+          "priority": {
+            "description": "1 Low, 2 Medium, 3 High, 4 Urgent. Defaults to 1",
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "type": "integer"
+          },
+          "product_id": {
+            "type": "integer"
+          },
+          "requester_id": {
+            "description": "Set even when the ticket was created by phone and name — Freshdesk resolves or creates the contact and reports which one it used",
+            "type": "integer"
+          },
+          "responder_id": {
+            "type": "integer"
+          },
+          "source": {
+            "description": "1 Email, 2 Portal, 3 Phone, 7 Chat, 9 Feedback widget, 10 Outbound email",
+            "enum": [
+              1,
+              2,
+              3,
+              7,
+              9,
+              10
+            ],
+            "type": "integer"
+          },
+          "spam": {
+            "type": "boolean"
+          },
+          "status": {
+            "description": "2 Open, 3 Pending, 4 Resolved, 5 Closed. Defaults to 2 when the create did not set it",
+            "enum": [
+              2,
+              3,
+              4,
+              5
+            ],
+            "type": "integer"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [],
+      "description": "Update a ticket's fields",
+      "direction": "write",
+      "endpoint": {
+        "domain": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "freshdesk-ticket-update",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "Id of the ticket to update",
+          "name": "id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Ticket subject",
+          "name": "subject",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Ticket description",
+          "name": "description",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Ticket status: 2 open, 3 pending, 4 resolved, 5 closed",
+          "name": "status",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "enum": [
+              2,
+              3,
+              4,
+              5
+            ],
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Ticket priority: 1 low, 2 medium, 3 high, 4 urgent",
+          "name": "priority",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Requester id",
+          "name": "requester_id",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Responding agent id",
+          "name": "responder_id",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Requester name",
+          "name": "name",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Requester phone",
+          "name": "phone",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Requester email",
+          "name": "email",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "format": "email",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Query type",
+          "name": "type",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Email config used for this ticket",
+          "name": "email_config_id",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Group the ticket is assigned to",
+          "name": "group_id",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Associated product",
+          "name": "product_id",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Ticket tags",
+          "name": "tags",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        {
+          "description": "Custom ticket field data",
+          "name": "custom_fields",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "additionalProperties": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "type": "object"
+          }
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "custom_fields": {
+              "$param": "custom_fields"
+            },
+            "description": {
+              "$param": "description"
+            },
+            "email": {
+              "$param": "email"
+            },
+            "email_config_id": {
+              "$param": "email_config_id"
+            },
+            "group_id": {
+              "$param": "group_id"
+            },
+            "name": {
+              "$param": "name"
+            },
+            "phone": {
+              "$param": "phone"
+            },
+            "priority": {
+              "$param": "priority"
+            },
+            "product_id": {
+              "$param": "product_id"
+            },
+            "requester_id": {
+              "$param": "requester_id"
+            },
+            "responder_id": {
+              "$param": "responder_id"
+            },
+            "status": {
+              "$param": "status"
+            },
+            "subject": {
+              "$param": "subject"
+            },
+            "tags": {
+              "$param": "tags"
+            },
+            "type": {
+              "$param": "type"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "PUT",
+        "url": "{base}/tickets/{id}"
+      },
+      "response_schema": {
+        "properties": {
+          "attachments": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "description": "The opening message as HTML — unchanged by an update, which never edits the first message",
+            "type": "string"
+          },
+          "description_text": {
+            "description": "The opening message as plain text",
+            "type": "string"
+          },
+          "due_by": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fr_due_by": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fr_escalated": {
+            "type": "boolean"
+          },
+          "group_id": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "is_escalated": {
+            "type": "boolean"
+          },
+          "priority": {
+            "description": "1 Low, 2 Medium, 3 High, 4 Urgent",
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "type": "integer"
+          },
+          "product_id": {
+            "type": "integer"
+          },
+          "requester_id": {
+            "type": "integer"
+          },
+          "responder_id": {
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              1,
+              2,
+              3,
+              7,
+              9,
+              10
+            ],
+            "type": "integer"
+          },
+          "spam": {
+            "type": "boolean"
+          },
+          "status": {
+            "description": "2 Open, 3 Pending, 4 Resolved, 5 Closed — the value **after** this update",
+            "enum": [
+              2,
+              3,
+              4,
+              5
+            ],
+            "type": "integer"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "tags": {
+            "description": "The ticket's tag set after the update. Freshdesk documents no additive form of this field — unlike zendesk's `additional_tags` — so read it back rather than assuming earlier tags survived",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": {
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "Moves on every accepted update, so it is the cheapest confirmation that the call changed something",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [],
+      "description": "Add a note to a ticket; the note is private unless explicitly made public",
+      "direction": "write",
+      "endpoint": {
+        "domain": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "freshdesk-ticket-note-add",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "Id of the ticket",
+          "name": "id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Note body",
+          "name": "body",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Whether the note is hidden from end users",
+          "name": "private",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Set true when the note originates from an external system",
+          "name": "incoming",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Addresses to notify about the note",
+          "name": "notify_emails",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "items": {
+              "format": "email",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "body": {
+              "$param": "body"
+            },
+            "incoming": {
+              "$param": "incoming"
+            },
+            "notify_emails": {
+              "$param": "notify_emails"
+            },
+            "private": {
+              "$param": "private"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/tickets/{id}/notes"
+      },
+      "response_schema": {
+        "properties": {
+          "attachments": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "body": {
+            "description": "The note as HTML",
+            "type": "string"
+          },
+          "body_text": {
+            "description": "The note as plain text",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "The note's own id, distinct from the ticket's",
+            "type": "integer"
+          },
+          "incoming": {
+            "description": "True when the note represents something the customer sent in rather than an agent's own note",
+            "type": "boolean"
+          },
+          "notified_to": {
+            "description": "Who was notified — the response's name for the request's `notify_emails`",
+            "items": {
+              "format": "email",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "private": {
+            "description": "True for a note only agents can see. Defaults to true — read it back before assuming a note was published",
+            "type": "boolean"
+          },
+          "structured_body": {
+            "description": "The note again, as `{body_contents: [{type, data: {content}}]}`",
+            "type": "object"
+          },
+          "support_email": {
+            "description": "The support address involved, or null",
+            "type": "string"
+          },
+          "ticket_id": {
+            "description": "The ticket the note was added to",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "user_id": {
+            "description": "Who the note is attributed to",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [],
+      "description": "List and filter contacts, e.g. to resolve a caller before filing a ticket",
+      "direction": "read",
+      "endpoint": {
+        "domain": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "freshdesk-contact-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Filter by phone",
+          "name": "phone",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Filter by email",
+          "name": "email",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "format": "email",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Filter by mobile number",
+          "name": "mobile",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Filter by company id",
+          "name": "company_id",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Filter by contact state",
+          "name": "state",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "blocked",
+              "deleted",
+              "unverified",
+              "verified"
+            ],
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "company_id",
+            "value": {
+              "$param": "company_id"
+            }
+          },
+          {
+            "name": "email",
+            "value": {
+              "$param": "email"
+            }
+          },
+          {
+            "name": "mobile",
+            "value": {
+              "$param": "mobile"
+            }
+          },
+          {
+            "name": "phone",
+            "value": {
+              "$param": "phone"
+            }
+          },
+          {
+            "name": "state",
+            "value": {
+              "$param": "state"
+            }
+          }
+        ],
+        "url": "{base}/contacts"
+      },
+      "response_schema": {
+        "description": "The matching contacts, as a bare JSON array with no envelope. Empty when nothing matched — which is a successful call, and the signal that the caller is not a known contact",
+        "items": {
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "company_id": {
+              "type": "integer"
+            },
+            "contact_type": {
+              "type": "string"
+            },
+            "created_at": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "deleted": {
+              "type": "boolean"
+            },
+            "email": {
+              "description": "The primary address; further ones are in `other_emails`",
+              "format": "email",
+              "type": "string"
+            },
+            "id": {
+              "description": "The contact id — this is the `requester_id` a ticket create takes",
+              "type": "integer"
+            },
+            "job_title": {
+              "type": "string"
+            },
+            "language": {
+              "type": "string"
+            },
+            "mobile": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "other_companies": {
+              "description": "Freshdesk's own examples disagree about this member: bare company ids in a listing, `{company_id, view_all_tickets}` objects on a single read. No item schema is declared rather than guessing which",
+              "type": "array"
+            },
+            "other_emails": {
+              "items": {
+                "format": "email",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "phone": {
+              "type": "string"
+            },
+            "tags": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "time_zone": {
+              "type": "string"
+            },
+            "twitter_id": {
+              "type": "string"
+            },
+            "updated_at": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [],
+      "description": "Get one contact",
+      "direction": "read",
+      "endpoint": {
+        "domain": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "freshdesk-contact-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The contact id",
+          "name": "id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/contacts/{id}"
+      },
+      "response_schema": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "address": {
+            "type": "string"
+          },
+          "avatar": {
+            "description": "The contact's picture — `{avatar_url, content_type, id, name, size}` — or null",
+            "type": "object"
+          },
+          "company_id": {
+            "type": "integer"
+          },
+          "contact_type": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "custom_fields": {
+            "description": "The account's own contact fields, keyed by field name",
+            "type": "object"
+          },
+          "description": {
+            "type": "string"
+          },
+          "devices": {
+            "description": "Known devices, each `{device_type, device_make, device_model, app_version, os, os_version}`",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "job_title": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "mobile": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "other_companies": {
+            "description": "On a single read Freshdesk's example shows `{company_id, view_all_tickets}` objects; its listing example shows bare ids. No item schema is declared rather than picking one",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "other_emails": {
+            "items": {
+              "format": "email",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "time_zone": {
+            "type": "string"
+          },
+          "twitter_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "view_all_tickets": {
+            "description": "True when this contact can see every ticket of their company, not only their own",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [],
+      "description": "Create a contact",
+      "direction": "write",
+      "endpoint": {
+        "domain": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "freshdesk-contact-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "Contact name",
+          "name": "name",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Contact email",
+          "name": "email",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "format": "email",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Contact phone number",
+          "name": "phone",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "email": {
+              "$param": "email"
+            },
+            "name": {
+              "$param": "name"
+            },
+            "phone": {
+              "$param": "phone"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/contacts"
+      },
+      "response_schema": {
+        "properties": {
+          "active": {
+            "description": "Whether the contact has an active portal account. Freshdesk's own create example returns `false`, so do not treat a create as producing an active contact",
+            "type": "boolean"
+          },
+          "address": {
+            "type": "string"
+          },
+          "avatar": {
+            "description": "Null on a contact created through the API",
+            "type": "object"
+          },
+          "company_id": {
+            "type": "integer"
+          },
+          "contact_type": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "id": {
+            "description": "The new contact's id — the `requester_id` for a following `freshdesk-ticket-create`",
+            "type": "integer"
+          },
+          "job_title": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "mobile": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "other_emails": {
+            "items": {
+              "format": "email",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "time_zone": {
+            "type": "string"
+          },
+          "twitter_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "view_all_tickets": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v2",
+      "base_url": "https://{domain}/api/v2",
+      "gid": "com.freshdesk.api:v2",
+      "name": "default",
+      "tags": [
+        "support"
+      ]
+    }
+  ],
+  "vendor": "Freshdesk",
+  "verify": "freshdesk-test"
+}
