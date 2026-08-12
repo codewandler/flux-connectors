@@ -149,6 +149,19 @@ proves the seams end to end, and keep the fleet growing in parallel waves.
 An **epic** is a themed group of stories with a shared design doc. Stories join an epic via the
 `epic: <slug>` frontmatter field, where `<slug>` matches a design doc at `docs/designs/<slug>.md`.
 
+### The test suite costs what it verifies
+
+Three measured, independent levers on the workspace gate's wall clock, link time and disk — none of
+which deletes, merges or weakens a test: one test binary per crate instead of one per file
+([C-533](stories/C-533-the-test-suite-links-one-binary-per-crate.md), whose "The measurement"
+section is the epic's evidence base — 179 test files, 30 GB of executables, and the disk exhaustion
+that failed the v0.21.0 cut), a parallel process runner for the gate
+([C-543](stories/C-543-run-the-test-suite-as-parallel-processes.md)), and concurrent provider
+compiles in the pipeline ([C-544](stories/C-544-parallelise-the-provider-compile-loop.md)).
+[C-546](stories/C-546-test-suite-cost-epic.md) tracks the program. Deliberately no separate design
+doc: each lever is self-contained in its story, and the epic's rule — a red run must never be
+ambiguous about which lever caused it — is an ordering constraint, not an architecture.
+
 ### All integrations are connectors — one declaration, executed through Exchange
 
 Generated HTTP is the first connector runtime, not the repository boundary. Docker, Kubernetes,

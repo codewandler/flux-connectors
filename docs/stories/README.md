@@ -30,6 +30,7 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 - [C-495 — All official integrations become connectors (epic)](C-495-all-integrations-are-connectors-epic.md) · Bridge · EPIC — every official integration is connector-owned and Exchange-executed; migrate all 18 Flux adapters without a local Flux runtime or fallback
 - [C-523 — Publish one canonical normalized HTTPS-origin API for every consumer](C-523-publish-canonical-https-origin.md) · Bridge · Milestone 1 blocker: Exchange X-125 must validate and compare the exact origin contract without copying connector-spec or depending on an unpublished compiler crate
 - [C-534 — The catalog artifact replaces compiled Flux (epic)](C-534-catalog-artifact-epic.md) · Bridge · EPIC — Decision 0022: compile the IR to a canonical per-provider document and a compressed pack; resolve requests from data, not parsed Flux; retire connector-flux behind a byte-identical differential gate
+- [C-546 — The test suite costs what it verifies, not what Cargo defaults to (epic)](C-546-test-suite-cost-epic.md) · Build · Epic tracker for the three measured test-cost levers: one binary per crate (C-533), parallel process running (C-543), and the parallel provider compile loop (C-544). Filed when the operator asked for faster test runs; C-533's measurement section is the evidence base
 
 ## Next (ready — take the top one unless the user named a story)
 - [C-517 — Repository agents use the installed Flux Board workflow](C-517-use-the-installed-flux-board-workflow.md) · Bridge · Fleet dogfood — replace private Track slash commands with copyable versioned flux board commands
@@ -67,6 +68,7 @@ _The generalized-provider vocabulary so far names things a service *is* or *hold
 
 ### the catalog artifact
 - [C-538 — Resolve requests from the document, not the Flux](C-538-resolve-from-the-document.md) · Connector · connector-pack derives the request plan from the request template; the parse at spec.rs:250 and the AST walk leave the resolve path behind a whole-catalogue byte-identical differential gate
+- [C-547 — Publish the catalog pack as a verifiable release asset](C-547-publish-the-pack-as-a-release-asset.md) · Build · Operator-proposed 2026-08-12: attach catalog.pack (+ out-of-band sha256) to the GitHub release so a client fetches the catalogue without cargo; Pack::load(path) already refuses a wrong digest or schema version, so the verification half exists
 - [C-545 — The status route serves a machine-readable pointer to a superseded story](C-545-the-status-route-cites-a-superseded-story.md) · Host · status.rs serves Issue { story: \"C-10\" } behind CREDENTIALS_REACH_THE_REQUEST = false; C-535 closed C-10 as superseded, so a machine-readable consumer is pointed at work that is never coming — found by C-542's implementor
 
 ### channel bindings — generalize a flux `channel` over a connector
