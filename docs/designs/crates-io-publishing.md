@@ -20,12 +20,14 @@ otherwise only be discovered at release time is moved onto every pull request.
 
 `../flux` solved the same problem and its `crates-io.yml` is the template. This mirrors it.
 
-## 1. The closure is four crates, not three
+## 1. The closure is five crates, not three
 
-C-190 names three consumable crates. The dependency graph says four.
+C-190 names three consumable crates. The dependency graph said four when this was written, and says
+five since C-537 gave the catalogue a data crate to sit on.
 
 ```
-connector-catalog                              (no dependencies at all)
+catalog-reader                                 (no dependencies at all)
+catalog-reader → connector-catalog             (the pack, re-exported as `catalog::reader`)
 connector-address → connector-secrets          (CredentialRef, Layout, TenantLayout)
 connector-catalog, connector-secrets → connector-pack
 ```
@@ -40,9 +42,10 @@ Derived publish order:
 | # | crate | why it is here |
 |---|---|---|
 | 1 | `connector-address` | **not requested — forced** by `connector-secrets`' public API |
-| 2 | `connector-catalog` | consumable; zero dependencies |
-| 3 | `connector-secrets` | consumable; needs `connector-address` live |
-| 4 | `connector-pack` | consumable; needs `connector-catalog` and `connector-secrets` live |
+| 2 | `catalog-reader` | **not requested — forced** by `connector-catalog`'s public API (C-537); zero dependencies of its own |
+| 3 | `connector-catalog` | consumable; needs `catalog-reader` live |
+| 4 | `connector-secrets` | consumable; needs `connector-address` live |
+| 5 | `connector-pack` | consumable; needs `connector-catalog` and `connector-secrets` live |
 
 Not published: `connector-cli` (this repository's own build tool), `connector-flux` (reachable only
 from it) and `connector-spec` (the compiler). None is in the closure of any consumable crate, so
@@ -51,8 +54,8 @@ none is forced.
 **This is a finding for C-190, not a decision taken here.** It changes that story's arithmetic:
 four new crates against the crates.io new-crate rate limit rather than three, and one more permanent
 name to settle. It also means `connector-catalog` is no longer quite the "publishable on its own"
-crate the notes assume — it still is, but `connector-secrets` is not, and `connector-pack` needs
-three predecessors live.
+crate the notes assume — it was, until C-537 put `catalog-reader` underneath it; `connector-secrets`
+never was; and `connector-pack` now needs four predecessors live.
 
 ### The forced crate used to be the compiler (C-407)
 
@@ -75,7 +78,8 @@ leaving it to whoever next reads a derived list.
 
 `../flux` hand-lists 29 crates because its graph carries ordering constraints a manifest does not
 state (an optional feature dependency; a protocol line versioned independently of the runtime). This
-workspace has four crates and one non-obvious edge, so a topological sort over the manifests is
+workspace has five crates and two non-obvious edges — the `CredentialRef` re-export and the pack
+re-exported as `catalog::reader` — so a topological sort over the manifests is
 *exact* — and a sort cannot go stale the way a list does.
 
 `scripts/publish-crates-io.sh` therefore lists only **ROOTS** (which crates are consumable — a
@@ -107,13 +111,14 @@ Deliberate divergences from flux's file, both small:
 
 ## 3. Crate names — settled public contract
 
-The repository chose the organization-prefixed package names before first publication. On
-2026-08-04, querying `https://crates.io/api/v1/crates/<name>/0.19.1` for each package returned these
-four live, unyanked records:
+The repository chose the organization-prefixed package names before first publication. Re-measured
+2026-08-12 with `curl -s https://index.crates.io/co/de/<name> | tail -1`, which reports
+`"vers":"0.22.0"` and `"yanked":false` for each of these five:
 
 | package name | Rust library name |
 |---|---|
 | `codewandler-connector-address` | `connector_address` |
+| `codewandler-connector-catalog-reader` | `catalog_reader` |
 | `codewandler-connector-catalog` | `catalog` |
 | `codewandler-connector-secrets` | `connector_secrets` |
 | `codewandler-connector-pack` | `connector_pack` |
@@ -126,7 +131,7 @@ the same public package names.
 
 ## 4. Metadata
 
-`description`, `license`, `repository`, `readme`, `keywords` on all four, plus `documentation` and
+`description`, `license`, `repository`, `readme`, `keywords` on all five, plus `documentation` and
 `categories` following flux's convention. `license` and `repository` are inherited from
 `[workspace.package]`; `readme` names a per-crate `README.md`, because a crates.io front page that
 says "see the monorepo" is a worse first impression than three paragraphs.

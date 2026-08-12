@@ -10,7 +10,7 @@ local story and reconcile the text before implementation; the roadmap does not o
 repository's implementation acceptance, safety invariants or validation contract. C-507 records the
 current adoption of Decision 0001. C-535 records the adoption of Decision 0022: the compile
 destination is a versioned **catalog artifact** — request shaping as closed declarative data the
-resolver evaluates, behaviour staying in Flux-Lang at the Flux layer. C-534's program (C-536…C-540)
+resolver evaluates, behaviour staying in Flux-Lang at the Flux layer. C-534's program (C-536…C-541)
 is delivering it additively — C-536 landed the canonical documents, C-537 the pack and its reader —
 and nothing previously emitted retires before C-538…C-540's differential gate.
 
@@ -102,7 +102,7 @@ The coordinator failures from the same session, and each of them cost a rework r
 
 ## Current project boundary
 
-**Snapshot: v0.21.0 + C-537 (re-measured 2026-08-12).** `cargo run -p connector-cli -- build` compiles **55 providers**, **67 services**
+**Snapshot: v0.22.0 (re-measured 2026-08-12).** `cargo run -p connector-cli -- build` compiles **55 providers**, **67 services**
 and **835 curated connector operations** — plus 53 events, 5 channel bindings and 77 Flux core entries
 (29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **1167 artifacts**. The
 compiler, the embedded Rust catalogue, the JSON catalogue, the Tool pack and the public explorer all
@@ -838,7 +838,9 @@ AWS). The service is the unit that is addressed, versioned, selected, emitted an
   an operation to fall into — omitting `service` there is a loud error.
 - **A service owns its base URL and its API version**, with the connector's as defaults. Each emitted
   manifest carries its own service's `base_url` and its own operations, so a service's egress surface
-  is never widened to the union of the provider's. C-10's `http_hosts` derives from that value.
+  is never widened to the union of the provider's. An `http_hosts` allowlist would derive from that
+  value, but it is unowned since C-10 closed as superseded; whether the catalog artifact grows one
+  is C-534's to decide.
 - **No content field of a provider TOML influences an output path.** Paths derive from the discovered
   file stem, and the one content field that reaches a path — a service name, via
   `<provider>-<service>.flux` — is validated against the address grammar in the loader
@@ -1115,12 +1117,13 @@ version number is burned, and a wrong `description`, `readme` or `keywords` is f
   whole closure on every pull request, so a packaging error arrives as a review comment rather than
   as a release incident.
 - **Crate names are settled.** The permanent public packages are
-  `codewandler-connector-address`, `codewandler-connector-catalog-reader` (C-537, first published
-  with the next release), `codewandler-connector-catalog`,
-  `codewandler-connector-secrets` and `codewandler-connector-pack`; the four pre-C-537 packages are
-  live and unyanked at `0.19.1` (re-measured 2026-08-04 with the crates.io
-  `/api/v1/crates/<name>/0.19.1` endpoint). Their shorter `[lib]` names remain the Rust import names;
-  README dependency snippets, crates.io links and docs.rs metadata use the public package names.
+  `codewandler-connector-address`, `codewandler-connector-catalog-reader`,
+  `codewandler-connector-catalog`, `codewandler-connector-secrets` and
+  `codewandler-connector-pack`. All five are live and unyanked at `0.22.0`; the reader is the
+  newest of them, added by C-537 and first published in v0.22.0 (re-measured 2026-08-12 with
+  `curl -s https://index.crates.io/co/de/<name> | tail -1`, which reports `"vers":"0.22.0"` and
+  `"yanked":false` for each). Their shorter `[lib]` names remain the Rust import names; README
+  dependency snippets, crates.io links and docs.rs metadata use the public package names.
 
 See [docs/designs/crates-io-publishing.md](docs/designs/crates-io-publishing.md) for the reasoning
 and [C-190](docs/stories/C-190-publish-catalog-pack-secrets.md) for *when* the first publish
@@ -1172,7 +1175,7 @@ against the diff, not against memory.
 
    That promotes both changelogs, bumps `[workspace.package].version`, every internal
    path-dependency requirement in `[workspace.dependencies]`, `README.md`, and the public package
-   requirements in all four packaged crate READMEs, re-locks the workspace, **regenerates every
+   requirements in all five packaged crate READMEs, re-locks the workspace, **regenerates every
    artifact**, runs the Rust gate plus both Node gates from [Validation](#validation), commits
    `Release vX.Y.Z` and creates the annotated tag. It **does not push and never publishes**.
 
@@ -1240,5 +1243,6 @@ That is CI's, and the contract below says why.
   gate in [docs/designs/catalog-artifact.md](docs/designs/catalog-artifact.md). Flux never grows a
   connector module loader: C-10 and C-15 are closed as superseded, not pending. None of this moves
   the secrets boundary, the offline guarantee or the fail-closed rules — Decision 0022 changes the
-  compile target, not those invariants — and nothing of it has shipped yet: the emitter still runs
-  and every artifact above still ships.
+  compile target, not those invariants. The first two steps have shipped additively in v0.22.0:
+  C-536's canonical documents and C-537's pack with its published reader. The resolver and the
+  retirement have not, so the emitter still runs and every artifact above still ships.

@@ -6,18 +6,19 @@ document is the hand-written narrative around it.
 
 ## Status
 
-_As of 2026-08-03:_ the compiler, catalogue, Tool pack, generated WebSocket plan, and reference host
-are built through **v0.17.0**. The checked-in catalogue has 55 provider definitions (measured with
+_As of 2026-08-12:_ the compiler, catalogue, Tool pack, generated WebSocket plan, and reference host
+are built through **v0.22.0**. The checked-in catalogue has 55 provider definitions (measured with
 `find providers -maxdepth 1 -name '*.toml' | wc -l` on this date). Exact story status lives on the
 generated [board](stories/README.md); exact artifact and operation counts live in the checked README
 contract and move with each catalogue build.
 
 Working end to end: provider TOML → IR → a Flux module, a capability manifest, one rendering per
-operation, an embedded Rust catalogue and the published `catalog.json` behind the explorer — hermetic,
-offline and byte-reproducible, with `connectors.lock` recording what produced what. Beside the
-compiler sit two **host libraries**: `connector-pack` projects every operation onto a flux `ToolSpec`,
-assembles its credential in Rust and hands a registry declarations; `connector-secrets` resolves a
-credential address to a value over an in-memory or Vault-backed store.
+operation, an embedded Rust catalogue, the published `catalog.json` behind the explorer, one canonical
+`catalog/<name>.catalog.json` per provider and the whole-catalogue `catalog.pack` its dependency-free
+reader serves — hermetic, offline and byte-reproducible, with `connectors.lock` recording what
+produced what. Beside the compiler sit two **host libraries**: `connector-pack` projects every
+operation onto a flux `ToolSpec`, assembles its credential in Rust and hands a registry declarations;
+`connector-secrets` resolves a credential address to a value over an in-memory or Vault-backed store.
 
 **The external dependency this section used to name is gone.** flux's `$auth` seam was the critical
 path for a live call; C-114, C-115 and C-116 dissolved it by assembling auth inside the Tool pack, so
@@ -42,11 +43,15 @@ constant `"local"` tenant with one that comes from a Google-backed session, and 
 in-memory credential store with a 0600 file the host refuses to open when it is wider. Both are
 recorded, with transcripts, in `crates/connectors-api/README.md`.
 
-The largest gap is not a blocker but a hole: **six declarable surfaces reach no artifact** —
-`config`, `verify`, a service's `roles`, `quirks.pagination`, `graphs` and `quirks.rate_limit`. The IR
-models each and the loader validates it, and then neither the manifest nor the published catalogue
-carries it, so a host cannot render a connector's settings page or find its "Test connection"
-operation for connectors that declare both. `AGENTS.md`'s *Intentional gaps* has the table.
+That hole has closed to one: **one declarable surface reaches no artifact** — `graphs`. `config` and
+`verify` left the list with C-87 and now travel into the manifest and the published catalogue, so a
+host renders a connector's settings page and finds its "Test connection" operation from the artifact
+alone; a service's `roles` and `quirks.pagination` left it with C-536, both reaching
+`catalog/<name>.catalog.json`, and `quirks.rate_limit` became representable there — the document
+schema carries the field, and nothing declares one yet. `graphs` is modelled in the IR and the
+loader validates it, and the canonical document refuses rather than drops it while its lowering
+stays an open question of the catalog-artifact design. `AGENTS.md`'s *Intentional gaps* has the
+table.
 
 ## Delivered
 
@@ -85,6 +90,59 @@ The itemized history is [CHANGELOG.md](../CHANGELOG.md); this is its shape.
 - **v0.8.0** — credentials that survive a restart (C-207), a dev sign-in so the host runs without a
   Google registration (C-234), a `User-Agent` on every outgoing request (C-223), a checked MSRV
   (C-213), and C-186's requirement that a repeatable write state the condition it depends on.
+- **v0.9.0** — the `[spec]` front-end (C-4): a provider points at a vendored OpenAPI document instead
+  of spelling every operation out, ingest selects nothing by default, and one `[[patch.select]]`
+  statement carries naming, risk and idempotency across many operations (C-411, C-412, C-414). Also
+  `connectors.lock` actually written, so drift detection exists (C-189), and C-407 taking the compiler
+  *out* of the publish closure. **v0.9.1** withheld the four operations that returned a secret (C-430).
+- **v0.10.0** — `produces_credential` returns a handle and never the secret, with the module path
+  closed by refusal rather than by care (C-136); `also_binds`, so one collected value reaches several
+  request positions (C-229); and Twilio's channel binding reproducing the vendor's own published
+  signature (C-188). **v0.10.1** settled the logo question by never vendoring one (C-437).
+- **v0.11.0** — the host's explorer becomes an operator console with a socket-free, secret-free dry run
+  (C-237), a service declares a `Tag` from a closed vocabulary (C-153), and the Managed Agents surface
+  is inventoried before any TOML — where it contradicted its own epic's premise in three places (C-445).
+- **v0.12.0** — one thing: a request body can carry an array at a declared length, with five refusals
+  around it (C-185).
+- **v0.13.0** — the runtime seam moves to flux 0.49 (C-455), a release cut runs both Node consumer
+  gates inside the same transaction as the Rust gate (C-453), and the whole-catalogue network-safety
+  gate stops rebuilding once per operation: 191.31s → 1.48s (C-456).
+- **v0.14.0** — Zendesk grows from 7 operations to 37 across three services on vendored, scrubbed,
+  provenanced first-party documents (C-459, C-462–C-466); five established connectors add twenty exact
+  first-party reads (C-467–C-474); and a caller-owned path segment is refused before authentication or
+  egress (C-478).
+- **v0.15.0** — Asterisk ARI as a spec-generated REST connector: all 108 ordinary HTTP operations from
+  eleven vendored Swagger documents, WebSocket deliberately absent (C-483–C-486), and every Zendesk
+  operation re-derived from its vendored description with no compatibility aliases (C-487).
+- **v0.16.0** — one thing: the runtime seam moves to Flux 0.52, with no connector operation byte
+  changed (C-488).
+- **v0.17.0** — generated channel bindings publish their complete routing contract and
+  `connector_pack::channel_plan` resolves them into a redacted zero-I/O handshake (C-489–C-491);
+  Asterisk gains its event WebSocket with all 45 official `Event` subtypes (C-492); the seam moves to
+  Flux 0.54 (C-493).
+- **v0.18.0** — several connections to one connector, admitted safely: `CredentialScope`, an atomic
+  `SecretBatch`, and the pack binding one connection UUID (C-494). Plus policy-bearing semantic effects
+  (C-155), query parameters encoded structurally through Flux 0.54's RFC 3986 query map instead of
+  interpolated (C-30), and the documented boundary widening to every official integration (C-495, C-496).
+- **v0.19.0** — configuration and verification become public consumer contracts, `catalog.json` moving
+  to schema 3 with `auth.oauth2` a complete declaration rather than a lossy boolean (C-87); one
+  execution boundary adopted across the family — this repository declares, Exchange executes (C-507);
+  and the native-plugin migration inventory with its conformance ratchet (C-505). **v0.19.1** made
+  durable credentials owner-only on all three platforms (C-509).
+- **v0.20.0** — recoverable prepared credential transactions as a public host port, with `FileStore`
+  taking a native writer lease and speaking transactional v2 (C-515), and Decision 0006's datasource
+  vocabulary adopted as a chartered connector surface (C-510).
+- **v0.21.0** — a credential declares whose authority it carries (C-528), the published catalogue
+  carries its OAuth2 acquisition (C-525), GitLab becomes the first shipped connector to declare
+  `[auth.oauth2]` (C-530), and every published operation states a closed `read`/`write` direction
+  independent of its HTTP method (C-516).
+- **v0.22.0** — Decision 0022 adopted (C-535) and its first two deliveries shipped **additively**: one
+  canonical `catalog/<name>.catalog.json` per provider, validated against a published schema and hashed
+  per provider in `connectors.lock` (C-536), and the single `catalog.pack` those documents compile into
+  — offset-indexed, digest-carrying — served by the new dependency-free
+  `codewandler-connector-catalog-reader` (C-537). Nothing previously emitted changed. The release-asset
+  contract that attaches `catalog.pack` and its `sha256sum` line to every tag landed just after the cut
+  and was applied back to it, so v0.22.0's assets are attached and verified (C-547).
 
 ## Publishing
 
@@ -95,17 +153,20 @@ limit resumes rather than stranding a half-published set that cannot be withdraw
 [AGENTS.md § Publishing contract](../AGENTS.md) and
 [designs/crates-io-publishing.md](designs/crates-io-publishing.md).
 
-**The closure is four crates, and which four changed at C-407.** `connector-secrets` re-exports
-`CredentialRef`, so whichever crate owns that vocabulary is in its public API and must ship or
-nothing outside this workspace resolves. Until C-407 that crate was `connector-spec` — the connector
-IR, both front-ends, validation and the lockfile writer, 11,832 lines of compiler shipped so that a
-credential address would resolve. This paragraph used to record that as a fact of life; it was a
-dependency-direction problem, and extracting the vocabulary into `connector-address` ended it. In
+**The closure is five crates, and both which crates and how many have moved.** `connector-secrets`
+re-exports `CredentialRef`, so whichever crate owns that vocabulary is in its public API and must
+ship or nothing outside this workspace resolves. Until C-407 that crate was `connector-spec` — the
+connector IR, both front-ends, validation and the lockfile writer, 11,832 lines of compiler shipped
+so that a credential address would resolve. This paragraph used to record that as a fact of life; it
+was a dependency-direction problem, and extracting the vocabulary into `connector-address` ended it.
+C-537 added the fifth for the opposite reason: `catalog-reader` carries the pack and resolves
+nothing, so `connector-catalog` gains an edge to catalogue *data* rather than to machinery. In
 dependency order:
 
 ```
-codewandler-connector-address → codewandler-connector-catalog
-  → codewandler-connector-secrets → codewandler-connector-pack
+codewandler-connector-address → codewandler-connector-catalog-reader
+  → codewandler-connector-catalog → codewandler-connector-secrets
+  → codewandler-connector-pack
 ```
 
 The order is **derived from the manifests** by `scripts/publish-crates-io.sh --print-order`, never
@@ -122,9 +183,12 @@ names are a contested namespace, and `connector-cli` is already taken on crates.
 project. Package names are decoupled from crate names by `[lib] name`, so `use catalog::` and
 `use connector_spec::` are unaffected.
 
-**All four are published, and the order was deliberate.** The closure first went out at **0.7.0** on
-**2026-07-31** and is at **0.8.0** as of the same day, in the dependency order above. Everything the ordering waited
-on had landed by then: [C-197](stories/C-197-config-collapses-across-services.md),
+**All five are published, and the order was deliberate.** The closure first went out at **0.7.0** on
+**2026-07-31** and is at **0.22.0** as of 2026-08-12, in the dependency order above; `catalog-reader`
+is the one that joined late, first published at 0.22.0, and each of the five is live and unyanked
+there (`curl -s https://index.crates.io/co/de/<name> | tail -1` reports `"vers":"0.22.0"` and
+`"yanked":false`). Everything the ordering waited on had landed by the first cut:
+[C-197](stories/C-197-config-collapses-across-services.md),
 [C-92](stories/C-92-authorities-for-every-provider.md), and
 [C-192](stories/C-192-flux-0-41-bump.md) — a consumer must link exactly one flux-runtime, because
 `connector-pack` hands out `Arc<dyn Tool>` and two engine versions are two incompatible types — plus
@@ -140,9 +204,16 @@ and the reason was wrong: it was never `connector-catalog` that was at risk.
 
 ## Next
 
-The ranked, actionable form is the **Next** list on the [board](stories/README.md). In short: close
-the surface gap so a host can read what a connector already declares, stand up the reference host that
-proves the seams end to end, and keep the fleet growing in parallel waves.
+The ranked, actionable form is the **Next** list on the [board](stories/README.md). In short: two
+programs and a loose end. [C-534](stories/C-534-catalog-artifact-epic.md) has landed the canonical
+documents, the pack and its reader, and everything left in it is the part that changes what actually
+runs — C-538 resolves a request from the document rather than from emitted Flux, C-539 has Exchange
+read the artifact, and C-540 and C-541 retire `connector-flux` and the Tool wrapper once the
+differential gate and Exchange's plan-API adoption respectively permit it.
+[C-546](stories/C-546-test-suite-cost-epic.md) carries what the gate costs: C-543's parallel process
+runner and C-544's concurrent provider compiles. C-547 has already published the pack as a verifiable
+release asset; C-545 is the last superseded-story pointer still being served, this one by the status
+route.
 
 ## Epics
 
@@ -408,9 +479,14 @@ the host and never present in any artifact. Design:
 [designs/connectors-v1.md](designs/connectors-v1.md); the pipeline itself is
 [designs/connector-pipeline.md](designs/connector-pipeline.md).
 
-**Done looks like:** `flux-connectors build && flux-connectors install`, then a `flux` session lists
-`zendesk.ticket.show` and `anthropic.messages.create` among its ops and calls one successfully
-against the live API.
+**Done looks like:** this condition is superseded by Decision 0022, not outstanding. Its installer
+half is closed rather than deferred — there is no `flux-connectors install` and there will not be one
+([C-15](stories/C-15-install-and-live-e2e.md)), and the `.flux` modules it would have installed retire
+under C-534's differential gate. Restated on the path that survived, it is the host's condition and it
+is met: `connector-pack` projects catalogue operations — `zendesk-ticket-show`,
+`anthropic-models-list` — onto flux `ToolSpec`s, assembles each credential in Rust, and
+`crates/connectors-api` calls one successfully against the live API, an exchange recorded in
+`crates/connectors-api/README.md`.
 
 ### Inbound events — the reverse call direction
 
@@ -484,10 +560,12 @@ They are chosen to exercise different halves of the pipeline:
 
 ### Generated connector tests — what can be derived, and what must never be
 
-`crates/connector-flux/tests/` holds **52 `*_connector.rs` files totalling 22,455 lines**, roughly one
-per shipped provider, and every new connector adds one by hand. The obvious reading is that this is
-boilerplate a generator should write. The measurement says only partly, and the interesting part is
-not the part you would generate.
+`crates/connector-flux/tests/` holds **52 `*_connector.rs` files totalling 23,060 lines** (re-measured
+2026-08-12 with `ls crates/connector-flux/tests/*_connector.rs | wc -l` and
+`wc -l crates/connector-flux/tests/*_connector.rs | tail -1`), roughly one per shipped provider, and
+every new connector adds one by hand. The obvious reading is that this is boilerplate a generator
+should write. The measurement says only partly, and the interesting part is not the part you would
+generate.
 
 Across those 52 files, 37 declare a `const PROVIDER`, 36 an env-var constant, 31 a `const OPERATIONS`,
 29 a `const CREDENTIAL`, 26 a `const BASE_URL` — every one a second spelling of something the provider
@@ -503,7 +581,7 @@ So the epic starts with a **measurement, not a generator** — and it is allowed
 doing", which for a spike is a successful outcome. Two things follow from what it finds. The
 mechanical bucket probably wants **deletion into a fleet-wide test** rather than generation: a test
 whose expected value comes from the same IR that produced the artifact asserts that the generator is
-the generator, and `flux-connectors diff` already checks all 557 artifacts byte-for-byte against
+the generator, and `flux-connectors diff` already checks all 1167 artifacts byte-for-byte against
 exactly that derivation. A disk-enumerating test in the `shipped_modules.rs` mould cannot drift and
 covers providers not written yet. Separately, there is one genuinely new check available: the vendored
 documents publish `example` blocks and, since C-4, resolved response schemas — two *independent*
@@ -511,7 +589,7 @@ statements by the vendor that nothing has ever compared.
 
 Design: [designs/generated-connector-tests.md](designs/generated-connector-tests.md).
 
-**Done looks like:** the question answered with a number — how many of the 22,455 lines restate the
+**Done looks like:** the question answered with a number — how many of the 23,060 lines restate the
 provider file, how many are already covered fleet-wide, how many are reasoned claims that stay — and
 then either the mechanical bucket is gone or the measurement says it was never the boilerplate it
 looked like, written down so nobody re-opens it on a hunch.
@@ -536,9 +614,12 @@ cannot separate, and it is gameable in the direction that improves the grade wit
 connector. So the facts are published per axis, each traceable to a declaration the loader enforces,
 and whether a composed grade ships is decided in the open once those facts exist.
 
-One axis turned out to be load-bearing at runtime rather than descriptive: flux's credential
-boundary (unchanged in the current 0.49.0 source) **refuses** a response carrying credential-shaped material instead of redacting it, so an
-operation that returns a token and does not say so does not leak — it fails.
+One axis was expected to be load-bearing at runtime rather than descriptive, and the expectation did
+not survive being checked: C-432 read flux's credential boundary in the vendored source and found it
+sits on the **plugin** seam, which this repository's artifacts do not travel. So an unmarked
+credential-shaped response neither fails nor is redacted, and there is no marking that would change
+that — `PlatformSourcing` opts *in* to refusal and has no value meaning "allow this one". The axis is
+descriptive after all, which is why nothing here declares a marking flux does not read.
 
 Design: [designs/connector-security-posture.md](designs/connector-security-posture.md).
 

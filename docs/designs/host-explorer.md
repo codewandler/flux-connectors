@@ -91,8 +91,8 @@ on `connector-cli`, and linking the compiler into the host would be wrong even t
   `web/`.
 - **(b) Move the emitter into a crate both can use.** No duplicate emitter, but a larger refactor
   that touches the publish closure. Growing `crates/catalog` to carry the missing fields is a third
-  option and is **rejected**: it is in the publish closure, is documented as dependency-free
-  `.rodata`, and would multiply its size for consumers that only want to execute.
+  option and is **rejected**: it is in the publish closure, is documented as carrying only data and
+  one data-only dependency, and would multiply its size for consumers that only want to execute.
 
 **Start with (a), record (b) as the follow-on.** (a) is reversible; a second emitter of the same
 document would be exactly the drift this repository exists to prevent, and is the one option that

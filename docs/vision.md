@@ -90,8 +90,9 @@ directly is wrong, however convenient it looks."* That sentence was written for 
 loads `connectors/<name>.flux` from `~/.flux/flows` and resolves credentials in-language via
 `$auth`; that world was never built, and the shipped system recovers every request by parsing the
 emitted Flux back out of the catalogue (`connector-pack`'s deliberately closed AST walk). The
-prohibition stands for behaviour and is redrawn honestly for request shaping. Nothing has shipped
-against the new destination yet: the build still emits `.flux` modules, and keeps doing so until
+prohibition stands for behaviour and is redrawn honestly for request shaping. Two steps toward the
+new destination have shipped additively — C-536's canonical documents and C-537's pack with its
+published reader — while the build still emits `.flux` modules, and keeps doing so until
 [C-534](stories/C-534-catalog-artifact-epic.md)'s differential gate proves the document-derived
 requests byte-identical — see [designs/catalog-artifact.md](designs/catalog-artifact.md).
 
@@ -162,8 +163,8 @@ requests byte-identical — see [designs/catalog-artifact.md](designs/catalog-ar
     reason `connectors-app` superseded `connectors-proxy`, it is unaffected by tenancy, and it
     survives verbatim.
   - **Publication.** `publish = false` on the host crate. The amendment is about *deployment*, not
-    crates.io; the publish closure stays four crates
-    ([C-190](stories/C-190-publish-catalog-pack-secrets.md)).
+    crates.io; the publish closure stays five crates since C-537 added the reader, and the host is
+    not in it ([C-190](stories/C-190-publish-catalog-pack-secrets.md)).
   - **A reachable bind before an authenticated principal exists.** The host is loopback-only today
     and stays that way until the session is what names the tenant. Widening the bind first is
     precisely the rejected proxy.

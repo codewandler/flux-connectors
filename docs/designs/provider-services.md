@@ -154,8 +154,9 @@ existing catalogue, and it is asserted directly
 
 Each manifest carries only its own service's operations and its own service's `base_url`, so a
 service's egress surface is its own and is never widened to the union. The manifest's real
-`http_hosts` allowlist is C-10's and does not exist yet; when it lands it derives from
-`base_url_of(service)`, which is the per-service value this story introduces.
+`http_hosts` allowlist is unowned since C-10 was closed as superseded; whether the catalog artifact
+gains one is C-534's to decide, and if it does it derives from `base_url_of(service)`, which is the
+per-service value this story introduces.
 
 The catalog crate's unit stays the **provider** (`crates/catalog/ops/<provider>/`,
 `generated/<provider>.rs`). Splitting it per service is a second reshape with its own churn and no
