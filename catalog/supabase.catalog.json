@@ -51,7 +51,7 @@
     ]
   ],
   "description": "Supabase project data and configuration: describe the tables the API exposes, read a table's rows, and read which sign-in methods the project has enabled. Reads only, through the project's public anon key, so every row returned is bounded by the project's own row-level-security policies",
-  "generator": "flux-connectors 0.25.0",
+  "generator": "flux-connectors 0.26.0",
   "operations": [
     {
       "auth": [

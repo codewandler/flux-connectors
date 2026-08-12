@@ -180,7 +180,7 @@
     ]
   ],
   "description": "Anthropic platform: the live model catalogue, and organization info, members, workspaces, workspace members, API keys and outstanding invites from the Admin API — all read-only",
-  "generator": "flux-connectors 0.25.0",
+  "generator": "flux-connectors 0.26.0",
   "operations": [
     {
       "auth": [

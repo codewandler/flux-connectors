@@ -36,7 +36,7 @@
     ]
   ],
   "description": "SendGrid transactional email: read templates and bounce suppressions, validate an email address. Cannot send mail — see the header comment for why the send envelope is not expressible here",
-  "generator": "flux-connectors 0.25.0",
+  "generator": "flux-connectors 0.26.0",
   "operations": [
     {
       "auth": [

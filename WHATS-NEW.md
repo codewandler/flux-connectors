@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.26.0] — 2026-08-13
+
 ### New
 
 - **A host can now build a connector's inbound channel connection from data too, without the Flux

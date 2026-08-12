@@ -219,7 +219,7 @@
       "service": "default"
     }
   ],
-  "generator": "flux-connectors 0.25.0",
+  "generator": "flux-connectors 0.26.0",
   "operations": [
     {
       "auth": [
