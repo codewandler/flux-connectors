@@ -50,6 +50,8 @@ mod openai_rehearsal;
 mod origin_grammar_parity;
 #[path = "main/path_parameter_guard.rs"]
 mod path_parameter_guard;
+#[path = "main/plan_seam.rs"]
+mod plan_seam;
 #[path = "main/projection.rs"]
 mod projection;
 #[path = "main/rehearsal.rs"]

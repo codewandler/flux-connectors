@@ -7,17 +7,36 @@
 //! C-540. `tests/document_differential.rs` (C-536) landed the *mechanism* on one provider with a
 //! test-local evaluator; this is the whole catalogue against the **production** reader.
 //!
-//! # The two derivations, and why comparing them is not circular
+//! # The three derivations, and why comparing them is not circular
 //!
 //! - **Flux-derived**: [`Rehearsal`] parses the operation's emitted `op` declaration with
 //!   `flux_lang` and evaluates its body — the seven-node AST walk in `connector-pack`'s `request.rs`.
 //! - **Document-derived**: [`DocumentRehearsal`] reads the request template out of
 //!   `catalog/<provider>.catalog.json`, served from the pack `catalog-reader` embeds, and evaluates
 //!   it in `connector-resolve`.
+//! - **Published-derived** (C-553): [`Operation::build_request_plan`] — the seam a consumer that
+//!   owns its own `Tool` projection reaches, driven through the **bound ports** rather than through
+//!   hand-assembled inputs.
 //!
 //! Two independent lowerings of one IR, evaluated by two independent evaluators. They share the
 //! *rules* — the brace grammar, `lit_text`, `json_truthy`, the structured-query wire contract — and
 //! nothing else, which is exactly the sharing that makes a divergence in the **artifacts** visible.
+//!
+//! # Why the third derivation is not a third copy of the second (C-553)
+//!
+//! The document-derived arm calls `connector_resolve::resolve` with inputs this file assembles: an
+//! endpoint map it built, and a `Vec<Assembled>` it composed. The published arm calls nothing of the
+//! sort — it binds a [`Credentials`] over a seeded [`MemoryStore`] and a [`Configuration`] over a
+//! [`MemoryConfig`], projects the operation, and asks it for its plan. Everything between those two
+//! statements is the **enforcement topology**: the alternative-selection rule, the checked redactor
+//! registration, the acquisition axis, the declared defaults, operator approval and origin
+//! normalisation. So the comparison answers a question the second arm cannot: *does the plan a
+//! consumer actually receives equal the one the wrapper-`Tool` path dispatches?*
+//!
+//! It is the same code by construction — [`Operation::build_authenticated_request`] returns
+//! `plan.request` from this very call — and that is exactly why it is worth pinning across all 835
+//! operations rather than asserting once. A second derivation added beside it would keep both
+//! signatures and keep both green in isolation.
 //!
 //! # What "agree" means here
 //!
@@ -26,7 +45,7 @@
 //! | | compared |
 //! |---|---|
 //! | the request | method, URL (query included), headers, body — **exactly**, as text |
-//! | `permission_subjects` | the unauthenticated URL both derivations would hand a host's network policy |
+//! | `permission_subjects` | the unauthenticated URL every derivation would hand a host's network policy |
 //! | the redaction set | every credential-derived string that travels, in the form it travels in |
 //! | the configuration surface | endpoint variables, their slots, and the caller path parameters |
 //! | the contract's parameter names | the caller-facing symbols, which the document does **not** publish |
@@ -57,16 +76,24 @@ use std::sync::Arc;
 use catalog::{OperationKey, ProviderKey};
 use connector_pack::{
     Configuration, Credentials, DocumentRehearsal, Egress, MemoryConfig, MemoryStore, Operation,
-    Rehearsal, Request, Slot,
+    Rehearsal, Request, Secret, SecretStore, SensitiveText, Slot,
 };
-use connector_resolve::auth::{place, placed_form, Assembled};
-use flux_runtime::Tool;
+use connector_resolve::auth::{acquire, place, placed_form, Assembled};
+use flux_runtime::{Tool, ToolContext};
+use flux_system::{System, Workspace};
 use serde_json::{json, Map, Value};
 
 const TENANT: &str = "t-catalogue-differential";
 
 /// A value no vendor issued, long enough for a redactor to hold, and recognisable in a diff.
 const SENTINEL: &str = "SENTINEL-NOT-A-REAL-CREDENTIAL";
+
+/// The user half a Basic join is bound to, for the five connectors that declare one.
+///
+/// It is config rather than a secret (C-193), so it comes through the configuration port and never
+/// through the store — and the published arm needs it bound or `Credentials::resolve` refuses with
+/// `MissingCredentialConfig` before a request exists.
+const USER: &str = "differential@example.test";
 
 /// The value a `Slot::Host`, `Slot::Path`, `Slot::Query`, `Slot::Header` or `Slot::Unplaced`
 /// variable is bound to. One spelling for all of them, because what is being compared is two
@@ -170,9 +197,15 @@ fn endpoint_values(
 /// twilio operations refuse for a reason belonging to *this helper* rather than to either
 /// derivation — which is how they used to land in the both-refuse arm and never reach the byte
 /// comparison at all.
+///
+/// **The Basic user halves are bound here too** (C-553). The published arm resolves credentials
+/// through the real port, and a Basic join reads its user half from *this* store — so a connector
+/// whose username is not also an endpoint variable would refuse for a reason belonging to this
+/// helper rather than to any derivation, exactly as twilio's four operations once did.
 fn configured(
     entry: &'static catalog::Operation,
     values: &BTreeMap<String, String>,
+    usernames: &BTreeMap<&'static str, String>,
 ) -> Configuration {
     let mut config = MemoryConfig::new();
     for (variable, value) in values {
@@ -186,7 +219,72 @@ fn configured(
             None => config.with_endpoint(TENANT, entry.provider, entry.service, variable, value),
         };
     }
+    for (credential, user) in usernames {
+        config = config.with_username(TENANT, entry.provider, entry.service, credential, user);
+    }
     Configuration::new(Arc::new(config), TENANT).expect("a valid tenant id")
+}
+
+/// The user half every Basic credential of this operation's connector is bound to.
+///
+/// Twilio's account SID is both an endpoint variable and the Basic user half, spelled
+/// `username.twilio.basic_auth`, so a value already bound through [`endpoint_values`] wins — binding
+/// it twice with two spellings is how one derivation would read a value the other did not.
+fn usernames_for(
+    entry: &'static catalog::Operation,
+    values: &BTreeMap<String, String>,
+) -> BTreeMap<&'static str, String> {
+    let Some(provider) = catalog::provider(ProviderKey::id(entry.provider)) else {
+        return BTreeMap::new();
+    };
+    provider
+        .auth
+        .iter()
+        .filter(|credential| matches!(credential.acquire, catalog::Acquisition::BasicJoin { .. }))
+        .map(|credential| {
+            let bound = values
+                .get(&format!("username.{}", credential.name))
+                .cloned();
+            (credential.name, bound.unwrap_or_else(|| USER.to_string()))
+        })
+        .collect()
+}
+
+/// **The credential port the published arm resolves through**, over a store holding the sentinel at
+/// every address this connector declares (C-553).
+///
+/// Every credential rather than the first mechanism's, because the selection rule is part of what is
+/// under test: `Credentials::resolve` takes the **first mechanism whose credentials all resolve**,
+/// and a store seeded with only that mechanism could not tell a correct selection from an accidental
+/// one. A connector declaring no `authority` has no address to seed — its operations refuse
+/// identically on both arms — so the reference is skipped rather than unwrapped.
+async fn seeded_credentials(entry: &'static catalog::Operation) -> Credentials {
+    let store = Arc::new(MemoryStore::new());
+    let credentials =
+        Credentials::new(store.clone() as Arc<dyn SecretStore>, TENANT).expect("a valid tenant id");
+    if let Some(provider) = catalog::provider(ProviderKey::id(entry.provider)) {
+        for credential in provider.auth {
+            let Ok(reference) = credentials.reference(entry.id, provider, credential) else {
+                continue;
+            };
+            store
+                .put(&reference, &Secret::new(SENTINEL))
+                .await
+                .expect("an in-memory put cannot fail");
+        }
+    }
+    credentials
+}
+
+/// A `ToolContext` for the published arm, whose redactor every resolved credential is registered
+/// with before a plan exists.
+///
+/// One for the whole run: `register` asks the redactor whether it already holds a value before
+/// adding it, so the set stays the handful of distinct assembled forms the catalogue produces rather
+/// than growing per operation.
+fn context() -> ToolContext {
+    let workspace = Workspace::new(env!("CARGO_MANIFEST_DIR")).expect("the crate root exists");
+    ToolContext::new(Arc::new(System::new(workspace)))
 }
 
 /// Every credential the operation's **first** declared mechanism names, assembled onto a sentinel.
@@ -196,7 +294,18 @@ fn configured(
 /// each credential and not of the choice between them. A credential the connector does not declare
 /// is skipped — `Error::UndeclaredCredential` is the pack's answer to that and it is not this
 /// gate's subject.
-fn assembled_credentials(entry: &'static catalog::Operation) -> Vec<Assembled> {
+///
+/// **The acquisition axis is applied, not skipped** (C-553). This used to hand [`SENTINEL`] straight
+/// to [`Assembled::new`], which was enough while both arms were fed the same literal. The published
+/// arm resolves through the real port, so for a Basic join the value that travels is
+/// `base64(user<suffix>:secret)` and nothing else — and an expectation still naming the bare
+/// sentinel would report every one of those five connectors as a divergence. [`acquire`] is
+/// `connector-resolve`'s own function, so this is the published rule read rather than a second copy
+/// of it; what this file supplies is the same *input* the port was seeded with.
+fn assembled_credentials(
+    entry: &'static catalog::Operation,
+    usernames: &BTreeMap<&'static str, String>,
+) -> Vec<Assembled> {
     let Some(provider) = catalog::provider(ProviderKey::id(entry.provider)) else {
         return Vec::new();
     };
@@ -208,14 +317,21 @@ fn assembled_credentials(entry: &'static catalog::Operation) -> Vec<Assembled> {
         let Some(credential) = provider.auth.iter().find(|entry| entry.name == *name) else {
             continue;
         };
-        // An inbound signing secret is refused identically by both derivations — it never leaves —
-        // so placing one would compare two refusals rather than two requests.
+        // An inbound signing secret is refused identically by every derivation — it never leaves —
+        // so placing one would compare refusals rather than requests.
         if matches!(credential.place, catalog::Placement::Inbound) {
             continue;
         }
+        let user = match credential.acquire {
+            catalog::Acquisition::BasicJoin { user_suffix, .. } => Some(format!(
+                "{}{user_suffix}",
+                usernames.get(credential.name).map_or(USER, String::as_str)
+            )),
+            _ => None,
+        };
         assembled.push(Assembled::new(
             credential.name,
-            SENTINEL.to_string(),
+            acquire(credential, SENTINEL, user.as_deref()),
             credential.place,
         ));
     }
@@ -235,18 +351,31 @@ fn redaction_set(credentials: &[Assembled]) -> Vec<String> {
     set
 }
 
+/// A plan's redaction set as plain text, for comparison against [`redaction_set`].
+///
+/// Reaching for [`SensitiveText::expose_secret`] is the deliberate speed bump the type exists to
+/// put here; a test comparing redaction sets is one of the few honest reasons to take it.
+fn exposed(redactions: &[SensitiveText]) -> Vec<String> {
+    redactions
+        .iter()
+        .map(|text| text.expose_secret().to_string())
+        .collect()
+}
+
 // ---------------------------------------------------------------------------------------------
 // The gate
 // ---------------------------------------------------------------------------------------------
 
-/// **The gate.** For every operation in the catalogue, the document-derived plan and the
-/// Flux-derived plan are the same plan.
-#[test]
-fn the_document_and_the_flux_derivations_agree_for_every_operation() {
+/// **The gate.** For every operation in the catalogue, the document-derived plan, the Flux-derived
+/// plan and the plan the **published seam** hands a consumer are the same plan.
+#[tokio::test]
+async fn the_document_and_the_flux_derivations_agree_for_every_operation() {
     let mut divergences: Vec<String> = Vec::new();
     let mut compared = 0usize;
     let mut byte_compared = 0usize;
+    let mut published_compared = 0usize;
     let mut refused: Vec<String> = Vec::new();
+    let ctx = context();
 
     for entry in catalog::operations() {
         let id = entry.id;
@@ -330,9 +459,10 @@ fn the_document_and_the_flux_derivations_agree_for_every_operation() {
                 .map(|(name, slot)| (name.clone(), *slot)),
         );
         let values = endpoint_values(entry, &variables);
-        let configuration = configured(entry, &values);
+        let usernames = usernames_for(entry, &values);
+        let configuration = configured(entry, &values, &usernames);
         let params = params_for(flux.spec());
-        let credentials = assembled_credentials(entry);
+        let credentials = assembled_credentials(entry, &usernames);
 
         let from_flux = flux.request(&configuration, &params);
         let from_document = document.request(&configuration, &params);
@@ -369,7 +499,7 @@ fn the_document_and_the_flux_derivations_agree_for_every_operation() {
         // The subject a host's network policy is shown: the URL **before** any credential is
         // placed, on both sides.
         let flux_subjects = vec![from_flux.url.clone()];
-        divergences.extend(disagreements(id, &from_document, &from_flux));
+        divergences.extend(disagreements(id, "document", &from_document, &from_flux));
 
         // ---- auth placement, the plan, and the redaction set -----------------------------------
         let plan = match connector_resolve::resolve(
@@ -393,30 +523,33 @@ fn the_document_and_the_flux_derivations_agree_for_every_operation() {
                 continue;
             }
         }
-        divergences.extend(disagreements(id, &plan.request, &from_flux));
+        divergences.extend(disagreements(id, "document", &plan.request, &from_flux));
+        let expected = redaction_set(&credentials);
         if plan.permission_subjects != flux_subjects {
             divergences.push(format!(
                 "`{id}`: permission subjects {:?} (document) vs {flux_subjects:?} (flux)",
                 plan.permission_subjects
             ));
         }
-        let registered: Vec<String> = plan
-            .redactions
-            .iter()
-            .map(|text| text.expose_secret().to_string())
-            .collect();
-        let expected = redaction_set(&credentials);
-        if registered != expected {
+        if exposed(&plan.redactions) != expected {
             divergences.push(format!(
-                "`{id}`: redaction set {registered:?} (document) vs {expected:?} (flux)"
+                "`{id}`: redaction set {:?} (document) vs {expected:?} (flux)",
+                exposed(&plan.redactions)
             ));
         }
 
-        // ---- and the subject the projected tool actually hands a host --------------------------
+        // ---- and the plan the published seam hands a consumer (C-553) ---------------------------
+        //
+        // The same three comparisons again, against a plan derived through the **bound ports**
+        // rather than through the inputs this file assembled: the credential port over a seeded
+        // store, the configuration port over a `MemoryConfig`, and `Operation::build_request_plan`.
+        // That is the enforcement topology — alternative selection, the acquisition axis, checked
+        // redactor registration, declared defaults, operator approval, origin normalisation — and it
+        // is the path a consumer takes, so it is the one that has to agree.
         let projected = Operation::project(
             entry,
             http(),
-            Credentials::new(Arc::new(MemoryStore::new()), TENANT).expect("a valid tenant id"),
+            seeded_credentials(entry).await,
             configuration.clone(),
         )
         .unwrap_or_else(|error| panic!("`{id}` does not project: {error}"));
@@ -426,6 +559,34 @@ fn the_document_and_the_flux_derivations_agree_for_every_operation() {
                  {flux_subjects:?}",
                 projected.permission_subjects(&params)
             ));
+        }
+        match projected.build_request_plan(&ctx, &params).await {
+            Ok(published) => {
+                published_compared += 1;
+                divergences.extend(disagreements(
+                    id,
+                    "published",
+                    &published.request,
+                    &from_flux,
+                ));
+                if published.permission_subjects != flux_subjects {
+                    divergences.push(format!(
+                        "`{id}`: permission subjects {:?} (published) vs {flux_subjects:?} (flux)",
+                        published.permission_subjects
+                    ));
+                }
+                if exposed(&published.redactions) != expected {
+                    divergences.push(format!(
+                        "`{id}`: redaction set {:?} (published) vs {expected:?} (flux)",
+                        exposed(&published.redactions)
+                    ));
+                }
+            }
+            Err(error) => divergences.push(format!(
+                "`{id}`: the published seam refuses where the flux derivation builds `{} {}` — \
+                 {error}",
+                from_flux.method, from_flux.url
+            )),
         }
     }
 
@@ -455,10 +616,22 @@ fn the_document_and_the_flux_derivations_agree_for_every_operation() {
         refused.len(),
         refused.join("\n")
     );
+    // **And what the published seam actually yielded** (C-553), on the identical argument.
+    //
+    // A refusal from `build_request_plan` is already pushed as a divergence above, so this cannot be
+    // the only thing that notices one. It is here because it is the number the story's Acceptance is
+    // read against — "for every operation" — and a count is the only form in which "every" is
+    // checkable. The two arms are compared against the same Flux-derived request, so equality here
+    // says the published plan was byte-compared exactly as often as the document-derived one was.
+    assert_eq!(
+        published_compared, byte_compared,
+        "the published plan seam was compared for {published_compared} of {byte_compared} \
+         operations, so the rest reached no comparison at all"
+    );
     assert!(
         divergences.is_empty(),
-        "{} of {compared} operations diverge between the canonical document and the emitted \
-         Flux:\n{}",
+        "{} of {compared} operations diverge between the canonical document, the published seam \
+         and the emitted Flux:\n{}",
         divergences.len(),
         divergences
             .iter()
@@ -519,11 +692,93 @@ fn a_seeded_divergence_is_caught() {
     let seeded = connector_resolve::build_request(doctored, base, &params, &endpoints)
         .expect("the fixture composes");
 
-    let found = disagreements(OPERATION, &seeded, &honest);
+    let found = disagreements(OPERATION, "document", &seeded, &honest);
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].contains(OPERATION), "{}", found[0]);
     assert!(found[0].contains("url"), "{}", found[0]);
     assert!(found[0].contains("/api/v2/users/1"), "{}", found[0]);
+}
+
+/// **The control for the published arm** (C-553), and it is a separate one on purpose.
+///
+/// [`a_seeded_divergence_is_caught`] proves the comparator can see a divergence between two
+/// *documents*. It says nothing about the arm added by C-553, which compares a plan obtained through
+/// the bound ports — a different value, reached by a different path, and carrying two fields the
+/// request comparison does not look at. A green 835-operation run of that arm would otherwise be
+/// indistinguishable from an arm that cannot tell.
+///
+/// So a real published plan is taken and each of the three things the gate checks is seeded with a
+/// divergence in turn — the URL, the permission subjects, the redaction set — and each must be
+/// reported.
+#[tokio::test]
+async fn a_seeded_divergence_in_the_published_plan_is_caught() {
+    const OPERATION: &str = "zendesk-ticket-show";
+
+    let entry = catalog::operation(OperationKey::id(OPERATION)).expect("a shipped operation");
+    let values = BTreeMap::from([("subdomain".to_string(), PLAIN.to_string())]);
+    let usernames = usernames_for(entry, &values);
+    let configuration = configured(entry, &values, &usernames);
+    let params = json!({"ticket_id": 1});
+
+    let projected = Operation::project(
+        entry,
+        http(),
+        seeded_credentials(entry).await,
+        configuration.clone(),
+    )
+    .expect("the shipped operation projects");
+    let published = projected
+        .build_request_plan(&context(), &params)
+        .await
+        .expect("the published seam derives a plan");
+
+    let honest = Rehearsal::of(OPERATION, entry.provider, entry.service, entry.flux)
+        .expect("the emitted declaration rehearses")
+        .request(&configuration, &params)
+        .expect("the flux derivation composes");
+    let credentials = assembled_credentials(entry, &usernames);
+
+    // The gate as it stands: no divergence, on any of the three.
+    let mut authenticated = honest.clone();
+    for credential in &credentials {
+        place(OPERATION, credential, &mut authenticated).expect("the credential places");
+    }
+    assert!(
+        disagreements(OPERATION, "published", &published.request, &authenticated).is_empty(),
+        "the shipped catalogue must agree with itself before a seed means anything"
+    );
+    assert_eq!(published.permission_subjects, vec![honest.url.clone()]);
+    assert_eq!(exposed(&published.redactions), redaction_set(&credentials));
+
+    // ---- seed one: the request ---------------------------------------------------------------
+    let mut seeded = published.request.clone();
+    seeded.url = seeded.url.replace("/tickets/", "/users/");
+    let found = disagreements(OPERATION, "published", &seeded, &authenticated);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains(OPERATION), "{}", found[0]);
+    assert!(found[0].contains("url"), "{}", found[0]);
+    assert!(found[0].contains("published"), "{}", found[0]);
+
+    // ---- seed two: the permission subjects ------------------------------------------------------
+    let mut seeded = published.permission_subjects.clone();
+    seeded.push("https://elsewhere.example".to_string());
+    assert_ne!(
+        seeded,
+        vec![honest.url.clone()],
+        "a subject a host's policy never saw must not compare equal"
+    );
+
+    // ---- seed three: the redaction set ----------------------------------------------------------
+    //
+    // A dropped redaction is the divergence with no other symptom: the request is byte-identical,
+    // the subject is byte-identical, and a consumer registers one string fewer than travels.
+    let mut seeded = exposed(&published.redactions);
+    seeded.pop();
+    assert_ne!(
+        seeded,
+        redaction_set(&credentials),
+        "a plan naming one redaction fewer than travels must not compare equal"
+    );
 }
 
 /// A divergence in the *configuration surface* is caught too, and separately: a request comparison
@@ -558,31 +813,41 @@ fn a_seeded_surface_divergence_is_caught() {
     assert_ne!(shipped.endpoint_slots(), doctored.endpoint_slots());
 }
 
-/// Every way the two requests can disagree, each naming the operation and the field.
-fn disagreements(operation: &str, document: &Request, flux: &Request) -> Vec<String> {
+/// Every way two requests can disagree, each naming the operation, the field and **which
+/// derivation** produced the left-hand side.
+///
+/// The `derivation` label joined the signature with C-553's third arm: `document` and `published`
+/// are compared against the same Flux-derived request, so a failure that named neither would leave a
+/// reader guessing which of the two had moved.
+fn disagreements(
+    operation: &str,
+    derivation: &str,
+    derived: &Request,
+    flux: &Request,
+) -> Vec<String> {
     let mut problems = Vec::new();
-    if document.method != flux.method {
+    if derived.method != flux.method {
         problems.push(format!(
-            "`{operation}`: method `{}` (document) vs `{}` (flux)",
-            document.method, flux.method
+            "`{operation}`: method `{}` ({derivation}) vs `{}` (flux)",
+            derived.method, flux.method
         ));
     }
-    if document.url != flux.url {
+    if derived.url != flux.url {
         problems.push(format!(
-            "`{operation}`: url `{}` (document) vs `{}` (flux)",
-            document.url, flux.url
+            "`{operation}`: url `{}` ({derivation}) vs `{}` (flux)",
+            derived.url, flux.url
         ));
     }
-    if document.headers != flux.headers {
+    if derived.headers != flux.headers {
         problems.push(format!(
-            "`{operation}`: headers {:?} (document) vs {:?} (flux)",
-            document.headers, flux.headers
+            "`{operation}`: headers {:?} ({derivation}) vs {:?} (flux)",
+            derived.headers, flux.headers
         ));
     }
-    if document.body != flux.body {
+    if derived.body != flux.body {
         problems.push(format!(
-            "`{operation}`: body {:?} (document) vs {:?} (flux)",
-            document.body, flux.body
+            "`{operation}`: body {:?} ({derivation}) vs {:?} (flux)",
+            derived.body, flux.body
         ));
     }
     problems
