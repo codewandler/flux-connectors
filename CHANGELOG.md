@@ -9,6 +9,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`connector-pack` publishes the request plan and the dispatch seam** (C-553, un-gating
+  Exchange's engine-free adoption and upstream's Tool-wrapper retirement). `Operation::build_request_plan`
+  yields the complete `RequestPlan` — request, permission subjects, redaction set — through the
+  same enforcement topology the Tool path applies (it is the body `build_authenticated_request`
+  already had, its result published instead of swallowed), and `Egress::send` is public so a
+  consumer dispatches a plan-derived request without unwrapping the transport. The whole-catalogue
+  differential gate gains a third arm holding the published plan byte-identical to the Flux
+  derivation for all 835 operations; every newly public type keeps its `SensitiveText`/redacted-`Debug`
+  discipline. A `produces_credential` operation's diversion is a documented plan-path boundary —
+  such an operation goes through the Tool projection. No artifact bytes move.
+
 - **GitHub declares its OAuth2 acquisition** (C-554, for the cross-repo login goal). A new
   `github-login` auth-host service (`https://github.com`, distinct from the API host) plus a
   `github.oauth_token` credential composing the authorization-code grant — endpoints verified
