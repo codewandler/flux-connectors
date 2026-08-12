@@ -247,6 +247,12 @@
 //! - **The transport stays inside the port.** [`Egress::send`] is the published dispatch seam
 //!   precisely so [`Egress::tool`] can be refused outright by a consumer that does not want a second
 //!   request path — which is the rule Exchange enforces in every one of its files.
+//! - **A `produces_credential` login does not go through this path** (C-136). Its answer is a
+//!   credential, and [`Tool::execute`] diverts that answer into the bound store rather than
+//!   returning it; the plan path derives a request and dispatches it, applying no diversion, so it
+//!   would hand the caller the vendor's token in the clear. No shipped connector mints today, but
+//!   this is permanent API — such an operation must go through the [`Tool`] projection. See
+//!   [`Operation::build_request_plan`], "the one operation shape the plan path does *not* serve".
 //!
 //! What is *not* published, deliberately: `Credentials::resolve` and `Configuration::snapshot`, the
 //! two ingredients X-156 offered as an alternative to the plan. Handing those out would put the

@@ -602,6 +602,25 @@ impl Operation {
     /// never edit it**: a consumer that composes a request from a plan's parts has become the second
     /// request path this family already rejected.
     ///
+    /// # The one operation shape the plan path does *not* serve (C-136)
+    ///
+    /// A `produces_credential` operation is a **login**: its whole purpose is to mint a credential,
+    /// and its response body *is* that credential. [`Tool::execute`] on a projected [`Operation`]
+    /// handles it specially — it dispatches, then diverts the vendor's answer into the bound store
+    /// through [`mint::divert`], returning the handle `{ "credential": "tenants/…" }` in its place,
+    /// so nothing derived from the credential-bearing body ever leaves. **The plan path applies none
+    /// of that.** `build_request_plan` derives the request, and [`Egress::send`] dispatches it and
+    /// returns what the transport produced — for a minting operation, the credential in the clear.
+    ///
+    /// This is a documented boundary rather than a bug, because it is a boundary the plan
+    /// *vocabulary* cannot express: a [`RequestPlan`](connector_resolve::RequestPlan) is request
+    /// data, and the diversion is a rule about what to do with a *response*. No shipped connector
+    /// mints today (the four C-430 withheld are the closest the catalogue has come), so nothing
+    /// reaches this today — but this is permanent public API, and the day a minting operation ships
+    /// a consumer that routed it through the plan path would hand a caller the vendor's token. **A
+    /// `produces_credential` operation must go through the [`Tool`] projection**, whose `execute`
+    /// diverts; the plan seam is for the operations whose answer is theirs to read.
+    ///
     /// # Errors
     ///
     /// Whatever [`Operation::build_request`] refuses, plus every credential refusal: no value

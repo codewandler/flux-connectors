@@ -76,7 +76,7 @@ use std::sync::Arc;
 use catalog::{OperationKey, ProviderKey};
 use connector_pack::{
     Configuration, Credentials, DocumentRehearsal, Egress, MemoryConfig, MemoryStore, Operation,
-    Rehearsal, Request, Secret, SecretStore, SensitiveText, Slot,
+    Rehearsal, Request, RequestPlan, Secret, SecretStore, SensitiveText, Slot,
 };
 use connector_resolve::auth::{acquire, place, placed_form, Assembled};
 use flux_runtime::{Tool, ToolContext};
@@ -563,24 +563,13 @@ async fn the_document_and_the_flux_derivations_agree_for_every_operation() {
         match projected.build_request_plan(&ctx, &params).await {
             Ok(published) => {
                 published_compared += 1;
-                divergences.extend(disagreements(
+                divergences.extend(published_plan_divergences(
                     id,
-                    "published",
-                    &published.request,
+                    &published,
                     &from_flux,
+                    &flux_subjects,
+                    &expected,
                 ));
-                if published.permission_subjects != flux_subjects {
-                    divergences.push(format!(
-                        "`{id}`: permission subjects {:?} (published) vs {flux_subjects:?} (flux)",
-                        published.permission_subjects
-                    ));
-                }
-                if exposed(&published.redactions) != expected {
-                    divergences.push(format!(
-                        "`{id}`: redaction set {:?} (published) vs {expected:?} (flux)",
-                        exposed(&published.redactions)
-                    ));
-                }
             }
             Err(error) => divergences.push(format!(
                 "`{id}`: the published seam refuses where the flux derivation builds `{} {}` — \
@@ -708,8 +697,12 @@ fn a_seeded_divergence_is_caught() {
 /// indistinguishable from an arm that cannot tell.
 ///
 /// So a real published plan is taken and each of the three things the gate checks is seeded with a
-/// divergence in turn — the URL, the permission subjects, the redaction set — and each must be
-/// reported.
+/// divergence in turn — the URL, the permission subjects, the redaction set — and
+/// [`published_plan_divergences`], the gate's **own** comparison, must report each one. Routing
+/// every seed through that function is the whole point: an earlier draft asserted seeds two and
+/// three with `assert_ne!` over local vectors, which proves `!=` works and says nothing about
+/// whether the gate's subject and redaction checks are live. The subject check authorises X-156's
+/// adoption; it is exercised here by the code that ships.
 #[tokio::test]
 async fn a_seeded_divergence_in_the_published_plan_is_caught() {
     const OPERATION: &str = "zendesk-ticket-show";
@@ -732,53 +725,72 @@ async fn a_seeded_divergence_in_the_published_plan_is_caught() {
         .await
         .expect("the published seam derives a plan");
 
-    let honest = Rehearsal::of(OPERATION, entry.provider, entry.service, entry.flux)
+    // The Flux derivation, with its credentials placed — exactly the three references the gate
+    // compares the published plan against.
+    let mut flux = Rehearsal::of(OPERATION, entry.provider, entry.service, entry.flux)
         .expect("the emitted declaration rehearses")
         .request(&configuration, &params)
         .expect("the flux derivation composes");
+    let flux_subjects = vec![flux.url.clone()];
     let credentials = assembled_credentials(entry, &usernames);
+    for credential in &credentials {
+        place(OPERATION, credential, &mut flux).expect("the credential places");
+    }
+    let expected = redaction_set(&credentials);
 
     // The gate as it stands: no divergence, on any of the three.
-    let mut authenticated = honest.clone();
-    for credential in &credentials {
-        place(OPERATION, credential, &mut authenticated).expect("the credential places");
-    }
     assert!(
-        disagreements(OPERATION, "published", &published.request, &authenticated).is_empty(),
+        published_plan_divergences(OPERATION, &published, &flux, &flux_subjects, &expected)
+            .is_empty(),
         "the shipped catalogue must agree with itself before a seed means anything"
     );
-    assert_eq!(published.permission_subjects, vec![honest.url.clone()]);
-    assert_eq!(exposed(&published.redactions), redaction_set(&credentials));
 
     // ---- seed one: the request ---------------------------------------------------------------
-    let mut seeded = published.request.clone();
-    seeded.url = seeded.url.replace("/tickets/", "/users/");
-    let found = disagreements(OPERATION, "published", &seeded, &authenticated);
+    let mut seeded = published.clone();
+    seeded.request.url = seeded.request.url.replace("/tickets/", "/users/");
+    let found = published_plan_divergences(OPERATION, &seeded, &flux, &flux_subjects, &expected);
     assert_eq!(found.len(), 1, "{found:?}");
-    assert!(found[0].contains(OPERATION), "{}", found[0]);
-    assert!(found[0].contains("url"), "{}", found[0]);
-    assert!(found[0].contains("published"), "{}", found[0]);
-
-    // ---- seed two: the permission subjects ------------------------------------------------------
-    let mut seeded = published.permission_subjects.clone();
-    seeded.push("https://elsewhere.example".to_string());
-    assert_ne!(
-        seeded,
-        vec![honest.url.clone()],
-        "a subject a host's policy never saw must not compare equal"
+    assert!(
+        found[0].contains(OPERATION) && found[0].contains("url"),
+        "{found:?}"
     );
+    assert!(found[0].contains("published"), "{found:?}");
+
+    // ---- seed two: the permission subjects (the check that authorises X-156's adoption) --------
+    //
+    // A subject a host's policy never saw — the request is byte-identical and the redaction set is
+    // byte-identical, so this is the *only* thing that moved, and the gate's inline `!=` is the only
+    // thing that can catch it.
+    let mut seeded = published.clone();
+    seeded
+        .permission_subjects
+        .push("https://elsewhere.example".to_string());
+    let found = published_plan_divergences(OPERATION, &seeded, &flux, &flux_subjects, &expected);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(
+        found[0].contains(OPERATION) && found[0].contains("permission subjects"),
+        "{found:?}"
+    );
+    assert!(found[0].contains("published"), "{found:?}");
 
     // ---- seed three: the redaction set ----------------------------------------------------------
     //
     // A dropped redaction is the divergence with no other symptom: the request is byte-identical,
-    // the subject is byte-identical, and a consumer registers one string fewer than travels.
-    let mut seeded = exposed(&published.redactions);
-    seeded.pop();
-    assert_ne!(
-        seeded,
-        redaction_set(&credentials),
-        "a plan naming one redaction fewer than travels must not compare equal"
+    // the subject is byte-identical, and a consumer registers one string fewer than travels. Seeding
+    // it needs a plan whose redaction set is non-empty, which zendesk's bearer gives us.
+    assert!(
+        !published.redactions.is_empty(),
+        "this control needs an operation that carries a credential"
     );
+    let mut seeded = published.clone();
+    seeded.redactions.pop();
+    let found = published_plan_divergences(OPERATION, &seeded, &flux, &flux_subjects, &expected);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(
+        found[0].contains(OPERATION) && found[0].contains("redaction set"),
+        "{found:?}"
+    );
+    assert!(found[0].contains("published"), "{found:?}");
 }
 
 /// A divergence in the *configuration surface* is caught too, and separately: a request comparison
@@ -848,6 +860,42 @@ fn disagreements(
         problems.push(format!(
             "`{operation}`: body {:?} ({derivation}) vs {:?} (flux)",
             derived.body, flux.body
+        ));
+    }
+    problems
+}
+
+/// **Every way the published plan can disagree with the Flux derivation**: the request, the
+/// permission subjects, and the redaction set (C-553).
+///
+/// Extracted from the gate's own body so [`a_seeded_divergence_in_the_published_plan_is_caught`]
+/// runs the **identical** comparison rather than a paraphrase of it — the same reasoning
+/// [`disagreements`] is a shared function for. A control that reimplemented `!=` over local vectors
+/// would prove that `!=` works, not that the gate's subject and redaction checks are live; the
+/// subject check in particular authorises X-156's adoption, so it has to be exercised by the code
+/// that ships.
+///
+/// `flux` carries its credentials already placed, `flux_subjects` is the URL **before** placement
+/// (what a host's network policy is shown), and `expected_redactions` is [`redaction_set`] — exactly
+/// the three references the gate compares against.
+fn published_plan_divergences(
+    operation: &str,
+    published: &RequestPlan,
+    flux: &Request,
+    flux_subjects: &[String],
+    expected_redactions: &[String],
+) -> Vec<String> {
+    let mut problems = disagreements(operation, "published", &published.request, flux);
+    if published.permission_subjects != flux_subjects {
+        problems.push(format!(
+            "`{operation}`: permission subjects {:?} (published) vs {flux_subjects:?} (flux)",
+            published.permission_subjects
+        ));
+    }
+    if exposed(&published.redactions) != expected_redactions {
+        problems.push(format!(
+            "`{operation}`: redaction set {:?} (published) vs {expected_redactions:?} (flux)",
+            exposed(&published.redactions)
         ));
     }
     problems
