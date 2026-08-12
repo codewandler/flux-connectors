@@ -34,7 +34,7 @@ static AUTH: &[crate::Credential] = &[
     crate::Credential {
         name: "github.oauth_token",
         leaf: "oauth_token",
-        acquire: crate::Acquisition::OAuth2(&crate::OAuth2 { endpoint: "login", authorize_path: "/login/oauth/authorize", token_path: "/login/oauth/access_token", client_id: "", scopes: &["repo", "read:org"], grants: &[crate::OAuthGrant::AuthorizationCode], redirect: None }),
+        acquire: crate::Acquisition::OAuth2(&crate::OAuth2 { endpoint: "login", token_endpoint: "", authorize_path: "/login/oauth/authorize", token_path: "/login/oauth/access_token", client_id: "", scopes: &["repo", "read:org"], grants: &[crate::OAuthGrant::AuthorizationCode], redirect: None, public_client: false }),
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
         subject: crate::Subject::User,
         hazard: None,

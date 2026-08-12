@@ -66,6 +66,8 @@ mod lockfile;
 mod microsoft_graph_spec_selection;
 #[path = "main/oauth2_acquisition.rs"]
 mod oauth2_acquisition;
+#[path = "main/oauth_token_endpoint.rs"]
+mod oauth_token_endpoint;
 #[path = "main/openai_spec_selection.rs"]
 mod openai_spec_selection;
 #[path = "main/openapi_ingest.rs"]
