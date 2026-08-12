@@ -182,9 +182,11 @@ fails closed:
   the exchange is recorded in `crates/connectors-api/README.md`.
 - **One declarable surface still reaches no artifact: `graphs`.** It is modelled in the IR,
   nothing declares one, and the canonical document refuses rather than drops it while its lowering
-  is an open question of the catalog-artifact design. A service's `roles`, `quirks.pagination` and
-  `quirks.rate_limit` left this list with C-536 — each now reaches `catalog/<name>.catalog.json` —
-  though nothing ships that *reads* them until the pack and resolver land (C-537, C-538). `config`
+  is an open question of the catalog-artifact design. A service's `roles` and `quirks.pagination`
+  left this list with C-536 — both now reach `catalog/<name>.catalog.json` — and
+  `quirks.rate_limit` became representable there (the document schema carries the field; nothing
+  declares one yet, so no document does). Nothing ships that *reads* any of them until the pack
+  and resolver land (C-537, C-538). `config`
   and `verify` left it earlier: C-87 published both, and today 82 config fields across 42 providers
   travel identically into `web/public/catalog.json` and into 46 `connectors/*.connector.toml`
   manifests (more manifests than providers because a multi-service connector emits one per

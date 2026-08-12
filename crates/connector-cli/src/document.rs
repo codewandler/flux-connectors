@@ -32,10 +32,13 @@
 //!
 //! # Determinism
 //!
-//! The document is a function of the IR alone: struct field order fixes the key order, every map
-//! is a `BTreeMap` (and `serde_json`'s own map is one — no `preserve_order`), and the text is
-//! `to_string_pretty` plus one trailing newline, exactly the `core_catalog.rs` shape. Unchanged
-//! inputs reproduce every byte; `connectors.lock` hashes each document per provider.
+//! The document is a function of the IR alone, and the emitted key order is **alphabetical
+//! throughout**, not the struct-declaration order: [`render`] round-trips the typed wire shape
+//! through `serde_json::to_value` so the schema validates the exact value being written, and
+//! `serde_json`'s map is BTree-backed (no `preserve_order`), so every object re-sorts on the way
+//! through. Determinism comes from that sort plus `BTreeMap` everywhere a map is built by hand;
+//! the text is `to_string_pretty` plus one trailing newline, exactly the `core_catalog.rs` shape.
+//! Unchanged inputs reproduce every byte; `connectors.lock` hashes each document per provider.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
@@ -64,7 +67,9 @@ pub const SCHEMA_ID: &str =
     "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json";
 
 // ---------------------------------------------------------------------------------------------
-// The wire shape. Field order is the emitted order; nothing is sorted at render time.
+// The wire shape. Declaration order here does NOT survive into the text: `render` round-trips
+// through `serde_json::to_value` for schema validation, whose BTree-backed map re-sorts every
+// object, so the emitted key order is alphabetical. Nothing may depend on field order.
 // ---------------------------------------------------------------------------------------------
 
 #[derive(Serialize)]
@@ -981,44 +986,49 @@ fn body_template(operation: &Operation) -> Result<Option<DocBody>> {
         return Ok(None);
     }
 
-    if set.body_encoding.is_json() {
-        let tree = body_tree(operation)?;
-        return Ok(Some(DocBody {
-            encoding: "json",
-            template: Some(tree),
-            fields: None,
-        }));
-    }
-
-    debug_assert_eq!(set.body_encoding, BodyEncoding::Form);
-    // The emitted pair order: every always-sent pair first, then the guarded ones, each group in
-    // declaration order (`connector-flux/src/op.rs::form_payload`).
-    let mut fields = Vec::new();
-    let (always, guarded): (Vec<&Param>, Vec<&Param>) = set
-        .body
-        .iter()
-        .partition(|param| param.required || constant(param).is_some());
-    for (group, required) in [(always, true), (guarded, false)] {
-        for param in group {
-            let value = match constant(param) {
-                Some(value) => {
-                    refuse_braced_constant(operation, param, value)?;
-                    value.clone()
+    // Exhaustive on purpose: a third `BodyEncoding` variant must fail to compile here rather
+    // than fall through to a spelling it never meant — the module's refuse-loudly rule, applied
+    // at the type level.
+    match set.body_encoding {
+        BodyEncoding::Json => {
+            let tree = body_tree(operation)?;
+            Ok(Some(DocBody {
+                encoding: "json",
+                template: Some(tree),
+                fields: None,
+            }))
+        }
+        BodyEncoding::Form => {
+            // The emitted pair order: every always-sent pair first, then the guarded ones, each
+            // group in declaration order (`connector-flux/src/op.rs::form_payload`).
+            let mut fields = Vec::new();
+            let (always, guarded): (Vec<&Param>, Vec<&Param>) = set
+                .body
+                .iter()
+                .partition(|param| param.required || constant(param).is_some());
+            for (group, required) in [(always, true), (guarded, false)] {
+                for param in group {
+                    let value = match constant(param) {
+                        Some(value) => {
+                            refuse_braced_constant(operation, param, value)?;
+                            value.clone()
+                        }
+                        None => param_splice(&param.name),
+                    };
+                    fields.push(DocFormField {
+                        name: wire_name(param).to_string(),
+                        value,
+                        required,
+                    });
                 }
-                None => param_splice(&param.name),
-            };
-            fields.push(DocFormField {
-                name: wire_name(param).to_string(),
-                value,
-                required,
-            });
+            }
+            Ok(Some(DocBody {
+                encoding: "form",
+                template: None,
+                fields: Some(fields),
+            }))
         }
     }
-    Ok(Some(DocBody {
-        encoding: "form",
-        template: None,
-        fields: Some(fields),
-    }))
 }
 
 /// One step of a parsed [`Param::wire`] path — the emitter's grammar (`key` or `key[0]`, joined
