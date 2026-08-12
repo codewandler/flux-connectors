@@ -29,6 +29,7 @@ Gate: `cargo build --workspace` · `cargo test --workspace --no-fail-fast` ·
 - [C-440 — An `[[auth]]` block can declare an acquisition the host performs, and the hazard it carries](C-440-declare-an-acquisition-and-its-hazard.md) · Spec · the fourth route C-432 did not list, and the one the authentication contract already implies: a token exchange is not an operation to mark, it is an ACQUISITION to declare — plus a hazard field, so a host can refuse the OAuth2 password grant by property rather than by connector name. Also the first `[[auth]]` quirk: babelforce's token endpoint reads expires_in per-grant and switches accounts on account_id, and no document declares either
 - [C-495 — All official integrations become connectors (epic)](C-495-all-integrations-are-connectors-epic.md) · Bridge · EPIC — every official integration is connector-owned and Exchange-executed; migrate all 18 Flux adapters without a local Flux runtime or fallback
 - [C-523 — Publish one canonical normalized HTTPS-origin API for every consumer](C-523-publish-canonical-https-origin.md) · Bridge · Milestone 1 blocker: Exchange X-125 must validate and compare the exact origin contract without copying connector-spec or depending on an unpublished compiler crate
+- [C-534 — The catalog artifact replaces compiled Flux (epic)](C-534-catalog-artifact-epic.md) · Bridge · EPIC — Decision 0022: compile the IR to a canonical per-provider document and a compressed pack; resolve requests from data, not parsed Flux; retire connector-flux behind a byte-identical differential gate
 
 ## Next (ready — take the top one unless the user named a story)
 - [C-517 — Repository agents use the installed Flux Board workflow](C-517-use-the-installed-flux-board-workflow.md) · Bridge · Fleet dogfood — replace private Track slash commands with copyable versioned flux board commands
@@ -63,6 +64,12 @@ _Authentication is currently something the **host** does *around* a connector: `
 _The generalized-provider vocabulary so far names things a service *is* or *holds* — a secret store, a_
 - [C-447 — Decide: is `balance` one contract, or is money separate from metered usage?](C-447-decide-balance-shape.md) · Spec · measured: three vendors already answer 'how much is left' and no two mean the same thing — settled funds (stripe, per-currency list in minor units), prepaid credit (openrouter, a subtraction), metered counts (babelforce, a time series). Splitting is cheap now
 - [C-448 — A contract cannot require a derived value, and nothing says so](C-448-a-contract-cannot-require-a-derived-value.md) · Spec · found via openrouter: its balance is `total_credits - total_usage`, arithmetic this repository has no way to express — AGENTS.md refuses formulas outright. Conformance can map INPUTS; nothing can derive an OUTPUT, and no design records the limit
+
+### the catalog artifact
+- [C-535 — Adopt Decision 0022 across the repository contract](C-535-adopt-decision-0022.md) · Bridge · Contract correction: amend the vision north star, close C-10/C-15 as superseded, restate Path C and the artifact table for the catalog-artifact destination
+- [C-536 — Emit the canonical catalog document per provider](C-536-canonical-catalog-document.md) · Codegen · One deterministic committed catalog/<name>.catalog.json per provider carrying the complete surface incl. the request template and the four surfaces that reach no artifact today
+- [C-537 — Compile the pack and publish the reader](C-537-compile-the-pack-and-reader.md) · Build · One versioned, digest-carrying compressed pack derived from the canonical documents; a dependency-free reader preserving the catalog API; the catalog crate becomes a shim over the embedded pack
+- [C-538 — Resolve requests from the document, not the Flux](C-538-resolve-from-the-document.md) · Connector · connector-pack derives the request plan from the request template; the parse at spec.rs:250 and the AST walk leave the resolve path behind a whole-catalogue byte-identical differential gate
 
 ### channel bindings — generalize a flux `channel` over a connector
 _[inbound-events.md](inbound-events.md) models an **event** — the vendor calls us — and stops there._
@@ -203,6 +210,10 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-501 — Migrate the observability plugins into connectors](C-501-migrate-observability-plugins.md) · Connector · Alertmanager, Grafana, Loki, Opsgenie and Prometheus become catalogue-owned integrations, including streaming/tailing and datasource contracts
 - [C-502 — Migrate SQL, Vault and 1Password into connectors](C-502-migrate-data-and-secret-plugins.md) · Connector · database handles and secret-store operations need lifecycle and credential-result boundaries, not an exemption from the connector model
 - [C-503 — Migrate AWS, Homer, Hugging Face and web search adapters](C-503-migrate-the-remaining-native-adapters.md) · Connector · close the residual inventory: SigV4/CLI-backed AWS, Homer HTTP/JWT, Hugging Face and provider-selecting web search
+
+### the catalog artifact
+- [C-539 — Sibling adoption: Exchange reads the artifact](C-539-sibling-adoption.md) · Bridge · Cut the schema release Exchange consumes; zero runtime Flux parses remain in exchange-host; .connector.toml stays emitted as a projection until flux/D-214 repoints inbound
+- [C-540 — Retire connector-flux and the compiled Flux artifacts](C-540-retire-connector-flux.md) · Build · Delete the emitter, connectors/*.flux, catalog/ops/**, and the parse-back halves of connector-pack — in the same release train as proven adoption, per the Decision 0022 migration rule
 
 ### channel bindings — generalize a flux `channel` over a connector
 _[inbound-events.md](inbound-events.md) models an **event** — the vendor calls us — and stops there._
