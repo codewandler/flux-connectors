@@ -101,9 +101,9 @@ The coordinator failures from the same session, and each of them cost a rework r
 
 ## Current project boundary
 
-**Snapshot: v0.20.0 + C-527 (re-measured 2026-08-11).** `cargo run -p connector-cli -- build` compiles **55 providers**, **67 services**
+**Snapshot: v0.21.0 + C-536 (re-measured 2026-08-12).** `cargo run -p connector-cli -- build` compiles **55 providers**, **67 services**
 and **835 curated connector operations** — plus 53 events, 5 channel bindings and 77 Flux core entries
-(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **1110 artifacts**. The
+(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **1166 artifacts**. The
 compiler, the embedded Rust catalogue, the JSON catalogue, the Tool pack and the public explorer all
 work. **The repository now also ships a host**, `connectors-api` (C-200), which makes live API calls
 — it is fenced away from the compile path in both directions, and the compiler itself still reaches
@@ -119,8 +119,12 @@ flux-connectors compiles vendor API descriptions. A provider is described in
 renderings, Rust catalogue tables, and public catalogue data. The compile **destination** is a
 versioned catalog artifact (Decision 0022, adopted by C-535): request shaping becomes closed
 declarative data the resolver evaluates, and behaviour — composition, retry, saga, approval — stays
-in Flux-Lang at the Flux layer. Neither TOML nor the artifact is an execution format for behaviour;
-the emitted set above is what a build writes until C-536…C-540 deliver the artifact.
+in Flux-Lang at the Flux layer. Neither TOML nor the artifact is an execution format for behaviour.
+C-536 landed the artifact's first form **additively**: one canonical `catalog/<name>.catalog.json`
+per provider, carrying the complete surface including the request template, validated against the
+committed `catalog/connector-document.schema.json` and hashed per provider in `connectors.lock`;
+every previously emitted artifact is unchanged until C-537…C-540 deliver the pack, the resolver and
+the retirement.
 
 A connector is **not** a set of operations. It declares what a vendor can do in **both directions**,
 and what an **operator** must supply to use it: operations and services outbound, events and channels
@@ -192,7 +196,7 @@ cargo run -p connector-cli -- build
 cargo run -p connector-cli -- diff
 ```
 
-`diff` must finish with `1110 artifacts up to date (55 providers checked)` for the current catalogue.
+`diff` must finish with `1166 artifacts up to date (55 providers checked)` for the current catalogue.
 The artifact count legitimately changes when providers or operations change: it is not a permanent
 invariant, but it is checked at every commit against the real build plan. Regenerate this sentence
 and the counts under [Current project boundary](#current-project-boundary) when that plan changes;
@@ -201,6 +205,8 @@ do not relax the check.
 | Generated path | Source of truth |
 |---|---|
 | `connectors/*.flux`, `connectors/*.connector.toml` | `providers/`, vendored `specs/`, compiler code |
+| `catalog/<provider>.catalog.json` | Connector IR and the document lowering (`connector-cli`'s `document`) — the canonical per-provider artifact of Decision 0022 (C-536) |
+| `catalog/connector-document.schema.json` | `document::schema` — the versioned JSON Schema every document is validated against at build time |
 | `crates/catalog/ops/<provider>/*.flux` | Emitted provider operations |
 | `crates/catalog/src/generated/<provider>.rs` | Connector IR and catalogue emitter |
 | `crates/catalog/src/generated.rs` | The provider set in `providers/` — **whole-catalogue** |
@@ -216,11 +222,12 @@ module.
 ### An artifact no plan claims is refused, not deleted (C-429)
 
 A full `build` or `diff` also asks the inverse question: which committed files sit under a directory
-the build owns that **no plan writes**? Four directories are artifact roots — `connectors/`,
-`crates/catalog/ops/`, `crates/catalog/src/generated/` and `web/public/v1/` — and each is derived
-from what the emitter says it writes rather than listed here, so a new family of artifacts brings its
-root with it. A file counts only if it shares an extension with something the build writes into that
-root, which is why `crates/catalog/ops/README.md` and `assets/brand/*.svg` are not reported.
+the build owns that **no plan writes**? Five directories are artifact roots — `connectors/`,
+`catalog/` (C-536), `crates/catalog/ops/`, `crates/catalog/src/generated/` and `web/public/v1/` —
+and each is derived from what the emitter says it writes rather than listed here, so a new family of
+artifacts brings its root with it. A file counts only if it shares an extension with something the
+build writes into that root, which is why `crates/catalog/ops/README.md` and `assets/brand/*.svg`
+are not reported.
 
 **`build` refuses and names the file; it never removes one.** Deleting a committed file is only as
 safe as the root it was judged against, and *Refuse ambiguous or unsafe output* decides that
@@ -874,22 +881,24 @@ These failures are recorded decisions. Do not “fix” one without reading its 
      [docs/designs/connectors-api.md](docs/designs/connectors-api.md), and
      [docs/designs/connectors-app.md](docs/designs/connectors-app.md) for the parts still current.
 
-- **Four declarable surfaces reach no artifact at all.** The IR models each one and the loader
-  validates it, and then neither `connectors/*.connector.toml` nor
-  `web/public/catalog.json` carries it. C-87 removed `config` and `verify` from this list: manifests
-  and the public catalogue now carry the value-free form, its derived level and the bounded Test
-  connection read, while configuration still reaches no `.flux` module by design.
+- **~~Four declarable surfaces reach no artifact at all.~~ MOSTLY CLOSED 2026-08-12 (C-536) — three
+  of the four now reach the canonical catalog document.** The IR models each one and the loader
+  validates it; `connectors/*.connector.toml` and `web/public/catalog.json` still do not carry
+  them, and that is now fine rather than a gap: `catalog/<name>.catalog.json` is the artifact the
+  surface-to-artifact mapping lands on. C-87 removed `config` and `verify` from this list earlier
+  the same way. Re-measured 2026-08-12:
 
   | surface | declared today | where it stops |
   |---|---|---|
-  | `[[services]] roles` | 1 role (`anthropic` / `models`) | IR and loader only |
-  | `quirks.pagination` | 6 operations across 3 providers | IR and loader only |
-  | `[[graphs]]` | none — the lowering exists (`crates/connector-flux/src/graph.rs`) and nothing declares one | no consumer *and* no producer |
-  | `quirks.rate_limit` | none — `providers/hubspot.toml` records a deliberate non-declaration | no consumer *and* no producer |
+  | `[[services]] roles` | 1 role (`anthropic` / `models`) | the canonical document (`grep -l llm_catalogue catalog/*.catalog.json` → `catalog/anthropic.catalog.json`); no consumer reads it until C-537/C-538 |
+  | `quirks.pagination` | 4 operations across 2 providers (`grep -c '^\[.*quirks.pagination\]' providers/*.toml` → babelforce 2, twilio 2; the 2026-08-11 "6 across 3" counted comment mentions) | the canonical document, per operation |
+  | `[[graphs]]` | none — the lowering exists (`crates/connector-flux/src/graph.rs`) and nothing declares one | no consumer *and* no producer; the document lowering **refuses** a declared graph rather than dropping it (deferred by the catalog-artifact design) |
+  | `quirks.rate_limit` | none — `providers/hubspot.toml` records a deliberate non-declaration | no producer; the document schema carries the field, so the first declaration reaches an artifact without new plumbing |
 
-  The first two are sharp because declarations already exist: a host reading an artifact still
-  cannot ask what a service claims to do or page a list for connectors that state those facts in
-  provider TOML. Do not close this by widening the manifest ad hoc; the surface-to-artifact mapping is decided in
+  What remains open is the *consumer* half: a host reading an artifact can now find a service's
+  roles or an operation's paging in the document, but nothing ships that reads it until the pack
+  and resolver land (C-537, C-538). Do not close that by widening the manifest ad hoc; the
+  surface-to-artifact mapping is decided in
   [docs/designs/connector-surfaces.md](docs/designs/connector-surfaces.md).
 
   **`quirks` gained a third scope in C-440 and it does not belong in that table**, which is the
@@ -903,12 +912,14 @@ These failures are recorded decisions. Do not “fix” one without reading its 
 
   It reaches an artifact because `connectors/*.connector.toml` serializes the whole `[[auth]]`
   block, so a new field there is published without anybody widening a manifest — the opposite
-  failure mode from the four above, and worth knowing before adding one. It reaches **neither**
-  whole-catalogue artifact: `web/public/catalog.json` and `crates/catalog/src/generated/` both
-  enumerate their fields, and neither lists it (`grep -c token_endpoint web/public/catalog.json` →
-  `0`). The sibling declaration C-440 added, `[[auth]] hazard`, is not in this list at all — it
-  reaches the manifest *and* `catalog::Credential`, and flux-exchange's
-  `FLUX_EXCHANGE_ALLOW_AUTH_HAZARDS` is the consumer.
+  failure mode from the four above, and worth knowing before adding one. Since C-536 it also
+  reaches the canonical document as structured data
+  (`grep -c token_endpoint_quirks catalog/babelforce.catalog.json` → `1`, carrying all 5). It
+  reaches **neither** whole-catalogue artifact: `web/public/catalog.json` and
+  `crates/catalog/src/generated/` both enumerate their fields, and neither lists it
+  (`grep -c token_endpoint web/public/catalog.json` → `0`). The sibling declaration C-440 added,
+  `[[auth]] hazard`, is not in this list at all — it reaches the manifest *and*
+  `catalog::Credential`, and flux-exchange's `FLUX_EXCHANGE_ALLOW_AUTH_HAZARDS` is the consumer.
 - **Freshdesk declares no credential.** Its API key occupies the Basic username position, which the
   current model treats as non-secret config. Emitting it would bypass secret gating and redaction;
   the deliberate result is a fail-closed 401.

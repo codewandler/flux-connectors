@@ -540,6 +540,24 @@ fn neither_projection_can_lose_a_field_hmac_spec_declares() {
         expected,
         "the public-catalogue projection publishes a different field set than `HmacSpec` declares"
     );
+
+    // The third restatement (C-536): the canonical per-provider document carries its own
+    // `DocHmac`, held to the same derived list so a field `HmacSpec` gains cannot silently
+    // drop from the one artifact that claims to carry the complete surface.
+    let canonical: Value =
+        serde_json::from_str(&connector_cli::document::render(&connector).expect("it lowers"))
+            .expect("the canonical document is valid JSON");
+    let channel = canonical["channels"]
+        .as_array()
+        .expect("the canonical document carries its channels")
+        .iter()
+        .find(|channel| channel["name"] == "hook")
+        .expect("the fixture binding is published");
+    assert_eq!(
+        keys(&channel["verification"]["hmac"]),
+        expected,
+        "the canonical-document projection publishes a different field set than `HmacSpec` declares"
+    );
 }
 
 // ---------------------------------------------------------------------------------------------

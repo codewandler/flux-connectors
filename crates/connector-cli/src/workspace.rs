@@ -28,6 +28,18 @@ pub fn spec_path(provider: &str, file: &Path) -> String {
 /// Generated, committed artifacts: `connectors/<name>.flux` and `<name>.connector.toml`.
 pub const ARTIFACTS_DIR: &str = "connectors";
 
+/// The canonical per-provider catalog documents: `catalog/<name>.catalog.json` (C-536).
+///
+/// At the repository root beside `connectors/`, as the catalog-artifact design's diagram places
+/// them: the reviewed artifact of Decision 0022, one deterministic JSON document per provider.
+pub const DOCUMENTS_DIR: &str = "catalog";
+
+/// The suffix a canonical document's file name carries: `zendesk.catalog.json`.
+pub const DOCUMENT_SUFFIX: &str = "catalog.json";
+
+/// The committed JSON Schema the documents validate against, beside them under [`DOCUMENTS_DIR`].
+pub const DOCUMENT_SCHEMA_FILE: &str = "connector-document.schema.json";
+
 /// The `.flux` module extension.
 pub const MODULE_EXT: &str = "flux";
 
@@ -108,6 +120,26 @@ impl Workspace {
     /// a manifest a build wrote, so one no plan claims is a unit whose service stopped existing.
     pub fn artifacts_dir(&self) -> PathBuf {
         self.root.join(ARTIFACTS_DIR)
+    }
+
+    /// `<root>/catalog`.
+    ///
+    /// The **artifact root** of the canonical-document family (C-536, C-429): every `.json` in it
+    /// is a per-provider document or their shared schema, all written by a build, so one no plan
+    /// claims is a document whose provider stopped existing.
+    pub fn documents_dir(&self) -> PathBuf {
+        self.root.join(DOCUMENTS_DIR)
+    }
+
+    /// `<root>/catalog/<provider>.catalog.json` — the canonical per-provider document (C-536).
+    pub fn document_path(&self, provider: &str) -> PathBuf {
+        self.documents_dir()
+            .join(format!("{provider}.{DOCUMENT_SUFFIX}"))
+    }
+
+    /// `<root>/catalog/connector-document.schema.json` — the schema the documents validate against.
+    pub fn document_schema_path(&self) -> PathBuf {
+        self.documents_dir().join(DOCUMENT_SCHEMA_FILE)
     }
 
     /// `<root>/connectors/<provider>.flux` — the module of a provider's `default` service.

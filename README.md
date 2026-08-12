@@ -18,9 +18,10 @@ queryable Rust catalogue, and a flux Tool pack.
 
 The repository currently contains **835 curated connector operations across 55 providers and 67
 services**, plus 53 events and 5 channel bindings. It also publishes 77 Flux-owned core operations, node
-kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **1110
-committed, reviewable artifacts** without contacting a vendor. Browse them in the
-[catalogue explorer](https://flux.codewandler.org/explorer).
+kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **1166
+committed, reviewable artifacts** without contacting a vendor — including one canonical
+`catalog/<name>.catalog.json` document per provider, the reviewed artifact of Decision 0022. Browse
+them in the [catalogue explorer](https://flux.codewandler.org/explorer).
 
 > These counts are intentionally mutable, but they are checked against a full build plan by
 > `crates/connector-cli/tests/readme_snippet.rs`. When the catalogue changes, regenerate the stated
@@ -49,6 +50,8 @@ Describe a provider once in `providers/<name>.toml`. `flux-connectors build` wri
 
 | Output | Purpose |
 |---|---|
+| `catalog/<name>.catalog.json` | The canonical per-provider document (Decision 0022): the complete surface, request templates included. |
+| `catalog/connector-document.schema.json` | The versioned JSON Schema every document is validated against at build time. |
 | `connectors/<name>.flux` | The provider's typed Flux `op` declarations. |
 | `connectors/<name>.connector.toml` | The host-facing capability and credential manifest. |
 | `crates/catalog/ops/<name>/*.flux` | One standalone rendering per operation. |
@@ -65,8 +68,9 @@ adopted by [C-535](docs/stories/C-535-adopt-decision-0022.md)) makes the compile
 connector a versioned **catalog artifact**: one canonical committed document per provider, compiled
 into a single pack the resolver reads, with the emitted `.flux` modules retiring only after a
 differential gate proves the document-derived requests byte-identical to the Flux-derived ones.
-That program is [C-534](docs/stories/C-534-catalog-artifact-epic.md) (C-536…C-540); none of it has
-shipped, and today's build writes exactly the table above. See
+That program is [C-534](docs/stories/C-534-catalog-artifact-epic.md) (C-536…C-540); C-536 shipped
+the canonical document additively, every other artifact above is unchanged, and the pack, the
+resolver and the retirement are still ahead. See
 [docs/designs/catalog-artifact.md](docs/designs/catalog-artifact.md).
 
 ## Try it locally
@@ -84,7 +88,7 @@ cargo run -p connector-cli -- build
 On a clean checkout, `diff` reports:
 
 ```text
-1110 artifacts up to date (55 providers checked)
+1166 artifacts up to date (55 providers checked)
 ```
 
 Then inspect [`connectors/zendesk.flux`](connectors/zendesk.flux), browse the
@@ -176,14 +180,16 @@ fails closed:
   redactor before building the request, and `crates/connectors-api` binds that to a real
   `http.request` from `codewandler-flux-web`. This repository has sent real bytes to a real vendor;
   the exchange is recorded in `crates/connectors-api/README.md`.
-- **Four declarable surfaces still reach no artifact.** A service's `roles`, `quirks.pagination`,
-  `graphs` and `quirks.rate_limit` are modelled in the IR and validated by the loader, and then
-  appear in neither the manifest nor the published catalogue. **`config` and `verify` are no longer
-  among them** — C-87 published both, and today 82 config fields across 42 providers travel
-  identically into `web/public/catalog.json` and into 46 `connectors/*.connector.toml` manifests
-  (more manifests than providers because a multi-service connector emits one per service), alongside
-  `verify` on 43 of them. A host can now render a settings page and find the "Test connection"
-  operation from the artifact alone.
+- **One declarable surface still reaches no artifact: `graphs`.** It is modelled in the IR,
+  nothing declares one, and the canonical document refuses rather than drops it while its lowering
+  is an open question of the catalog-artifact design. A service's `roles`, `quirks.pagination` and
+  `quirks.rate_limit` left this list with C-536 — each now reaches `catalog/<name>.catalog.json` —
+  though nothing ships that *reads* them until the pack and resolver land (C-537, C-538). `config`
+  and `verify` left it earlier: C-87 published both, and today 82 config fields across 42 providers
+  travel identically into `web/public/catalog.json` and into 46 `connectors/*.connector.toml`
+  manifests (more manifests than providers because a multi-service connector emits one per
+  service), alongside `verify` on 43 of them. A host can now render a settings page and find the
+  "Test connection" operation from the artifact alone.
 - **Freshdesk ships with no credential at all**, deliberately. Its `base64(<api_key>:X)` places the
   secret in a position the current IR cannot mark as secret. Emitting it would bypass secret gating
   and redaction, so the connector fails closed with a 401 instead.

@@ -163,6 +163,17 @@ pub fn plan_selected(
     let mut entries = Vec::new();
     let mut diagnostics = Vec::new();
     let mut lockfile = Lockfile::new();
+
+    // The schema the canonical documents validate against (C-536). Planned on every run, scoped
+    // ones included: it is a constant of the generator — no provider data, so a scoped run can
+    // write it honestly — and a provider-scoped build must validate its own document against the
+    // schema that will hold at integration.
+    artifacts.push(planned(
+        workspace.document_schema_path(),
+        crate::document::schema_text(),
+        Ownership::Family(workspace.documents_dir()),
+    )?);
+
     for provider in &providers {
         let compiled = compile(workspace, provider, service, whole_catalogue)?;
         if let Some(entry) = compiled.lock {
@@ -419,6 +430,14 @@ fn compile(
 
     // The catalog's half is provider-unit — see the note above on a service-scoped run.
     if service.is_none() {
+        // The canonical document (C-536): the whole provider in one deterministic JSON file, so —
+        // like the generated table — it cannot be written honestly from a service-scoped run.
+        // Emission is additive: `.flux` and `.connector.toml` above are unchanged until C-540.
+        artifacts.push(planned(
+            workspace.document_path(&provider.name),
+            crate::document::render(&connector).with_context(context)?,
+            Ownership::Family(workspace.documents_dir()),
+        )?);
         artifacts.push(planned(
             workspace.catalog_module_path(&provider.name),
             emitted.catalog,

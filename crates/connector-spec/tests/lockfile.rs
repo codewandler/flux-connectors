@@ -108,9 +108,26 @@ fn entry(inputs: &Inputs) -> LockEntry {
     connector.provenance.spec_sha256 = inputs.spec.as_ref().map(|spec| sha256_hex(spec.as_bytes()));
 
     let module = emit(&connector, &inputs.generator);
+    let document = document(&connector, &inputs.generator);
     LockEntry::for_connector(&connector, &inputs.generator)
         .expect("lock entry")
         .with_artifact("zendesk.flux", module.as_bytes())
+        .with_artifact("catalog/zendesk.catalog.json", document.as_bytes())
+}
+
+/// A stand-in for the canonical catalog document (C-536), the way [`emit`] stands in for
+/// `connector-flux`: the document is the *complete* published surface in one JSON file, which is
+/// exactly why its bytes carry everything the lockfile must not — the resolved endpoint, the
+/// credential names, the environment keys. Recording it is safe only because the row holds a path
+/// and a hash; this fixture is what lets `the_lockfile_carries_no_credential_and_no_endpoint`
+/// state that against the new rows rather than assume it.
+fn document(connector: &Connector, generator: &str) -> String {
+    format!(
+        "{{\"generator\":{generator:?},\"connector\":{:?},\"base_url\":{:?},\"auth\":{}}}\n",
+        connector.id,
+        connector.base_url,
+        serde_json::to_string(&connector.auth).expect("auth serializes"),
+    )
 }
 
 /// The rendered lockfile for one set of inputs.
@@ -551,6 +568,14 @@ fn the_lockfile_carries_no_credential_and_no_endpoint() {
 
     // The specification URL is recorded, deliberately — C-14 re-fetches from it.
     assert!(rendered.contains("https://developer.zendesk.com/zendesk/oas.yaml"));
+
+    // The canonical document's row (C-536) is the sharpest instance of the rule: the document's
+    // own bytes carry the endpoint, the credential names and the environment keys — the fixture
+    // above puts them there on purpose — and what reaches the lockfile is its path and its hash.
+    assert!(
+        rendered.contains("\"catalog/zendesk.catalog.json\""),
+        "the document row must be recorded:\n{rendered}"
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
