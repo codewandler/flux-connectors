@@ -35,6 +35,19 @@ const PAGINATED_READS: [&str; 4] = [
     "github-commit-list",
 ];
 
+/// The delegated credential (C-554): obtained by an OAuth2 grant the host runs on behalf of a
+/// signed-in user, beside the static token this connector has always accepted.
+const OAUTH_TOKEN: &str = "github.oauth_token";
+
+/// The auth-host service. GitHub's browser leg and token exchange are on `github.com`, which is not
+/// the `api.github.com` every operation goes to, so the endpoint needs a service of its own.
+const LOGIN_SERVICE: &str = "login";
+
+/// The minimum the thirteen declared operations need, each derived from GitHub's own per-endpoint
+/// scope statement and reasoned in `providers/github.toml`. Notably **not** `read:user`: no endpoint
+/// page names it, and `GET /user` needs no scope for the public profile this connector declares.
+const EXPECTED_SCOPES: [&str; 2] = ["repo", "read:org"];
+
 /// `<repo root>/providers/github.toml`, derived from this crate's manifest directory so the test is
 /// independent of the working directory a runner happens to use.
 fn provider_path() -> PathBuf {
@@ -211,4 +224,133 @@ fn no_github_query_value_reaches_the_url() {
             operation.id
         );
     }
+}
+
+/// **The OAuth2 acquisition is declared, and a host can compose the authorize URL from the artifact
+/// alone** (C-554).
+///
+/// GitHub's auth host is not its API host — `github.com` serves the browser leg and the token
+/// exchange while `api.github.com` serves every operation — so the declaration needs a second
+/// service to hang the endpoint on, exactly as `providers/gitlab.toml` does. The three things a
+/// consumer composes from are asserted here rather than left to the provider file's prose: the
+/// endpoint names a *declared* service, that service's base URL is a literal, and the two paths are
+/// the vendor's own.
+///
+/// **`grants` is `authorization_code` alone, and the absence of `refresh_token` is the assertion.**
+/// A grant this connector's app model does not honour would be a declaration a host acts on and the
+/// vendor refuses. See the provider file for the documented reasoning; the short form is that scopes
+/// and refresh tokens belong to two *different* GitHub app models, and this connector declares
+/// scopes.
+#[test]
+fn the_oauth2_acquisition_is_declared_and_composable() {
+    let connector = github();
+
+    let method = connector
+        .auth_method(OAUTH_TOKEN)
+        .unwrap_or_else(|| panic!("github declares the `{OAUTH_TOKEN}` credential"));
+    let spec = method
+        .oauth2
+        .as_ref()
+        .unwrap_or_else(|| panic!("`{OAUTH_TOKEN}` declares an `[auth.oauth2]` acquisition"));
+
+    // The endpoint is a declared service, never a URL: `http_hosts` derives from declared base URLs,
+    // so a URL written here would name a host nothing admitted.
+    assert_eq!(
+        spec.endpoint, LOGIN_SERVICE,
+        "the grant resolves against the declared auth-host service"
+    );
+    let login = connector
+        .service(LOGIN_SERVICE)
+        .unwrap_or_else(|| panic!("github declares the `{LOGIN_SERVICE}` service"));
+    let base_url = login
+        .base_url
+        .as_deref()
+        .expect("the auth-host service owns its own base URL — it is not `api.github.com`");
+    assert_eq!(
+        base_url, "https://github.com",
+        "GitHub's browser leg and token exchange are served by `github.com`, not by the API host"
+    );
+
+    // **The X-154 consumer contract** (`NoDeclaredDefault`): a startup composing the authorize URL
+    // has only the artifact, so a `{placeholder}` with nothing to resolve it from is a composition
+    // that cannot complete. GitHub.com is one fixed host, so the honest answer is a literal.
+    assert!(
+        !base_url.contains('{'),
+        "`{LOGIN_SERVICE}`'s base URL is templated ({base_url:?}) with no declared default, so a \
+         consumer composing the authorize URL at startup has nothing to resolve it from"
+    );
+
+    assert_eq!(
+        spec.authorize_path, "/login/oauth/authorize",
+        "the browser leg's path, as GitHub documents it"
+    );
+    assert_eq!(
+        spec.token_path, "/login/oauth/access_token",
+        "the token exchange's path, as GitHub documents it"
+    );
+
+    // **No registration value.** `client_id` is per-deployment and the canonical document has no
+    // field for one, so a value here is refused at the document lowering (C-536). The requirement is
+    // published as configuration instead, asserted below.
+    assert!(
+        spec.client_id.is_empty(),
+        "a registration value is per-deployment; publish the requirement through `[[config]]`"
+    );
+
+    assert_eq!(
+        spec.scopes, EXPECTED_SCOPES,
+        "the scope set is the minimum the declared operations need, and widening it is a decision"
+    );
+
+    // The grant list is the honest one for the app model that has scopes at all. `refresh_token`
+    // being absent is the point of the assertion, not an omission.
+    assert_eq!(
+        spec.grants,
+        vec![connector_spec::OAuthGrant::AuthorizationCode],
+        "a classic OAuth app's token does not refresh; declaring the grant would be a promise the \
+         vendor will not honour"
+    );
+
+    // The registration triple an `authorization_code` grant owes an operator, at operator level and
+    // with only the secret marked secret.
+    for (binds, secret) in [
+        ("oauth.client_id", false),
+        ("oauth.client_secret", true),
+        ("oauth.redirect_uri", false),
+    ] {
+        let field = connector
+            .config
+            .iter()
+            .find(|field| field.binds == binds)
+            .unwrap_or_else(|| panic!("github publishes a `[[config]]` field binding `{binds}`"));
+        assert_eq!(
+            field.level(),
+            Some(connector_spec::Level::Operator),
+            "`{binds}` is set once per deployment, never by an end user"
+        );
+        assert_eq!(
+            field.secret, secret,
+            "`{binds}` disagrees with flux's secret partition"
+        );
+    }
+
+    // The delegated credential is the user's, not the application's — a host that stored it at a
+    // tenant-wide address would let any member act as whoever completed the grant (C-528).
+    assert_eq!(
+        method.subject,
+        connector_spec::Subject::User,
+        "an OAuth2 access token obtained on behalf of a signed-in user carries that user's authority"
+    );
+
+    // Both credentials authenticate everything, as alternatives rather than as a pair.
+    let alternatives: Vec<Vec<&str>> = connector
+        .default_auth
+        .iter()
+        .map(|requirement| requirement.iter().map(String::as_str).collect())
+        .collect();
+    assert_eq!(
+        alternatives,
+        vec![vec![OAUTH_TOKEN], vec!["github.token"]],
+        "the delegated grant and the static token are two deployments of one connector"
+    );
 }

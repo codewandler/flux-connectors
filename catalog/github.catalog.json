@@ -11,11 +11,76 @@
         "kind": "bearer"
       },
       "subject": "unstated"
+    },
+    {
+      "description": "GitHub OAuth2 access token obtained on behalf of a signed-in user. Bounded by that user's own permissions, never by the application's",
+      "name": "github.oauth_token",
+      "oauth2": {
+        "authorize_path": "/login/oauth/authorize",
+        "endpoint": "login",
+        "grants": [
+          "authorization_code"
+        ],
+        "scopes": [
+          "repo",
+          "read:org"
+        ],
+        "token_path": "/login/oauth/access_token"
+      },
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "user"
     }
   ],
   "authority": "com.github.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "oauth.client_id",
+      "docs_url": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app",
+      "format": "text",
+      "help": "Register an OAuth app under Settings -> Developer settings -> OAuth Apps, with the callback URL your deployment serves. This is the client ID, which is public",
+      "label": "GitHub OAuth application client ID",
+      "level": "operator",
+      "name": "oauth_client_id",
+      "required": false,
+      "secret": false,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "oauth.redirect_uri",
+      "docs_url": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps",
+      "example": "https://exchange.internal/api/oauth/callback",
+      "format": "url",
+      "help": "The callback address this deployment serves, registered on the app above. GitHub matches the host (excluding sub-domains) and port exactly and requires the path to be at or below the registered callback URL's path — so a registered `https://host/api/oauth` admits `https://host/api/oauth/callback` but not `https://host/`",
+      "label": "GitHub OAuth callback URL",
+      "level": "operator",
+      "name": "oauth_redirect_uri",
+      "required": false,
+      "secret": false,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "oauth.client_secret",
+      "docs_url": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app",
+      "format": "token",
+      "help": "The client secret issued beside the ID above. GitHub shows it once at generation and never again. Supplied by whoever runs this deployment, never by an end user",
+      "label": "GitHub OAuth application client secret",
+      "level": "operator",
+      "name": "oauth_client_secret",
+      "required": false,
+      "secret": true,
+      "service": "default"
+    }
+  ],
   "connector": "github",
   "default_auth": [
+    [
+      "github.oauth_token"
+    ],
     [
       "github.token"
     ]
@@ -25,6 +90,9 @@
   "operations": [
     {
       "auth": [
+        [
+          "github.oauth_token"
+        ],
         [
           "github.token"
         ]
@@ -146,6 +214,9 @@
     },
     {
       "auth": [
+        [
+          "github.oauth_token"
+        ],
         [
           "github.token"
         ]
@@ -293,6 +364,9 @@
     {
       "auth": [
         [
+          "github.oauth_token"
+        ],
+        [
           "github.token"
         ]
       ],
@@ -432,6 +506,9 @@
     },
     {
       "auth": [
+        [
+          "github.oauth_token"
+        ],
         [
           "github.token"
         ]
@@ -606,6 +683,9 @@
     {
       "auth": [
         [
+          "github.oauth_token"
+        ],
+        [
           "github.token"
         ]
       ],
@@ -733,6 +813,9 @@
     },
     {
       "auth": [
+        [
+          "github.oauth_token"
+        ],
         [
           "github.token"
         ]
@@ -3456,6 +3539,9 @@
     {
       "auth": [
         [
+          "github.oauth_token"
+        ],
+        [
           "github.token"
         ]
       ],
@@ -3607,6 +3693,9 @@
     },
     {
       "auth": [
+        [
+          "github.oauth_token"
+        ],
         [
           "github.token"
         ]
@@ -5618,6 +5707,9 @@
     {
       "auth": [
         [
+          "github.oauth_token"
+        ],
+        [
           "github.token"
         ]
       ],
@@ -6177,6 +6269,9 @@
     {
       "auth": [
         [
+          "github.oauth_token"
+        ],
+        [
           "github.token"
         ]
       ],
@@ -6632,6 +6727,9 @@
     {
       "auth": [
         [
+          "github.oauth_token"
+        ],
+        [
           "github.token"
         ]
       ],
@@ -6753,6 +6851,9 @@
     },
     {
       "auth": [
+        [
+          "github.oauth_token"
+        ],
         [
           "github.token"
         ]
@@ -7570,6 +7671,9 @@
     {
       "auth": [
         [
+          "github.oauth_token"
+        ],
+        [
           "github.token"
         ]
       ],
@@ -8382,11 +8486,17 @@
   "services": [
     {
       "base_url": "https://api.github.com",
+      "legacy": true,
       "name": "default",
       "tags": [
         "source-control",
         "issue-tracking"
       ]
+    },
+    {
+      "base_url": "https://github.com",
+      "description": "GitHub's OAuth2 authorize and token endpoints, served by github.com rather than by the API host.",
+      "name": "login"
     }
   ],
   "vendor": "GitHub",
