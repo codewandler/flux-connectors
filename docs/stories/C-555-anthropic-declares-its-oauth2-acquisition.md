@@ -2,7 +2,7 @@
 id: C-555
 title: "Anthropic declares its OAuth2 acquisition"
 pillar: Connector
-status: ready
+status: in-progress
 priority: 1
 epic: catalog-artifact
 areas: [providers, connector-spec]
@@ -46,6 +46,97 @@ Exchange's composition (X-154) and autodev's Anthropic login are the consumers.
 ## Progress
 
 - 2026-08-12: Filed by the cross-repo coordinator for the exchange/autodev OAuth login goal.
+- 2026-08-12: **Stopped at Acceptance item 1's own escape clause — the model cannot express the
+  two-host shape, and two of this story's premises did not survive re-verification.** No
+  `[auth.oauth2]` block was written; `providers/anthropic.toml` is unchanged. The four findings
+  below are what a follow-up story needs. Nothing here is implementable until the owner rules on
+  finding 4, which is upstream of the loader question.
+
+## Findings (C-555, measured 2026-08-12)
+
+### 1. The model cannot express a cross-host OAuth2 flow, and the quirk surface is not the seam
+
+Read from the loader source in this worktree, not from recollection:
+
+- `crates/connector-spec/src/auth.rs:240-264` — `OAuth2Spec` carries **one** host slot,
+  `endpoint: String`, documented as *"The declared endpoint name whose base URL the paths below
+  resolve against"*. `authorize_path` and `token_path` are both joined onto that **single** base
+  URL; `token_path` is documented as *"The token endpoint path (every grant and refresh POSTs
+  here)"*. The struct is `#[serde(deny_unknown_fields)]` and its seven fields are `endpoint`,
+  `authorize_path`, `token_path`, `client_id`, `scopes`, `grants`, `redirect`.
+- `crates/connector-spec/src/auth.rs:225-230` — `OAuthRedirect` is `{ port: u16, path: String }`:
+  a loopback callback, carrying no host.
+- `crates/connector-spec/src/auth.rs:382-401` — `TokenEndpointQuirk` has exactly four fields, all
+  `String`: `grant`, `behaviour`, `attribution`, `measured`, under `deny_unknown_fields`. It is
+  **prose provenance, not a URL carrier**, and its own doc comment records the owner's ruling
+  against becoming one: *"Prose rather than a field, because a field is a promise every other
+  connector is then assumed to keep"*, and *"Kept deliberately narrow. Owner-decided 2026-08-02: if
+  it is not in the specification, it does not become a general thing."*
+- `crates/connector-cli/src/catalog.rs:867-872` lowers exactly those fields
+  (`endpoint`/`authorize_path`/`token_path`/…), so no second host survives anywhere downstream
+  either.
+
+**So the `[[auth.quirks.token_endpoint]]` surface is not a candidate for a cross-host token URL and
+adding one would be the ad-hoc widening this story forbids.** The gap, precisely: *`OAuth2Spec` binds
+the authorize leg and the token leg to one declared service, and therefore to one origin.* Expressing
+a two-host flow needs a deliberate spec/loader change — a second endpoint reference (e.g. an optional
+`token_endpoint` naming a second declared service, keeping the URL out of the field and the host
+inside the `http_hosts` allow-list that `endpoint` exists to preserve). That is its own story.
+
+### 2. The story's token host is stale — `console.anthropic.com` is dead
+
+`https://console.anthropic.com/v1/oauth/token` **404s**; the live endpoint is
+`https://platform.claude.com/v1/oauth/token` (console.anthropic.com was renamed to
+platform.claude.com). The authorize leg is still reported at `https://claude.ai/oauth/authorize`,
+and the registered callback stays on the legacy host
+(`https://platform.claude.com/oauth/code/callback`). PKCE `S256` is confirmed as mandatory.
+**Every one of these facts comes from community reverse-engineering, not from Anthropic**: Anthropic
+publishes no authorize/token URL for this flow on any page fetched during this story.
+
+### 3. `user:inference` is the wrong scope for *this* connector's operations
+
+The story specifies `user:inference` "for the models surface". The scope set on that flow is
+`user:profile user:inference user:sessions:claude_code user:mcp_servers`. But
+`providers/anthropic.toml`'s own charter boundary is **"NO INFERENCE OPERATION IN THIS FILE"** — what
+it ships is the model catalogue plus a curated Admin API slice. `user:inference` authorizes the thing
+this connector deliberately does not do, and nothing in that scope set covers the Admin API at all.
+Anthropic's own CLI flow uses a different vocabulary (`org:admin`) for exactly that surface. A scope
+list is not derivable until finding 4 is settled.
+
+### 4. Upstream of all of it: this may be a flow the connector must not declare
+
+There are **two** distinct Anthropic OAuth systems, and this story conflates them:
+
+- **The Claude subscription login** (claude.ai authorize + platform.claude.com token, fixed public
+  client id, `user:*` scopes). Anthropic does not permit third-party client registration on it, and
+  since Jan–Feb 2026 enforces its restriction to Claude Code and Claude.ai **server-side**, with
+  consumer-plan OAuth tokens rejected elsewhere. *(Widely attested across secondary sources; I could
+  not confirm the exact policy paragraph on an Anthropic-hosted page I fetched directly — the owner
+  should confirm before this is treated as settled.)*
+- **The Console/CLI login** (`ant auth login`), which is what actually authorizes the Models and
+  Admin APIs this connector calls. Anthropic's own docs describe it as *"a browser-based OAuth flow
+  against the Claude Console"* — i.e. **single-host**, which the current model already expresses —
+  but publish no authorize/token URLs for it, and direct non-interactive and third-party use to API
+  keys or Workload Identity Federation instead. `platform.claude.com/docs/en/manage-claude/authentication`
+  lists exactly three supported methods for the Claude API: **API key, Workload Identity Federation,
+  App Attest.** Authorization-code OAuth is not among them.
+
+**The decision this needs from the owner:** whether flux-connectors declares an acquisition that
+Anthropic restricts to its own first-party clients (finding 4a), or declares the Console flow whose
+endpoints Anthropic does not publish (finding 4b, and unverifiable endpoints cannot be declared under
+"Before you assert anything"), or declares neither and records the absence — with WIF's
+`POST /v1/oauth/token` as the sanctioned machine-credential path this connector could model instead.
+
+### The credential relationship, decided and recorded
+
+Had the flow been declarable, the OAuth2-acquired token would be a **third, sibling credential**
+(`anthropic.oauth_token`), never a second acquisition bolted onto `anthropic.api_key` or
+`anthropic.admin_key` — following the gitlab pattern, where `gitlab.token` (static, operator-provisioned)
+and `gitlab.oauth_token` (delegated, per-user) coexist and `default_auth` admits either. The reason is
+`subject`: both existing anthropic keys are console-minted, organization-provisioned secrets, whereas
+an OAuth token is `subject = "user"` and bounded by the signing-in person's own permissions. Merging
+them would put two different principals behind one credential name and let a per-user token silently
+satisfy an Admin operation that an organization-scoped key was provisioned for.
 
 ## Notes
 
