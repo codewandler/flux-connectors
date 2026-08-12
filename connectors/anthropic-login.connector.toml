@@ -2,24 +2,19 @@
 # Auth is assembled by the host resolver (`connector-pack`); this manifest becomes a projection of the catalog artifact (C-534).
 generator = "flux-connectors 0.23.0"
 connector = "anthropic"
-service = "models"
-gid = "com.anthropic.api/models:v1"
+service = "login"
+gid = "com.anthropic.api/login:v1"
 vendor = "Anthropic"
 description = "Anthropic platform: the live model catalogue, and organization info, members, workspaces, workspace members, API keys and outstanding invites from the Admin API — all read-only"
 runtime = "http"
-base_url = "https://api.anthropic.com"
+base_url = "https://platform.claude.com"
 api_version = "v1"
-module = "anthropic-models.flux"
-operations = ["anthropic-models-list", "anthropic-model-get"]
-verify = "anthropic-models-list"
+module = "anthropic-login.flux"
+operations = []
 
 [operation_directions]
-anthropic-model-get = "read"
-anthropic-models-list = "read"
 
 [operation_semantic_effects]
-anthropic-model-get = []
-anthropic-models-list = []
 
 [[auth]]
 name = "anthropic.api_key"
@@ -104,12 +99,23 @@ credentials = ["anthropic.api_key"]
 credentials = ["anthropic.console_oauth"]
 
 [[config]]
-name = "api_key"
-service = "models"
-label = "API key"
-help = "Create a key in the Anthropic Console (console.anthropic.com), under API Keys. This is the standard key used for the model catalogue"
-format = "token"
-secret = true
-docs_url = "https://docs.anthropic.com/en/api/getting-started"
-binds = "credential.anthropic.api_key"
-level = "connection"
+name = "oauth_client_id"
+service = "login"
+label = "Anthropic OAuth client ID"
+help = "The OAuth client ID this deployment authorizes as. Anthropic does not currently operate a public client-registration program for third-party applications, so a deployment supplies the id it has been issued; the value is public, and PKCE rather than a client secret protects the exchange"
+required = false
+docs_url = "https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication"
+binds = "oauth.client_id"
+level = "operator"
+
+[[config]]
+name = "oauth_redirect_uri"
+service = "login"
+label = "Anthropic OAuth callback URL"
+help = "The callback address this deployment serves, registered against the client ID above. Anthropic's own clients use a loopback callback and fall back to displaying the code for manual paste when no loopback is reachable"
+example = "https://exchange.internal/api/oauth/callback"
+format = "url"
+required = false
+docs_url = "https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication"
+binds = "oauth.redirect_uri"
+level = "operator"

@@ -203,8 +203,11 @@ async fn supplying_one_credential_makes_the_operations_that_use_it_callable() {
     );
     assert_eq!(
         operation(&after, "anthropic-organization-get")["requires"],
-        serde_json::json!([["anthropic.admin_key"]]),
-        "the per-operation mapping must name what is missing, as alternatives of mechanisms"
+        serde_json::json!([["anthropic.admin_key"], ["anthropic.console_oauth_admin"]]),
+        "the per-operation mapping must name what is missing, as alternatives of mechanisms. \
+         C-555 added the org:admin OAuth token beside the Admin API key, so this operation now has \
+         two ways to become callable and the mapping must offer both rather than naming only the \
+         one a host happens to prefer"
     );
 }
 

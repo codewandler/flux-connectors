@@ -283,21 +283,48 @@ fn the_models_service_claims_llm_catalogue_without_reshaping() {
     assert!(model_members.iter().any(|id| id.ends_with("get")));
 }
 
-/// Auth is two `x-api-key` credentials, never a bearer — and the `verify` operation only ever
-/// needs the regular one, so pressing "Test connection" never demands organization-admin access.
+/// The `verify` operation only ever needs the regular key, so pressing "Test connection" never
+/// demands organization-admin access.
+///
+/// **This test said "two `x-api-key` credentials, never a bearer" until C-555, and that premise is
+/// now false by design rather than by drift.** The connector declares four credentials: the two
+/// Console-minted API keys, which still travel as `x-api-key` and are still the only two that do,
+/// and the two Console OAuth2 tokens, which travel as bearers because that is how Anthropic accepts
+/// an OAuth token. The claim worth keeping is the *pairing* — which scheme each credential uses, and
+/// that `verify` needs the unprivileged one — so that is what is asserted now. A future credential
+/// added to either group without a deliberate edit here is still caught.
 #[test]
 fn the_connector_verifies_with_the_regular_key_over_x_api_key() {
     let connector = anthropic();
 
-    let credentials: Vec<&str> = connector
-        .auth
-        .iter()
-        .map(|entry| entry.name.as_str())
-        .collect();
+    let by_scheme = |wanted: fn(&connector_spec::AuthScheme) -> bool| -> Vec<&str> {
+        connector
+            .auth
+            .iter()
+            .filter(|entry| wanted(&entry.scheme))
+            .map(|entry| entry.name.as_str())
+            .collect()
+    };
+
     assert_eq!(
-        credentials,
+        by_scheme(|scheme| matches!(
+            scheme,
+            connector_spec::AuthScheme::Header { name, .. } if name == "x-api-key"
+        )),
         ["anthropic.api_key", "anthropic.admin_key"],
-        "two distinct x-api-key credentials: the regular key and the Admin API key"
+        "two distinct x-api-key credentials: the regular key and the Admin API key. Anthropic \
+         authenticates a key with a custom header and never with `Authorization: Bearer`, so a key \
+         that moved to a bearer would be sending the right secret the wrong way"
+    );
+    assert_eq!(
+        by_scheme(|scheme| matches!(scheme, connector_spec::AuthScheme::Bearer)),
+        [
+            "anthropic.console_oauth",
+            "anthropic.console_oauth_admin",
+            "anthropic.subscription_oauth"
+        ],
+        "the three OAuth2-acquired tokens, and only those, travel as bearers: the two Console \
+         credentials and the Claude Pro/Max subscription token (C-555 round 2)"
     );
 
     assert_eq!(
@@ -362,6 +389,224 @@ fn no_anthropic_operation_declares_a_query_parameter() {
                 .iter()
                 .map(|param| param.name.as_str())
                 .collect::<Vec<_>>()
+        );
+    }
+}
+
+/// **The Console OAuth2 acquisition, declared as two credentials because privilege differs** (C-555).
+///
+/// Anthropic runs two browser OAuth flows and this connector declares exactly one of them: the
+/// Console flow that `ant auth login` performs, whose authorize and token legs share one origin and
+/// which is therefore expressible by today's single-`endpoint` `OAuth2Spec`. The subscription flow
+/// (authorize on `claude.ai`, token on `platform.claude.com`) is two-host and is deliberately absent
+/// — see `the_two_host_subscription_flow_is_not_half_declared` below.
+///
+/// The split into two credentials is the substantive claim. The Admin API needs `org:admin`; the
+/// model catalogue does not, and this file already refuses to make the catalogue ask for
+/// organization-admin access (`verify` is pinned to the models read for exactly that reason). One
+/// OAuth credential carrying `org:admin` for both surfaces would undo that one line at a time, so a
+/// regression that merges them is caught here.
+#[test]
+fn the_console_oauth_grant_is_declared_as_two_credentials_split_by_privilege() {
+    let connector = anthropic();
+
+    let credential = |name: &str| {
+        connector
+            .auth
+            .iter()
+            .find(|method| method.name == name)
+            .unwrap_or_else(|| panic!("credential `{name}` should be declared"))
+    };
+
+    for name in ["anthropic.console_oauth", "anthropic.console_oauth_admin"] {
+        let method = credential(name);
+        let spec = method
+            .oauth2
+            .as_ref()
+            .unwrap_or_else(|| panic!("`{name}` should declare an `[auth.oauth2]` grant"));
+
+        assert_eq!(
+            method.subject,
+            connector_spec::Subject::User,
+            "`{name}` is issued to the person who completed the grant and is bounded by their own \
+             permissions, not the organization's — a token that acted as the organization would be \
+             the API key, not this"
+        );
+        assert_eq!(
+            spec.endpoint, "login",
+            "`{name}` must resolve its paths against the declared `login` service, so the token \
+             exchange stays inside the egress allow-list `http_hosts` derives from declared base URLs"
+        );
+        assert_eq!(spec.authorize_path, "/oauth/authorize");
+        assert_eq!(spec.token_path, "/v1/oauth/token");
+        assert!(
+            spec.grants
+                .contains(&connector_spec::OAuthGrant::AuthorizationCode)
+                && spec
+                    .grants
+                    .contains(&connector_spec::OAuthGrant::RefreshToken),
+            "`{name}` declares grants {:?}. This flow issues refresh tokens and an unattended \
+             deployment outlives the access token, so both grants are required",
+            spec.grants
+        );
+        assert!(
+            spec.client_id.is_empty(),
+            "`{name}` carries a client id value. A registration value is deployment configuration \
+             and never a declaration field — the `oauth_client_id` config field binding \
+             `oauth.client_id` is where a deployment supplies it"
+        );
+    }
+
+    assert!(
+        credential("anthropic.console_oauth")
+            .oauth2
+            .as_ref()
+            .expect("a grant")
+            .scopes
+            .is_empty(),
+        "the workspace-scoped credential requests no named scope. Anthropic documents the default \
+         as workspace-scoped and names a scope only for the Admin API, so a scope word invented \
+         here is one the authorize endpoint has never seen"
+    );
+    assert_eq!(
+        credential("anthropic.console_oauth_admin")
+            .oauth2
+            .as_ref()
+            .expect("a grant")
+            .scopes,
+        vec!["org:admin".to_string()],
+        "the admin credential requests exactly the one scope Anthropic names for the Admin API — \
+         no comfortable superset"
+    );
+}
+
+/// **Every base URL the composition needs is a literal** — X-154's `NoDeclaredDefault` contract.
+///
+/// Exchange composes the authorize URL from the artifact alone. A `{placeholder}` in the `login`
+/// service's base URL with no declared default would leave it with nothing to resolve, and a
+/// templated auth host is the one a consumer cannot fill in.
+#[test]
+fn the_login_service_base_url_is_resolvable_without_configuration() {
+    let connector = anthropic();
+
+    let login = connector
+        .services
+        .iter()
+        .find(|service| service.name == "login")
+        .expect("the `login` service should be declared");
+    let base_url = login
+        .base_url
+        .as_deref()
+        .expect("the `login` service should declare its own base URL, not inherit the API host");
+
+    assert_eq!(base_url, "https://platform.claude.com");
+    assert!(
+        !base_url.contains('{'),
+        "the login base URL {base_url:?} is templated. X-154's consumer contract is that a base URL \
+         the composition needs is non-templated or carries a declared default; Anthropic serves one \
+         Console origin for everyone, so there is nothing here to parameterise"
+    );
+    assert!(
+        login.base_url.as_deref() != Some(connector.base_url.as_str()),
+        "the auth host and the API host are different hosts, which is the whole reason the `login` \
+         service exists"
+    );
+}
+
+/// **The subscription flow is the two-host acquisition, declared honestly across two services**
+/// (C-555 round 2, expressible since C-556).
+///
+/// Anthropic's Claude Pro/Max sign-in authorizes on `claude.ai` and exchanges on
+/// `platform.claude.com` — two origins one `endpoint` cannot express. C-556's `token_endpoint` is
+/// what makes it declarable: `endpoint` names the authorize host and `token_endpoint` names the
+/// token host, both resolved from declared services.
+///
+/// Round 1 this test asserted the flow was *absent* rather than half-declared, because the model
+/// could not state it truthfully. It now asserts the opposite: that the flow is present and each leg
+/// resolves against the host it actually uses. The invariant it defends is unchanged — no leg is
+/// silently composed against the wrong origin — but it is now checked over a real declaration rather
+/// than over its absence.
+///
+/// **The half-declaration guard still bites.** Every OAuth2 grant on the connector must state both
+/// paths; the loader requires neither, so an omitted one would compose against whatever host the
+/// remaining `endpoint`/`token_endpoint` names — and the failure would be a plausible URL for the
+/// wrong flow rather than a 404. That check now covers all three credentials.
+#[test]
+fn the_subscription_flow_is_two_host_and_each_leg_resolves_against_its_own_service() {
+    let connector = anthropic();
+
+    let base_of = |service_name: &str| -> String {
+        connector
+            .services
+            .iter()
+            .find(|service| service.name == service_name)
+            .unwrap_or_else(|| panic!("service `{service_name}` should be declared"))
+            .base_url
+            .clone()
+            .unwrap_or_else(|| panic!("service `{service_name}` should declare its own base URL"))
+    };
+
+    let subscription = connector
+        .auth
+        .iter()
+        .find(|method| method.name == "anthropic.subscription_oauth")
+        .expect("the subscription credential should be declared");
+    let spec = subscription
+        .oauth2
+        .as_ref()
+        .expect("the subscription credential declares an `[auth.oauth2]` grant");
+
+    // The authorize leg is on claude.ai; the token leg is on platform.claude.com. Reading the hosts
+    // back through the declared services is what proves the two references point where they must.
+    assert_eq!(
+        base_of(&spec.endpoint),
+        "https://claude.ai",
+        "the subscription authorize leg (`endpoint` = {:?}) must resolve to claude.ai",
+        spec.endpoint
+    );
+    assert!(
+        !spec.token_endpoint.is_empty(),
+        "the subscription flow is two-host, so `token_endpoint` must name a second service — an \
+         empty one would silently redeem the token against the authorize host claude.ai, which is \
+         not where the exchange lives"
+    );
+    assert_eq!(
+        base_of(&spec.token_endpoint),
+        "https://platform.claude.com",
+        "the subscription token leg (`token_endpoint` = {:?}) must resolve to platform.claude.com — \
+         the console.anthropic.com host it used to live on now 404s",
+        spec.token_endpoint
+    );
+    assert_ne!(
+        spec.endpoint, spec.token_endpoint,
+        "the whole point of a two-host declaration is that the authorize and token services differ; \
+         if they were equal this would be a single-host flow wearing `token_endpoint` for show"
+    );
+    assert!(
+        spec.public_client,
+        "the subscription flow is a public PKCE client — it ships a shared public client id and no \
+         secret, and a confidential marking here would demand an operator client secret that does \
+         not exist"
+    );
+    assert!(
+        spec.client_id.is_empty(),
+        "the shared client id is a fact for a comment, never a declaration value"
+    );
+
+    // The half-declaration guard, now over all three OAuth2 credentials.
+    for method in &connector.auth {
+        let Some(spec) = &method.oauth2 else {
+            continue;
+        };
+        assert!(
+            !spec.authorize_path.is_empty() && !spec.token_path.is_empty(),
+            "credential `{}` declares an OAuth2 grant with an empty leg (authorize {:?}, token \
+             {:?}). The loader does not require either path, so an omitted one is silently composed \
+             against whatever origin `endpoint`/`token_endpoint` names — state both legs or declare \
+             no grant",
+            method.name,
+            spec.authorize_path,
+            spec.token_path
         );
     }
 }

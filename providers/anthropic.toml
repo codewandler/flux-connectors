@@ -208,7 +208,15 @@ const_headers = { "anthropic-version" = "2023-06-01" }
 description = "Anthropic platform: the live model catalogue, and organization info, members, workspaces, workspace members, API keys and outstanding invites from the Admin API — all read-only"
 
 # The Models API default. Admin operations override this individually — see the header comment.
-default_auth = [{ credentials = ["anthropic.api_key"] }]
+#
+# Two alternatives, not a pair (C-555): a deployment provisions one Console-minted API key, or a
+# signed-in user completes the Console OAuth2 grant and acts as themselves. A list of requirements is
+# an OR — within one entry the credentials are an AND — so this says both are valid and chooses
+# neither. That is the host's decision, and it is why `subject` exists.
+default_auth = [
+    { credentials = ["anthropic.api_key"] },
+    { credentials = ["anthropic.console_oauth"] },
+]
 
 # The "Test connection" button: a parameterless, unpaginated GET that needs only the regular API
 # key, so pressing it never asks an operator for organization-admin access they may not hold.
@@ -236,6 +244,183 @@ scheme = { header = { name = "x-api-key" } }
 # admin role, in the Anthropic Console.
 env = ["ANTHROPIC_ADMIN_KEY"]
 description = "Anthropic Admin API key (starts sk-ant-admin), sent as x-api-key. Required only for the Admin API operations below — organization, members, workspaces, workspace members, API keys and invites — the model catalogue uses the regular API key"
+
+# ---------------------------------------------------------------------------------------------
+# THE CONSOLE OAUTH2 ACQUISITION (C-555) — two delegated credentials, mirroring the two keys above.
+# ---------------------------------------------------------------------------------------------
+#
+# **Which of Anthropic's two OAuth systems this is, because they are easy to conflate.** Anthropic
+# runs two distinct browser OAuth flows:
+#
+#   1. The **Console** flow, which `ant auth login` performs — Anthropic's own documentation calls it
+#      "a browser-based OAuth flow against the Claude Console"
+#      (https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication, read 2026-08-12).
+#      It issues `sk-ant-oat01-…` tokens that authenticate the Claude API, and it is the flow that
+#      authorizes **this connector's operations**: the Models API and the Admin API. Authorize and
+#      token are both on the Console origin, so one `endpoint` expresses it — the two credentials
+#      declared immediately below.
+#   2. The **subscription** flow (Claude Pro/Max sign-in), whose authorize leg is on `claude.ai`
+#      while its token leg is on `platform.claude.com`. It is a two-host flow, declared further down
+#      as `anthropic.subscription_oauth` using C-556's `token_endpoint`, and it authorizes inference
+#      that this connector does not model — see its own section for what it is for.
+#
+# **Two credentials rather than one, and the reason is privilege.** The Admin API needs the
+# `org:admin` scope; the model catalogue does not. Collapsing both surfaces onto one OAuth
+# credential would make every deployment that merely wants the model catalogue request
+# organization-admin access — the exact escalation this file already refuses one line at a time
+# (`verify` is pinned to `anthropic-models-list` precisely "so pressing it never asks an operator for
+# organization-admin access they may not hold"). So the OAuth pair mirrors the key pair: one
+# workspace-scoped credential for `models`, one org-admin credential for `admin`.
+#
+# **`subject = "user"` on both, and that is the substantive difference from the keys above.** Both
+# API keys are Console-minted, organization-provisioned secrets. An OAuth token is issued to the
+# person who completed the grant and is bounded by *their* permissions, so it is not the same
+# credential wearing a different hat and must not share a name or an address with one.
+#
+# **One wrinkle a host must handle and this file cannot declare.** An Anthropic OAuth token travels
+# as `Authorization: Bearer <token>` *plus* an `anthropic-beta: oauth-2025-04-20` header, whereas the
+# API keys above travel as `x-api-key`. `scheme = "bearer"` carries the first half; the second is a
+# per-credential constant header, and `const_headers` is connector-wide, so there is nowhere here to
+# put it. Recorded rather than faked: a host running this grant adds that header itself.
+
+[[auth]]
+name = "anthropic.console_oauth"
+scheme = "bearer"
+subject = "user"
+description = "Anthropic Console OAuth2 access token (sk-ant-oat01-), obtained on behalf of a signed-in user and sent as a bearer. Workspace-scoped: enough for the model catalogue, and deliberately not enough for the Admin API"
+
+[auth.oauth2]
+# Both paths resolve against the one `login` service above — this flow is single-host, which is what
+# makes it declarable today.
+endpoint = "login"
+authorize_path = "/oauth/authorize"
+token_path = "/v1/oauth/token"
+# **No `scopes`, and that is a declaration rather than an omission.** Anthropic's CLI documentation
+# states the default plainly: "By default, `ant auth login` requests a workspace-scoped token", and
+# names a scope (`org:admin`) only for the Admin API. There is no published scope word for the
+# ordinary workspace-scoped token, so requesting none is what this flow actually does; inventing a
+# scope name here would be a string the authorize endpoint has never seen.
+grants = ["authorization_code", "refresh_token"]
+# **A public PKCE client, so no operator client secret** (C-556). Anthropic's Console OAuth
+# authenticates the token exchange with PKCE alone — its CLI profile exposes `client_id` as a
+# writable key and no client secret at all. Marking it public is what exempts it from the
+# operator-secret requirement `auth_archetypes.rs` otherwise enforces on an `authorization_code`
+# grant, and it is the honest description: there is no secret for an operator to supply.
+public_client = true
+
+[[auth.quirks.token_endpoint]]
+# **The endpoints above are measured, not published — and this is the surface for exactly that.**
+grant = "authorization_code"
+behaviour = "Anthropic documents that this flow exists and what it is for, but publishes no authorize or token URL for it on any page under platform.claude.com/docs or code.claude.com/docs. Both values above are therefore measured rather than quoted. The token endpoint additionally MOVED: `console.anthropic.com/v1/oauth/token` now returns 404, and the live endpoint is `platform.claude.com/v1/oauth/token`, following the console.anthropic.com to platform.claude.com rename. A host that hard-codes the legacy console host from an older integration will 404 on fresh logins while token *refresh* keeps working, which is how the migration usually presents."
+attribution = "Anthropic's own CLI docs (https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication) describe the flow as \"a browser-based OAuth flow against the Claude Console\" and publish no URLs. The URLs come from third-party implementations of the same flow — github.com/querymt/anthropic-auth records the Console authorize endpoint as `console.anthropic.com/oauth/authorize` (pre-rename) alongside the subscription flow's `claude.ai/oauth/authorize` — and from the live-host check recorded in NousResearch/hermes-agent#49821, where the console token host 404s and the platform host answers. Not confirmed against a vendor specification, because none is published."
+measured = "2026-08-12"
+
+[[auth]]
+name = "anthropic.console_oauth_admin"
+scheme = "bearer"
+subject = "user"
+description = "Anthropic Console OAuth2 access token carrying the org:admin scope, sent as a bearer. Required for the Admin API operations; issued only to an organization member holding the admin, owner or primary-owner role"
+
+[auth.oauth2]
+endpoint = "login"
+authorize_path = "/oauth/authorize"
+token_path = "/v1/oauth/token"
+# `org:admin` is the one scope Anthropic names for this surface, and it is quoted rather than
+# guessed: "To manage the resources documented on the Admin API page, request the `org:admin` scope
+# under a dedicated profile", and "The `org:admin` scope is granted only to organization members with
+# the admin, owner, or primary owner role. The issued token has organization-wide access, and any
+# workspace binding on the profile does not constrain it."
+# (https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication, read 2026-08-12.)
+#
+# That last sentence is why this is a separate credential and not an extra scope on the one above:
+# the resulting token is organization-wide by construction, so it cannot be the credential the model
+# catalogue asks for.
+scopes = ["org:admin"]
+grants = ["authorization_code", "refresh_token"]
+# Public PKCE client, same as `anthropic.console_oauth` — the org:admin scope changes what the token
+# can do, not how the client authenticates the exchange.
+public_client = true
+
+[[auth.quirks.token_endpoint]]
+grant = "authorization_code"
+behaviour = "Same measured endpoints as `anthropic.console_oauth` — Anthropic publishes no authorize or token URL for the Console flow, and the token host moved from console.anthropic.com to platform.claude.com. Recorded again here rather than cross-referenced because a quirk is read per credential."
+attribution = "See `anthropic.console_oauth`'s measurement for the full provenance: Anthropic's CLI docs describe the flow without URLs; the values come from third-party implementations of the same flow and a live-host check."
+measured = "2026-08-12"
+
+# ---------------------------------------------------------------------------------------------
+# THE SUBSCRIPTION OAUTH2 ACQUISITION (C-555, expressible since C-556) — the two-host flow.
+# ---------------------------------------------------------------------------------------------
+#
+# Anthropic's Claude Pro/Max sign-in is a **two-host** OAuth2 flow: the browser leg is
+# `https://claude.ai/oauth/authorize` and the exchange is `https://platform.claude.com/v1/oauth/token`.
+# One `endpoint` cannot express two origins — which is why this was a documented non-declaration in
+# C-555's first round. C-556 added `OAuth2Spec::token_endpoint`, a second service *reference*, and it
+# is what makes this declarable: `endpoint` names the authorize host and `token_endpoint` names the
+# token host, both resolved from declared `[[services]]` base URLs so `http_hosts` and X-154's
+# `NoDeclaredDefault` composition rule keep working. The authorize host is the new
+# `subscription-authorize` service below; the token host is the existing `login` service
+# (`platform.claude.com`), reused rather than duplicated because it is byte-for-byte the same origin.
+#
+# **What this credential authorizes: none of this connector's operations, deliberately.** A Pro/Max
+# subscription OAuth token is a consumer *inference* credential — Anthropic's own Claude Code docs say
+# a `setup-token` OAuth token "can only make model requests" — and this file's charter is "NO
+# INFERENCE OPERATION IN THIS FILE". So it appears in neither `default_auth` nor any operation's
+# `auth`, and the loader permits that: a requirement must name a declared credential, but no rule
+# forces a credential to be named by a requirement (`validate_requirements`,
+# `crates/connector-spec/src/provider.rs`). The credential is declared because the story's consumer is
+# **Exchange's authorize-URL composition and autodev's Anthropic login** (`## Goal`), not an operation
+# here: a host acquires this token to make inference calls that live in flux's native `anthropic`
+# provider, and this connector declares *how the acquisition composes* without modelling the call.
+#
+# **The client id is a FACT recorded, never a declaration value.** Claude Code ships a single
+# well-known public client id for this flow — `9d1c250a-e61b-44d9-88ed-5944d1962f5e`, recorded here in
+# prose so a reader can recognise it. It is deliberately NOT the `client_id` field of the block below,
+# and there is no `oauth_client_id` config binding it: a registration value is deployment
+# configuration, and the loader would refuse a populated registration field anyway. PKCE S256 is
+# mandatory and is what a public client authenticates the exchange with — coqu's implementation notes
+# it plainly: "The auth server enforces PKCE. Omitting `code_verifier` in the token request fails."
+#
+# ⚠ **THE TERMS-OF-SERVICE POSITION, AND THAT THE OWNER ACCEPTED IT EXPLICITLY.** Anthropic states
+# that OAuth on Free, Pro and Max plans "is intended exclusively for Claude Code and Claude.ai", that
+# it "does not offer an OAuth program for third-party tools", and that it "does not provide a way to
+# register new client IDs for third-party projects"; server-side enforcement rejecting consumer-plan
+# OAuth tokens outside those surfaces has been in place since January 2026, and a documentation update
+# on 2026-02-19 confirmed that using such tokens in third-party tools violates the Consumer Terms.
+# **The owner weighed this on 2026-08-12 and accepted it explicitly, choosing to ship the subscription
+# flow anyway** (round-2 re-scope of C-555). This is recorded rather than argued because it is not the
+# connector model's decision to make — the model can express the flow honestly, and whether a
+# deployment is permitted to run it is the operator's and the owner's call, made here with the facts in
+# front of them. Sources: querymt/anthropic-auth and flopsstuff.github.io/coqu (endpoints, client id,
+# scopes, PKCE), NousResearch/hermes-agent#49821 (the console→platform token-host move), and the
+# widely-reported February 2026 Anthropic policy update (the ToS position).
+
+[[auth]]
+name = "anthropic.subscription_oauth"
+scheme = "bearer"
+subject = "user"
+description = "Anthropic Claude Pro/Max subscription OAuth2 access token (sk-ant-oat01-), acquired on behalf of a signed-in consumer-plan user and sent as a bearer. Authorizes inference against Anthropic's consumer surfaces, which this catalogue does not model — it is declared so a host can compose the two-host acquisition, not to authenticate an operation here. Anthropic restricts this flow to Claude Code and Claude.ai; using the token elsewhere violates the Consumer Terms (owner-accepted 2026-08-12)"
+
+[auth.oauth2]
+# Two hosts (C-556): `endpoint` is the authorize origin, `token_endpoint` is the exchange origin.
+endpoint = "subscription-authorize"
+token_endpoint = "login"
+authorize_path = "/oauth/authorize"
+token_path = "/v1/oauth/token"
+# The four `user:*` scopes Claude Code requests on this flow, quoted from the same third-party
+# implementations that carry the endpoints (querymt/anthropic-auth, flopsstuff.github.io/coqu). They
+# are inference/session/mcp scopes — none maps to an operation in this connector, which is the point:
+# the acquisition is real and the operations it would authorize live elsewhere.
+scopes = ["user:profile", "user:inference", "user:sessions:claude_code", "user:mcp_servers"]
+grants = ["authorization_code", "refresh_token"]
+# A public PKCE client — the client id is public and shared, and there is no client secret. See the
+# section comment above for the id (recorded as a fact, not a value) and the PKCE-S256 source.
+public_client = true
+
+[[auth.quirks.token_endpoint]]
+grant = "authorization_code"
+behaviour = "Authorize is `https://claude.ai/oauth/authorize` and the token exchange is `https://platform.claude.com/v1/oauth/token` — two different origins, PKCE S256 mandatory (omitting `code_verifier` fails the exchange). The token host is `platform.claude.com`, NOT the legacy `console.anthropic.com`, which now 404s: the console.anthropic.com to platform.claude.com rename moved it, and an older integration that hard-codes the console host will 404 on fresh logins while refresh keeps working. Anthropic publishes no URL for this flow; both values are measured."
+attribution = "The endpoints, the shared public client id and the `user:*` scopes come from third-party implementations of the Claude Code flow — github.com/querymt/anthropic-auth (\"Max Mode\": authorize `claude.ai/oauth/authorize`) and flopsstuff.github.io/coqu/claude-oauth (token `platform.claude.com/v1/oauth/token`, client id `9d1c250a-e61b-44d9-88ed-5944d1962f5e`, scopes `user:profile user:inference user:sessions:claude_code user:mcp_servers`, PKCE enforced). The console→platform token-host move is the live-host check in NousResearch/hermes-agent#49821. Anthropic's own docs describe consumer OAuth without publishing endpoints, so none of this is confirmed against a vendor specification."
+measured = "2026-08-12"
 
 # ---------------------------------------------------------------------------------------------
 # Configuration — what a human supplies before any of this runs
@@ -268,6 +453,42 @@ secret = true
 docs_url = "https://docs.anthropic.com/en/docs/manage-claude/admin-api-keys"
 binds = "credential.anthropic.admin_key"
 
+# **The OAuth registration fields — operator level, and no client secret among them** (C-555).
+#
+# `binds = "oauth.client_id"` is how this repository says *the value is deployment configuration*:
+# the id is public, it is not a secret, and it is emphatically not a declaration field — nothing in
+# the artifact carries a registration value. Both fields sit on the `login` service because that is
+# the service whose endpoints the grant uses.
+#
+# **There is no `oauth_client_secret` field here, unlike `providers/github.toml`, and that is a
+# measured difference rather than an oversight.** Anthropic's Console OAuth is a public client using
+# PKCE: its CLI profile exposes `client_id` as a writable configuration key and exposes no client
+# secret at all (`ant profile set` accepts `workspace_id`, `base_url`, `organization_id`, `scope`,
+# `client_id` and `console_url` —
+# https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication, read 2026-08-12). A
+# secret field here would ask an operator for a credential this flow never issues.
+
+[[config]]
+name = "oauth_client_id"
+service = "login"
+label = "Anthropic OAuth client ID"
+help = "The OAuth client ID this deployment authorizes as. Anthropic does not currently operate a public client-registration program for third-party applications, so a deployment supplies the id it has been issued; the value is public, and PKCE rather than a client secret protects the exchange"
+format = "text"
+required = false
+docs_url = "https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication"
+binds = "oauth.client_id"
+
+[[config]]
+name = "oauth_redirect_uri"
+service = "login"
+label = "Anthropic OAuth callback URL"
+help = "The callback address this deployment serves, registered against the client ID above. Anthropic's own clients use a loopback callback and fall back to displaying the code for manual paste when no loopback is reachable"
+example = "https://exchange.internal/api/oauth/callback"
+format = "url"
+required = false
+docs_url = "https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication"
+binds = "oauth.redirect_uri"
+
 # ---------------------------------------------------------------------------------------------
 # Services
 # ---------------------------------------------------------------------------------------------
@@ -286,6 +507,43 @@ roles = ["llm_catalogue"]
 name = "admin"
 tags = ["ai"]
 description = "Admin API: organization info and members, workspaces and their members, API keys, and outstanding invites — read-only"
+
+[[services]]
+# **The Console OAuth2 endpoints, which are not on the API host** (C-555).
+#
+# Declared as a service because that is how this repository names an endpoint whose base URL differs
+# from the connector's, and because `http_hosts` derives from declared base URLs — a token exchange
+# against a host nothing declared is one the egress gate refuses. `OAuth2Spec.endpoint` below names
+# this service rather than carrying a URL of its own, which is the property that keeps it that way.
+#
+# **The base URL is a literal, and that is the consumer contract** (X-154's `NoDeclaredDefault`).
+# Exchange composes the authorize URL from the artifact alone, so a `{placeholder}` with no declared
+# default would leave it with nothing to resolve. Anthropic serves one Console origin for everyone —
+# there is no per-tenant subdomain here, unlike GitLab's self-managed `{origin}` — so the literal is
+# also the honest value.
+#
+# It declares no operations, and must not. An authorize endpoint is a browser redirect and a token
+# endpoint's response body *is* a credential, so neither is a connector operation — AGENTS.md
+# § Authentication contract. The host runs the grant; this service exists so the host knows where.
+name = "login"
+description = "Anthropic's Console OAuth2 authorize and token endpoints on platform.claude.com; also the subscription flow's token host, which redeems here while authorizing on claude.ai."
+base_url = "https://platform.claude.com"
+
+[[services]]
+# **The subscription flow's authorize host, which is neither the API host nor the token host**
+# (C-555, two-host since C-556).
+#
+# Claude Pro/Max sign-in authorizes on `claude.ai` and redeems its token on `platform.claude.com`.
+# This service is the first origin; the `login` service above is the second. `anthropic.subscription_oauth`
+# names this one as its `endpoint` (authorize) and `login` as its `token_endpoint` (exchange), so a
+# host joins each path onto the right host and `http_hosts` admits both. Same `NoDeclaredDefault`
+# reasoning as `login`: `claude.ai` is a single origin with no per-tenant subdomain, so the base URL
+# is a literal a consumer can compose against with no configuration.
+#
+# It declares no operations, and must not — it is a browser-redirect host, not an API surface.
+name = "subscription-authorize"
+description = "Anthropic's Claude Pro/Max subscription OAuth2 authorize endpoint, served by claude.ai. The matching token exchange is on the `login` service (platform.claude.com)."
+base_url = "https://claude.ai"
 
 # ---------------------------------------------------------------------------------------------
 # Operations — the models service (2), then the admin service (9). All eleven are GET, all
@@ -375,7 +633,10 @@ path = "/v1/organizations/me"
 description = "Get the organization this Admin API key belongs to. Takes no parameters; useful for confirming which organization a key resolves to"
 risk = "low"
 idempotency = "idempotent"
-auth = [{ credentials = ["anthropic.admin_key"] }]
+auth = [
+    { credentials = ["anthropic.admin_key"] },
+    { credentials = ["anthropic.console_oauth_admin"] },
+]
 
 [operations.response_schema]
 type = "object"
@@ -397,7 +658,10 @@ path = "/v1/organizations/users"
 description = "List the people in this organization, with each member's name, email address, organization role and the date they joined. Returns personal data about real individuals. Unpaginated — this connector cannot request a further page, so on an organization larger than one page this is a sample and not a roster"
 risk = "low"
 idempotency = "idempotent"
-auth = [{ credentials = ["anthropic.admin_key"] }]
+auth = [
+    { credentials = ["anthropic.admin_key"] },
+    { credentials = ["anthropic.console_oauth_admin"] },
+]
 # No parameters. The vendor declares four optional query filters — `after_id`, `before_id`, `limit`
 # and `email` — all excluded; see the header comment. Losing `email` is the one that stings: it
 # turns "is this person a member" from a filtered lookup into a scan of the first page, and there
@@ -425,7 +689,10 @@ path = "/v1/organizations/users/{user_id}"
 description = "Retrieve one organization member by user id, returning their name, email address, organization role and join date. Returns personal data about a real individual"
 risk = "low"
 idempotency = "idempotent"
-auth = [{ credentials = ["anthropic.admin_key"] }]
+auth = [
+    { credentials = ["anthropic.admin_key"] },
+    { credentials = ["anthropic.console_oauth_admin"] },
+]
 
 # SCHEMA GAP: a path parameter is interpolated as verbatim as a query parameter is, and `status.rs`
 # deliberately does not flag it — C-30 scopes its refusal to query values. Safe here on the same
@@ -459,7 +726,10 @@ path = "/v1/organizations/workspaces"
 description = "List the organization's workspaces. Unpaginated and excludes archived workspaces by default — this connector cannot request a further page or ask for archived ones"
 risk = "low"
 idempotency = "idempotent"
-auth = [{ credentials = ["anthropic.admin_key"] }]
+auth = [
+    { credentials = ["anthropic.admin_key"] },
+    { credentials = ["anthropic.console_oauth_admin"] },
+]
 # No parameters. The vendor declares four, `after_id`/`before_id`/`limit`/`include_archived`, all
 # optional query and all excluded — see the header comment.
 
@@ -483,7 +753,10 @@ path = "/v1/organizations/workspaces/{workspace_id}"
 description = "Retrieve one workspace by id, including its name, creation date, whether it is archived, and its data-residency configuration. Unlike anthropic-workspaces-list this reaches an archived workspace, since the id is given rather than filtered for"
 risk = "low"
 idempotency = "idempotent"
-auth = [{ credentials = ["anthropic.admin_key"] }]
+auth = [
+    { credentials = ["anthropic.admin_key"] },
+    { credentials = ["anthropic.console_oauth_admin"] },
+]
 
 # Safe to interpolate for the reason the header comment records: a workspace id is a vendor-minted
 # opaque handle of the form `wrkspc_01JwQvzr7…`, drawn from `[A-Za-z0-9_]`.
@@ -516,7 +789,10 @@ path = "/v1/organizations/workspaces/{workspace_id}/members"
 description = "List who belongs to one workspace and the role each holds in it. Returns the user ids of real individuals; resolve one to a name and email with anthropic-organization-member-get. Unpaginated — this connector cannot request a further page, so on a workspace larger than one page this is a sample and not a roster"
 risk = "low"
 idempotency = "idempotent"
-auth = [{ credentials = ["anthropic.admin_key"] }]
+auth = [
+    { credentials = ["anthropic.admin_key"] },
+    { credentials = ["anthropic.console_oauth_admin"] },
+]
 # No parameters beyond the path. The vendor declares three optional query filters — `after_id`,
 # `before_id` and `limit` — all excluded; see the header comment.
 
@@ -549,7 +825,10 @@ path = "/v1/organizations/workspaces/{workspace_id}/members/{user_id}"
 description = "Retrieve one person's membership of one workspace, and the role they hold in it. This is the direct answer to whether a given user is in a given workspace; it returns the user id of a real individual"
 risk = "low"
 idempotency = "idempotent"
-auth = [{ credentials = ["anthropic.admin_key"] }]
+auth = [
+    { credentials = ["anthropic.admin_key"] },
+    { credentials = ["anthropic.console_oauth_admin"] },
+]
 
 # Two path parameters, both vendor-minted opaque handles — see the header comment.
 [[operations.params.path]]
@@ -584,7 +863,10 @@ path = "/v1/organizations/api_keys"
 description = "List the organization's API keys, with each key's name, status and a redacted hint — never the key itself. Unpaginated and unfiltered"
 risk = "low"
 idempotency = "idempotent"
-auth = [{ credentials = ["anthropic.admin_key"] }]
+auth = [
+    { credentials = ["anthropic.admin_key"] },
+    { credentials = ["anthropic.console_oauth_admin"] },
+]
 # No parameters. The vendor declares six optional query filters — `after_id`, `before_id`, `limit`,
 # `status`, `workspace_id`, `created_by_user_id` — all excluded; see the header comment.
 
@@ -610,7 +892,10 @@ path = "/v1/organizations/invites"
 description = "List the organization's invites, with the email address invited, the role offered, and whether the invite is still pending. Returns personal data — an email address for a real person. Unpaginated and unfiltered by status, so a `pending` invite must be selected from the returned entries rather than asked for"
 risk = "low"
 idempotency = "idempotent"
-auth = [{ credentials = ["anthropic.admin_key"] }]
+auth = [
+    { credentials = ["anthropic.admin_key"] },
+    { credentials = ["anthropic.console_oauth_admin"] },
+]
 # No parameters. The vendor declares three optional query filters — `after_id`, `before_id` and
 # `limit` — all excluded; see the header comment. There is no `status` filter to lose: the vendor
 # publishes none, which is why the description tells a caller to filter `status` themselves.

@@ -50,8 +50,71 @@ description = "Anthropic Admin API key (starts sk-ant-admin), sent as x-api-key.
 [auth.scheme.header]
 name = "x-api-key"
 
+[[auth]]
+name = "anthropic.console_oauth"
+scheme = "bearer"
+description = "Anthropic Console OAuth2 access token (sk-ant-oat01-), obtained on behalf of a signed-in user and sent as a bearer. Workspace-scoped: enough for the model catalogue, and deliberately not enough for the Admin API"
+subject = "user"
+
+[auth.oauth2]
+endpoint = "login"
+authorize_path = "/oauth/authorize"
+token_path = "/v1/oauth/token"
+grants = ["authorization_code", "refresh_token"]
+public_client = true
+
+[[auth.quirks.token_endpoint]]
+grant = "authorization_code"
+behaviour = "Anthropic documents that this flow exists and what it is for, but publishes no authorize or token URL for it on any page under platform.claude.com/docs or code.claude.com/docs. Both values above are therefore measured rather than quoted. The token endpoint additionally MOVED: `console.anthropic.com/v1/oauth/token` now returns 404, and the live endpoint is `platform.claude.com/v1/oauth/token`, following the console.anthropic.com to platform.claude.com rename. A host that hard-codes the legacy console host from an older integration will 404 on fresh logins while token *refresh* keeps working, which is how the migration usually presents."
+attribution = """Anthropic's own CLI docs (https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication) describe the flow as "a browser-based OAuth flow against the Claude Console" and publish no URLs. The URLs come from third-party implementations of the same flow — github.com/querymt/anthropic-auth records the Console authorize endpoint as `console.anthropic.com/oauth/authorize` (pre-rename) alongside the subscription flow's `claude.ai/oauth/authorize` — and from the live-host check recorded in NousResearch/hermes-agent#49821, where the console token host 404s and the platform host answers. Not confirmed against a vendor specification, because none is published."""
+measured = "2026-08-12"
+
+[[auth]]
+name = "anthropic.console_oauth_admin"
+scheme = "bearer"
+description = "Anthropic Console OAuth2 access token carrying the org:admin scope, sent as a bearer. Required for the Admin API operations; issued only to an organization member holding the admin, owner or primary-owner role"
+subject = "user"
+
+[auth.oauth2]
+endpoint = "login"
+authorize_path = "/oauth/authorize"
+token_path = "/v1/oauth/token"
+scopes = ["org:admin"]
+grants = ["authorization_code", "refresh_token"]
+public_client = true
+
+[[auth.quirks.token_endpoint]]
+grant = "authorization_code"
+behaviour = "Same measured endpoints as `anthropic.console_oauth` — Anthropic publishes no authorize or token URL for the Console flow, and the token host moved from console.anthropic.com to platform.claude.com. Recorded again here rather than cross-referenced because a quirk is read per credential."
+attribution = "See `anthropic.console_oauth`'s measurement for the full provenance: Anthropic's CLI docs describe the flow without URLs; the values come from third-party implementations of the same flow and a live-host check."
+measured = "2026-08-12"
+
+[[auth]]
+name = "anthropic.subscription_oauth"
+scheme = "bearer"
+description = "Anthropic Claude Pro/Max subscription OAuth2 access token (sk-ant-oat01-), acquired on behalf of a signed-in consumer-plan user and sent as a bearer. Authorizes inference against Anthropic's consumer surfaces, which this catalogue does not model — it is declared so a host can compose the two-host acquisition, not to authenticate an operation here. Anthropic restricts this flow to Claude Code and Claude.ai; using the token elsewhere violates the Consumer Terms (owner-accepted 2026-08-12)"
+subject = "user"
+
+[auth.oauth2]
+endpoint = "subscription-authorize"
+token_endpoint = "login"
+authorize_path = "/oauth/authorize"
+token_path = "/v1/oauth/token"
+scopes = ["user:profile", "user:inference", "user:sessions:claude_code", "user:mcp_servers"]
+grants = ["authorization_code", "refresh_token"]
+public_client = true
+
+[[auth.quirks.token_endpoint]]
+grant = "authorization_code"
+behaviour = "Authorize is `https://claude.ai/oauth/authorize` and the token exchange is `https://platform.claude.com/v1/oauth/token` — two different origins, PKCE S256 mandatory (omitting `code_verifier` fails the exchange). The token host is `platform.claude.com`, NOT the legacy `console.anthropic.com`, which now 404s: the console.anthropic.com to platform.claude.com rename moved it, and an older integration that hard-codes the console host will 404 on fresh logins while refresh keeps working. Anthropic publishes no URL for this flow; both values are measured."
+attribution = """The endpoints, the shared public client id and the `user:*` scopes come from third-party implementations of the Claude Code flow — github.com/querymt/anthropic-auth ("Max Mode": authorize `claude.ai/oauth/authorize`) and flopsstuff.github.io/coqu/claude-oauth (token `platform.claude.com/v1/oauth/token`, client id `9d1c250a-e61b-44d9-88ed-5944d1962f5e`, scopes `user:profile user:inference user:sessions:claude_code user:mcp_servers`, PKCE enforced). The console→platform token-host move is the live-host check in NousResearch/hermes-agent#49821. Anthropic's own docs describe consumer OAuth without publishing endpoints, so none of this is confirmed against a vendor specification."""
+measured = "2026-08-12"
+
 [[default_auth]]
 credentials = ["anthropic.api_key"]
+
+[[default_auth]]
+credentials = ["anthropic.console_oauth"]
 
 [[config]]
 name = "admin_key"
