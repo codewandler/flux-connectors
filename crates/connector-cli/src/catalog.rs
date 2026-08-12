@@ -423,8 +423,9 @@ fn credential_requirement(connector: &Connector, operation: &Operation) -> &'sta
 /// to choose, and substituting a placeholder here would invent one. A caller reads this to decide
 /// whether their egress policy admits the call, and a pattern is the honest answer to that.
 ///
-/// C-10 replaces this with the manifest's real `http_hosts` allowlist, which is why the catalog
-/// field is a slice: today every operation reaches exactly the connector's own host.
+/// The manifest's real `http_hosts` allowlist replaces this, which is why the catalog field is a
+/// slice: today every operation reaches exactly the connector's own host. That was C-10's, closed
+/// as superseded-never-implemented by C-535; C-534's program owns where the allowlist lands now.
 ///
 /// Shared with [`crate::site`] so that `catalog.json` and `crates/catalog` name the same host — two
 /// answers to "which host does this reach?" would be one answer too many.
