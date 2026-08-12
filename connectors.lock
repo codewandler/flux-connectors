@@ -16,7 +16,7 @@ ir_sha256 = "5083b2e5725e9601102b779326ce7869b8e7cb3014aba5c4e1ef937dcfcf6e9f"
 
 [provider.artifacts]
 "catalog/airtable.catalog.json" = "046531d8154c58a600a14c84dc553114396c1eedbedc9ad8f11f37223d1363d3"
-"connectors/airtable.connector.toml" = "f570a28cd94846e315c84ac152659514859f25b73d4c33e5c8de3025e8699811"
+"connectors/airtable.connector.toml" = "f954f3f0d78430ffe18b901b2f127d23113a4cb2ed9231faafb0c4d718b57e3a"
 "connectors/airtable.flux" = "758ed501185c8b7b3f8588b4e83944d993cd440ca66810ff9440d41db8e5b425"
 "crates/catalog/ops/airtable/airtable-record-create.flux" = "834e33bdededce1abee47de2f6edeed930ad8a542b03e6769c7e23dfc55079db"
 "crates/catalog/ops/airtable/airtable-record-delete.flux" = "2c932c719cf26cfebefe321dcb77d46a1a14a733b95c31c8af4a8767986d969b"
@@ -32,7 +32,7 @@ ir_sha256 = "bc7091a04423b9ed39bf083d8c4d541eca0d5971052e91081fb718d7f719b453"
 
 [provider.artifacts]
 "catalog/algolia.catalog.json" = "8f08ac8b04d6f8bc3d8338445d45af31860a7d5fc5bfe2e3199744b6d50e6c84"
-"connectors/algolia.connector.toml" = "ab9205b51a290fc6b0753f164003b7f3bb71810f5c9d45766763cc7a1eca48c6"
+"connectors/algolia.connector.toml" = "d0278e405f80b53052a36df2f18243fedd4b8c3afb329333cbfda8642565b2c1"
 "connectors/algolia.flux" = "0d733e816f1c25df4a0eacc1a005c5a6fa2c3215a04f62456c7fb377c36a51ad"
 "crates/catalog/ops/algolia/algolia-index-list.flux" = "041bba49f7b40ef2fb0f8a1ddf349d656fdf61ff5794c805cdfd5f52d20877fc"
 "crates/catalog/ops/algolia/algolia-index-search.flux" = "960f0a7e7c9e43e744327b763996970230da4cd1adfef23871b21427c87c30c9"
@@ -49,9 +49,9 @@ ir_sha256 = "a2f8299277cd5fa4b7a46aee529914495f17251b3be2b76426bbdf9fadb846fb"
 
 [provider.artifacts]
 "catalog/anthropic.catalog.json" = "3b3342811e2f283a9b69de8bbb6ac02d6799fa3dc0837db5a84c0d9580c78f73"
-"connectors/anthropic-admin.connector.toml" = "571d27206f419d58f4444cc43ae4636a0f3a443080183d763f8c9c79c54fc849"
+"connectors/anthropic-admin.connector.toml" = "8085758de894980cdb267ba63a2b8052af823d4e345243064f8e78fbf071e831"
 "connectors/anthropic-admin.flux" = "8892d83320f6446ef6c6b04e70f280354e50513064013d34019728874d47236e"
-"connectors/anthropic-models.connector.toml" = "c5e06cabc41e2a96ceee45c48496831d0f5f79da19c481fa32b67ccbcfdfdeec"
+"connectors/anthropic-models.connector.toml" = "f658c2a0afd9d6bb784e49ce0ce5cf2023fd439b4a174ecc8e1691027d274542"
 "connectors/anthropic-models.flux" = "1e055e8f13687b9d6c6c0c8debdf3af37bd2ba23e75a8f2275927c4c3227f950"
 "crates/catalog/ops/anthropic/anthropic-api-keys-list.flux" = "5109162c4baf10597eb6eb1c33759cbcdda56e0ec9d4c071670feb9d2e51ea2c"
 "crates/catalog/ops/anthropic/anthropic-invites-list.flux" = "6768d685468d62e28bc858de5458e667be7cbc64c8f1ada884205775481586ac"
@@ -74,7 +74,7 @@ ir_sha256 = "b65585486541f37ae7edd2b57a489064134c05984722ab202a59aceed3a371ca"
 
 [provider.artifacts]
 "catalog/asana.catalog.json" = "446e4be56dc5f63b6ad88468abe3092a8d70265ef27caacbac8ff022773f2534"
-"connectors/asana.connector.toml" = "dfed782d55b0dc20ef7a25b258a5531c0521e5b0725b9775d1104a7bb9c9c46e"
+"connectors/asana.connector.toml" = "15e5294160547657f144da2441e63bc86fb2f2dde0f580d1fe03dbd727f7aa0c"
 "connectors/asana.flux" = "ed70232aba7390d544618b6f76ceb10947b6362cf924ffc48ffa8b3e26a6b331"
 "crates/catalog/ops/asana/asana-project-get.flux" = "9e91750c626a0115152e96ac4e14fc7e5c1013464e587d16f95a3fa1bc2f092c"
 "crates/catalog/ops/asana/asana-task-create.flux" = "3d00f35aa512e7d0beda8b3202bbbc0a3ea78e9beb27d102eedb34c529ff481a"
@@ -100,7 +100,7 @@ sha256 = "7ea540678f8f9930d5582161c7cb0dc1cbf09674c2bc5b5466f94c854210f53e"
 
 [provider.artifacts]
 "catalog/asterisk.catalog.json" = "c4c0fff95f71ad0bf11fd5559c07eda371faf39521136053d18af21a4d39aa76"
-"connectors/asterisk.connector.toml" = "c41c22d32a3d721e3563099f9232d253afffb4e0156255226bf32c6098767927"
+"connectors/asterisk.connector.toml" = "5d1612394771db917d0eb0a62a09eac665c456e7f9224dd53fcd9da62e0c11b5"
 "connectors/asterisk.flux" = "e606a1c52bc9ee45a28c6117b89df037eec9568740a044f196e00e938870a95c"
 "crates/catalog/ops/asterisk/asterisk-ari-applications-filter.flux" = "c4656a28902fb8d8a380969f2e2b8504910330c4f4e78fbd61fcb17530d53ab3"
 "crates/catalog/ops/asterisk/asterisk-ari-applications-get.flux" = "1e2a2b4566eae2ecff860b385d1deff0e6fa529d8d6a0c949fbec3e0bb73e602"
@@ -232,13 +232,13 @@ sha256 = "031327359000bd70d6b2ab012868971cc834812e5f61f5157531e7cb5daa4d85"
 
 [provider.artifacts]
 "catalog/babelforce.catalog.json" = "3b2621b09b48b4ccc9072d45d13041e8117f59eded2a5fa76da207e9fe0b2ee9"
-"connectors/babelforce-manager.connector.toml" = "55f091757600bff3274d58ba76d2c60014d69290f9680ec21581f1d15ca36ce7"
+"connectors/babelforce-manager.connector.toml" = "26402784ca773d55239ee4fb2f2c222fecee3274f203807efcae67e95f7b4d24"
 "connectors/babelforce-manager.flux" = "3850a00bc2e6489e43ffe82112ed00f87ed1a0fdb533170173c934e910404bff"
-"connectors/babelforce-task-automation.connector.toml" = "245a97c06080bd588842aea0e11216f4f12488e76c8bfded6d57ba0d6ef6b1b2"
+"connectors/babelforce-task-automation.connector.toml" = "41d7787daff34e84ba00f5135bf3ae7846e125e11fcc861ed1c83f2d7ce0a631"
 "connectors/babelforce-task-automation.flux" = "236190bd808c181d9695f3a896dbfd1b121808b0ee01f5c1c20320af2c21e588"
-"connectors/babelforce-task-schedule.connector.toml" = "5e24f6c26e7724cc194b85e8b0f161f1406b9140aa894ae9ba276bc1146d800f"
+"connectors/babelforce-task-schedule.connector.toml" = "f7ce5cbbe432029052a5bbdf39cc9dd046dd4f354753edfeb445c348d370202b"
 "connectors/babelforce-task-schedule.flux" = "6a8534f3da60bd4f35c7564389abd30546d421343e6910a09403f416fc6de48d"
-"connectors/babelforce-user.connector.toml" = "5662a30fa1a292a58a045cd46b45eb62334a1c20af99f49ecce56c7476c676c6"
+"connectors/babelforce-user.connector.toml" = "7491f34028ab44b4bd9da2d881f35dd4a7d7274aaa2bd77980e785eed854bd58"
 "connectors/babelforce-user.flux" = "61dd67c641f183245118e8c7ad1a49c4f63ca9caf108a92096099d04f75962ab"
 "crates/catalog/ops/babelforce/babelforce-add-agent-to-group.flux" = "f6ee21cade65ae131ce4a07fa7f2ef0aae54fc59e92023963ae22aa7cef81980"
 "crates/catalog/ops/babelforce/babelforce-add-agent-to-queue-selection.flux" = "32fe486e620e41703dd7298cb0d5ffef1df2c9afd55260b8fd8c0bc735b34915"
@@ -638,7 +638,7 @@ ir_sha256 = "4ebe031caa8322740c8244a4726be8923b1c6605386987f4e0443ec5856c2d4f"
 
 [provider.artifacts]
 "catalog/bitbucket.catalog.json" = "2bbb599cefd89266c8f9db580e64b01d82dcb07388169034bde9c19c59d4187d"
-"connectors/bitbucket.connector.toml" = "6210d1537be97389c399bc5ad7f429bed749bff0dcf3bfd9828f4e8a0be53227"
+"connectors/bitbucket.connector.toml" = "4cdb0c20042079e7ce415d90e52ffb4180e1f3d9a360afbc3f16a3e3d5cb3970"
 "connectors/bitbucket.flux" = "e5a608303333c7db1501edb68da5c4d43c1339253298382033554f932457e5bb"
 "crates/catalog/ops/bitbucket/bitbucket-pull-request-approve.flux" = "af611de2e231164429b54701f1218447e34fe044bdb21915821c58f462449dc5"
 "crates/catalog/ops/bitbucket/bitbucket-pull-request-comment.flux" = "08f016adfe13f7f881b80a5e8640acace174d0a4ca3a3bcb5ae2370883b1a0d9"
@@ -657,7 +657,7 @@ ir_sha256 = "0531a1ccb9bfc445add624350a46b51637018eb48cd1fcf1baf677218c122e8b"
 
 [provider.artifacts]
 "catalog/box.catalog.json" = "9e0009988a200e304e6f8a837844cbf97d33ea0d413effb588eb6a6bcabbda30"
-"connectors/box.connector.toml" = "2efb733829fae5d45bd394b289714dec6f7b854cbe9553ac0e696245f906f307"
+"connectors/box.connector.toml" = "a3ba9188e5154328dfdd2d28a8b07e06c8c6b99e429295c3b9994366e0e170e2"
 "connectors/box.flux" = "ffc1915079aa28edee108a948ac3de95d7cd941d72a5a6956ad50b360d9872a9"
 "crates/catalog/ops/box/box-file-copy.flux" = "92c4ce378b6eafdaf1b9ab4cbce196fc1701139e0ee98f27826aff456a7e45af"
 "crates/catalog/ops/box/box-file-get.flux" = "2864103f6440f5ad2c27d24e497fbc0b604d5cb6b6e158a2e2225e61662c1f83"
@@ -675,7 +675,7 @@ ir_sha256 = "6b9fa6815faec0a3554154b779a22b991975fc3d316f4cb47c053907c7f8fe75"
 
 [provider.artifacts]
 "catalog/calendly.catalog.json" = "2c49acf83b0730494783d944fed026b209e08e06a75f2f01a23179edc6fa9551"
-"connectors/calendly.connector.toml" = "33c381a3f13bbfcd30a968a542c01a951925a9459278a9b6e63f5eae38a2ddef"
+"connectors/calendly.connector.toml" = "489be0ef61a2af597fa457ea137a63ec43446b977656bdc19f0e3b0b045f8943"
 "connectors/calendly.flux" = "65198cb8d2acdfb5280d4d39b6700f9834ad5f404e88b0d5e97d34e2d5df579b"
 "crates/catalog/ops/calendly/calendly-event-type-list.flux" = "27013afaaa7eeabb733ef662403bed3d0503af6580cb1e499b7450e7517b2908"
 "crates/catalog/ops/calendly/calendly-invitee-list.flux" = "4ca75855ee747cae1e28516b40d8c8a604480dd35880b29bbda7950304ed266c"
@@ -692,7 +692,7 @@ ir_sha256 = "24a97413b5f0b343428cf0f0d8f26a38d690b88fb6ba89fc530aa7c4d1d85cc9"
 
 [provider.artifacts]
 "catalog/clickup.catalog.json" = "5821d421155b71aea03b383136a92cb0186068f9d743d1a28fd1d5ac4ea51eba"
-"connectors/clickup.connector.toml" = "3a8ffd926cf08360f3fd854e7e5d1edc2c9b70cc8b73ceea65749ec2c0a90de4"
+"connectors/clickup.connector.toml" = "5239a6bd46c7e5fe9f61646002840781fd5c4ee103fbea699249c30c0941333b"
 "connectors/clickup.flux" = "afea5bcb783b921abda1f7b6e6573f597e4e9a37463ccbc106eba563ca84060f"
 "crates/catalog/ops/clickup/clickup-list-task-list.flux" = "b2de21a027e1498e6390b197ac3351e5335bf90fdb78f12ded15d9245444c892"
 "crates/catalog/ops/clickup/clickup-space-folder-list.flux" = "802f4e957029e97c1e0bec9a82923175f8eaba03805f956a6d64d26c8365669c"
@@ -710,7 +710,7 @@ ir_sha256 = "b4391bdd9677428e8791fb4c8e6fd05bd9f043fe0a42b30b598e7ed702c6948b"
 
 [provider.artifacts]
 "catalog/cloudflare.catalog.json" = "9f251ba96b03c5c099fda8ff7aa690ca6cedc5408cac0def121745673c800a2e"
-"connectors/cloudflare.connector.toml" = "7093e67abee41e63ccdbaa13398e7bab776bae919f9c498dac050b58e2390aeb"
+"connectors/cloudflare.connector.toml" = "5463b7dc0a0182000c6e6c44df7d830386f628684233e4c73f9286e420a0e482"
 "connectors/cloudflare.flux" = "f3933d0627a0a7262afd9ad94a9652df1707a7aa8a5437957224847fda781255"
 "crates/catalog/ops/cloudflare/cloudflare-cache-purge.flux" = "2f90e1dec9898f114aa0a67e3ca8874c80c54ed3f6d24ddcd068abd5e613644f"
 "crates/catalog/ops/cloudflare/cloudflare-dns-record-create.flux" = "1e293bbc10c08a0fd07cca532f126dd49963a8fcbad44c14921fcf5a47d0bc02"
@@ -727,7 +727,7 @@ ir_sha256 = "1093413e0b2fc8c28905f67d7c1ebd41437bffb945ef7f91f31cfd28375cec41"
 
 [provider.artifacts]
 "catalog/confluence.catalog.json" = "4a69096b0e2bdfbfafed3de729ca7e96435dfff84f60e674ed1b9c43dcf28e0c"
-"connectors/confluence.connector.toml" = "6653db1bea25b1dc949bb053ec7963f9f2cec55f1f5baca446e56574caa46f7a"
+"connectors/confluence.connector.toml" = "798478fdc389e7242bc2d11a25c64c3ef4b56b7bd90f47f88651df6dc6ef738a"
 "connectors/confluence.flux" = "d2b27b873faf85139469d345bb1aeb398ba687952c7e7641ae67db165a5e371f"
 "crates/catalog/ops/confluence/confluence-comment-add.flux" = "316c9741c8b467d8bca6707e31a4908def64f6bb1f6b47298266003087c5746c"
 "crates/catalog/ops/confluence/confluence-page-create.flux" = "7f7e8eb45305cc9206d17293a061fd7527b8b77e54d1428c426e57543cf25f88"
@@ -745,9 +745,9 @@ ir_sha256 = "6da1d5c04d5873e3a781c4a7a74c216e5680c6e2c21e3c002b15a057dfaf8a25"
 
 [provider.artifacts]
 "catalog/contentful.catalog.json" = "833bb1d289873b10aa00218564e0aae336cf3e0d4e38a52d2ed36ecb997a02e6"
-"connectors/contentful-delivery.connector.toml" = "fbcb7d7b57a47050861de46e35622cfed513ff616ee5d93b3a4709d8852f884b"
+"connectors/contentful-delivery.connector.toml" = "d09f7f773a7c1e854e8d74e458a71b71bc04f605032e8fec2d204ae530abed8c"
 "connectors/contentful-delivery.flux" = "4c7838fedd343ffa209756bc1cb230c3c85567c9a9a2966cc2154aaacf0fc6a1"
-"connectors/contentful-management.connector.toml" = "cb29d59418938b05af78638db9e13789af65799ca9d9d5c19f43e865fa13b470"
+"connectors/contentful-management.connector.toml" = "00569d0147482ab895400e99930475b492ad6c851855f80d30922963a6caf907"
 "connectors/contentful-management.flux" = "9afea5cdaf5c92e7b52e7b3fe913c5cfa73ee682af56950143846a726b49398f"
 "crates/catalog/ops/contentful/contentful-asset-get.flux" = "de532d5ddd339588527b1074c420272b09d38aa5fd7f93308e2c10ad1175bfcd"
 "crates/catalog/ops/contentful/contentful-entries-list.flux" = "417e9d2391766ef1a8930849d8dbd5e8d3c2543d324a914df127cbc42d1ebff3"
@@ -764,7 +764,7 @@ ir_sha256 = "8b7b144f9ec0c0f136fcee3784eabb817bceb68ebaef47fb3afa00f1584f66b0"
 
 [provider.artifacts]
 "catalog/datadog.catalog.json" = "b76d9a9c2d14c2eec7d0a38c34a221bb138cbd37b2da27bf92f83302ca9d4062"
-"connectors/datadog.connector.toml" = "1ffff3835c133b849e9fb15a8d35a28b79a383c292e7af99790c1139db5a704c"
+"connectors/datadog.connector.toml" = "edcac4de5f3ad5f1f4da0ab6a66e4b2f121bff84703bd3d47e48c56841dbe0d2"
 "connectors/datadog.flux" = "98d1276df01b3765bc85c1e7786ee6cddd0cf9aefda132b316ace3b43c91ae7b"
 "crates/catalog/ops/datadog/datadog-incident-get.flux" = "4ff0eb1aa0a5f310e830db2972469cf47c1a140d8af5f96bf0238fd0e3431770"
 "crates/catalog/ops/datadog/datadog-incident-list.flux" = "a8560fd84f1d70af714272a063fae35aa2689680cf20913065722e9b51b59452"
@@ -780,7 +780,7 @@ ir_sha256 = "e6dfbfe8de4f8c1b2f9dc093c8927b581fac03c0ead6dbbbd11923380043cc0a"
 
 [provider.artifacts]
 "catalog/discord.catalog.json" = "164155c5d848aee04393d16171b745babbc5c7d6d1295b8fb0d070fbe2222605"
-"connectors/discord.connector.toml" = "219a8c5dd9c56d4560f39a469b34e420b2b9dc2bc4739067a6100625d649ff40"
+"connectors/discord.connector.toml" = "2473cad7deeba71cb846b7a9cd0bed4d5d283ee3103f8a836d0180eda631583f"
 "connectors/discord.flux" = "a8db7d4fd7f6a52580866890a72f104525c6072b482b141dc33aa19684571877"
 "crates/catalog/ops/discord/discord-channel-messages.flux" = "38439e246b14064ccdd72b3b806b21796ef93649349b86899e350452839703a6"
 "crates/catalog/ops/discord/discord-current-user.flux" = "f4ff697a533159974070f5274d8006f505d697418a73b6fc36e7dbaf5e9a87c9"
@@ -798,7 +798,7 @@ ir_sha256 = "648bb6c3c82eb9049fc9577be11862fcef5714192abaf9988d42abb2d104848b"
 
 [provider.artifacts]
 "catalog/docusign.catalog.json" = "abac595ee0a0ba0649bce3689adb9a7846c63812e57cc4a68418f2c94069e70a"
-"connectors/docusign.connector.toml" = "4c0c0e04e84b27cf65ecba08cd2ec596e7b4e8fe22ec255de6846314076ccdf0"
+"connectors/docusign.connector.toml" = "422eb8d1d3fbd6c05c3e1e5bbdbbd8509d2ba1aaf8ffd4f683ec32b83c396afc"
 "connectors/docusign.flux" = "7bf800627468fe38b0e789fb2693a9ffad9ef5303532b026286d3e2233c0061c"
 "crates/catalog/ops/docusign/docusign-envelope-create-from-template.flux" = "8188fac4df090cba3a76a62347d684ae70d9776561ed157de17bad2903bda4b6"
 "crates/catalog/ops/docusign/docusign-envelope-get.flux" = "6750f324ac7cb9cf18bd8c1e18aa70084cfdc39407d01c02b3c276317ec146b4"
@@ -816,7 +816,7 @@ ir_sha256 = "853d807b18b785d4d939ce3e438958dd6d728562d1e411912ff1b8755d1b4d4c"
 
 [provider.artifacts]
 "catalog/dropbox.catalog.json" = "da38cb844ffb3b0bdc138a76fa1e2c9574e593c76f7d4a78591052ee693c67bc"
-"connectors/dropbox.connector.toml" = "315a4cc56ef6af9f9244b9a97d1d572313c2194e2b63295955993b470d75c520"
+"connectors/dropbox.connector.toml" = "5ea8ce5a996caf3f7ce55b30dddafc5260932300a086fddc2f9dc373d2be6f80"
 "connectors/dropbox.flux" = "904866ca13883c730c40c374436f9006a35334676c95cc426eed01e31ae6b987"
 "crates/catalog/ops/dropbox/dropbox-folder-create.flux" = "ed336e1ca2cfa1269f9174b16f0d65299739422aa699f67daf3ebe38ed3fa21d"
 "crates/catalog/ops/dropbox/dropbox-folder-list.flux" = "9903660ce773ab9b7e5d916e97adeb69ffc1f4b54958990ef0eb4c7db504d81a"
@@ -834,7 +834,7 @@ ir_sha256 = "ff39f25ddf988d9a0c587901ada28d743f6ef208c16b558bcef10aafc308d0ed"
 
 [provider.artifacts]
 "catalog/figma.catalog.json" = "41e2172e3e856ffecad2485136da161e0cf069a4203c13dfcf96c0375c6a6692"
-"connectors/figma.connector.toml" = "775c7bea292f9d9a2eeb6f074dd82513fe0af1238be637e36c8c4e4bb3b8cd6b"
+"connectors/figma.connector.toml" = "02a8d20ffa48e4dbe64ccb07f91123e70f4a89f71542612065f2d0d338736bde"
 "connectors/figma.flux" = "e50664dd8615c45f568c439aa0fe14d11363c5979d4dab88bca6763924b65519"
 "crates/catalog/ops/figma/figma-file-comments-list.flux" = "111b7c46a12cfe67829a6e78e9b772367690eb18ff62ba7e735fea0fcb2019c8"
 "crates/catalog/ops/figma/figma-file-get.flux" = "3040d19d92c196b9f6441251c3ad4944835c83d86373f352c4cb0ba2534436fe"
@@ -852,7 +852,7 @@ ir_sha256 = "4071fcaad1dcc18ad33cd299adf52683ccb769d1b353f968a4071b7a4543603c"
 
 [provider.artifacts]
 "catalog/fly.catalog.json" = "9e81540d480cbe396701aebaf3c4c24d977613870517febb51f5abc2ad08e2bd"
-"connectors/fly-machines.connector.toml" = "1ddda5ae32c1ded5f73f1117d16be1941e7682749505bc23f745d8cae3c357cc"
+"connectors/fly-machines.connector.toml" = "d4e8e6356f3a4a2f410d93bdad162cdda5b038febe37de5560e81646fd59f378"
 "connectors/fly-machines.flux" = "49f3b76ae2e0b4ff9044a3399296432c5d6b49dfc0c9ad1419937fd34d96fd91"
 "crates/catalog/ops/fly/fly-machine-create.flux" = "d362625e421cb19f597a86389ebfe3b7fe5a4b3efd3b25887f19e7532d05552c"
 "crates/catalog/ops/fly/fly-machine-delete.flux" = "6c9b2b4534663b0c69633d79099cd9608a915677c02c6d24f25ba9113dc6ee3f"
@@ -873,7 +873,7 @@ ir_sha256 = "cf9c14fce9c3fc18bc0b23575878738302ed47dc0a7f10be86d0c7b7072c5b9d"
 
 [provider.artifacts]
 "catalog/freshdesk.catalog.json" = "b6084b0f323ba78ad591d56bad34de396417eeee1754854cc460edb9673e1ea1"
-"connectors/freshdesk.connector.toml" = "43f51cdc237f4a78895bcaba538d9aecb069c8dc47673bb01052223cceddeabb"
+"connectors/freshdesk.connector.toml" = "aa788ceb3f0cef7b6abb3dbabb30344142b8383f10bac03f5f9ff1f275d49288"
 "connectors/freshdesk.flux" = "b8e192b7f06649e03a1306b8b74a6c9a919af55902b8c1cf64cfbe74f09730aa"
 "crates/catalog/ops/freshdesk/freshdesk-contact-create.flux" = "2de9fb87e64c23e0b13c1b0d52eb53750e571108c8995fd4d2b2434348b07795"
 "crates/catalog/ops/freshdesk/freshdesk-contact-get.flux" = "058897d18b4208e526cce9abc464e736d18fc1e8d23555e2019429bb2191f988"
@@ -894,7 +894,7 @@ ir_sha256 = "2a625bf1e31d038f5be5192c969f7a5861660b3c35bdec40f2aed2309b057568"
 
 [provider.artifacts]
 "catalog/front.catalog.json" = "c22bc63c9bd35d0678d8670abea5f38fec7ddad817477c15790bbe36626d05ac"
-"connectors/front.connector.toml" = "d79d71bfd48ad058ce2f8748decf26104cb1dc829413d4cbcd28e069710dff58"
+"connectors/front.connector.toml" = "9510f50a46794ff69e35e2551aa6c1872bada8e2d49c4f4ca83378ba0b8aa392"
 "connectors/front.flux" = "1f39bb407a1ce2d8df6640fd5f52c8796d2ee88e71b082bd6694f44ce069f793"
 "crates/catalog/ops/front/front-conversation-get.flux" = "af7965dc8ef1a95445939ec8998147a786793ca4954a0d455387994e49669dd4"
 "crates/catalog/ops/front/front-conversation-list.flux" = "c16c17362c293becca638bb620050801d8a8b3555dd599f9a50892492943d7cc"
@@ -921,7 +921,7 @@ sha256 = "a7a3293268f062d09eb576806f0e5af271c039b9427f9852c8280c8fecc692e7"
 
 [provider.artifacts]
 "catalog/github.catalog.json" = "a61485c135fdcaa21a06d5acade2c6c78cf013ba19f4be34fa0560bc3f568e83"
-"connectors/github.connector.toml" = "3bd523f51dcf73f2cccc44eb972110322ca78fa8bb0d2b1f20992e3c31dad995"
+"connectors/github.connector.toml" = "b6c94789aa6ec3ca997af2c11e7d28f2f5184171103e159498970472d4db112a"
 "connectors/github.flux" = "f668f7892d9a98293351fe0ead6d50089ad76b68f92a9c95056070b5e7e81af2"
 "crates/catalog/ops/github/github-commit-list.flux" = "13b22e3a453f6328db80fceb4fa30159b2ec9c73d96746004ad43044cba79e9e"
 "crates/catalog/ops/github/github-issue-comment-add.flux" = "6969b58893a080709aa1156e6960f51e8975c41d8d8a707fde91b9625c4ef477"
@@ -946,9 +946,9 @@ ir_sha256 = "e0bb7ad1f2c5174161bab8618aa90ead7ec50420e3c9e2010b7cc0b4b9466830"
 
 [provider.artifacts]
 "catalog/gitlab.catalog.json" = "8842f206be225d0cd3870aff503b4cab0c2759726e508ad19c1d16a945a0190b"
-"connectors/gitlab-login.connector.toml" = "8237aed0a980a9f59c97f3b8c1c96a30ce2cda9cfb2acc5a6537fee3aec8e85f"
+"connectors/gitlab-login.connector.toml" = "6807abf513e449a1e7b6aa117279347d4862cd054b9d358e78fc74dd571d71b8"
 "connectors/gitlab-login.flux" = "55a9261dccf50f79d8333eee81319e4ac5fee1d9ffa00723c0f3da2f1dfef50a"
-"connectors/gitlab.connector.toml" = "d62733870f9bdfcf3724dd9ad8a67b1d3e887f8aee137ff646373a68ae1aeb51"
+"connectors/gitlab.connector.toml" = "d8074f11471b7cd3cfabffc1648a6241b958640c2becb21212c84121510db7f5"
 "connectors/gitlab.flux" = "af91565bc67327ef5b72a9a5b625ff8e35467926e62b0843f389baf46d7ffebb"
 "crates/catalog/ops/gitlab/gitlab-branch-list.flux" = "9b62d31ee3518f0b12b1217df2590036faab7d51fc8892732d07da6c180040dc"
 "crates/catalog/ops/gitlab/gitlab-group-list.flux" = "69564d88d4ce28b3a4df4d72be8acbeab064f82b5ecfd7b9298bf472c468e40f"
@@ -969,11 +969,11 @@ ir_sha256 = "8a14dbb035faee844bfaedeefedbee07b3c552d4ab6bfff0cee86a1d6165d15f"
 
 [provider.artifacts]
 "catalog/google.catalog.json" = "e5d96dd8d8d0972c04be244279433b3a313ed92b622c6da2c4b410d9d2895a0d"
-"connectors/google-calendar.connector.toml" = "c137c491c38b59176a29e8ded785a296fb3b488bc5452bd720d105372f70a938"
+"connectors/google-calendar.connector.toml" = "40e7bbe39199948fc03576815d5dab25b045cddfeea52e94b2e65d3e0b90a980"
 "connectors/google-calendar.flux" = "62911bd8e6313389308f765c73931b7ef5433b6ab4c7f637c5dc644b37fcd473"
-"connectors/google-drive.connector.toml" = "970ce0423182101c7eab948184e8fcc133ce83c0e1dedfa4ee0d5795a7bcee6a"
+"connectors/google-drive.connector.toml" = "82496931e52b2fadea12a55d6ef65b19e18d5133860dae5edfc2f79bbd013f9e"
 "connectors/google-drive.flux" = "6ef63c484b1232f7c99fc9cebfe00397e2b1d6094383026e25d5ec222ea2863c"
-"connectors/google-gmail.connector.toml" = "e6f6e8cabf8ab31f4992d8a490e7d443f74f56e62b8588645a37387495dcea41"
+"connectors/google-gmail.connector.toml" = "b2bb653dbfee9b8783b3ac99e7295c4be3d446c00cc01887f5e429167c093a10"
 "connectors/google-gmail.flux" = "47a6444f092090acb0185f9d3bcbd075d77afbee89a3ce6c39b738994a4db7b3"
 "crates/catalog/ops/google/google-calendar-calendar-get.flux" = "709e888315fdfffea8447a354f9196f7e0b11efe6dc8826f2eff917c28884803"
 "crates/catalog/ops/google/google-calendar-event-get.flux" = "020d81cd7b11b6893d25d95d68657522d43bbf3c1813daf2406bf7a97a3b43c2"
@@ -993,7 +993,7 @@ ir_sha256 = "d1194ee963452e1026b189b7318d843a7193e54f161e550b0d0b9578ea0fae9c"
 
 [provider.artifacts]
 "catalog/hubspot.catalog.json" = "ffb458d128fbb6f9f933a265c78fe387bc33691ecdc4a7de92bb8b8cd6f55ec0"
-"connectors/hubspot.connector.toml" = "d9ed3cb76ff7ce6b629f13c870e7c53346f3421ae6d5e9665139f1509a092e0d"
+"connectors/hubspot.connector.toml" = "e3a378c6b19a45282d5987cc80e1b7260e4fa40ae0da6173293974d4e9474b65"
 "connectors/hubspot.flux" = "fc0abfa6f93ac00e29c9122b8d2b504eacb53a14c947b560915189efae6707f0"
 "crates/catalog/ops/hubspot/hubspot-company-get.flux" = "60136796f906a2a06cddb9a53f54237570c4b07f44f937a9cecf9b6c077aa35f"
 "crates/catalog/ops/hubspot/hubspot-contact-create.flux" = "817c8f08f14ea58ebc6e7302961fc1207ea4eead468136953ef97b919e65e821"
@@ -1010,7 +1010,7 @@ ir_sha256 = "d7c608aa7208aba5b272767b41d2ca77eee5a4a368e3544d22fc7b46e496731a"
 
 [provider.artifacts]
 "catalog/intercom.catalog.json" = "26050a494edf343d7e60544b8ff1c1b896d12a8dde3ec7458f43253f5bfed2d6"
-"connectors/intercom.connector.toml" = "463e46ead05866bb8a13895663707f19037ab31316c469d9fd4125559c5a3922"
+"connectors/intercom.connector.toml" = "afa36993321a1c1c4bc4663a737b1fa45064ca87f927b590e7e1e947284b6a5f"
 "connectors/intercom.flux" = "039f107d06dd3def7f2731daf19fa32621dce0d2aae0787668060ba6205b24db"
 "crates/catalog/ops/intercom/intercom-contact-create.flux" = "6f9054fa225d8858d76749c4e0e5687dff091c6e2b0c3c56374ece3886898dee"
 "crates/catalog/ops/intercom/intercom-contact-get.flux" = "f9dc129e474f70a70934de73e3e6984b181e2bdd326aff39a71b2c49d79e585f"
@@ -1027,7 +1027,7 @@ ir_sha256 = "ba20525a6ede7debe9023125b0020bf63ef66c863fa0c735bcc0cb27acfa8d86"
 
 [provider.artifacts]
 "catalog/jira.catalog.json" = "2162227d23925f9b72b971f06ecd2676704bd6f71699806334bda46254c527a1"
-"connectors/jira.connector.toml" = "d6ab6b596388d07c579e3abaa48a044dda8bc7e8fe0539daddb238c8c82d9dbc"
+"connectors/jira.connector.toml" = "f2890b452fc61dd2ba392e53fc23ee396a03899e534a15af80d9e79fd68ff032"
 "connectors/jira.flux" = "bd95bd9749704b72c2e6195f9ac6dbcf30d9e826ed60370abfcc6a591e61037d"
 "crates/catalog/ops/jira/jira-issue-comment-add.flux" = "8e3644467632b08bb56ff6be5625c2883eadd3b5bda04d1e7eb55b2c71bfc66b"
 "crates/catalog/ops/jira/jira-issue-comment-list.flux" = "ec32dcd15bd6be6458c442f00863b9c2a33131ff7f6aaa730e2ad0278e33baab"
@@ -1045,7 +1045,7 @@ ir_sha256 = "6241d7351059712b535e9ef88716538e13a684dc6799fb6f95665e7645426577"
 
 [provider.artifacts]
 "catalog/klaviyo.catalog.json" = "b8eb55f45c176b8e6b7c4deb139c94d769af2b42bd6223f368e8a164e9e67c6d"
-"connectors/klaviyo.connector.toml" = "21ab8cec14cd4d59c23a254058d74b81258ce77ec60daf8093c48c35e019e7bf"
+"connectors/klaviyo.connector.toml" = "13abfbfb58628b5d52b925a6479ccb1130f86336fa3e35fdbe0434434c78aeec"
 "connectors/klaviyo.flux" = "c269747e01696029f92f6b33f364464f752615c21e9adea49c096ce5b7bc4de7"
 "crates/catalog/ops/klaviyo/klaviyo-account-list.flux" = "8127f1a288f76896f61868f4afa3be337c3572545078e4dddb09343c6b885079"
 "crates/catalog/ops/klaviyo/klaviyo-event-create.flux" = "347a08d63d255f73027662cb4abe17b45cc1a5ef331048329c5a34d49fdc6aa6"
@@ -1063,7 +1063,7 @@ ir_sha256 = "a37fd8f3cd2689ca99a219f53e746cfa2f7ec5491bd31206aa9a8490f9082f73"
 
 [provider.artifacts]
 "catalog/launchdarkly.catalog.json" = "5c776bd98d14dc03178bdaa69bf0a012014fe3821243ed1e8083b557dc644817"
-"connectors/launchdarkly.connector.toml" = "0487776d5cc7d1f793990d37c083593dbe6cc49782cd45d7ee16232ed6b34b4f"
+"connectors/launchdarkly.connector.toml" = "3c602db9eb06c71ab69210b81e82569c02136b52714513123c93ea346228ece1"
 "connectors/launchdarkly.flux" = "793b486e278df5c1c58b6992674b67facf07f0122e8cd9eace7e99bbea19be1a"
 "crates/catalog/ops/launchdarkly/launchdarkly-environment-list.flux" = "ca560956b539092fc3f28cba63e2e744148846d63cd4786f23e2c24423347069"
 "crates/catalog/ops/launchdarkly/launchdarkly-flag-get.flux" = "42bad465c96f4ad44cd6429a39b6de1477fe7d5f89f577bae48f0f6a8db0bb50"
@@ -1080,7 +1080,7 @@ ir_sha256 = "cb77e568663a2d7033fae447f91b9cd52754476c2747bfae3e5be5cc2cbf01d9"
 
 [provider.artifacts]
 "catalog/mailchimp.catalog.json" = "b421e8a52f1429aa4bb00fa274a10474e05c31ab724b15260e0bc7ef994f2c18"
-"connectors/mailchimp.connector.toml" = "16849baea06594ed09adf4f7dbc948c0338b3600a47051dcb0aaa6b985edff04"
+"connectors/mailchimp.connector.toml" = "b316eeaf4d8b419d1c516c1ff5472aff27013a1a04372309458e429936b82250"
 "connectors/mailchimp.flux" = "1fadc64c351e8d36731c99dd73a4bce1fca52e335ad88033d8bf711eb503e53c"
 "crates/catalog/ops/mailchimp/mailchimp-audience-get.flux" = "40fdd4a21c818fbbed701cc444b7214e7fb0ada84c4b37abfce1662dfc696df7"
 "crates/catalog/ops/mailchimp/mailchimp-audience-list.flux" = "433cf1c05e40e774c482e1b0735aed4ed2b71d17678b4c9ee73ce926560d50ab"
@@ -1113,11 +1113,11 @@ sha256 = "d3cf91ee72c4f23f7b1a80b5d7796462bef5ea448dd268d328233b8f0479f57a"
 
 [provider.artifacts]
 "catalog/microsoft_graph.catalog.json" = "cd2d8e9457eee0e4e58052acc5bba34045470fb7265d244aa68e6282aa32c6ea"
-"connectors/microsoft_graph-calendar.connector.toml" = "5a48f072babc030bbf62bd73d04d54ad4e6b534e52954f1db3a2a50be54dcd4e"
+"connectors/microsoft_graph-calendar.connector.toml" = "0a18b7ac2ae4d034062716c2d8b1d808a6e5cf28c44ce46a35cffaec0c969ce2"
 "connectors/microsoft_graph-calendar.flux" = "7e3a81c9ffb3a1a83e69deb79d6ed5e0c861b40ae89ee2a707330be7aec833aa"
-"connectors/microsoft_graph-files.connector.toml" = "7a4ac3f7be09162c41784056bd10fbb2781800f0a8b56428be845a0b693aed83"
+"connectors/microsoft_graph-files.connector.toml" = "9226065693cf7139a9c6e6792a7311bef31c71f8bc38694458f4754b413119b6"
 "connectors/microsoft_graph-files.flux" = "d2c9e725f2bafac97fb16e70b7398fba5aaf99f4285bd4754350a970bce4754c"
-"connectors/microsoft_graph-mail.connector.toml" = "0129031ca7185d663fac082f57c05be28510cdc76eb0423238111c6e73fe2cab"
+"connectors/microsoft_graph-mail.connector.toml" = "e2cf6ddabf0d033701fe2699ddda634c8ddbd9ecab6689cf0dc0607e8ced3349"
 "connectors/microsoft_graph-mail.flux" = "d35367727b6b96150635f3e8b34b25548787d16004663b4bb06d6b3836451af5"
 "crates/catalog/ops/microsoft_graph/microsoft_graph-calendar-calendar-get.flux" = "27ab8552d714d155901ec6c4ca9837c778d2b1a0e3fe7a7d89904d775346bde3"
 "crates/catalog/ops/microsoft_graph/microsoft_graph-calendar-category-list.flux" = "e6209ae58ddb76850234bbc403da9b6ccaef3b2c2227f9114086dd48befb7e04"
@@ -1141,7 +1141,7 @@ ir_sha256 = "93e939bab50c5187e28688e4f13466cd10426432316689dfb7c0b03bd060bc01"
 
 [provider.artifacts]
 "catalog/miro.catalog.json" = "0063acc8a82a3b0058714dc708771d3c8e41aa928ec83820714b4b2d8c2e550c"
-"connectors/miro.connector.toml" = "cb39d125d0d8ce1e173d56b4cccca90ea8f7c7a578f4ba3ffafa27f32a56d6f5"
+"connectors/miro.connector.toml" = "3e3dcef60994f55d6ac322ef25d77f0abf879aadf27c363f6123f1bec64c8458"
 "connectors/miro.flux" = "817f64a9ed35e700c235b2a875fab8fcb803c1a0512f5540bbd60aedbdd35a62"
 "crates/catalog/ops/miro/miro-board-item-get.flux" = "516372ae2f7b07a3d813c3b268f300f6d9d06f31f551adf20f91ab3337714d84"
 "crates/catalog/ops/miro/miro-board-item-list.flux" = "268a3483ddd3d5a1bc586166c6c8d174ea5e4363e5aaf13177616370cfd4034c"
@@ -1159,7 +1159,7 @@ ir_sha256 = "08aa7c279ed4469a41cd7388293bb3d8d0aa507c40feb15203b7e78faefd856d"
 
 [provider.artifacts]
 "catalog/newrelic.catalog.json" = "2baab27ecae701c5e9f6031aaf8638a5c3c2c1a5de01ff24381165dfceec5623"
-"connectors/newrelic.connector.toml" = "a005a170ef73c9be4403ba57f9dc47568c0b30df09d85b6d83924b1f8460a75b"
+"connectors/newrelic.connector.toml" = "5e7a01b7146f9d7d962b8a59f3deddda2b694deb386c246776460ca5973fd01c"
 "connectors/newrelic.flux" = "957a0aa3dbd17cb9144e30e9f173c5c0c1b23377378e931ce7f9a88818457c57"
 "crates/catalog/ops/newrelic/newrelic-alert-policy-list.flux" = "51d93215e89a51c598c7c508b2c56507e3e715ed3eb751eae91271f918c908ff"
 "crates/catalog/ops/newrelic/newrelic-alert-violation-list.flux" = "76dc4c6e241033a75b0ac22f9b531354c4745223526a16e860001723a04b45cc"
@@ -1177,7 +1177,7 @@ ir_sha256 = "5112d06275c1543ece078a95fdd4a95a1e673dbbb8d4f3a886b122fc559324ce"
 
 [provider.artifacts]
 "catalog/notion.catalog.json" = "3fe128ff9b19b9174201d64600cd30ef1ded1ee26a10ab8e020b133af4cd1e26"
-"connectors/notion.connector.toml" = "ddbdcb8830eacdff9a42bf1bbbf7750e0f168702c6ac9d75b43b59def48c9cee"
+"connectors/notion.connector.toml" = "eaae8d8a552af4529b33fcadc0075800f8e26b7b257d8d7f22c82486a0d0c5d4"
 "connectors/notion.flux" = "e11ed3701888b0021a53d829c97b0d587c1575acad5271a5704b841f3dc3971a"
 "crates/catalog/ops/notion/notion-database-query.flux" = "8b93c99e5c09ed1a13e6fb52539d69615ce3b39066c6f01fe936a6e004679f2c"
 "crates/catalog/ops/notion/notion-page-create.flux" = "5f27da24642e895c4a9121ee81b2b5543775e90073e15ff8b22343e6458bf237"
@@ -1194,7 +1194,7 @@ ir_sha256 = "b95f0947abadfd7ddeb495d9cf58447f939db77321afb305ac1ef02be7c8e46b"
 
 [provider.artifacts]
 "catalog/okta.catalog.json" = "9acba0f904ccded486c6721d0f21c18b253285701f2eea2011bd9bae5322b2b5"
-"connectors/okta.connector.toml" = "b6bdf16116620bccbe7d20a09f195a52ccec679f824120356bed0d26585adc67"
+"connectors/okta.connector.toml" = "5b514c3c2b9561d5e2aef075c062c92fb43a19e93d12e3fce936ba5f7001f6df"
 "connectors/okta.flux" = "10ba66a811589a3d4270e1036e10f9f8ac978d7548a08e1bd05b69aaa3d8cd54"
 "crates/catalog/ops/okta/okta-group-list.flux" = "d93160fc2c2b77789245c8caa51a9e4c60fc38a075f96325854f0fe431471f98"
 "crates/catalog/ops/okta/okta-user-deactivate.flux" = "9aa693e628d93ddbe5b530757378bd085cf2e570f9f33f86889bcfb1878d44e5"
@@ -1220,7 +1220,7 @@ sha256 = "bf253f99bca25941f6b7a5ce0c4a0634b89677502067bfbadb82727690c596a6"
 
 [provider.artifacts]
 "catalog/openai.catalog.json" = "feb2520ccb428fd9139d9bca922746589f3df6af41708dd4dc07866b94c91be1"
-"connectors/openai.connector.toml" = "e2f13430881917349f6741a802bc8fda5d532d06f3f9f6853bb3ad44086dfb33"
+"connectors/openai.connector.toml" = "a71e61024b3c7b6af3c5c75b84c47a1ae62e799b8f68b2a44103f286d0416d7f"
 "connectors/openai.flux" = "4568dd3e63d33e4254486b356b322f5f7a3e1513c119f9ffc7144bc135dff078"
 "crates/catalog/ops/openai/openai-batch-list.flux" = "f3940d7efd278005ac0671976ba7e192b10f8ed47fcf1f915cda33301de7d378"
 "crates/catalog/ops/openai/openai-chat-completion.flux" = "7a1bb7ce50d457c4c2a758a0cf6b1f9af1ed559fcec5378054794efc644301ba"
@@ -1240,7 +1240,7 @@ ir_sha256 = "52e3b3015621ee9da6e925c39404748e116401f65911ed12955850439320f6f3"
 
 [provider.artifacts]
 "catalog/openrouter.catalog.json" = "c4a7fe1f95c66cf90c652b93d62fed7d3700d29bb311f27a02a3c95df58bc3cc"
-"connectors/openrouter.connector.toml" = "ef70371ef3e38c9db9e48bebbffb933dfb370e8532de9fe4341eef369ac0be8d"
+"connectors/openrouter.connector.toml" = "c934906621b012d8a02e2d96f067d04fb3c414eef3d893c2991c029f8418f5ca"
 "connectors/openrouter.flux" = "0c3f40733448ba3ea4c3dca32f3eb37b004ecfc1da94abd02dfab036f7dbb4ed"
 "crates/catalog/ops/openrouter/openrouter-chat-completion.flux" = "76a7589135be54b8dff76845ade7ea928c4801b3ce854f8a43af30f213ae552b"
 "crates/catalog/ops/openrouter/openrouter-credits-get.flux" = "82ca46d35d240681f7bed30059603b38d6b83a3a800458bca6bcc4cfb70db75d"
@@ -1256,7 +1256,7 @@ ir_sha256 = "ac230dadcb4404b734ea3e4851ae927bc6d948bacfcef7aa45b08c55a3b2c306"
 
 [provider.artifacts]
 "catalog/pagerduty.catalog.json" = "466827548b422361764bd79f05ff22e157e7daed86f774d69a8f8e8ffdf45038"
-"connectors/pagerduty.connector.toml" = "99597573225dd78c83e8a73aed68006b4765c4843bfd93638a059a92a235e23a"
+"connectors/pagerduty.connector.toml" = "46a9f874a67fcd13e1300ddfe53f1839f6d3139eb4945ae6d7963b0b75dce81e"
 "connectors/pagerduty.flux" = "f24561945d89deb31dda35ea12959e72bc99b653e55d02c69ec1b52f04fe32be"
 "crates/catalog/ops/pagerduty/pagerduty-incident-acknowledge.flux" = "26ca3b7a639d79f0a4f994b51d99f981402af3e057885c55877f2fea972af50e"
 "crates/catalog/ops/pagerduty/pagerduty-incident-get.flux" = "d18dcee2a8c7fbffa9d2f4709485a5dbc1b373533ce4c1b8b0e11daab6bfd33a"
@@ -1274,7 +1274,7 @@ ir_sha256 = "29c6e5f44e5fe742f69bcddd9051e2b86a944f648c04f243fefa4fcf9c791671"
 
 [provider.artifacts]
 "catalog/postmark.catalog.json" = "8e3a298cefea49c88a4fc029c8f6047624ffc0fb841b67261598f604dc618c12"
-"connectors/postmark-server.connector.toml" = "7d2eeda3cb6db99942cac1d0d4dbcb6b9b4ad3c050cfa0c9cb79a24af83d9903"
+"connectors/postmark-server.connector.toml" = "053d2abcef770235d6adada677f76b54855d97e717941479a8c8cde50c2aaf89"
 "connectors/postmark-server.flux" = "990f908e78e56dd090af74eec341aa120dec7d9538d34fe2639d82477802cbab"
 "crates/catalog/ops/postmark/postmark-bounce-get.flux" = "8170a20694206fa1cc039aef899f593b6445c7e354f7931be405e29f85fb5d19"
 "crates/catalog/ops/postmark/postmark-bounce-list.flux" = "010346547286780a837bd0ee21edb41e4e398f4bc7b742c2a44cbf87a96d60ef"
@@ -1290,7 +1290,7 @@ ir_sha256 = "81baa15525ff4957b9bb51dc2b1676894281668e5f8f8225299dd2d5b38a8ab5"
 
 [provider.artifacts]
 "catalog/resend.catalog.json" = "94246409ae0a5ede80bacaefe77e0f3d408d93a08bb06dab8a78866a87b48492"
-"connectors/resend.connector.toml" = "915331a6b6d6d923748ed3bd78ff3bf3999ca982defe37f193964d75fc4ba94c"
+"connectors/resend.connector.toml" = "20685046409b25cae3d01130d4c6b7d6e00247907969cbadb4ae766a19fdc233"
 "connectors/resend.flux" = "41a2c53296485b4f61168b43ad423c05fe230d7ce70528f3af5f6969ea1408de"
 "crates/catalog/ops/resend/resend-domain-get.flux" = "43e5a833c1640ac14d174961f599df47387d893bb48763af9ab7d50e064fdb98"
 "crates/catalog/ops/resend/resend-domain-list.flux" = "2399ef8fc962bd4d59f77dd0ca929d11d83808a1e8f640ff27a05f188bee20ea"
@@ -1306,7 +1306,7 @@ ir_sha256 = "a2e9c22b52b77536a0e763fc60625d968e120d0293d0445a5a4c9a06f60febcd"
 
 [provider.artifacts]
 "catalog/salesforce.catalog.json" = "5c8f3114b2b82b80a30bf519a94ab2bd5059069e94281c97900cdfd61b8dac8f"
-"connectors/salesforce.connector.toml" = "1bfad6cc156c43a584860cca76b321936c898a902f41de4cefcc20d57af8776a"
+"connectors/salesforce.connector.toml" = "82500f276eee51501cb070bbea5ec5311da4e27b04435a38c716d356e2e9c54a"
 "connectors/salesforce.flux" = "c9cbf6aae4769c5dc6522b58cd8844d73ee2094e1a2347209ce691f91e75d48d"
 "crates/catalog/ops/salesforce/salesforce-record-create.flux" = "4e85e5fb223e506ee73c146295dca232ad049630a5c3812be8031f953aa4ac66"
 "crates/catalog/ops/salesforce/salesforce-record-get.flux" = "826274e300ae778d3a73adc487dd63545bb26a6ca4fdda41b14be932fdaedf24"
@@ -1323,7 +1323,7 @@ ir_sha256 = "4fcb6ddfa27be6027564d32122cd403eea9f9f31f5c2188d55a10f552174aaa2"
 
 [provider.artifacts]
 "catalog/sendgrid.catalog.json" = "c1e2526b74ac7f829838795142e3cfb7278dbc022b0a578232115902c7dde34a"
-"connectors/sendgrid.connector.toml" = "25a743d2535017e912f8861fcd7b60520e4a0b8de4cb553e0d76cd5988dcc95b"
+"connectors/sendgrid.connector.toml" = "75c53aba67e9fb25fbafb5d311b82c4ebad93fcbd7199d70f22242d5be66acd4"
 "connectors/sendgrid.flux" = "2a30e1623af8fd4aba7dd48fb70f7f5f6c375f84cef9d496ffc1bc5e08d63194"
 "crates/catalog/ops/sendgrid/sendgrid-email-validate.flux" = "5aec408b2c964ede81994043494025278c8d4f895dcccba7e06a0b9d0798bed3"
 "crates/catalog/ops/sendgrid/sendgrid-suppression-bounce-list.flux" = "5a43bb9f4ebe1958a61728314dc4951531cb9c9da1b919a76ecbf1283557788c"
@@ -1339,7 +1339,7 @@ ir_sha256 = "97bb8d1033dd4869b9730d66cbac6508bdd36811c08b86b74aae181f7cd0d918"
 
 [provider.artifacts]
 "catalog/sentry.catalog.json" = "db09898a5b2b86a6e439fcb64d798f72b4313d22664d5ef4bbf94664dc09b7d2"
-"connectors/sentry.connector.toml" = "798168e8dae31ed8dacb8551464639ae9c2667afd5a1c21ba656d8f1c80a3f08"
+"connectors/sentry.connector.toml" = "8f3dc415941ebe448dd0342a6ec512f8b1fc4c9b75fbc7f13f118369711296e2"
 "connectors/sentry.flux" = "ca12bf914769f3eabd442adc996afed36d4364577151df5832c08267a19fab9c"
 "crates/catalog/ops/sentry/sentry-issue-event-latest.flux" = "dfc866463ec2fb317161e563bb48716cb477c3ce2610fe3c8654e2132f5a13b9"
 "crates/catalog/ops/sentry/sentry-issue-get.flux" = "3ac16579e68d08403f98fdb6beb0cc18eb3984f212e030aa9689e4618a1895e5"
@@ -1355,7 +1355,7 @@ ir_sha256 = "ce02716e20a3f1d23101078b08158eec3e6f0056f0c01eed70058194ed846ce9"
 
 [provider.artifacts]
 "catalog/shopify.catalog.json" = "6349af3729b92b35e750a38c44eeedc4a0de7c1dd041a3f0ec48592a74c04df7"
-"connectors/shopify.connector.toml" = "f78ab31e79ea1c571bb50187498abf28610dd56cb204f89087995a9a5fd919fe"
+"connectors/shopify.connector.toml" = "7245142aeb8da31ed0cd9c91c1027a5a0977b786bceaefde4c7b669afcea154f"
 "connectors/shopify.flux" = "80054ca7e72ebe6d1e3278c6011c2f3cbfa4bdb1d408d3b2beee43a1fe64a8e5"
 "crates/catalog/ops/shopify/shopify-customer-get.flux" = "a70451c0a98cb21668da92feb2e9f0cf2d704a50730213f92e53dea5220a12f8"
 "crates/catalog/ops/shopify/shopify-inventory-level-list.flux" = "82767ae29786361a57d62079076d8e426dff9fec37babca5d400c760d2117cbd"
@@ -1372,7 +1372,7 @@ ir_sha256 = "47d123ca253dd3f44737bbd2157939f35280c7dc87ee8618f0ac927c56b919e1"
 
 [provider.artifacts]
 "catalog/slack.catalog.json" = "854e28620ae87e0b0a54c305ce18460d83ae73769aed7fc7f1ec0f431a0b9912"
-"connectors/slack.connector.toml" = "ae87ea0f38abcaf04adab552d37500b6d4db08f2f8e7372d820d4500b6af20fb"
+"connectors/slack.connector.toml" = "1b2b5846ad7a3bdc706b9d5e4e585f06ed8f4dd43dabfa03955cd47a567f85f1"
 "connectors/slack.flux" = "60eba41be6c40ebc29440a585dd248ea2beb459058a018d53a2cacee9e75e371"
 "crates/catalog/ops/slack/slack-chat-post-message.flux" = "356c5e58f2b881bc0c94f692c02cf976d48fd92bc52c7e896f58bbf4a8905067"
 "crates/catalog/ops/slack/slack-conversations-history.flux" = "e8a6d3cc761b3b39f07b1825aefc67c187ef9500c3a8cb3630453fb5d59af535"
@@ -1388,7 +1388,7 @@ ir_sha256 = "f5a21323fb659da0389ae068dc3719dbf4c8d6407c77db306e33760886031538"
 
 [provider.artifacts]
 "catalog/statuspage.catalog.json" = "02406e0dbe4978a48e4a7489ea695230e4bb2a8ae02d964f450e75972e020304"
-"connectors/statuspage.connector.toml" = "ec3f263858d4a8c9d51cde50d70bcf6abb8b67fc4c39d0a35212a79c9e4cb803"
+"connectors/statuspage.connector.toml" = "20d0cda6a05408a46ce30bc6f2be82b318c6fd0d7c643d25c5e137fdb180b7db"
 "connectors/statuspage.flux" = "4c2a9903b8bf1e48a59b897da1a8bdba69e098a167fb3d86acd3961e309b1bfe"
 "crates/catalog/ops/statuspage/statuspage-component-list.flux" = "5067c548d1f15995cc42843b7a9e0d313c1989ed1d47bf0531185758b86121c8"
 "crates/catalog/ops/statuspage/statuspage-incident-create.flux" = "e3600462db24712c5ba6e0280d43df62426e9fe4ee7f1a3bada775e11774cf81"
@@ -1414,7 +1414,7 @@ sha256 = "3b3d858f1a02a2ac0116cc10a296a7d374fe7c9d8b4a68a5419712e0bb3fbf41"
 
 [provider.artifacts]
 "catalog/stripe.catalog.json" = "656219fd5312d1241ba2ed86de020a8195a3249c921accd532fedb2214409900"
-"connectors/stripe.connector.toml" = "5e90657e15c2110e7dd12214e49c42fa1952fc4188be4372a22f537da7868ced"
+"connectors/stripe.connector.toml" = "6d170530877516353c43466419e05fb06611398a01340ed781d1b137a46394e2"
 "connectors/stripe.flux" = "79e66fa05fec8724c3cbaec51cc4463cc2f6ac77642ee4f333855ad167b05307"
 "crates/catalog/ops/stripe/stripe-balance-get.flux" = "515ef0dfff41c259612bc4ec64a082af44f6c6a7ff0c6af1a5d89caa227dff08"
 "crates/catalog/ops/stripe/stripe-billing-meter-list.flux" = "93b4f7dab0554f59b9d8b7dcd7f6f7d49a5cc39cea8fa11868efaf783df6fe25"
@@ -1438,7 +1438,7 @@ ir_sha256 = "555ca6f04caab129d106f6bd6086c390c1662eae7a0ffc9c664a279869e8ad41"
 
 [provider.artifacts]
 "catalog/supabase.catalog.json" = "b7910a426d13f83317b81aec006cbb54b7efaa2db827e9c837760c7e8a63f2e3"
-"connectors/supabase.connector.toml" = "1e1244840a93ca9508e4808fefcee1f486ea2de4f061d62164f3c64be7b02257"
+"connectors/supabase.connector.toml" = "3700cb810f8796b2dfce498327781346c957f42d21aa19c6d0ee490b73cdb013"
 "connectors/supabase.flux" = "3a922ea7352045befcde3e4ba9625c1e15b09e08f0de42c38597813fb0ca2391"
 "crates/catalog/ops/supabase/supabase-auth-settings.flux" = "294caa94c683a8f2a38ae45d76262016690c2925fc31f73f98a2857033c3a35e"
 "crates/catalog/ops/supabase/supabase-rows-list.flux" = "dfeaf8c3bbcdfb4d793cea0af7ab1d75cdefe673383be7343d0a3129b0698334"
@@ -1453,7 +1453,7 @@ ir_sha256 = "45ba79fb83825b361ef8e285626cb024c91325fe5d0f614cc4cd10333b522213"
 
 [provider.artifacts]
 "catalog/trello.catalog.json" = "d2b5ba3679bcb9a7903b73d6a1919ca8bbc51dbbeed475e4932872aae001c4be"
-"connectors/trello.connector.toml" = "a541dd2d449949cc69c2a9352a33e889f863faeaf13b61e29c16e1cf35f4e2eb"
+"connectors/trello.connector.toml" = "bf5778796b6f230d35b30ae8b804fdc63655f52fe3effae7f14eb1834902c017"
 "connectors/trello.flux" = "ac23eca6f50ab99749b51b2da86b32aef10d5c207996068e2265394c4b181482"
 "crates/catalog/ops/trello/trello-board-get.flux" = "9f15e1842ad79abbec27908f6f68ff57f08b90eccf089a8ab608b8536b7ae6b1"
 "crates/catalog/ops/trello/trello-board-list.flux" = "2305eb58ac4b90c9c41d9482426f62e95204e613fccb4683fbd9844677eab7ae"
@@ -1480,7 +1480,7 @@ sha256 = "2ab609f9daeddae92f339c6c8d646dae9058f8f11baa53fab12e98fd3f37700d"
 
 [provider.artifacts]
 "catalog/twilio.catalog.json" = "d7f25bda08a92d5db9f4d1c50286eda817bbe5a1e413e4d1d88cb05d15eabaf2"
-"connectors/twilio.connector.toml" = "2ee034a04fd9ff945d9e8ac92d10b03d9e9d5771c021f67b354d6b458ae0d7b1"
+"connectors/twilio.connector.toml" = "b36ff9edba677d477a2b2a615b90b67b6b3d1f02467a50b743afb9b7a2c65fe7"
 "connectors/twilio.flux" = "e155987abff8ddd7e083bfe820a3d705633e4228218faff3efbe385ec180e973"
 "crates/catalog/ops/twilio/twilio-account-get.flux" = "e06f47b11aa9c11e74bd22d8210ee2c715e608fd2a47bd1d2e5c41fb999065b1"
 "crates/catalog/ops/twilio/twilio-call-get.flux" = "070af6c41bab9c8bdfa8905f9a0d03752cf8a88808b7cb9ba9a68e81cdde3163"
@@ -1501,7 +1501,7 @@ ir_sha256 = "c96242bfd1f935e2c80ad2b91d2e69fbc7805cacbe58d13eaf23db86fbd8bf2d"
 
 [provider.artifacts]
 "catalog/typeform.catalog.json" = "fcc28d3a67ed34b227f5760be24fa25e5de29b8672c121b4c3c8798a506e58b8"
-"connectors/typeform.connector.toml" = "6b469f18fe69025b00edf6a45df41ccefd036c4fc21212d47b5fc9cb0bdeba06"
+"connectors/typeform.connector.toml" = "67d3fd2256217087261d488782a83326d8dc7f94768957caa6237c97a59453ca"
 "connectors/typeform.flux" = "07f5186dc30513a9677d3d07309ad1cefc08d80ac224692440d2f1d99e98a168"
 "crates/catalog/ops/typeform/typeform-form-get.flux" = "f294eef38ef00eab28497dd1e7fda4dc387f04331eafcd28815cd73fd3ecc8c8"
 "crates/catalog/ops/typeform/typeform-form-list.flux" = "56702750fb6e559c0d3f3df063a360970fcc7ea3c95b88545a76f3da7e55292a"
@@ -1518,7 +1518,7 @@ ir_sha256 = "e5036fc0a5e97c4060b40f8af3c2fb068c022459b3c102580b0e0b8ab5129fce"
 
 [provider.artifacts]
 "catalog/vercel.catalog.json" = "21abd51652af821f499c96fb79db1d6f7be7be34140ffef20aa8c80eac2a36a9"
-"connectors/vercel.connector.toml" = "c572509ebdf328ec2d426814c1ab3d0f4d2f2a1a4ecd476751830d77cc7546ca"
+"connectors/vercel.connector.toml" = "ea27e0fef95419a2235a7918cd8ec17601c73751e9abff122d15dfc419dd2d39"
 "connectors/vercel.flux" = "db256e53d3025e57f4338ab8d00efa52e44faae85a3cfabc79992bb6104c4b89"
 "crates/catalog/ops/vercel/vercel-deployment-cancel.flux" = "d4dcc540e2f499b85baa3bf7cbb9a2e19243deedad9a49bd60dfdf7ea4b1ffaa"
 "crates/catalog/ops/vercel/vercel-deployment-get.flux" = "cd9372f7d3a4fd895243eaf9090436844490a6f000dffa7704eb7a42a568cb82"
@@ -1535,7 +1535,7 @@ ir_sha256 = "a89c6f7b95735cf7d478e0698dd451fe4ff894df38d5effd9eb5587fd9f962a7"
 
 [provider.artifacts]
 "catalog/webflow.catalog.json" = "470304128a21de7d1b1e17ebce6cbb589fa14f239fa5c129f3859b76f794daf8"
-"connectors/webflow.connector.toml" = "c03415bb161e8bbb317cc30f48eea857ff2580c1ffb9d81f379b1d7ccec84fa9"
+"connectors/webflow.connector.toml" = "005c8333bf2e1cefa3883d5b7c5541bc85f1bd1a8a3ac7f06668ab42eb3a20b8"
 "connectors/webflow.flux" = "3eaee9cc077c0820a05161aec88e1f4cd751e3a7f3222ad4b57fa0c259ae237b"
 "crates/catalog/ops/webflow/webflow-collection-get.flux" = "c0a4ad0c6271aaa812ef62b1907287dabaf42fc1382faafb33bd55510b0a0296"
 "crates/catalog/ops/webflow/webflow-collection-item-get.flux" = "0a2922d7095d519feca444394701e7226e2f1857a1a3dd0980536b0ab59952f2"
@@ -1574,11 +1574,11 @@ sha256 = "cde5a1f4d54038bb4d52df965f0eb7824c2074be2a5a36835dfc20c82f121da6"
 
 [provider.artifacts]
 "catalog/zendesk.catalog.json" = "6c5f5ca4278c270b55a583b79cf1dec3c372f1cbcbff4e064c17625d35afd24a"
-"connectors/zendesk-help-center.connector.toml" = "8144e4d97ef3fbb1350ca92e814c30e9a16089534e897f42167f86cd53dab364"
+"connectors/zendesk-help-center.connector.toml" = "f0611766bc2e5bbdfa7fdfe0cd337dd84daa646cd483f64f0549f3e86ad4038a"
 "connectors/zendesk-help-center.flux" = "9e4c899459fffee2fd2c64edf89edccb8563b040917d27ffc02749fdd3822e16"
-"connectors/zendesk-messaging.connector.toml" = "be121f11ce650861bbb849f66fff7d71a65c02fed4af488b2859e4c3525b9efd"
+"connectors/zendesk-messaging.connector.toml" = "796aa1afbd1cbe3b533c9ceb7df60e4ea6fda85e14e1ab47c083c1a4086651c0"
 "connectors/zendesk-messaging.flux" = "cc3f283f7bb24f6335bc25a363799cfa6a71046394c5247a58654971bb504245"
-"connectors/zendesk.connector.toml" = "c3b32f977f4962ea7d668ca1a2696707bdad35fdc2505f785a5608299a8464e2"
+"connectors/zendesk.connector.toml" = "8fb70df94f95a151f9c8097be4247498a261fac599ea8a8d05d243b64fde371a"
 "connectors/zendesk.flux" = "6efa366e4003544e60b79e39ccfd4ace564846104d91d52b3ad7e64b88d9b85a"
 "crates/catalog/ops/zendesk/zendesk-custom-object-list.flux" = "020b6d65f12e98e6d0aca93fbb97d6b7308bdee47c8915b2c9e670949bded9d5"
 "crates/catalog/ops/zendesk/zendesk-custom-status-list.flux" = "f0804553d2c6b4d1c25be53f4d5f3fa31a13c4cb92bc421d74b744af77b2c76b"
@@ -1625,7 +1625,7 @@ ir_sha256 = "7dba48ad51dfd009cd3dfb1aab32e4a419ab9b6589d6ef5232db6e7de7d1fe10"
 
 [provider.artifacts]
 "catalog/zoom.catalog.json" = "ff64d245b19d7b95938c4bc3a3739009c2aad1e0b08a8e8d0ea30014fd9b8bc1"
-"connectors/zoom.connector.toml" = "4ac1ce7520517df46b09b806a0812cbe9663dbcfa4596e9c4721917f4a272532"
+"connectors/zoom.connector.toml" = "4e7dc4ba7090a5a12ea1f9a4e7037276ba36b159971557a922401c51c3ed09df"
 "connectors/zoom.flux" = "680305a34709007b47dbe4e213e33ae11cece6ef0828f64f6b93449e9a2d4cb7"
 "crates/catalog/ops/zoom/zoom-meeting-delete.flux" = "6fbccf1f66ce8c985afbdf890ad65b847470fa0315fa1691a6e17e07c1ff8c97"
 "crates/catalog/ops/zoom/zoom-user-get.flux" = "daab6a3aafdd05344880228f592ec2c354416a452986a3eb45d8a9889bad96fd"
