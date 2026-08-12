@@ -2,7 +2,7 @@
 id: C-557
 title: "Expose the engine-free plan producers so a host derives a RequestPlan without flux"
 pillar: Connector
-status: in-progress
+status: done
 priority: 0
 design: docs/designs/catalog-artifact.md
 epic: catalog-artifact

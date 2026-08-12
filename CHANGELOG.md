@@ -11,6 +11,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The plan producers are engine-free, so a host derives a request plan without flux** (C-557,
+  the last piece un-gating Exchange's engine-free adoption). C-538 moved the plan *derivation* to
+  the engine-free `connector-resolve`; this moves the two *producers* of its inputs there too —
+  `resolve_endpoints` (endpoint resolution: declared defaults, operator approval, HTTPS-origin
+  normalisation) over a new `ConfigPort` trait, and `assemble_credentials` (mechanism selection,
+  the acquisition axis, the redaction forms) over `connector-secrets`' `SecretStore` port, returning
+  the credential set and the redaction set as **data**, touching no redactor. `connector-pack`'s
+  `Credentials::resolve` and endpoint resolution now delegate down, so there is one derivation, not
+  two; the whole-catalogue differential gate gains a fourth arm proving the engine-free producers
+  byte-identical to the flux-`ToolContext` path for all 835 operations, request, subjects and
+  redaction set. `connector-resolve` still links no `codewandler-flux-*`, and the offline compiler
+  fence holds across its new edge to `connector-secrets`. A consumer can now obtain a complete
+  `RequestPlan` without depending on `connector-pack` at all.
+
 - **Anthropic declares both of its OAuth2 login flows** (C-555, completing the cross-repo login
   goal's third vendor). The **Console flow** — single-host, a public PKCE client (no client
   secret) — authorizes the connector's model catalogue and Admin API (`org:admin`). The

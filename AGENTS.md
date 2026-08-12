@@ -1116,8 +1116,9 @@ version number is burned, and a wrong `description`, `readme` or `keywords` is f
   sibling workflow — the publish must gain no new way to go red, and it alone holds
   `contents: write`. `web/test/release_assets.test.mjs` pins it.
 - **The publish closure is six crates** (C-537 added the reader, C-538 the resolve core).
-  `connector-address`, `catalog-reader`, `connector-catalog`, `connector-resolve`,
-  `connector-secrets`, `connector-pack` — that is the topological order
+  `connector-address`, `catalog-reader`, `connector-catalog`, `connector-secrets`,
+  `connector-resolve`, `connector-pack` — that is the topological order (C-557 gave
+  `connector-resolve` an edge to `connector-secrets`, so `secrets` now precedes `resolve`)
   `scripts/publish-crates-io.sh --print-order` derives. `connector-cli`, `connector-flux` and
   `connector-spec` are not published. The closure is *derived* from the manifests by
   [`scripts/publish-crates-io.sh`](scripts/publish-crates-io.sh), which lists only the consumable
