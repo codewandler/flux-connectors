@@ -443,55 +443,27 @@ impl Configuration {
         }
     }
 
-    /// Snapshot every setting a channel handshake may read, applying declared optional defaults.
-    pub(crate) fn channel_snapshot(
+    /// **Read one channel-handshake setting for `service`, raw** (C-558).
+    ///
+    /// The engine-free [`connector_resolve::channel_plan`] applies the connector's declared defaults
+    /// itself — that is where `channel_snapshot`'s default logic moved — so this hands it only what the
+    /// tenant actually configured, an empty or all-whitespace value dropped. Approval never gated the
+    /// channel path, so this reads the plain value rather than an operator-approved one.
+    pub(crate) fn channel_value(
         &self,
-        provider: &'static catalog::Provider,
-        channel: &'static catalog::Channel,
-    ) -> Snapshot {
-        let mut values = BTreeMap::new();
-        for declaration in provider
-            .config
-            .iter()
-            .filter(|field| field.service == channel.service)
-        {
-            let field = if let Some(variable) = declaration.binds.strip_prefix("endpoint.") {
-                Some(Field::Endpoint(variable))
-            } else if let Some(credential) = declaration.binds.strip_prefix("username.") {
-                Some(Field::Username(credential))
-            } else {
-                declaration
-                    .binds
-                    .strip_prefix("channel.")
-                    .and_then(|rest| rest.split_once(".query."))
-                    .filter(|(binding, _)| *binding == channel.name)
-                    .map(|(binding, parameter)| Field::ChannelQuery {
-                        channel: binding,
-                        parameter,
-                    })
-            };
-            let Some(field) = field else { continue };
-            let value = self
-                .values
-                .get_for_instance(
-                    &self.tenant,
-                    provider.id,
-                    self.instance.as_ref(),
-                    channel.service,
-                    field,
-                )
-                .filter(|value| !value.trim().is_empty())
-                .or_else(|| declaration.default.map(str::to_owned));
-            if let Some(value) = value {
-                values.insert(field.key(), ConfigValue::proposed(value));
-            }
-        }
-        Snapshot {
-            tenant: self.tenant.clone(),
-            provider: provider.id.to_owned(),
-            service: channel.service.to_owned(),
-            values,
-        }
+        provider: &str,
+        service: &str,
+        field: Field<'_>,
+    ) -> Option<String> {
+        self.values
+            .get_for_instance(
+                &self.tenant,
+                provider,
+                self.instance.as_ref(),
+                service,
+                field,
+            )
+            .filter(|value| !value.trim().is_empty())
     }
 }
 
@@ -589,6 +561,11 @@ impl connector_resolve::ConfigPort for SnapshotPort<'_> {
         let field = match field {
             connector_resolve::ConfigField::Endpoint(name) => Field::Endpoint(name),
             connector_resolve::ConfigField::Username(name) => Field::Username(name),
+            // The operation-path snapshot carries no channel query, so this reads through to `None`;
+            // the arm exists because the core's `ConfigField` is deliberately not `#[non_exhaustive]`.
+            connector_resolve::ConfigField::ChannelQuery { channel, parameter } => {
+                Field::ChannelQuery { channel, parameter }
+            }
         };
         self.0.resolved(field).map(|resolved| {
             if resolved.is_operator_approved() {

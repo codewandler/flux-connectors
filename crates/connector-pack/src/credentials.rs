@@ -59,13 +59,11 @@
 
 use std::sync::Arc;
 
-use connector_secrets::{
-    validate_tenant, CredentialRef, InstanceId, Secret, SecretStore, StoreError,
-};
+use connector_secrets::{validate_tenant, CredentialRef, InstanceId, Secret, SecretStore};
 use flux_runtime::ToolContext;
 
-use crate::auth::{self, Assembled};
-use crate::config::{Field, Snapshot, SnapshotPort};
+use crate::auth::Assembled;
+use crate::config::{Snapshot, SnapshotPort};
 use crate::Error;
 
 /// The reserved service name [`CredentialRef::new`] elides, spelled here because a credential is
@@ -151,6 +149,14 @@ impl Credentials {
     /// The selected connection UUID, absent for the sole-connection binding.
     pub fn instance(&self) -> Option<&InstanceId> {
         self.instance.as_ref()
+    }
+
+    /// The bound secret store, for the engine-free producers this port delegates to (C-557/C-558).
+    ///
+    /// `connector_resolve::assemble_credentials` and `connector_resolve::channel_plan` take a bare
+    /// [`SecretStore`], so this hands over the `Arc`'s referent rather than a second port over it.
+    pub(crate) fn store(&self) -> &dyn SecretStore {
+        self.store.as_ref()
     }
 
     /// Where `credential` of `provider` is kept for this port's tenant.
@@ -313,74 +319,6 @@ impl Credentials {
 
         Ok(assembly.credentials)
     }
-
-    /// Resolve one channel handshake's declared alternatives without constructing transport state.
-    pub(crate) async fn resolve_channel(
-        &self,
-        channel: &str,
-        provider: &'static catalog::Provider,
-        requirements: &'static [&'static [&'static str]],
-        settings: &Snapshot,
-    ) -> Result<Vec<Assembled>, Error> {
-        if requirements.is_empty() {
-            return Ok(Vec::new());
-        }
-        let mut unmet = Vec::new();
-        for mechanism in requirements {
-            let mut assembled = Vec::with_capacity(mechanism.len());
-            let mut missing = None;
-            for name in *mechanism {
-                let credential =
-                    provider
-                        .credential(name)
-                        .ok_or_else(|| Error::UndeclaredCredential {
-                            operation: channel.to_owned(),
-                            credential: (*name).to_owned(),
-                            provider: provider.id.to_owned(),
-                        })?;
-                if matches!(credential.place, catalog::Placement::Inbound) {
-                    return Err(Error::InboundCredential {
-                        operation: channel.to_owned(),
-                        credential: credential.name.to_owned(),
-                    });
-                }
-                let reference = self.reference(channel, provider, credential)?;
-                let secret = match self.store.get(&reference).await {
-                    Ok(secret) => secret,
-                    Err(source) if source.is_not_found() => {
-                        missing = Some(not_found_path(&source));
-                        break;
-                    }
-                    Err(source) => {
-                        return Err(Error::CredentialStore {
-                            operation: channel.to_owned(),
-                            credential: credential.name.to_owned(),
-                            source,
-                        });
-                    }
-                };
-                let user = user_half(channel, credential, settings)?;
-                assembled.push(Assembled::new(
-                    credential.name,
-                    auth::acquire(credential, secret.expose_secret(), user.as_deref()),
-                    credential.place,
-                ));
-            }
-            if let Some(path) = missing {
-                unmet.push(path);
-            } else {
-                return Ok(assembled);
-            }
-        }
-        Err(Error::MissingCredential {
-            operation: channel.to_owned(),
-            path: unmet
-                .first()
-                .cloned()
-                .unwrap_or_else(|| "<no address>".to_owned()),
-            alternatives: unmet.len(),
-        })
-    }
 }
 
 #[cfg(test)]
@@ -406,60 +344,6 @@ mod instance_tests {
 
         assert_eq!(reference.instance().map(InstanceId::as_str), Some(instance));
     }
-}
-
-/// The user half of a Basic join, with its literal suffix, or `None` for every other acquisition.
-///
-/// # It comes from the configuration port, not the process environment (C-193)
-///
-/// This used to read `Acquisition::BasicJoin::user_env` out of `std::env`, on the reasoning that the
-/// user half is config rather than a gated secret and that flux resolves its own `AuthMethod` the
-/// same way. The first half of that is still right — it is a non-secret, which is exactly why it is
-/// not in the store — and the second half is what made it wrong here: **a server's environment holds
-/// one value, and this is a per-tenant one.** `ZENDESK_USER` can name one customer's account; a pack
-/// serving a second tenant would have signed its requests as the first. Fixing a templated host
-/// while leaving this would have been half a migration, so it moves to the same port
-/// ([`Field::Username`]), and this crate now reads no environment variable at all.
-///
-/// `user_env` stays in the catalogue and is quoted in the refusal below, because it is the name the
-/// vendor's own documentation and flux's `AuthMethod` use for the same value — the fastest way for
-/// an operator to recognise what they are being asked for.
-///
-/// # Errors
-///
-/// [`Error::MissingConfig`] when the tenant has not supplied it. Composing `base64(":<secret>")`
-/// instead would produce a header the vendor answers with a 401 that says nothing about what is
-/// missing.
-fn user_half(
-    operation: &str,
-    credential: &'static catalog::Credential,
-    settings: &Snapshot,
-) -> Result<Option<String>, Error> {
-    let catalog::Acquisition::BasicJoin {
-        user_env,
-        user_suffix,
-    } = credential.acquire
-    else {
-        return Ok(None);
-    };
-
-    let user = settings
-        .require(operation, Field::Username(credential.name))
-        .map_err(|error| match error {
-            // Re-stated with the vendor's own name for the value. `MissingConfig` alone would say
-            // `username.zendesk.api_token`, which is right and is not what a Zendesk operator has
-            // ever seen this called.
-            Error::MissingConfig { .. } => Error::MissingCredentialConfig {
-                operation: operation.to_owned(),
-                credential: credential.name.to_owned(),
-                tenant: settings.tenant().to_owned(),
-                env: user_env.join(", "),
-            },
-            other => other,
-        })?;
-    // The suffix is the connector's declared data — zendesk's `/token` — so it is appended here
-    // rather than asked of a host, which cannot get it wrong and cannot be asked to know it.
-    Ok(Some(format!("{user}{user_suffix}")))
 }
 
 /// **Register `value` with the host's redactor, or refuse the call.**
@@ -570,25 +454,14 @@ fn holds(ctx: &ToolContext, value: &str) -> bool {
 /// prefixing it defeats shape-based redaction without splitting the value. See [`holds`].
 const PROBE: char = '\u{1}';
 
-/// The path a [`StoreError::NotFound`] names.
-///
-/// Taken from the error rather than re-rendered here: a reference renders differently under each
-/// [`Layout`](connector_secrets::Layout), so quoting our own rendering would send an operator to a
-/// path their store does not use.
-fn not_found_path(error: &StoreError) -> String {
-    match error {
-        StoreError::NotFound { path } => path.clone(),
-        other => other.to_string(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use connector_secrets::{Layout, MemoryStore, Secret, TenantLayout};
     use flux_system::{System, Workspace};
 
-    use crate::config::{Configuration, MemoryConfig};
+    use crate::auth;
+    use crate::config::{Configuration, Field, MemoryConfig};
     use crate::request::Request;
 
     /// The tenant the query-placement fixture below is addressed under.

@@ -312,6 +312,10 @@ impl ConfigPort for MapConfigPort<'_> {
                 .get(name)
                 .or_else(|| self.values.get(&format!("username.{name}")))
                 .map(|value| ConfigValue::proposed(value.clone())),
+            // The operation-path producers never ask for a channel query — that is the channel
+            // handshake's field, and this arm exists because the core's `ConfigField` is not
+            // `#[non_exhaustive]`.
+            ConfigField::ChannelQuery { .. } => None,
         }
     }
 }

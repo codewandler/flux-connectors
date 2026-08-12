@@ -20,9 +20,9 @@
 
 /// **Which non-secret connection value the resolver is asking for.**
 ///
-/// The two variants are the two non-secret, connection-level rows of the configuration design's
-/// `binds` table — `endpoint.<var>` and `username.<name>`. Secrets are the credential port's job and
-/// never travel through here.
+/// The three variants are the non-secret, connection-level rows of the configuration design's
+/// `binds` table — `endpoint.<var>`, `username.<name>` and `channel.<binding>.query.<parameter>`.
+/// Secrets are the credential port's job and never travel through here.
 ///
 /// Not `#[non_exhaustive]`: a host implementing [`ConfigPort`] must decide what to do with every kind
 /// the resolver can ask for, and a new kind should be a compile error at that decision rather than a
@@ -36,6 +36,17 @@ pub enum ConfigField<'a> {
     /// `zendesk.api_token`, `jira.api_token`. The connector's declared suffix is appended by the
     /// assembler, not asked of the host.
     Username(&'a str),
+    /// One connection-time query value of a socket channel's `connect` handshake (C-558).
+    ///
+    /// Keyed by the channel binding **and** the vendor query parameter, exactly as the credential
+    /// addressing keys the operation-path fields: two bindings of one service may spell the same
+    /// parameter, so the binding is part of the address rather than a hint.
+    ChannelQuery {
+        /// The channel binding this query value belongs to.
+        channel: &'a str,
+        /// The vendor query parameter, as the `connect.query` declaration spells it.
+        parameter: &'a str,
+    },
 }
 
 impl<'a> ConfigField<'a> {

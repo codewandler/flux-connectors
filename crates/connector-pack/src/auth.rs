@@ -14,8 +14,10 @@
 //! "does this placement transform the value" rather than a rule each caller re-derives.
 //!
 //! This shim exists so that the crate's own call sites and doc links keep one spelling for the seam.
-//! `placed_form` is **not** re-exported here since C-557 relocated credential assembly: the one place
-//! this crate consulted it — `Credentials::resolve_mechanism` — moved to `connector-resolve`'s
-//! `assemble_credentials`, so its remaining reader is a `dry_run` test that names the source directly.
+//! `placed_form` is **not** re-exported here since C-557 relocated credential assembly, and neither
+//! is `acquire` since C-558 relocated the channel handshake: the two places this crate consulted them
+//! — `Credentials::resolve_mechanism` and `resolve_channel` — moved to `connector-resolve`'s
+//! `assemble_credentials` and `channel_plan`. `placed_form`'s remaining reader is a `dry_run` test
+//! that names the source directly; what stays here is `place`, `query_encode` and `Assembled`.
 
-pub(crate) use connector_resolve::auth::{acquire, place, query_encode, Assembled};
+pub(crate) use connector_resolve::auth::{place, query_encode, Assembled};

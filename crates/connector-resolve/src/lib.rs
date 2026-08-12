@@ -66,6 +66,7 @@
 #![deny(missing_docs)]
 
 pub mod auth;
+mod channel;
 mod config;
 mod credentials;
 pub mod document;
@@ -77,6 +78,7 @@ mod resolve;
 mod slot;
 mod template;
 
+pub use channel::{channel_plan, PreparedChannelPlan};
 pub use config::{ConfigField, ConfigPort, ConfigValue};
 pub use credentials::{assemble_credentials, Assembly, Redaction};
 pub use endpoints::{resolve_endpoint, resolve_endpoints};
