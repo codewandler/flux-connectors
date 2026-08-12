@@ -161,13 +161,40 @@ function tagPatternsOf(workflowName) {
   return patterns
 }
 
-/** A step is the attachment when it uploads both assets to a release. */
+/**
+ * True when `text` names `asset` as itself rather than as the head of a longer name.
+ *
+ * `catalog.pack` is a prefix of `catalog.pack.sha256`, so a plain `includes` reports the pack as
+ * uploaded by a command that uploads only the digest.
+ */
+function mentionsAsset(text, asset) {
+  return new RegExp(`${asset.replace(/\./g, '\\.')}(?![\\w.])`).test(text)
+}
+
+/**
+ * The `gh release upload` command of a step, with backslash continuations folded in — or `null`.
+ *
+ * Asked of the *command* and not of the step, deliberately: seeded on 2026-08-12 by deleting the
+ * `.sha256` argument from the upload, the whole-step version of this stayed green, because the
+ * verification loop further down the same script still named the file. A step that mentions an
+ * asset is not a step that attaches one.
+ */
+function uploadCommandOf(step) {
+  if (step.run === null) return null
+  const lines = step.run.split('\n')
+  const start = lines.findIndex((line) => line.includes('gh release upload'))
+  if (start === -1) return null
+  let command = lines[start]
+  for (let i = start + 1; command.endsWith('\\') && i < lines.length; i += 1) {
+    command = `${command.slice(0, -1)} ${lines[i]}`
+  }
+  return command
+}
+
+/** A step is the attachment when its upload command carries both assets. */
 function attachesThePack(step) {
-  return (
-    step.run !== null &&
-    step.run.includes('gh release upload') &&
-    ASSETS.every((asset) => step.run.includes(asset))
-  )
+  const command = uploadCommandOf(step)
+  return command !== null && ASSETS.every((asset) => mentionsAsset(command, asset))
 }
 
 /** A step is the crates.io publish when it runs the publish script or `cargo publish`. */
@@ -272,9 +299,9 @@ test('a release object created after the tag push still gets the assets', () => 
       triggersOf(job.workflow).includes('release'),
       `${job.workflow} attaches the pack on a tag push only, and the release object is created after the publish is green — that run finds no release and the assets are never attached`
     )
-    const upload = job.steps.find(attachesThePack)
+    const upload = uploadCommandOf(job.steps.find(attachesThePack))
     assert.match(
-      upload.run,
+      upload,
       /--clobber/,
       `${job.workflow}:${job.job} uploads without --clobber — the second of the two triggers, or any re-run, then fails on the asset name instead of replacing identical bytes`
     )
@@ -283,17 +310,17 @@ test('a release object created after the tag push still gets the assets', () => 
 
 test('the reader README documents the assets the workflow actually attaches', () => {
   const readme = readFileSync(readerReadme, 'utf-8')
-  const upload = attachingJobs()[0].steps.find(attachesThePack)
+  const upload = uploadCommandOf(attachingJobs()[0].steps.find(attachesThePack))
 
   // The link this test exists to keep: the consumer contract is written in a README on crates.io,
   // and the thing that honours it is a workflow in this repository. Either can be edited alone.
   for (const asset of ASSETS) {
     assert.ok(
-      readme.includes(asset),
+      mentionsAsset(readme, asset),
       `the reader README does not name \`${asset}\`, which the workflow attaches — a consumer reads the README, not the workflow`
     )
     assert.ok(
-      upload.run.includes(asset),
+      mentionsAsset(upload, asset),
       `the workflow does not attach \`${asset}\`, which the reader README tells consumers to fetch`
     )
   }
