@@ -21,8 +21,8 @@
 use catalog::{
     Acquisition, Approval, AuthHazard, Channel, ChannelTransport, Choice, ConfigChoices,
     ConfigField, Credential, CredentialRequirement, Event, Idempotency, OAuth2, OAuthGrant,
-    OAuthRedirect, Operation, OperationDirection, OperationKey, Placement, Provider, ProviderKey,
-    Risk, Runtime, Subject,
+    OAuthRedirect, Operation, OperationDirection, OperationKey, Pair, Placement, Provider,
+    ProviderKey, Risk, Runtime, Selector, SocketConnect, Subject,
 };
 
 /// The lookups, and every field of [`Operation`] — including [`Operation::flux`], which is the
@@ -260,5 +260,172 @@ fn the_reader_reexport_serves_the_same_catalogue() {
         Ok(_) => panic!("a missing file cannot load"),
         Err(catalog::reader::Error::Io(_)) => {}
         Err(other) => panic!("a missing file is an Io refusal, got {other}"),
+    }
+}
+
+/// The inbound and configuration surfaces — [`Event`], [`Channel`] with its [`SocketConnect`],
+/// [`Selector`] and [`Pair`] members, and [`ConfigField`] — read field by field, with no `..`
+/// rest pattern anywhere.
+///
+/// None of these types is `#[non_exhaustive]`, so the pin works in both directions: a removed or
+/// retyped field breaks the constructions below, an added field breaks the full destructures. The
+/// C-537 review found the first version of this file never read them, so a break confined to
+/// these three types would have compiled straight through the test whose whole job is holding the
+/// no-breaking-change line.
+#[test]
+fn the_inbound_and_configuration_surfaces_are_reachable() {
+    fn read_event(event: Event) {
+        let Event {
+            name,
+            service,
+            description,
+            wire_value,
+            default,
+            group,
+            schema,
+            declaration_json,
+        } = event;
+        let _: (&str, &str, &str, &str) = (name, service, description, group);
+        let _: (Option<&str>, Option<&str>) = (wire_value, schema);
+        let _: (bool, &str) = (default, declaration_json);
+    }
+
+    fn read_channel(channel: Channel) {
+        let Channel {
+            name,
+            service,
+            base_url,
+            description,
+            transport,
+            events,
+            connect,
+            discriminator,
+            delivery_id,
+            payload,
+            payload_root,
+            declaration_json,
+        } = channel;
+        let _: (&str, &str, &str, &str) = (name, service, base_url, description);
+        match transport {
+            ChannelTransport::Webhook | ChannelTransport::Socket | ChannelTransport::Poll => {}
+        }
+        let _: &[&str] = events;
+        if let Some(SocketConnect {
+            path,
+            query,
+            headers,
+            auth,
+            subprotocols,
+        }) = connect
+        {
+            let _: &str = path;
+            for &Pair { name, value } in query.iter().chain(headers) {
+                let _: (&str, &str) = (name, value);
+            }
+            let _: (&[&[&str]], &[&str]) = (auth, subprotocols);
+        }
+        for Selector { source, name } in [discriminator, delivery_id].into_iter().flatten() {
+            let _: (&str, &str) = (source, name);
+        }
+        for &Pair { name, value } in payload {
+            let _: (&str, &str) = (name, value);
+        }
+        let _: (bool, &str) = (payload_root, declaration_json);
+    }
+
+    fn read_config(field: ConfigField) {
+        let ConfigField {
+            name,
+            service,
+            label,
+            help,
+            example,
+            format,
+            required,
+            default,
+            approval,
+            secret,
+            docs_url,
+            binds,
+            also_binds,
+            also_services,
+            declaration_json,
+        } = field;
+        let _: (&str, &str, &str, &str) = (name, service, label, help);
+        let _: (Option<&str>, Option<&str>, Option<&str>) = (example, default, docs_url);
+        let _: (&str, &str) = (format, binds);
+        let _: (&[&str], &[&str]) = (also_binds, also_services);
+        let _: (bool, bool, &str) = (required, secret, declaration_json);
+        assert!(!approval.as_str().is_empty());
+    }
+
+    // Constructed once each, as a consumer's own test fixture would be — the direction the full
+    // destructure cannot cover.
+    read_event(Event {
+        name: "acme.ping",
+        service: "default",
+        description: "The vendor signals liveness.",
+        wire_value: Some("ping"),
+        default: true,
+        group: "system",
+        schema: None,
+        declaration_json: "{}",
+    });
+    read_channel(Channel {
+        name: "acme-events",
+        service: "default",
+        base_url: "https://api.acme.example",
+        description: "The vendor's event socket.",
+        transport: ChannelTransport::Socket,
+        events: &["acme.ping"],
+        connect: Some(SocketConnect {
+            path: "/ws",
+            query: &[Pair {
+                name: "v",
+                value: "1",
+            }],
+            headers: &[],
+            auth: &[&["acme.token"]],
+            subprotocols: &[],
+        }),
+        discriminator: Some(Selector {
+            source: "payload",
+            name: "type",
+        }),
+        delivery_id: None,
+        payload: &[],
+        payload_root: false,
+        declaration_json: "{}",
+    });
+    read_config(ConfigField {
+        name: "subdomain",
+        service: "default",
+        label: "Acme subdomain",
+        help: "The part of your Acme URL before the dot.",
+        example: Some("acme"),
+        format: "subdomain",
+        required: true,
+        default: None,
+        approval: Approval::None,
+        secret: false,
+        docs_url: None,
+        binds: "endpoint.subdomain",
+        also_binds: &[],
+        also_services: &[],
+        declaration_json: "{}",
+    });
+
+    // And the shipped catalogue's own instances, through the same readers, so the fields are
+    // exercised against real data whatever the catalogue holds.
+    for provider in catalog::providers() {
+        for event in provider.events {
+            read_event(*event);
+        }
+        for channel in provider.channels {
+            read_channel(*channel);
+        }
+        for field in provider.config {
+            read_config(*field);
+        }
     }
 }

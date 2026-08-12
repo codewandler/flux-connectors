@@ -138,8 +138,11 @@ the one that is *distributed*.
 
 #### 2.2 Measured (2026-08-12, commands inline)
 
-- Pack size: **9,547,465 bytes** (`wc -c crates/catalog-reader/catalog.pack`), against
-  9,517,303 bytes of canonical documents (`du -sb catalog/`) — the index costs ~30 KB, ~0.3%.
+- Pack size: **9,547,465 bytes** (`wc -c crates/catalog-reader/catalog.pack`), of which the
+  payload — the concatenated documents — is 9,494,998 bytes by the pack's own header
+  (`grep -m1 -a '^payload ' crates/catalog-reader/catalog.pack`), so the header and index cost
+  52,467 bytes, ≈ 0.55%. (`du -sb catalog/` → 9,517,303 is *not* the payload figure: that
+  directory also holds `connector-document.schema.json`, which the pack does not carry.)
 - What compression would buy at rest: gzip -9 → 697,599 bytes, zstd -3 → 561,589, zstd -19 →
   336,537 (each `<tool> -c catalog.pack | wc -c`). The layers that actually carry the bytes
   already take it: the crates.io `.crate` is a gzipped tar, and git compresses blobs — so the

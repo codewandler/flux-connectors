@@ -13,9 +13,10 @@
 //! from the same place it does for every other committed artifact: review and provenance, not this
 //! hash.
 //!
-//! Checked three ways in `tests/sha256.rs`: the FIPS 180-4 vectors, a one-million-`a` message, and
-//! byte-for-byte agreement with the `sha2` crate (a dev-dependency only) across lengths that cross
-//! every padding boundary.
+//! Checked three ways: the FIPS 180-4 vectors and the one-million-`a` message in this module's own
+//! unit tests below, and byte-for-byte agreement with the `sha2` crate (a dev-dependency only)
+//! across lengths that cross every padding boundary in
+//! `tests/pack.rs::the_vendored_sha256_agrees_with_sha2_across_padding_boundaries`.
 
 /// The eight initial hash values (FIPS 180-4 §5.3.3): the fractional parts of the square roots of
 /// the first eight primes.
