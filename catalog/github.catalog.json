@@ -86,7 +86,7 @@
     ]
   ],
   "description": "GitHub REST API: discover the authenticated user, their organisations and reachable repositories; read repositories, commits, issues, pull requests and Actions workflow runs; and write issues and issue comments",
-  "generator": "flux-connectors 0.23.0",
+  "generator": "flux-connectors 0.24.0",
   "operations": [
     {
       "auth": [

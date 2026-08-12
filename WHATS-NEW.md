@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-08-12
+
 ### New
 
 - **GitHub and Anthropic connections can be authorized by signing in, not just by pasting a token.**

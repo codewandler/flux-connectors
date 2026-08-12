@@ -21,7 +21,7 @@
     ]
   ],
   "description": "Resend transactional email: send a message, read what happened to it, and list or inspect the domains a key may send from",
-  "generator": "flux-connectors 0.23.0",
+  "generator": "flux-connectors 0.24.0",
   "operations": [
     {
       "auth": [

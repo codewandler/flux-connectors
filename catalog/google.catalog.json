@@ -21,7 +21,7 @@
     ]
   ],
   "description": "Google Workspace: read and send Gmail messages, read and create Calendar events, read and rename Drive files",
-  "generator": "flux-connectors 0.23.0",
+  "generator": "flux-connectors 0.24.0",
   "operations": [
     {
       "auth": [

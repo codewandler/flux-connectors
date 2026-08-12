@@ -63,7 +63,7 @@
     ]
   ],
   "description": "Datadog monitoring: list and inspect monitors, list and inspect incidents. Authenticates every request with an API key and an Application key together",
-  "generator": "flux-connectors 0.23.0",
+  "generator": "flux-connectors 0.24.0",
   "operations": [
     {
       "auth": [

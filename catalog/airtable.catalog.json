@@ -21,7 +21,7 @@
     ]
   ],
   "description": "Airtable records: read, create, update and delete a record in a base's table",
-  "generator": "flux-connectors 0.23.0",
+  "generator": "flux-connectors 0.24.0",
   "operations": [
     {
       "auth": [

@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-08-12
+
 ### Added
 
 - **Anthropic declares both of its OAuth2 login flows** (C-555, completing the cross-repo login

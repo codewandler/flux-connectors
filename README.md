@@ -11,7 +11,7 @@ one read that proves the connection works. Out come typed Flux operations, capab
 queryable Rust catalogue, and a flux Tool pack.
 
 > [!WARNING]
-> **v0.23.0 is a compiler, a catalogue and a Tool pack.** None of the published crates opens a socket;
+> **v0.24.0 is a compiler, a catalogue and a Tool pack.** None of the published crates opens a socket;
 > the pack authenticates and dispatches through an `http.request` its caller supplies. The one host in
 > this repository is `crates/connectors-api` — `publish = false`, loopback-only, and the thing that has
 > actually sent bytes to a vendor. See [Current limitations](#current-limitations).
@@ -117,7 +117,7 @@ If you have no Rust toolchain and no clone, take the pack from the release inste
 attaches it beside a one-line checksum, so a consumer verifies before parsing:
 
 ```bash
-base=https://github.com/codewandler/flux-connectors/releases/download/v0.23.0
+base=https://github.com/codewandler/flux-connectors/releases/download/v0.24.0
 curl -fsSLO "$base/catalog.pack" -O "$base/catalog.pack.sha256"
 sha256sum -c catalog.pack.sha256   # catalog.pack: OK
 ```

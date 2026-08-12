@@ -64,7 +64,7 @@
     ]
   ],
   "description": "Babelforce voice platform: agent availability, live and reported calls, and the session variables a flow reads and writes. The full manager-sdk surface — agents, calls, sessions, outbound, phonebook, reporting, task automation and scheduling — is catalogued and callable; the operations above are the ones a model drives directly",
-  "generator": "flux-connectors 0.23.0",
+  "generator": "flux-connectors 0.24.0",
   "operations": [
     {
       "auth": [

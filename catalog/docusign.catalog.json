@@ -61,7 +61,7 @@
     ]
   ],
   "description": "DocuSign eSignature REST API: list and read envelopes and their recipients, create an envelope from a template, and void one",
-  "generator": "flux-connectors 0.23.0",
+  "generator": "flux-connectors 0.24.0",
   "operations": [
     {
       "auth": [

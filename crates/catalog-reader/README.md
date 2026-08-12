@@ -11,7 +11,7 @@ SHA-256 check is vendored.
 
 ```toml
 [dependencies]
-codewandler-connector-catalog-reader = "0.23"
+codewandler-connector-catalog-reader = "0.24"
 ```
 
 The library name is `catalog_reader`:
