@@ -21,7 +21,7 @@
 //! | Issue | Rule over the IR | Owning story |
 //! |---|---|---|
 //! | [`NO_CREDENTIAL`] | the operation's effective auth is empty, and it did not *declare* it so | C-17 |
-//! | [`CREDENTIAL_NOT_INJECTED`] | the operation's effective auth is **not** empty | C-10 |
+//! | [`CREDENTIAL_NOT_INJECTED`] | the operation's effective auth is **not** empty | C-534 |
 //! | [`UNBOUND_BASE_URL_TEMPLATE`] | the operation's base URL carries a `{name}` placeholder whose declared configuration field has no default | C-17 |
 //!
 //! The first two are complementary over every operation that has *not* declared itself public: one
@@ -57,7 +57,8 @@
 //! [`CREDENTIALS_REACH_THE_REQUEST`] — whether the emitter attaches a declared credential to the
 //! request it generates. That is a property of `connector-flux`, not of any provider, so no walk of
 //! the IR can answer it. It is one commented `const` rather than a list of affected operations, and
-//! closing C-10 flips it in one line.
+//! the program that replaces the emitted module with the catalog artifact (C-534) flips it in one
+//! line.
 //!
 //! # Scope, and why it is on the issue rather than on the operation
 //!
@@ -75,13 +76,18 @@ use connector_spec::{Binding, Connector, Operation};
 ///
 /// **The one fact in this module that is not derived from the IR.** `connector-flux` emits no auth
 /// at all today — the generated `op` builds a URL and calls `http.request` with `method` and `url`
-/// and nothing else — because injection is C-10's, and the `$auth` marker it needs is a change that
-/// must land in *flux* first (`docs/designs/auth-seam.md`). `flux`'s `{"$secret": "ENV"}` is a
-/// whole-value replacement, so it produces neither a `Bearer ` prefix nor a base64-joined Basic
-/// pair.
+/// and nothing else.
+///
+/// Injection was C-10's, and C-535 closed C-10 as superseded-never-implemented: Decision 0022 rules
+/// that flux never grows a connector module loader, so a module naming a credential for flux to
+/// resolve has no consumer and the `$auth` marker is not coming
+/// (`docs/designs/auth-seam.md` records the road not taken). Auth assembly landed in Rust instead —
+/// the `Bearer ` prefix, the base64-joined Basic pair and query placement are `connector-pack`'s
+/// (C-114/C-115/C-116) — which is what a *host* uses; the emitted module stays credential-free, and
+/// the compiled form a resolver reads becomes the catalog artifact under C-534's program.
 ///
 /// It is a `const` and not a list of operation ids on purpose: the fact is uniform across the whole
-/// catalogue, and the story that closes it flips this one line rather than deleting an inventory
+/// catalogue, and the program that closes it flips this one line rather than deleting an inventory
 /// someone would otherwise have to keep in step.
 const CREDENTIALS_REACH_THE_REQUEST: bool = false;
 
@@ -145,7 +151,7 @@ impl CredentialRequirement {
     /// [`Declared`](Self::Declared) has none because there is nothing to report about it — the
     /// operation names its credentials, and that is the whole statement. What it does carry is
     /// [`CREDENTIAL_NOT_INJECTED`], which is about the *emitter* rather than about the operation's
-    /// requirement, and which disappears for every operation at once when C-10 lands.
+    /// requirement, and which disappears for every operation at once when C-534's program lands.
     pub const fn code(self) -> Option<&'static str> {
         match self {
             CredentialRequirement::Declared => None,
@@ -287,7 +293,13 @@ pub fn of(connector: &Connector, operation: &Operation) -> Status {
                 issues.push(Issue {
                     code: CREDENTIAL_NOT_INJECTED,
                     scope: Scope::Catalog,
-                    story: "C-10",
+                    // C-534's program, not C-10 (C-545). C-535 closed C-10 as superseded, so this
+                    // field — structured data a consumer may branch on — was naming work that is
+                    // never coming. It is the program rather than one of its children because no
+                    // child *delivers* credentialed requests: that arrived by another route
+                    // (`connector-pack`, C-114/C-115/C-116), and what closes this issue is the
+                    // program replacing the credential-free emitted module as the compiled form.
+                    story: "C-534",
                     summary: "Flux cannot yet apply connector credentials securely at request time, so this operation is unavailable for live calls."
                         .to_string(),
                     params: Vec::new(),
@@ -434,6 +446,56 @@ mod tests {
 
     fn note_codes(status: &Status) -> Vec<&str> {
         status.notes.iter().map(|note| note.code).collect()
+    }
+
+    fn stories(status: &Status) -> Vec<&str> {
+        status.issues.iter().map(|issue| issue.story).collect()
+    }
+
+    /// **No issue points a consumer at a story that is never coming** (C-545).
+    ///
+    /// [`Issue::story`] is not published, but it is still structured data a repository consumer may
+    /// branch on — which is why this is a pinned assertion rather than the prose correction C-542
+    /// made to the emitted manifest header. C-535 closed C-10 as superseded-never-implemented:
+    /// Decision 0022 states that flux never grows a connector module loader, so the `$auth` marker
+    /// the old pointer promised has no consumer and no story is going to deliver it. What replaces
+    /// it is C-534's program, exactly as the manifest header now says.
+    ///
+    /// The sweep is over every issue this module can derive, not only the credential one, so a
+    /// future rule cannot reintroduce the pointer in a branch nobody thought to check.
+    #[test]
+    fn no_issue_names_a_superseded_story() {
+        let declared = connector();
+        assert_eq!(
+            codes(&of(&declared, &declared.operations[0])),
+            vec![CREDENTIAL_NOT_INJECTED],
+            "the fixture must still be the shape that derives the credential-injection issue"
+        );
+        assert_eq!(
+            stories(&of(&declared, &declared.operations[0])),
+            vec!["C-534"],
+            "the credential-injection issue must name the program that replaces the emitted \
+             module, not C-10 — closed as superseded by C-535"
+        );
+
+        // Every other issue-producing shape: a withheld credential, an unbound base URL, and both
+        // at once. None of them may name C-10 either.
+        let mut withheld = connector();
+        withheld.auth.clear();
+        withheld.default_auth.clear();
+        let mut unbound = connector();
+        unbound.base_url = "https://{tenant}.acme.example".to_string();
+        let mut both = withheld.clone();
+        both.base_url = "https://{tenant}.acme.example".to_string();
+
+        for connector in [&declared, &withheld, &unbound, &both] {
+            let status = of(connector, &connector.operations[0]);
+            assert!(
+                !stories(&status).contains(&"C-10"),
+                "a route still serves the superseded C-10: {:?}",
+                status.issues
+            );
+        }
     }
 
     /// The two credential rules are complementary over every operation that has not declared itself

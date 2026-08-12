@@ -22,9 +22,12 @@
 //!   (C-411), a naming rule instead of a `rename` per operation (C-412), and one connector
 //!   compiling from **several** documents at once (C-410) — resolving the pin is not that; it picks
 //!   exactly one. See [`load`].
-//! - **The manifest is C-10's.** [`emit`] derives `<name>.connector.toml` from the IR here, because
-//!   `connector-flux` emits Flux and nothing else. C-10 replaces its body with the real capability
-//!   manifest — `http_hosts`, the endpoint env spec, and the credential declarations.
+//! - **The manifest is derived here**, not in `connector-flux`: [`emit`] builds
+//!   `<name>.connector.toml` from the IR because that crate emits Flux and nothing else. Replacing
+//!   its body with the real capability manifest — `http_hosts`, the endpoint env spec, the
+//!   credential declarations — was C-10's, and C-535 closed C-10 as superseded-never-implemented.
+//!   Under C-534's program the manifest becomes a projection of the catalog artifact, which is what
+//!   the emitted header now says (C-542).
 
 use std::collections::BTreeMap;
 
@@ -439,9 +442,10 @@ fn module(connector: &Connector, service: &str, operations: &[OperationRendering
 ///
 /// **A placeholder shape, and scoped like one.** The design's manifest carries `http_hosts`, the
 /// endpoint env spec and the credential declarations, mirroring flux's plugin-protocol vocabulary —
-/// all of which is C-10's Acceptance, and none of which can be written honestly before auth is
-/// modelled. What is here is what the IR already knows and a reviewer needs in order to read a
-/// diff: which connector this is, where it points, and which operations it publishes.
+/// all of which was C-10's Acceptance, closed as superseded-never-implemented by C-535 and now
+/// C-534's program's to place. What is here is what the IR already knows and a reviewer needs in
+/// order to read a diff: which connector this is, where it points, and which operations it
+/// publishes.
 ///
 /// # The inbound half (C-83)
 ///
@@ -486,7 +490,8 @@ fn manifest(connector: &Connector, service: &str) -> Result<String> {
         /// says it, including the 53 that say `http`.
         runtime: &'static str,
         /// **This service's** base URL, never the union of the provider's. A service's egress surface
-        /// is its own; C-10's `http_hosts` allowlist derives from exactly this value.
+        /// is its own; the `http_hosts` allowlist derives from exactly this value — C-10's until
+        /// C-535 closed it as superseded, C-534's program's now.
         base_url: &'a str,
         #[serde(skip_serializing_if = "Option::is_none")]
         api_version: Option<&'a str>,
