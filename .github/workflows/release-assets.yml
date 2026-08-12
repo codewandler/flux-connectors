@@ -1,0 +1,183 @@
+# Attaches the compiled catalogue to the GitHub release for a `vX.Y.Z` tag (C-547).
+#
+# Two assets, both derived from the committed pack AT THE TAG:
+#   catalog.pack         — the byte-identical file `connectors.lock`'s `[pack]` row records
+#   catalog.pack.sha256  — `sha256sum` output over it, so a client verifies before it parses
+# That is what lets a consumer with no Rust toolchain and no clone fetch the catalogue and check it
+# (`crates/catalog-reader/README.md` documents the client half). The workflow refuses to attach a
+# pack whose digest disagrees with the tag's own lockfile row: an asset the repository does not
+# vouch for, published under a digest that looks checked, is worse than no asset at all.
+#
+# WHY A SEPARATE WORKFLOW, not a job in crates-io.yml. Three reasons, all about the publish rather
+# than about the attachment: a published crate version cannot be withdrawn (AGENTS.md § Publishing
+# contract), so the irreversible step does not get a new way to go red; that workflow's
+# `concurrency: crates-io-publish` group with `cancel-in-progress: false` exists so two publish runs
+# cannot race, and an attachment queueing in it would delay a `workflow_dispatch` resume; and
+# uploading an asset needs `contents: write`, which crates-io.yml deliberately does not hold — it
+# runs at `contents: read`. The publish is untouched by this file, byte for byte.
+#
+# ORDERING — the release object usually does not exist when the tag is pushed. AGENTS.md § Release
+# process step 6 creates it with `gh release create` *after* the publish is green, so a tag-push run
+# that assumed a release would find none. All three orders are handled, and this workflow never
+# creates a release itself: creating one, even a draft, would make the operator's documented
+# `gh release create` fail on an existing tag, which is rewriting the release process from inside a
+# workflow rather than changing it.
+#   1. the release already exists at tag time  → the push run uploads.
+#   2. the release is created afterwards (the documented order) → the `release: published` trigger
+#      runs the same job against the same tag ref and uploads then.
+#   3. neither happened, or an upload failed → `workflow_dispatch` with the tag re-runs it.
+# The digest check runs on all three, so a pack disagreeing with its tag is a red run at tag time —
+# before any release exists to carry it — and `--clobber` makes the overlap between 1 and 2 a
+# no-op replacement of identical bytes rather than a name collision.
+#
+# `web/test/release_assets.test.mjs` pins the properties above against the reader README, so the
+# attachment cannot be narrowed away without a red suite.
+name: release assets
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  # The catch-up for the documented order: the release created after the publish went green.
+  release:
+    types: [published]
+  # Resumes an attachment for a tag whose release already exists — the counterpart of
+  # crates-io.yml's dispatch, and the reason the tag is an input rather than the checked-out branch.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The vX.Y.Z tag whose release should carry the catalogue"
+        required: true
+        type: string
+
+# Only what uploading a release asset needs. Nothing here reads a secret.
+permissions:
+  contents: write
+
+# Per tag, and never cancelling: the two triggers for one release can overlap, and an upload that is
+# cancelled halfway leaves the release carrying one asset of two. A group of its own, deliberately —
+# sharing crates-io.yml's would let an attachment delay a publish.
+concurrency:
+  group: release-assets-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  attach:
+    # A release published for something that is not a version tag is not this workflow's business;
+    # skipping it here keeps that from being a red run. The exact shape is still checked below,
+    # because `if:` expressions have no regular expressions and a typo in the dispatch input must
+    # not resolve to some other ref.
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # No checkout yet: this resolves *which* tag the run is about, and the checkout below is of
+      # that tag. Event fields arrive through the environment rather than through `${{ }}` inside
+      # the script, so a tag name is data to this shell and never source.
+      - name: Resolve the tag this run is about
+        id: tag
+        env:
+          EVENT: ${{ github.event_name }}
+          PUSH_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            push) tag="$PUSH_TAG" ;;
+            release) tag="$RELEASE_TAG" ;;
+            workflow_dispatch) tag="$INPUT_TAG" ;;
+            *) echo "::error::unexpected event $EVENT"; exit 1 ;;
+          esac
+          if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::'$tag' is not a vX.Y.Z release tag"
+            exit 1
+          fi
+          echo "name=$tag" >>"$GITHUB_OUTPUT"
+          echo "attaching the catalogue for $tag (event: $EVENT)"
+
+      - name: Check out the tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          # The asset must be the committed pack at the tag, byte for byte. The default ref is the
+          # branch for a `release` or `workflow_dispatch` run, and attaching whatever main happened
+          # to hold that afternoon is the one way this goes quietly wrong — the digest check below
+          # would still pass, against that pack's own lockfile.
+          ref: refs/tags/${{ steps.tag.outputs.name }}
+          # This job holds a write-scoped token and needs it only for `gh`; nothing here talks to
+          # git over the network, so the credential does not stay in the checkout's config.
+          persist-credentials: false
+
+      - name: Verify the pack against the tag's lockfile and stage the assets
+        id: stage
+        env:
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          set -euo pipefail
+
+          # The lockfile names the pack's path, so the file that is hashed and attached is the one
+          # `connectors.lock` is about. A pack that moves does not silently attach a stale path.
+          pack=$(awk '/^\[pack\]$/ {inside=1; next} /^\[/ {inside=0} inside && /^path = / {gsub(/^path = "|"$/, ""); print; exit}' connectors.lock)
+          locked=$(awk '/^\[pack\]$/ {inside=1; next} /^\[/ {inside=0} inside && /^sha256 = / {gsub(/^sha256 = "|"$/, ""); print; exit}' connectors.lock)
+          if [ -z "$pack" ] || [ -z "$locked" ]; then
+            echo "::error::$TAG's connectors.lock has no [pack] row with both path and sha256 — there is nothing this workflow can vouch for"
+            exit 1
+          fi
+          if [ ! -f "$pack" ]; then
+            echo "::error::$TAG's connectors.lock names $pack, which the tag does not contain"
+            exit 1
+          fi
+
+          # The out-of-band digest: over the whole file, and the number the repository published in
+          # the lockfile rather than one the asset asserts about itself.
+          computed=$(sha256sum "$pack" | cut -d ' ' -f 1)
+          if [ "$computed" != "$locked" ]; then
+            echo "::error::$pack hashes to $computed but $TAG's connectors.lock [pack] row states $locked — refusing to attach a catalogue the tag does not vouch for"
+            exit 1
+          fi
+
+          # The in-band digest, which is a *different* value by construction: the header's `digest`
+          # line covers every byte after itself, so it cannot cover the line that states it. This is
+          # the check `Pack::load` makes (Error::DigestMismatch), made here so a pack that would be
+          # refused on load is refused before a client can download it.
+          stated=$(sed -n '2p' "$pack" | awk '$1 == "digest" && $2 == "sha256" { print $3 }')
+          content=$(tail -c "+$(( $(head -n 2 "$pack" | wc -c) + 1 ))" "$pack" | sha256sum | cut -d ' ' -f 1)
+          if [ -z "$stated" ] || [ "$stated" != "$content" ]; then
+            echo "::error::$pack states header digest '$stated' but its content hashes to $content — Pack::load would refuse this file"
+            exit 1
+          fi
+
+          # `sha256sum -c` format — `<64 hex><two spaces>catalog.pack` — which is what v0.22.0's
+          # assets carry and what the reader README tells a consumer to run.
+          cp "$pack" "$RUNNER_TEMP/catalog.pack"
+          printf '%s  catalog.pack\n' "$computed" >"$RUNNER_TEMP/catalog.pack.sha256"
+          echo "digest=$computed" >>"$GITHUB_OUTPUT"
+          echo "$pack at $TAG: $(wc -c <"$RUNNER_TEMP/catalog.pack") bytes, sha256 $computed, content digest $content"
+
+      - name: Attach the catalogue to the release for the tag
+        env:
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          set -euo pipefail
+
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::no GitHub release exists for $TAG yet — the release is created once the publish is green, and this workflow's release:published trigger attaches the catalogue then. The pack was verified against the tag's lockfile above."
+            exit 0
+          fi
+
+          # --clobber: the two triggers for one release can both reach here, and a re-run must
+          # replace the asset rather than fail on its name. The bytes are a function of the tag, so
+          # a replacement is a no-op.
+          gh release upload "$TAG" "$RUNNER_TEMP/catalog.pack" "$RUNNER_TEMP/catalog.pack.sha256" --clobber
+
+          # Read the release back rather than trusting the upload's exit code: the asset a consumer
+          # fetches is the one listed here.
+          attached=$(gh release view "$TAG" --json assets --jq '[.assets[].name] | join(" ")')
+          for asset in catalog.pack catalog.pack.sha256; do
+            case " $attached " in
+              *" $asset "*) ;;
+              *) echo "::error::$asset is not attached to $TAG after the upload (assets: $attached)"; exit 1 ;;
+            esac
+          done
+          echo "$TAG carries: $attached"
