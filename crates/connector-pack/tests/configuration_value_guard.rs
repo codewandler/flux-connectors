@@ -22,6 +22,7 @@
 //! thing goes: a host the operator never named, carrying that operator's own token, through an
 //! egress gate that was shown a subject ending in `zendesk.com`.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use catalog::OperationKey;
@@ -282,46 +283,75 @@ fn a_query_value_is_encoded_by_the_encoder_that_already_exists() {
 /// provider declares a header pin yet (C-164's Algolia will be the first).
 ///
 /// This is the one position here with a classic exploit: a CR/LF in a field value appends a header
-/// of the value's choosing to *every* request the service makes. The fixture is a real catalogue
-/// entry with its emitted Flux replaced by the shape `connector-flux` emits for a header pin — a
-/// literal holding the placeholder, bound above the URL, read as a header record value.
+/// of the value's choosing to *every* request the service makes.
+///
+/// # The fixture is a **document** now, and it had to become one (C-538)
+///
+/// It used to be a real catalogue entry with its emitted Flux replaced by the shape
+/// `connector-flux` emits for a header pin. `Operation::build_request` reads the canonical document
+/// since C-538, so a doctored *module* no longer changes the request the pack composes — the
+/// fixture would have kept passing while exercising nothing at all, which is worse than deleting
+/// it. So the same connector shape is written in the artifact the request is now derived from: one
+/// operation whose `endpoint` map places `app_id` in a `header` and `teamId` in a `query`.
+///
+/// **The guard itself did not move and did not change.** `Slot::Header`'s rule is
+/// `connector-resolve`'s, character for character the rule `connector-pack` held before, and the
+/// seven assertions above this one still run against shipped connectors through
+/// `Operation::build_request`.
 #[test]
 fn a_newline_cannot_reach_a_header_pin() {
-    const WITH_HEADER_PIN: &str = r#"
-op vercel-projects-list -> Any
-  description "A fixture: the shape connector-flux emits for a header pin."
-  risk "low"
-  idempotency "idempotent"
-  effects ["network"]
-  expose true
+    /// The shape a connector declaring a header pin lowers to: the pin is a `{placeholder}` in the
+    /// header's value template, and the document's `endpoint` map says where it lands.
+    fn fixture() -> String {
+        serde_json::to_string(&json!({
+            "connector": "vercel",
+            "services": [{"name": "default", "base_url": "https://api.vercel.com"}],
+            "operations": [{
+                "id": "vercel-projects-list",
+                "service": "default",
+                "expose": true,
+                "params": [],
+                "endpoint": {"teamId": ["query"], "app_id": ["header"]},
+                "request": {
+                    "method": "GET",
+                    "url": "{base}/v10/projects",
+                    "headers": {"X-App-Id": "{app_id}"},
+                    "query": [{"name": "teamId", "value": "{teamId}"}],
+                },
+            }],
+        }))
+        .expect("the fixture serializes")
+    }
 
-  base = "https://api.vercel.com"
-  teamId = "{teamId}"
-  X_App_Id = "{app_id}"
-  url = fmt("{base}/v10/projects?teamId={teamId}")
-  response = http.request(headers: { "X-App-Id": X_App_Id }, method: "GET", url)
-  return response
-"#;
+    let document = connector_resolve::document::Document::parse(&fixture())
+        .expect("the fixture is a canonical document");
+    let operation = document
+        .operation("vercel-projects-list")
+        .expect("the fixture carries it");
+    let base = document.base_url("default").expect("the fixture's service");
 
-    let entry = catalog::operation(OperationKey::id("vercel-projects-list"))
-        .expect("the shipped catalogue carries it");
-    let mut doctored = *entry;
-    doctored.flux = Box::leak(WITH_HEADER_PIN.to_string().into_boxed_str());
-    let doctored: &'static catalog::Operation = Box::leak(Box::new(doctored));
-
-    let fixture = |app_id: &str| {
-        let configuration = configured(&[
-            ("vercel", "default", "teamId", "team_abc123"),
-            ("vercel", "default", "app_id", app_id),
-        ]);
-        Operation::project(doctored, http(), credentials(), configuration)
-            .expect("the fixture projects")
+    let built = |app_id: &str| {
+        connector_resolve::build_request(
+            operation,
+            base,
+            &json!({}),
+            &BTreeMap::from([
+                ("teamId".to_string(), "team_abc123".to_string()),
+                ("app_id".to_string(), app_id.to_string()),
+            ]),
+        )
+        .map_err(|error| error.to_string())
     };
 
-    let sent = built(&fixture("APP123"), json!({})).expect("an application id is a field value");
+    let sent = built("APP123").expect("an application id is a field value");
     assert_eq!(
         sent.headers.get("X-App-Id").map(String::as_str),
         Some("APP123")
+    );
+    assert!(
+        sent.url.ends_with("/v10/projects?teamId=team_abc123"),
+        "{}",
+        sent.url
     );
 
     for value in [
@@ -333,12 +363,13 @@ op vercel-projects-list -> Any
         "APP123 ",
         " ",
     ] {
-        let Err(refusal) = built(&fixture(value), json!({})) else {
+        let Err(refusal) = built(value) else {
             panic!("`{}` was accepted as a header value", value.escape_debug());
         };
         assert!(
             refusal.contains("vercel-projects-list") && refusal.contains("app_id"),
-            "the refusal names neither the operation nor the field: {refusal}"
+            "`{}`: the refusal names neither the operation nor the field: {refusal}",
+            value.escape_debug()
         );
     }
 }

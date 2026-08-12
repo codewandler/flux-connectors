@@ -1,5 +1,21 @@
 //! The request an operation makes, built from the operation's own emitted Flux.
 //!
+//! # **This is no longer the resolve path** (C-538)
+//!
+//! [`crate::Operation::build_request`] reads the canonical document's request template through
+//! [`connector_resolve`], and the AST evaluation below is unreachable from it. What still reaches
+//! here is [`crate::Rehearsal`], which takes a module's text and nothing else — and which is
+//! therefore the *Flux-derived* half of the whole-catalogue differential gate in
+//! `tests/catalogue_differential.rs`. Both halves have to exist for that gate to compare anything,
+//! which is why this module is retired rather than deleted; the deletion is C-540's, behind the
+//! gate, per Decision 0022's migration rule.
+//!
+//! The **rules** are not duplicated. `Slot` and its validators, the brace grammar and flux-lang's
+//! value semantics moved to `connector-resolve` and are imported back here, so what the gate
+//! compares is two *derivations* rather than two copies of one derivation.
+//!
+//! What follows describes the Flux side, unchanged.
+//!
 //! # Why the declaration, and not a second lowering
 //!
 //! [`crate::spec`] projects the *contract* by reading the shipped `op` declaration back, because two
@@ -115,7 +131,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use connector_address::HttpsOrigin;
+// **The rules moved to `connector-resolve` and this module reads them from there** (C-538). `Slot`,
+// its validators, the brace grammar and flux-lang's value semantics are the *same* rules the
+// document-derived plan is held to — imported rather than kept in parallel, so the differential gate
+// compares two derivations rather than two copies of one.
+use connector_resolve::{scan_template, text, truthy};
+pub(crate) use connector_resolve::{validate_templated_authority, Request, Slot};
 use flux_lang::ast::Node;
 use flux_lang::program::CompositeOpDecl;
 use serde_json::Value;
@@ -125,134 +146,6 @@ use crate::Error;
 /// The op the whole pack delegates to. Named once so the check below is a comparison rather than a
 /// scattered string.
 const HTTP_REQUEST: &str = "http.request";
-
-/// The header this software identifies itself in.
-const USER_AGENT: &str = "User-Agent";
-
-/// **What this software calls itself on the wire** (C-223).
-///
-/// A product token and its version, per RFC 9110 §10.1.5, with the repository as the comment a
-/// vendor can act on. It names *this* software rather than a browser or a bare product word, which
-/// is the acceptance the story states in the form it matters: a `User-Agent` that lies is worse than
-/// one that is absent, because a vendor's rate limit, allow-list and support desk all believe it.
-///
-/// Both halves are read from the manifest rather than typed, so neither can go stale at a release:
-/// `CARGO_PKG_VERSION` is the workspace version every crate here inherits, and
-/// `CARGO_PKG_REPOSITORY` is the `repository` field the publishing contract already requires. The
-/// concatenation is `const`, so this costs nothing at runtime and is one `&'static str` a test can
-/// compare against.
-pub const DEFAULT_USER_AGENT: &str = concat!(
-    "flux-connectors/",
-    env!("CARGO_PKG_VERSION"),
-    " (+",
-    env!("CARGO_PKG_REPOSITORY"),
-    ")"
-);
-
-/// **The request**: `{ method, url, headers, body }`, exactly `http.request`'s own input.
-///
-/// A typed value rather than a bare `serde_json::Value` so a test can assert on the pieces that go
-/// wrong silently — a flattened body, a missing `?`/`&` separator — instead of on a blob.
-/// [`Request::to_params`] is the one place it becomes the JSON `http.request` reads.
-#[derive(Clone, PartialEq, Eq)]
-pub struct Request {
-    /// The HTTP method, as `http.request` spells it (`GET`, `PUT`, …).
-    pub method: String,
-    /// The absolute request URL, query string included.
-    pub url: String,
-    /// The request headers. `BTreeMap` because the emitted record is one, so the order is the
-    /// module's order rather than a hash seed's.
-    pub headers: BTreeMap<String, String>,
-    /// The request body as the text `http.request` sends, or `None` for a request that has none.
-    ///
-    /// Text rather than a `Value` because that is what actually travels: `http.request` reads its
-    /// `body` argument with `Value::as_str`, and the emitter binds the payload to a symbol
-    /// precisely so flux stores it as canonical JSON *text* rather than handing over an object that
-    /// would be dropped without a word.
-    pub body: Option<String>,
-}
-
-/// **Hand-written, and no value prints** (C-159, finding 1).
-///
-/// A `Request` carries the assembled credential *after* `auth::place` has run — in a header value,
-/// and for a query placement in the URL itself — and this type is `pub`, so a host can hold one and
-/// format it. C-152 hand-wrote a redacting `Debug` for `auth::Assembled` for
-/// exactly this reason, and the review that closed it observed that this is the **larger** of the
-/// two exposures: `Assembled` is constructed at one internal site and never escapes, while this is
-/// public API.
-///
-/// The rule is **shape without values**, which is what a `Debug` of a request is read for: the
-/// method, the host, the path, the header *names* and the query-parameter *names* stay, and every
-/// value is `<redacted>`. Nothing here tries to work out which header holds the credential — a
-/// request cannot know, and an allow-list of "safe" header names is a list that rots into a leak the
-/// first time a vendor puts a token somewhere new.
-///
-/// A body prints as present or absent and never as content, and never as a length: a length is a
-/// fingerprint, which is the care [`connector_secrets::Secret`]'s own `Debug` already takes. No
-/// placement puts a credential in a body today, so this is the same foot-gun argument the derive
-/// itself lost — the value is caller data, and the only thing a reader needs from it here is whether
-/// one was built at all.
-impl std::fmt::Debug for Request {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Request")
-            .field("method", &self.method)
-            .field("url", &redacted_url(&self.url))
-            .field("headers", &HeaderNames(&self.headers))
-            .field("body", &self.body.as_ref().map(|_| Redacted))
-            .finish()
-    }
-}
-
-/// A value that does not print. A type rather than a `format_args!` at each site, because the header
-/// map needs it as a `Debug` *value* inside an entry and `Option::map` needs it as one too.
-struct Redacted;
-
-impl std::fmt::Debug for Redacted {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("<redacted>")
-    }
-}
-
-/// The headers as their names, every value [`Redacted`].
-struct HeaderNames<'a>(&'a BTreeMap<String, String>);
-
-impl std::fmt::Debug for HeaderNames<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_map()
-            .entries(self.0.keys().map(|name| (name, Redacted)))
-            .finish()
-    }
-}
-
-/// A URL with every query-parameter *value* redacted and every parameter *name* kept.
-///
-/// The cut is at the `?` because that is where the two kinds of data separate: everything before it
-/// is the emitter's own — a host and a path, the facts a reader is chasing — and everything after it
-/// is values, one of which may be a [`Placement::Query`](catalog::Placement::Query) credential.
-///
-/// Anything in the query that is not a `name=value` pair is redacted whole rather than reasoned
-/// about. Fail-closed costs one word of debugging output in a case the emitter does not produce.
-fn redacted_url(url: &str) -> String {
-    let Some((base, query)) = url.split_once('?') else {
-        return url.to_owned();
-    };
-    let mut out = String::with_capacity(url.len());
-    out.push_str(base);
-    out.push('?');
-    for (index, pair) in query.split('&').enumerate() {
-        if index > 0 {
-            out.push('&');
-        }
-        match pair.split_once('=') {
-            Some((name, _)) => {
-                out.push_str(name);
-                out.push_str("=<redacted>");
-            }
-            None => out.push_str("<redacted>"),
-        }
-    }
-    out
-}
 
 /// Apply Flux 0.54's structured-query wire contract to an evaluated query record — C-30.
 fn append_structured_query(url: &mut String, query: Value) -> Result<(), String> {
@@ -342,33 +235,6 @@ fn query_decode(value: &str) -> String {
         }
     }
     String::from_utf8_lossy(&decoded).into_owned()
-}
-
-impl Request {
-    /// The params `http.request` is called with.
-    ///
-    /// `headers` and `body` are omitted when empty rather than sent as `{}`/`""`, so a request this
-    /// pack builds is the same JSON a hand-written `http.request` call would carry.
-    pub fn to_params(&self) -> Value {
-        let mut params = serde_json::Map::new();
-        params.insert("url".to_string(), Value::String(self.url.clone()));
-        params.insert("method".to_string(), Value::String(self.method.clone()));
-        if !self.headers.is_empty() {
-            params.insert(
-                "headers".to_string(),
-                Value::Object(
-                    self.headers
-                        .iter()
-                        .map(|(name, value)| (name.clone(), Value::String(value.clone())))
-                        .collect(),
-                ),
-            );
-        }
-        if let Some(body) = &self.body {
-            params.insert("body".to_string(), Value::String(body.clone()));
-        }
-        Value::Object(params)
-    }
 }
 
 /// **The endpoint-configuration variables `declaration` needs**, in stable order.
@@ -604,382 +470,6 @@ fn walk_literals_node(node: &Node, visit: &mut dyn FnMut(&str)) {
         // symbols the body binds, which is the opposite of what this is looking for.
         _ => {}
     }
-}
-
-/// **Where a configuration variable lands on the request** — and therefore what its value may be.
-///
-/// The three request positions need three answers, and "percent-encode it" is the wrong answer to
-/// two of them. Encoding a *path segment* is meaningful; encoding a **host** is not, because a host
-/// has different legal syntax and a different failure mode, and there is no encoding at all for an
-/// HTTP field value — a bad one can only be refused.
-///
-/// | slot | answer | why |
-/// |---|---|---|
-/// | [`Host`](Self::Host) | refuse unless the whole composed authority is a hostname | a value here moves the **origin**; see [`validate_authority`] |
-/// | [`Path`](Self::Path) | refuse | a `zone_id` with a `/` in it is an operator's mistake, and silently encoding it produces a 404 they cannot diagnose |
-/// | [`Query`](Self::Query) | refuse structural characters, then pass the raw value to the structured query record | request assembly encodes every query key and value exactly once |
-/// | [`Header`](Self::Header) | refuse | a CR or LF appends a header of the value's choosing, and no encoding exists to make it safe |
-/// | [`Unplaced`](Self::Unplaced) | refuse unless **every** rule above accepts it, the host rule included | fail closed |
-///
-/// # This is a second spelling of `connector_spec::Position::validate_value`, deliberately
-///
-/// C-214 asks for that predicate to be *reused* rather than reimplemented — "two spellings of one
-/// rule is the defect this story is an instance of" — and it takes the story's sanctioned
-/// alternative instead: replaced, with the reason recorded. Three facts, in the order they matter.
-///
-/// **Reuse could never have covered this type.** `connector_spec::Position` is a closed set of the
-/// three positions a *pinned* value lands on, and it has **no `Host` variant** — a templated host is
-/// `Binding::Endpoint`, a different binding asking a different question. So [`validate_authority`]
-/// had to be written here whatever else happened, and reuse could have covered at best three of
-/// these five slots: the severe half of this story, the half that predates C-187, was never
-/// reusable. That is the argument, and it stands on its own.
-///
-/// **The edge does not exist.** Every `connector_spec` name in `connector-pack` today is prose in a
-/// doc comment; the pack's input is the *catalogue*, which carries no `binds` target and no
-/// `Position` (that is C-87). Adding it is a manifest and lockfile change, both outside what this
-/// change is allowed to touch.
-///
-/// **It is not forbidden, and this comment previously implied it was.** `AGENTS.md`'s dependency
-/// fence is *directional* — it forbids the compiler crates from reaching the host and network side,
-/// and `connector-pack` → `connector-spec` is the opposite direction, unguarded. `connector-spec` is
-/// already in the publish closure, so the edge would not enlarge it either. The reason to weigh the
-/// edge carefully is the `Host` argument above plus the design intent this module opens with, not a
-/// rule that would refuse it.
-///
-/// # Where the two spellings actually differ
-///
-/// Not "exact" — an earlier revision of this comment claimed that, and it was wrong in a way someone
-/// would have trusted instead of re-measuring. Against
-/// `crates/connector-spec/src/config.rs:269-333`, the path and header rules match character for
-/// character. The query rule differs by exactly one character:
-///
-/// | | refuses in a query value |
-/// |---|---|
-/// | `connector-spec` | `&` `=` `?` `#` `+` **`%`**, whitespace, control |
-/// | here ([`validate_query`]) | `&` `=` `?` `#` `+`, whitespace, control |
-///
-/// **The difference is principled rather than accidental, and it is safe in this direction.** The
-/// loader's own stated reason for refusing `%` is that "nothing percent-encodes a query value on the
-/// way out" — true where it runs, because a declared `example` is never encoded by anything. Here a
-/// value *is* encoded: [`crate::auth::query_encode`] maps `%` to `%25` along with every other
-/// non-unreserved byte, so `50%off` travels as `50%25off` and cannot become an escape the vendor
-/// re-reads. Refusing it here would reject a legitimate value for a hazard the encoder removes.
-///
-/// The asymmetry runs the **fail-safe way**: the loader is the stricter of the two, so a provider
-/// author cannot ship `example = "50%off"` for a query pin, while a tenant may still supply one. A
-/// drift in the other direction — runtime stricter than loader — would ship an example no tenant
-/// could use, and that is the one worth a test if these ever move.
-///
-/// **Unifying the two behind one crate is the follow-up**, and unification has to settle this
-/// divergence rather than paper over it: one rule cannot both know about an encoder and not.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Slot {
-    /// A complete operator-approved HTTPS origin. The connector appends its reviewed API path.
-    Origin,
-    /// The authority of a templated base URL — the `{subdomain}` of
-    /// `https://{subdomain}.zendesk.com`. The severe one, and the one that predates C-187.
-    Host,
-    /// A path segment: a `{var}` in the path half of a base URL (docusign's `{account_id}`,
-    /// contentful's `{space_id}`), or a `Position::Path` pin (cloudflare's `{zone_id}`).
-    Path,
-    /// A query parameter value — a `Position::Query` pin, such as vercel's `{teamId}`.
-    Query,
-    /// A request header value — a `Position::Header` pin. No shipped provider declares one; C-164
-    /// will be the first, which is why the guard is proved against a fixture.
-    Header,
-    /// **A placeholder this derivation could not place in exactly one position** — either because
-    /// the emitter produced a shape it does not model, or because the value genuinely lands in more
-    /// than one (C-229).
-    ///
-    /// It exists so that an emitter which grows a shape this does not model degrades into *more*
-    /// refusal rather than into none, which is the same choice [`Error::Unbuildable`] makes for the
-    /// evaluator, applied to the guard. Its rule is therefore the **intersection of every position's
-    /// rule**, the host's included, and it does not encode: an encoding is only safe where the
-    /// position is known.
-    ///
-    /// # C-229 made it reachable, deliberately, and this is the decision rather than an inheritance
-    ///
-    /// `providers/algolia.toml` declares one `[[config]]` field whose value is both the `{app_id}`
-    /// of `https://{app_id}.algolia.net` and the `X-Algolia-Application-Id` header on every call, so
-    /// [`record`] sees one variable in two positions and collapses it here. **That is the right
-    /// answer rather than a degradation**, and it is the answer the story asks for in as many words:
-    /// a value reaching a hostname and a header must satisfy *both* predicates, the host predicate
-    /// is the strict one, and a value legal in a header and illegal in a hostname is refused rather
-    /// than encoded differently per destination. This arm is exactly that — every rule at once, one
-    /// substituted string.
-    ///
-    /// The name is now half a description: `algolia/app_id` is not unplaceable, it is *multiply*
-    /// placed. Renaming it to something like `Everywhere` was weighed and left alone, because the
-    /// two cases share one rule and one reason for it, and a second variant carrying the identical
-    /// arm would be two spellings of one answer — the defect this repository keeps writing stories
-    /// about. What the two cases do not share is how they are audited, and that is
-    /// [`tests::every_shipped_configuration_variable_is_placed`]'s job: it names the multiply-placed
-    /// variables explicitly, so an *accidental* arrival here is still a red test.
-    Unplaced,
-}
-
-impl Slot {
-    /// The word a refusal calls this position by.
-    pub(crate) fn word(self) -> &'static str {
-        match self {
-            Self::Origin => "HTTPS origin",
-            Self::Host => "host",
-            Self::Path => "path segment",
-            Self::Query => "query parameter",
-            Self::Header => "header",
-            Self::Unplaced => "unplaced position",
-        }
-    }
-
-    /// **Whether `value` may be substituted here at all** — for the one caller that cannot fail.
-    ///
-    /// `Operation::subjects` has nowhere to put a refusal, so it needs the predicate without the
-    /// error. For [`Host`](Self::Host) it applies [`validate_authority`] to the value alone, which
-    /// is a sufficient condition rather than the full check: a value made only of host characters
-    /// cannot introduce a delimiter into a template that had none either.
-    pub(crate) fn substitutable(self, value: &str) -> bool {
-        match self {
-            Self::Origin => HttpsOrigin::parse(value).is_ok(),
-            Self::Host => validate_authority(value).is_ok(),
-            other => other.validate(value).is_ok(),
-        }
-    }
-
-    /// **Whether `value` can be substituted here without reshaping the request** — and the text to
-    /// substitute if it can.
-    ///
-    /// The return is the substituted text. Query values stay raw here because the emitted
-    /// structured query record is the single encoding boundary; pre-encoding a pin here would turn
-    /// `%2F` into `%252F` when request assembly applies Flux's semantics.
-    ///
-    /// [`Host`](Self::Host) is not answered here. Its question is about the authority the *template*
-    /// composes rather than about the value alone, so it is [`validate_authority`]'s, and this
-    /// returns the value untouched for [`Build::check_authority`] to judge in context.
-    ///
-    /// See this type's documentation for why these rules are spelled here rather than reused from
-    /// `connector_spec::Position::validate_value`.
-    ///
-    /// # Errors
-    ///
-    /// The reason, phrased for the operator who supplied the value.
-    pub(crate) fn validate(self, value: &str) -> Result<String, String> {
-        if value.trim().is_empty() {
-            return Err("a configuration value must not be empty or all whitespace".to_owned());
-        }
-        // Refused in every position: substitution fills `{placeholder}`s in emitted literals, so a
-        // value spelling one would either be filled in a second time or survive into the URL as
-        // text — which is what `Error::UnresolvedEndpoint` would then refuse, one step too late to
-        // say anything useful about the value.
-        if let Some(bad) = value.chars().find(|c| *c == '{' || *c == '}') {
-            return Err(format!(
-                "{value:?} contains {bad:?}, and a configuration value is substituted into a \
-                 `{{placeholder}}`, so a value spelling one of its own would be filled in twice or \
-                 reach the vendor verbatim"
-            ));
-        }
-        match self {
-            // **The substituted text is the normalized origin, not the supplied one** (C-523).
-            // `Operation::endpoint` has already normalized it, so this is idempotent for the
-            // ordinary path; stating it here too is what makes "the destination is a canonical
-            // origin" a property of substitution rather than of one caller remembering to do it.
-            Self::Origin => HttpsOrigin::parse(value)
-                .map(HttpsOrigin::into_string)
-                .map_err(|refusal| refusal.to_string()),
-            Self::Host => Ok(value.to_owned()),
-            Self::Path => {
-                validate_path(value)?;
-                Ok(value.to_owned())
-            }
-            Self::Query => {
-                validate_query(value)?;
-                Ok(value.to_owned())
-            }
-            Self::Header => {
-                validate_header(value)?;
-                Ok(value.to_owned())
-            }
-            // Fail closed: a placeholder nothing placed is held to **every** rule at once, the host
-            // rule included, and is not encoded — an encoding is only safe where the position is
-            // known.
-            //
-            // The host rule is load-bearing here rather than decorative. Without it this arm
-            // accepted `acme.zendesk.com@evil.example`: neither `@` nor `:` appears in the path,
-            // query or header charsets, because none of those three positions cares about them.
-            // Only the host does, and the host is the one position an unplaced value could be
-            // sitting in. A defence-in-depth layer that omits the defence it exists for is worse
-            // than none, because the comment above it gets believed.
-            Self::Unplaced => {
-                validate_path(value)?;
-                validate_query(value)?;
-                validate_header(value)?;
-                validate_authority(value)?;
-                Ok(value.to_owned())
-            }
-        }
-    }
-}
-
-/// A value that stays inside one path segment.
-fn validate_path(value: &str) -> Result<(), String> {
-    if value == "." || value == ".." {
-        return Err(format!(
-            "{value:?} is a relative path segment, so the request would address the segment above \
-             or beside the one it was configured for"
-        ));
-    }
-    match value
-        .chars()
-        .find(|c| "/?#%\\".contains(*c) || c.is_whitespace() || c.is_control())
-    {
-        Some(bad) => Err(format!(
-            "{value:?} contains {bad:?}, which does not stay inside one path segment — a `/` (or a \
-             `%` that could encode one) reshapes the URL, and a `?` or `#` ends the path entirely"
-        )),
-        None => Ok(()),
-    }
-}
-
-/// A value that adds no parameter of its own to the query string.
-///
-/// Refused *before* [`crate::auth::query_encode`] runs rather than left to it: encoding an `&` would
-/// send `%26` where the operator plainly meant a separator, which is a request the vendor answers
-/// with something confusing instead of a refusal they can act on. The encoder then covers the
-/// remainder — `/`, `:`, `@`, a comma — which is safe to encode because it has one obvious meaning.
-fn validate_query(value: &str) -> Result<(), String> {
-    match value
-        .chars()
-        .find(|c| "&=?#+".contains(*c) || c.is_whitespace() || c.is_control())
-    {
-        Some(bad) => Err(format!(
-            "{value:?} contains {bad:?}, which is query-string structure rather than a value — an \
-             `&` or `=` would add a parameter of its own to every request this connector makes"
-        )),
-        None => Ok(()),
-    }
-}
-
-/// A value that is an HTTP field value and nothing more (RFC 9110 §5.5).
-///
-/// The one position here with a classic exploit: a raw CR or LF appends a header of the value's
-/// choosing to every request the service makes. No shipped provider declares a header pin yet —
-/// C-164's Algolia will be the first — so this is proved against a fixture rather than against the
-/// catalogue.
-fn validate_header(value: &str) -> Result<(), String> {
-    if let Some(bad) = value
-        .chars()
-        .find(|c| !c.is_ascii() || c.is_ascii_control())
-    {
-        return Err(format!(
-            "{value:?} contains {bad:?}, which is not an HTTP field value (RFC 9110 §5.5) — a \
-             newline in particular would append a header of its own to every request"
-        ));
-    }
-    if value.trim() != value {
-        return Err(format!(
-            "{value:?} starts or ends with whitespace, which an HTTP field value may not \
-             (RFC 9110 §5.5)"
-        ));
-    }
-    Ok(())
-}
-
-/// **Whether `authority` is still an authority once a configuration value has been substituted into
-/// it.**
-///
-/// `authority` is the authority the declaration implies, with every `{var}` filled — for
-/// `https://{subdomain}.zendesk.com` and a value of `acme`, the string `acme.zendesk.com`. It must
-/// consist only of characters that **cannot delimit an authority**: ASCII alphanumerics, `-`, `.`
-/// and `_`. Every dot-separated label must be non-empty.
-///
-/// # Why an allow-list, and not a blocklist of `@`, `/` and `:`
-///
-/// The measured case is
-///
-/// ```text
-/// subdomain = "acme.zendesk.com@evil.example"
-///   -> https://acme.zendesk.com@evil.example.zendesk.com/api/v2/tickets/1
-///      authority: evil.example.zendesk.com
-/// ```
-///
-/// where the `@` turns everything before it into userinfo, and the request goes to a host the
-/// operator never named carrying that operator's own token, through an egress gate that was shown a
-/// subject ending in `zendesk.com`. A blocklist stops that one. An allow-list also stops the ones
-/// nobody enumerated — a `:` that becomes a port, a `%` that decodes to a delimiter, a `/` that ends
-/// the authority early, whitespace, a control character, and any non-ASCII codepoint an IDNA mapping
-/// could fold onto a different label.
-///
-/// Because no permitted character can delimit, the string a transport resolves is **exactly** this
-/// string. The composed authority therefore still ends in whatever fixed suffix the template
-/// declared — the property C-214 asks to be compared — and it holds as a consequence of the rule
-/// rather than as a second rule that could disagree with it.
-///
-/// `_` is permitted because DNS carries it and no URL parser treats it as a delimiter, so it cannot
-/// move an origin. Case is not folded, because hostnames are case-insensitive and refusing
-/// `Acme.zendesk.com` would be strictness with nothing behind it.
-///
-/// # Errors
-///
-/// The reason, phrased for the operator who supplied the value.
-fn validate_authority(authority: &str) -> Result<(), String> {
-    if authority.is_empty() {
-        return Err("a host must not be empty".to_owned());
-    }
-    if let Some(bad) = authority
-        .chars()
-        .find(|c| !(c.is_ascii_alphanumeric() || *c == '-' || *c == '.' || *c == '_'))
-    {
-        return Err(format!(
-            "the composed host {authority:?} contains {bad:?}, which is not a host character — a \
-             configuration value may not introduce one, because `@`, `:`, `/` and `%` all move or \
-             truncate the authority the connector declared"
-        ));
-    }
-    if authority.split('.').any(str::is_empty) {
-        return Err(format!(
-            "the composed host {authority:?} has an empty label, so it is not a hostname"
-        ));
-    }
-    Ok(())
-}
-
-/// Validate an authority whose **template**, rather than a configured value, may state a port.
-///
-/// Asterisk ARI is the first shipped case: `https://{host}:8089/ari`. The existing host predicate
-/// correctly refuses `host = "evil.example:8089"`, because a configured colon can redirect a
-/// request to a different port. Applying that same predicate to the finished authority also refused
-/// the emitter-authored `:8088`, though no configured byte introduced it. This split retains the
-/// safety property: only one decimal port written literally in the connector is admitted, while
-/// every substituted host value remains subject to [`validate_authority`].
-pub(crate) fn validate_templated_authority(template: &str, composed: &str) -> Result<(), String> {
-    let Some((_template_host, template_port)) = template.rsplit_once(':') else {
-        return validate_authority(composed);
-    };
-    if template_port.contains(MARK)
-        || template_port.is_empty()
-        || !template_port.chars().all(|c| c.is_ascii_digit())
-    {
-        return validate_authority(composed);
-    }
-    let port: u16 = template_port
-        .parse()
-        .map_err(|_| format!("the declared port {template_port:?} is not between 1 and 65535"))?;
-    if port == 0 {
-        return Err("the declared port 0 is not between 1 and 65535".to_owned());
-    }
-    let Some((composed_host, composed_port)) = composed.rsplit_once(':') else {
-        return Err(format!(
-            "the template declares port {template_port}, but the composed authority {composed:?} does not"
-        ));
-    };
-    if composed_port != template_port {
-        return Err(format!(
-            "the template declares port {template_port}, but the composed authority uses {composed_port:?}"
-        ));
-    }
-    // The composed host half still includes every substituted value; validating it proves no
-    // configured value introduced a delimiter. The template was read only to establish that the
-    // port was literal.
-    validate_authority(composed_host)
 }
 
 /// The sentinel that stands in for a placeholder while a template is being read positionally.
@@ -1427,63 +917,8 @@ pub(crate) fn build(
         });
     }
 
-    identify(&mut request);
+    request.identify();
     Ok(request)
-}
-
-/// **Give the request this software's identity, unless the connector already stated one** (C-223).
-///
-/// # Why here, and not in the host or in each connector
-///
-/// This function is one line long and its position is the whole of the story's second acceptance,
-/// so the reasoning is recorded where the code is. The full argument is
-/// [docs/designs/host-identity.md](../../../docs/designs/host-identity.md).
-///
-/// **Not the host.** `connectors-api` constructs no request of its own — `AGENTS.md`'s ownership
-/// table forbids it, and every route ends in `connector_pack`'s `pack` or `resolve`. Its only lever is the client it
-/// builds, and `codewandler-flux-web` 0.41.0 exposes none: neither `Client::builder()` site in
-/// `egress.rs` calls `ClientBuilder::user_agent` and `WebOptions` carries no field for one. Even
-/// granting the upstream field, a header set on the *client* is invisible to [`crate::DryRunTransport`],
-/// which is zero-sized and holds no client by construction — so the rehearsal would report a request
-/// the host does not make, which is the one thing C-145 exists to prevent. That single fact decides
-/// it independently of what upstream does.
-///
-/// **Not a C-55 constant header per connector.** It is what `providers/resend.toml` does today and
-/// what C-52 contemplated for GitHub, and it is the option to argue against rather than inherit.
-/// Three reasons: the default becomes *absence*, so the forty-sixth connector's omission is silent
-/// and surfaces as a vendor `403` naming authorization; a TOML literal cannot carry the build's
-/// version, so the value ships a bare product word that is wrong at the next release — Resend's
-/// shipped `"flux-connectors"` is already exactly that; and it puts the *host's* identity into
-/// *compiler* data, which the compiler has no business having an opinion about.
-///
-/// **So: request assembly, in the pack.** It is the one funnel every path already shares —
-/// [`crate::Operation::build_request`], [`crate::Operation::build_authenticated_request`] through
-/// it, [`crate::DryRunTransport::dry_run`] through it, and [`crate::Rehearsal`] through this same
-/// `build`. Agreement between the rehearsal and the wire is therefore structural rather than a
-/// property two code paths maintain in parallel.
-///
-/// # The connector still wins, and there is never a second header
-///
-/// The check is **case-insensitive**, which is not fastidiousness: `Request::headers` is a
-/// `BTreeMap`, so a module setting `user-agent` and a default inserting `User-Agent` would be two
-/// entries, two JSON keys, and — depending on how the transport folds them — two headers on the wire
-/// or a silent overwrite. A duplicated `User-Agent` is its own defect and this is where it is
-/// prevented. `providers/resend.toml` and any connector after it keep the value they declare.
-///
-/// If `codewandler-flux-web` later sets a client-level default, this stays correct and stays
-/// necessary: reqwest treats a per-request header as an override of a client default, so there is no
-/// duplication, and the dry run still needs its own answer.
-fn identify(request: &mut Request) {
-    if request
-        .headers
-        .keys()
-        .any(|name| name.eq_ignore_ascii_case(USER_AGENT))
-    {
-        return;
-    }
-    request
-        .headers
-        .insert(USER_AGENT.to_owned(), DEFAULT_USER_AGENT.to_owned());
 }
 
 /// The symbols an op body has bound so far.
@@ -1793,77 +1228,6 @@ fn interpolate(template: &str, env: &Env) -> String {
     scan_template(template, |name| env.get(name).map(text))
 }
 
-/// **The one brace grammar**, shared by all three things this module does with a template.
-///
-/// `fill` is called with each placeholder name in order; `Some` replaces it, `None` leaves it
-/// verbatim — which is flux-lang's own `interpolate_str` behaviour and the whole reason the
-/// emitter's `when` guards mean anything. [`interpolate`] fills from an op's bound symbols,
-/// [`Build::substitute`] from the host's configuration, and [`scan_node`] answers `None` to every
-/// name while recording it.
-///
-/// One scanner rather than three, because the alternative is three implementations of "what counts
-/// as a placeholder" that agree until one of them does not — and the one that disagrees would be the
-/// one deciding whether a URL still carries a variable.
-fn scan_template(template: &str, mut fill: impl FnMut(&str) -> Option<String>) -> String {
-    if !template.contains('{') {
-        return template.to_string();
-    }
-    let mut out = String::with_capacity(template.len());
-    let mut rest = template;
-    while let Some(open) = rest.find('{') {
-        out.push_str(&rest[..open]);
-        let at_brace = &rest[open..];
-        let (open_token, close_token) = if at_brace.starts_with("{{") {
-            ("{{", "}}")
-        } else {
-            ("{", "}")
-        };
-        let inner = &at_brace[open_token.len()..];
-        let Some(close) = inner.find(close_token) else {
-            out.push_str(at_brace);
-            return out;
-        };
-        match fill(inner[..close].trim()) {
-            Some(value) => {
-                out.push_str(&value);
-                rest = &inner[close + close_token.len()..];
-            }
-            None => {
-                out.push_str(open_token);
-                rest = inner;
-            }
-        }
-    }
-    out.push_str(rest);
-    out
-}
-
-/// flux-lang's `lit_text`: a string is itself, `null` is empty, anything else is compact JSON.
-///
-/// The `null` arm is the one with consequences — see this module's documentation.
-fn text(value: &Value) -> String {
-    match value {
-        Value::String(text) => text.clone(),
-        Value::Null => String::new(),
-        other => other.to_string(),
-    }
-}
-
-/// flux-lang's `json_truthy`: null/false/0/empty are falsey, and so is the *text* `"false"`/`"0"`.
-fn truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(bit) => *bit,
-        Value::Number(number) => number.as_f64().map(|n| n != 0.0).unwrap_or(false),
-        Value::String(text) => {
-            let trimmed = text.trim();
-            !trimmed.is_empty() && !trimmed.eq_ignore_ascii_case("false") && trimmed != "0"
-        }
-        Value::Array(items) => !items.is_empty(),
-        Value::Object(fields) => !fields.is_empty(),
-    }
-}
-
 /// A node's kind, for a refusal that names what it refused.
 fn kind(node: &Node) -> &'static str {
     match node {
@@ -1886,6 +1250,7 @@ fn kind(node: &Node) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use connector_resolve::{validate_authority, validate_header, validate_path, validate_query};
     use serde_json::json;
 
     /// **Every configuration variable in the shipped catalogue is placed** (C-214) — **or is one of

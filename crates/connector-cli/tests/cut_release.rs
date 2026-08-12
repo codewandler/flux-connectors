@@ -82,6 +82,10 @@ const PUBLIC_READMES: &[(&str, &str)] = &[
         "codewandler-connector-catalog-reader",
     ),
     (
+        "crates/connector-resolve/README.md",
+        "codewandler-connector-resolve",
+    ),
+    (
         "crates/connector-secrets/README.md",
         "codewandler-connector-secrets",
     ),

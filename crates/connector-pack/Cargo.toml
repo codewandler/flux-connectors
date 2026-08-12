@@ -57,6 +57,13 @@ connector-address.workspace = true
 # this manifest is not the one making.
 connector-secrets.workspace = true
 
+# **The plan-deriving core** (C-538). `resolve`/`project`/`pack` below are a thin wrapper over it:
+# the request template is read, the slots are checked and the credentials are placed there, and this
+# crate adds the flux `Tool` projection, the registry admission and the dispatch. The edge reaches
+# *down*, into a crate that links no engine and opens no socket, and it is already in the publish
+# closure through this crate, so it grows what ships by one deliberate package.
+connector-resolve.workspace = true
+
 # The flux side of the seam. `flux-spec` owns `ToolSpec` and its vocabulary; `flux-runtime` owns
 # the `Tool` trait and the registry a host installs into. Deliberately *not* `flux-sdk`: the pack
 # must be usable from a bare `ToolRegistry`, and the SDK is the host's choice, not ours.

@@ -72,8 +72,9 @@
 //!
 //! # flux keeps every byte of egress
 //!
-//! `Tool::execute` builds `{ method, url, headers, body }` and hands it to flux's own
-//! `http.request`, passing the **same** `ctx`. This crate opens no socket, holds no HTTP client and
+//! `Tool::execute` derives `{ method, url, headers, body }` — through
+//! [`connector_resolve`](connector_resolve), from the canonical document's request template (C-538)
+//! — and hands it to flux's own `http.request`, passing the **same** `ctx`. This crate opens no socket, holds no HTTP client and
 //! resolves no host: the transport is a constructor argument, so a host supplies the instance it has
 //! already configured with its SSRF guard, its private-network grant and its audit sink.
 //!
@@ -179,15 +180,22 @@
 //!   the projected operation holds no handle to the store. See [`ConfigStore::get`] for the
 //!   requirement that still binds a host across *several* operations.
 //!
-//! What this does *not* do is publish a connector's configuration surface — the labels, help text
-//! and `binds` targets that let a product render "connect your Zendesk". That is C-87, it is a
-//! breaking change to the manifest and the catalogue, and it is not needed to make a URL resolve:
-//! the variables are read off each operation's own emitted Flux.
+//! **And the variables are *declared* now, not inferred** (C-538). What stood here was that this
+//! crate reads a connector's endpoint variables off each operation's own emitted Flux, by scanning
+//! string literals for braces — the honest answer while nothing published them. The canonical
+//! document publishes them: `"endpoint": {"subdomain": ["host"]}` names the variable *and* the
+//! position it lands in, so [`Operation::endpoint_variables`], [`Operation::endpoint_slots`] and
+//! [`Operation::caller_path_parameters`] are read rather than derived, and a connector whose braces
+//! are the vendor's own syntax is no longer a shape this crate has to classify at all.
+//!
+//! What this still does *not* do is publish the whole configuration surface — the labels, help text
+//! and `binds` targets that let a product render "connect your Zendesk". That is C-87.
 
 mod auth;
 mod channel;
 mod config;
 mod credentials;
+mod document_rehearsal;
 mod dry_run;
 mod mint;
 mod name;
@@ -201,8 +209,18 @@ pub use config::{ConfigStore, ConfigValue, Configuration, Field, MemoryConfig};
 pub use credentials::{Credentials, DEFAULT_SERVICE};
 pub use dry_run::{CredentialReference, DryRun, DryRunTransport, Transport};
 pub use name::{dotted_name, NameError};
+// **Two rehearsals, side by side, deliberately** (C-538). `Rehearsal` reads the emitted Flux;
+// `DocumentRehearsal` reads the canonical document, with the same observable semantics. Both are
+// exported until Exchange's settings and connection-verification call sites migrate (C-539), and
+// `tests/catalogue_differential.rs` requires them to agree for every operation in the catalogue
+// until C-540 deletes the first.
+pub use document_rehearsal::DocumentRehearsal;
 pub use rehearsal::Rehearsal;
-pub use request::{Request, DEFAULT_USER_AGENT};
+// **The request and the identity moved to `connector-resolve`** (C-538) and are re-exported here
+// unchanged, so a consumer's `use connector_pack::Request` keeps resolving. They moved because the
+// plan is the unit the differential gate compares, and a comparison between two structurally
+// identical types would be a comparison of two copies rather than of two derivations.
+pub use connector_resolve::{Request, Slot, DEFAULT_USER_AGENT};
 pub use spec::{is_exposed, project};
 pub use tool::{Egress, Operation};
 
@@ -796,6 +814,83 @@ impl From<Error> for flux_core::Error {
     }
 }
 
+/// **The plan-deriving core's refusals, as this crate's** (C-538).
+///
+/// Every variant maps onto the identically-named one above, carrying the same fields and rendering
+/// the same sentence. It is a mapping rather than a re-export because the acceptance requires each
+/// `connector_pack::Error` variant to keep its **name and its trigger** — a host matches on them —
+/// while `connector_resolve` must stay engine-free, and this enum's `Name` variant carries a
+/// [`NameError`] derived from `flux_lang`'s identifier predicates.
+///
+/// The duplication that buys is seven sentences, and it is pinned rather than trusted:
+/// [`tests::the_mapped_refusals_render_the_same_sentence`] renders both sides of every arm and
+/// requires the strings to be equal, so a reworded refusal in either crate fails in the same run.
+///
+/// The match is **exhaustive on purpose**: a variant added to the core has to be given a home here
+/// rather than arriving as a catch-all that erases which refusal happened.
+impl From<connector_resolve::Error> for Error {
+    fn from(error: connector_resolve::Error) -> Self {
+        use connector_resolve::Error as Refused;
+        match error {
+            Refused::MissingParameter {
+                operation,
+                parameter,
+            } => Error::MissingParameter {
+                operation,
+                parameter,
+            },
+            Refused::UnsafePathParameter {
+                operation,
+                parameter,
+                reason,
+            } => Error::UnsafePathParameter {
+                operation,
+                parameter,
+                reason,
+            },
+            Refused::Unbuildable { operation, message } => {
+                Error::Unbuildable { operation, message }
+            }
+            Refused::UnsafeConfig {
+                operation,
+                variable,
+                position,
+                reason,
+            } => Error::UnsafeConfig {
+                operation,
+                variable,
+                position,
+                reason,
+            },
+            Refused::UnresolvedEndpoint {
+                operation,
+                variable,
+                url,
+            } => Error::UnresolvedEndpoint {
+                operation,
+                variable,
+                url,
+            },
+            Refused::CredentialCollision {
+                operation,
+                credential,
+                header,
+            } => Error::CredentialCollision {
+                operation,
+                credential,
+                header,
+            },
+            Refused::InboundCredential {
+                operation,
+                credential,
+            } => Error::InboundCredential {
+                operation,
+                credential,
+            },
+        }
+    }
+}
+
 /// **The pack.** Install every **exposed** operation of each named provider into a host's registry.
 ///
 /// This is the **model-facing** seam, and the word `exposed` is the whole of C-413: an operation
@@ -900,7 +995,7 @@ fn install(
     // makes an operation callable, so refusing there would withhold the call along with the tool.
     let mut tools: Vec<Arc<dyn Tool>> = Vec::new();
     for operation in entry.operations {
-        if !spec::is_exposed(operation)? {
+        if !document_of(operation.id)?.expose {
             continue;
         }
         tools.push(Arc::new(Operation::project(
@@ -912,6 +1007,47 @@ fn install(
     }
 
     registry.try_register_all_from(source_label(entry.id), tools)
+}
+
+/// **This operation's canonical document** — the request template every derivation now reads.
+///
+/// The pack's input used to be the Flux the catalogue embeds; since C-538 it is the reviewed
+/// document `catalog/<provider>.catalog.json`, served from the pack `catalog-reader` embeds. The
+/// lookup is by operation id, because the reader indexes it that way and the provider is one of the
+/// facts the record carries.
+///
+/// # Errors
+///
+/// [`Error::Unbuildable`] naming the operation. Unreachable for a build this repository produced —
+/// `crates/connector-cli/tests/catalog_pack.rs` holds the pack to being derived from the same
+/// documents the catalogue is, in the same build — and reported as the corrupt-input case it would
+/// be rather than unwrapped, because the alternative is a panic inside a host's registration call.
+pub(crate) fn document_of(
+    operation: &str,
+) -> Result<&'static connector_resolve::document::Operation, Error> {
+    connector_resolve::document::operation(operation).ok_or_else(|| Error::Unbuildable {
+        operation: operation.to_owned(),
+        message: "the embedded catalogue carries no canonical document for it, so no request                   template could be read"
+            .to_owned(),
+    })
+}
+
+/// The service base URL `operation` composes its request against, as its provider's document states
+/// it — the template, before this tenant's connection settings are substituted into it.
+///
+/// # Errors
+///
+/// [`Error::Unbuildable`], for the same corrupt-input reason [`document_of`] reports one.
+pub(crate) fn base_url_of(operation: &catalog::Operation) -> Result<&'static str, Error> {
+    connector_resolve::document::provider(operation.provider)
+        .and_then(|document| document.base_url(operation.service))
+        .ok_or_else(|| Error::Unbuildable {
+            operation: operation.id.to_owned(),
+            message: format!(
+                "its provider's canonical document declares no service `{}`, so no base URL                  composes",
+                operation.service
+            ),
+        })
 }
 
 /// The auditable label a provider's operations are registered under.
@@ -1155,6 +1291,68 @@ pub(crate) mod tests {
             },
             |params| async move { Ok(params) },
         ))
+    }
+
+    /// **The two spellings of seven refusals render one sentence.**
+    ///
+    /// [`From<connector_resolve::Error>`](Error) maps each of the plan-deriving core's variants onto
+    /// the identically-named one here, and the two crates each carry their own `#[error(…)]` text.
+    /// That duplication is deliberate — see the impl's own documentation — and it is the kind that
+    /// rots silently, because nothing *fails* when one side is reworded: a host just starts reading
+    /// a different sentence depending on which crate raised the refusal.
+    ///
+    /// So both sides are rendered here, over field values chosen to appear in every interpolation
+    /// slot, and required to be equal. A variant added to the core makes the match in `From` a
+    /// compile error; a variant *reworded* in either makes this test red.
+    #[test]
+    fn the_mapped_refusals_render_the_same_sentence() {
+        use connector_resolve::Error as Refused;
+
+        let operation = || "acme-thing-list".to_owned();
+        let refusals = [
+            Refused::MissingParameter {
+                operation: operation(),
+                parameter: "thing_id".to_owned(),
+            },
+            Refused::UnsafePathParameter {
+                operation: operation(),
+                parameter: "thing_id".to_owned(),
+                reason: "it contains a slash".to_owned(),
+            },
+            Refused::Unbuildable {
+                operation: operation(),
+                message: "its template says something else".to_owned(),
+            },
+            Refused::UnsafeConfig {
+                operation: operation(),
+                variable: "subdomain".to_owned(),
+                position: "host",
+                reason: "it contains an at sign".to_owned(),
+            },
+            Refused::UnresolvedEndpoint {
+                operation: operation(),
+                variable: "subdomain".to_owned(),
+                url: "https://{subdomain}.acme.test/things".to_owned(),
+            },
+            Refused::CredentialCollision {
+                operation: operation(),
+                credential: "acme.token".to_owned(),
+                header: "Authorization".to_owned(),
+            },
+            Refused::InboundCredential {
+                operation: operation(),
+                credential: "acme.signing_secret".to_owned(),
+            },
+        ];
+
+        for refusal in refusals {
+            let core = refusal.to_string();
+            let mapped = Error::from(refusal).to_string();
+            assert_eq!(
+                core, mapped,
+                "the plan-deriving core and this crate word one refusal differently"
+            );
+        }
     }
 
     #[test]

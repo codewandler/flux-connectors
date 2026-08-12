@@ -92,7 +92,22 @@ fn connector_cli_does_not_depend_on_connector_secrets() {
 /// lock reports the optional `connector-secrets -> reqwest` edge that no build takes. It is
 /// asserted over cargo's feature-resolved graph instead, in
 /// [`pack_links_no_http_client.rs`](../pack_links_no_http_client.rs) (C-199).
-const HOST_LIBRARIES: &[&str] = &["codewandler-connector-pack", HOST_LIBRARY];
+const HOST_LIBRARIES: &[&str] = &[
+    "codewandler-connector-pack",
+    // The plan-deriving core (C-538). It is host-facing, not the compiler: it reads the canonical
+    // document and returns a request plan, and it opens no socket — it links no HTTP client, no DNS
+    // resolver and no transport at all, and the `Egress` seam that would carry one lives one crate
+    // up. It is not in `COMPILER_CRATES` because nothing in the compile path depends on it, and it
+    // is not in `NETWORK_CRATES` because it may not open a socket.
+    //
+    // Its *other* fence — that it links no `codewandler-flux-*` crate — cannot be stated over
+    // `Cargo.lock` at all, for the same reason `codewandler-connector-pack`'s HTTP-client claim
+    // cannot: the lock records **dev**-dependency edges, and `codewandler-connector-catalog` takes
+    // `flux-lang` as one. It is asserted over cargo's kind-filtered graph instead, in
+    // [`engine_free_core.rs`](../engine_free_core.rs) (C-538).
+    "codewandler-connector-resolve",
+    HOST_LIBRARY,
+];
 
 /// **The edge that actually earns the allow-list its keep.**
 ///

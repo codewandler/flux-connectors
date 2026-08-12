@@ -45,6 +45,20 @@ let configuration = Configuration::for_instance(config_source, "9f3a4b2c", insta
 existing stores therefore compile unchanged and refuse a named instance until they deliberately
 support it. Projection also refuses credential and configuration ports bound to different UUIDs.
 
+## The request itself comes from `codewandler-connector-resolve`
+
+The method, URL, headers and body of every call are derived from the canonical catalog document's
+request template by
+[`codewandler-connector-resolve`](https://crates.io/crates/codewandler-connector-resolve), which
+links **no** `codewandler-flux-*` crate. This crate adds what needs flux: the `ToolSpec` projection,
+registry admission, and dispatch through the host's `http.request`.
+
+If all you want is *what request would this operation make* — a settings page, a connection check, a
+rehearsal — depend on that crate directly and skip the engine line entirely. Its `resolve` returns a
+`RequestPlan`: the request, the permission subjects a network policy should judge it by, and the set
+of strings a redactor must hold. **Projecting a plan into a `Tool` is not composing a request** —
+wrap and dispatch the plan you were handed.
+
 ## What it is not
 
 A runtime, and not a host. This crate constructs a **declaration** handed to something that already

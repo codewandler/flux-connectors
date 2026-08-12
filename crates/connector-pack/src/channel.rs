@@ -4,27 +4,17 @@ use std::collections::BTreeMap;
 
 use catalog::{ChannelTransport, Placement, ProviderKey};
 
+use connector_resolve::{validate_templated_authority, Slot};
+
 use crate::auth::{query_encode, Assembled};
 use crate::config::{Field, Snapshot};
-use crate::request::{validate_templated_authority, Slot};
 use crate::{Configuration, Credentials, Error};
 
-/// Text that may contain credential material and therefore never reveals itself through `Debug`.
-#[derive(Clone, PartialEq, Eq)]
-pub struct SensitiveText(String);
-
-impl SensitiveText {
-    /// Deliberately expose the prepared wire value to the guarded WebSocket handshake.
-    pub fn expose_secret(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Debug for SensitiveText {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("<redacted>")
-    }
-}
+// **`SensitiveText` moved to `connector-resolve` and is re-exported here** (C-538). The request plan
+// carries secret-bearing fields on exactly this pattern, so the type has to be the one the plan
+// uses rather than a second one with the same `Debug`. The name and the surface a host sees are
+// unchanged; `SensitiveText::new` is the constructor the tuple struct's private field used to be.
+pub use connector_resolve::SensitiveText;
 
 /// A complete RFC 6455 handshake plan containing no client, socket, resolver or runtime.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -163,7 +153,7 @@ pub async fn channel_plan(
     let mut headers = connect
         .headers
         .iter()
-        .map(|pair| (pair.name.to_owned(), SensitiveText(pair.value.to_owned())))
+        .map(|pair| (pair.name.to_owned(), SensitiveText::new(pair.value)))
         .collect::<BTreeMap<_, _>>();
     let assembled = credentials
         .resolve_channel(&operation, provider, connect.auth, &settings)
@@ -191,7 +181,7 @@ pub async fn channel_plan(
         binding: channel.name,
         service: channel.service,
         declared_base_url: channel.base_url,
-        url: SensitiveText(url),
+        url: SensitiveText::new(url),
         headers,
         subprotocols: connect.subprotocols.to_vec(),
         events: channel.events,
@@ -280,7 +270,7 @@ fn apply_auth(
     assembled: Vec<Assembled>,
 ) -> Result<(), Error> {
     for value in assembled {
-        match value.place {
+        match value.placement() {
             Placement::Header { name, prefix } => {
                 if let Some(existing) = headers
                     .keys()
@@ -288,25 +278,25 @@ fn apply_auth(
                 {
                     return Err(Error::CredentialCollision {
                         operation: operation.to_owned(),
-                        credential: value.credential.to_owned(),
+                        credential: value.credential().to_owned(),
                         header: existing.clone(),
                     });
                 }
                 headers.insert(
                     name.to_owned(),
-                    SensitiveText(format!("{prefix}{}", value.value)),
+                    SensitiveText::new(format!("{prefix}{}", value.expose_value())),
                 );
             }
             Placement::Query { name } => {
                 url.push(if url.contains('?') { '&' } else { '?' });
                 url.push_str(name);
                 url.push('=');
-                url.push_str(&query_encode(&value.value));
+                url.push_str(&query_encode(value.expose_value()));
             }
             Placement::Inbound => {
                 return Err(Error::InboundCredential {
                     operation: operation.to_owned(),
-                    credential: value.credential.to_owned(),
+                    credential: value.credential().to_owned(),
                 });
             }
         }

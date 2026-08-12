@@ -126,6 +126,7 @@ PUBLIC_PACKAGES=(
   codewandler-connector-address
   codewandler-connector-catalog
   codewandler-connector-catalog-reader
+  codewandler-connector-resolve
   codewandler-connector-secrets
   codewandler-connector-pack
 )
@@ -133,6 +134,7 @@ PUBLIC_README_PATHS=(
   crates/connector-address/README.md
   crates/catalog/README.md
   crates/catalog-reader/README.md
+  crates/connector-resolve/README.md
   crates/connector-secrets/README.md
   crates/connector-pack/README.md
 )

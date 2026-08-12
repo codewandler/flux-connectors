@@ -114,13 +114,18 @@ pub fn project(operation: &catalog::Operation) -> Result<ToolSpec, Error> {
 
 /// **Whether this catalogue operation reaches a model as an LLM tool** (C-413).
 ///
-/// The catalogue states this **positively**, on every operation, in the `expose` line of the embedded
-/// Flux — flux's formatter writes `expose true` or `expose false` and never elides either
-/// (`flux_lang::format`). So a consumer asking this question gets an answer rather than an inference
-/// from an absence, which is the distinction
+/// The catalogue states this **positively**, on every operation, and since C-538 it states it in the
+/// canonical document's own `expose` field rather than in the `expose` line of the embedded Flux. So
+/// a consumer asking this question gets an answer rather than an inference from an absence, which is
+/// the distinction
 /// [C-235](../../../docs/stories/C-235-the-catalogue-cannot-say-an-operation-is-public.md) records as
 /// missing for credentials and the reason this is a function here rather than a `bool` a caller
 /// derives for itself.
+///
+/// The module still says the same thing — `crates/catalog/ops/<provider>/<id>.flux` carries its own
+/// `expose` line, [`Rehearsal::is_exposed`](crate::Rehearsal::is_exposed) reads it, and
+/// `tests/catalogue_differential.rs` requires the two to agree for every operation in the catalogue
+/// until C-540 deletes one of them.
 ///
 /// **Unexposed is not uncatalogued.** An operation this returns `false` for is still in the
 /// manifest's `operations` list, still in `catalog.json`, still in the embedded catalogue, and
@@ -130,29 +135,18 @@ pub fn project(operation: &catalog::Operation) -> Result<ToolSpec, Error> {
 ///
 /// # Errors
 ///
-/// [`Error::Unparsable`], [`Error::NotOneOperation`] or [`Error::Mismatched`] for an entry whose
-/// embedded Flux is not the single `op` declaration a catalogue rendering is — the same corrupt-input
-/// cases [`project`] reports, and unreachable for a catalogue this repository generated.
+/// [`Error::Unbuildable`] for an entry the embedded catalogue carries no canonical document for —
+/// unreachable for a build this repository produced, and reported as the corrupt-input case it
+/// would be rather than unwrapped.
 pub fn is_exposed(operation: &catalog::Operation) -> Result<bool, Error> {
-    declares_exposure(operation.id, operation.flux)
-}
-
-/// [`is_exposed`], over the id and Flux rather than the entry.
-///
-/// The split is the one [`declaration_of`] already documents and takes for the same reason:
-/// `catalog::Operation` is `#[non_exhaustive]`, so no synthetic entry can be built outside the
-/// `catalog` crate, and nothing shipped is unexposed yet. **This is the exact predicate
-/// [`crate::pack`] branches on**, so testing it here is testing that branch — which is otherwise
-/// unreachable until a provider declares `expose = false`.
-pub(crate) fn declares_exposure(id: &str, flux: &str) -> Result<bool, Error> {
-    Ok(declaration_of(id, flux)?.meta.expose)
+    Ok(crate::document_of(operation.id)?.expose)
 }
 
 /// [`project`], over a declaration already parsed.
 ///
-/// The split exists because [`crate::Operation`] needs the declaration itself — C-115 builds the
-/// request by evaluating it — and parsing the same Flux twice to get two views of it is one parse
-/// that could disagree with the other.
+/// The split exists because [`crate::Rehearsal`] holds the declaration itself — it evaluates the
+/// module's body to compose the Flux-derived half of C-538's differential — and parsing the same
+/// Flux twice to get two views of it is one parse that could disagree with the other.
 pub(crate) fn project_declaration(
     id: &str,
     declaration: &CompositeOpDecl,
@@ -278,6 +272,15 @@ pub(crate) fn declaration_of(id: &str, flux: &str) -> Result<CompositeOpDecl, Er
 mod tests {
     use super::*;
     use catalog::OperationKey;
+
+    /// Whether an emitted declaration states exposure. The **document** is what [`is_exposed`]
+    /// reads since C-538; this is the module's answer, and
+    /// `tests/catalogue_differential.rs` is what requires the two to agree for every shipped
+    /// operation. Both arms of the branch are exercised here, because nothing shipped is unexposed
+    /// and the `false` arm would otherwise be untested until a provider first used the feature.
+    fn exposure(id: &str, flux: &str) -> bool {
+        declaration_of(id, flux).expect("it parses").meta.expose
+    }
 
     fn operation(id: &str) -> &'static catalog::Operation {
         catalog::operation(OperationKey::id(id))
@@ -472,10 +475,10 @@ mod tests {
             "the shipped rendering must state its exposure for this test to change it"
         );
 
-        assert!(declares_exposure(entry.id, entry.flux).expect("it reads"));
+        assert!(exposure(entry.id, entry.flux));
 
         let unexposed = entry.flux.replace("expose true", "expose false");
-        assert!(!declares_exposure(entry.id, &unexposed).expect("it reads"));
+        assert!(!exposure(entry.id, &unexposed));
     }
 
     /// A rendering that states no `expose` at all reads as **exposed**, because flux's
@@ -495,6 +498,6 @@ mod tests {
             .collect();
 
         assert!(!silent.contains("expose"), "the fixture must drop the line");
-        assert!(declares_exposure(entry.id, &silent).expect("it reads"));
+        assert!(exposure(entry.id, &silent));
     }
 }

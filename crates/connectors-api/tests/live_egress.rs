@@ -28,26 +28,40 @@
 //! - **The origin is retargeted; nothing downstream of it is.** No shipped connector can be pointed
 //!   at a loopback address, and that is deliberate rather than an oversight: nine carry a
 //!   `{placeholder}` in their base URL, every one of them templates a *label* inside a fixed vendor
-//!   suffix (`{subdomain}.zendesk.com`), and C-214's `request::Slot` guard exists specifically to
-//!   stop a configuration value from moving a request to another host. Making a connector
+//!   suffix (`{subdomain}.zendesk.com`), and C-214's `Slot` guard exists specifically to stop a
+//!   configuration value from moving a request to another host. Making a connector
 //!   loopback-pointable through configuration would be re-opening that hole to test it.
 //!
-//!   So [`retargeted_at`] rewrites **one string literal** — `https://api.openai.com` — in the
-//!   operation's own emitted Flux, and changes nothing else. The method, the path, the header the
-//!   module sets, the body's field set and its canonical JSON encoding, the credential's placement
-//!   and its `Bearer ` prefix are all the shipped operation's, evaluated by the shipped request
-//!   path. The bound worth stating plainly: **this proves the pack's request survives the wire
-//!   intact, not that `api.openai.com` answers it.** The live leg against a real vendor stays
-//!   manual and stays recorded in `crates/connectors-api/README.md`.
+//!   So [`Retargeted`] rewrites **one string** — `https://api.openai.com` — in the `url` the pack
+//!   hands the transport, and changes nothing else. The method, the path, the header the connector
+//!   declares, the body's field set and its canonical JSON encoding, the credential's placement and
+//!   its `Bearer ` prefix are all the shipped operation's, built by the shipped request path and
+//!   dispatched through `Operation::execute`. The bound worth stating plainly: **this proves the
+//!   pack's request survives the wire intact, not that `api.openai.com` answers it.** The live leg
+//!   against a real vendor stays manual and stays recorded in `crates/connectors-api/README.md`.
 //!
-//! The doctored-entry technique is not new here — `connector-pack`'s
-//! `an_operation_with_no_declared_host_is_refused` leaks a modified copy of a shipped entry for the
-//! same reason: `Operation::project` takes a `&'static catalog::Operation`, and a corrupt- or
-//! variant-catalogue case is otherwise unreachable from a test.
+//! # The retarget moved from the artifact to the transport (C-538)
+//!
+//! It used to rewrite that string in the operation's **emitted Flux** and leak a doctored
+//! `catalog::Operation`. `Operation::build_request` reads the canonical document since C-538, so a
+//! doctored module changes nothing the pack builds — the request would have gone to the real
+//! `api.openai.com` with a sentinel key, which is exactly what a green-looking test must never do.
+//!
+//! [`Egress`] is the seam the design already names for this: *"a dry-run that renders the request
+//! instead of sending it, or a recorded fixture, without either forking the request path"*. So the
+//! substitution happens there, one layer below the pack and one layer above the client, and the
+//! operation under test is the **unmodified shipped entry**. What that costs is stated where it is
+//! paid: [`the_vendor_receives_exactly_the_request_the_pack_built`] compares the received URL
+//! against the built URL *with the same one substitution applied*, so the origin is the one field
+//! this file does not prove survived the wire — and the path, the query, the method, the headers
+//! and the body still are.
 
 use std::collections::BTreeMap;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
+
+use std::future::Future;
+use std::pin::Pin;
 
 use axum::body::Bytes;
 use axum::extract::State;
@@ -57,7 +71,8 @@ use connector_pack::{
     Configuration, CredentialRef, Egress, MemoryConfig, Operation, Secret, DEFAULT_SERVICE,
 };
 use connectors_api::App;
-use flux_runtime::Tool;
+use flux_runtime::{Tool, ToolContext, ToolResult};
+use flux_spec::ToolSpec;
 use flux_system::net::PrivateNetAllow;
 use flux_web::http::HttpRequestTool;
 use flux_web::WebOptions;
@@ -199,39 +214,72 @@ async fn record(
     }))
 }
 
-/// The shipped operation, with its **origin and only its origin** pointed at `origin`.
+/// **The host's own transport, with the vendor origin — and only the vendor origin — rewritten.**
 ///
-/// See this module's documentation for why the rewrite exists and what it is bounded to. The
-/// assertion before the substitution is the part that keeps it honest: if the emitter ever stops
-/// spelling the vendor origin as one literal, this rewrites something else, and that must be a
-/// failure rather than a request quietly going to the real vendor.
-fn retargeted_at(id: &str, origin: &str) -> &'static catalog::Operation {
-    let entry = catalog::operation(OperationKey::id(id))
-        .unwrap_or_else(|| panic!("the shipped catalogue carries `{id}`"));
-    assert_eq!(
-        entry.flux.matches(VENDOR_ORIGIN).count(),
-        1,
-        "`{id}` no longer names `{VENDOR_ORIGIN}` exactly once in its own Flux, so this \
-         retargeting is rewriting something other than the origin"
-    );
+/// See this module's documentation for why the rewrite lives here and what it is bounded to. It is
+/// a `dyn Tool` wrapping a `dyn Tool`, which is exactly what [`Egress`]'s typing exists to allow:
+/// the pack composes the request, hands it to whatever transport the host bound, and this one
+/// forwards it — same `ctx`, same params, one string changed — to the client the app configured. So
+/// the SSRF guard, the private-network policy and the audit sink under test are still the app's.
+///
+/// `Tool` is `#[async_trait]`, and `connectors-api` does not depend on `async-trait`, so `execute`
+/// is spelled in the desugared form the macro would have written. It is three lines of ceremony to
+/// avoid a dependency this crate does not otherwise need.
+struct Retargeted {
+    inner: Arc<dyn Tool>,
+    from: String,
+    to: String,
+}
 
-    let flux: &'static str = Box::leak(entry.flux.replace(VENDOR_ORIGIN, origin).into_boxed_str());
-    // The declared host follows the request, or `permission_subjects`' fallback would name the
-    // vendor for a call that cannot reach it.
-    let authority: &'static str = Box::leak(
-        origin
-            .trim_start_matches("http://")
-            .to_owned()
-            .into_boxed_str(),
-    );
-    let hosts: &'static [&'static str] = Box::leak(Box::new([authority]));
+impl Retargeted {
+    /// Wrap `egress`, rewriting [`VENDOR_ORIGIN`] to `origin`.
+    fn wrapping(egress: Egress, origin: &str) -> Egress {
+        Egress::new(Arc::new(Retargeted {
+            inner: Arc::clone(egress.tool()),
+            from: VENDOR_ORIGIN.to_owned(),
+            to: origin.to_owned(),
+        }))
+    }
+}
 
-    let mut doctored = *entry;
-    doctored.flux = flux;
-    doctored.hosts = hosts;
-    // `project` takes a `&'static` entry, which a doctored copy is not. Leaking one is what
-    // `connector-pack`'s own catalogue-variant test does, for the same reason.
-    Box::leak(Box::new(doctored))
+impl Tool for Retargeted {
+    fn spec(&self) -> ToolSpec {
+        self.inner.spec()
+    }
+
+    fn execute<'inner, 'ctx, 'call>(
+        &'inner self,
+        ctx: &'ctx ToolContext,
+        mut params: Value,
+    ) -> Pin<Box<dyn Future<Output = flux_core::Result<ToolResult>> + Send + 'call>>
+    where
+        'inner: 'call,
+        'ctx: 'call,
+        Self: 'call,
+    {
+        // **The refusal that keeps this honest.** If the connector ever stops naming the vendor
+        // origin, this rewrites nothing and the request goes to the real `api.openai.com` carrying
+        // a sentinel key — a live call out of a test that would otherwise look green. It is a panic
+        // rather than a `None` because there is no safe way to continue.
+        let url = params
+            .get("url")
+            .and_then(Value::as_str)
+            .expect("`http.request` is always given a url");
+        assert!(
+            url.contains(&self.from),
+            "the request the pack built does not name `{}`, so this test would have sent it to \
+             the real vendor: {url}",
+            self.from
+        );
+        params["url"] = Value::String(url.replace(&self.from, &self.to));
+
+        Box::pin(async move { self.inner.execute(ctx, params).await })
+    }
+}
+
+/// The URL the vendor under test should see, given the URL the pack built.
+fn retargeted(url: &str, origin: &str) -> String {
+    url.replace(VENDOR_ORIGIN, origin)
 }
 
 /// The credential port, the configuration port and the projection, for one tenant.
@@ -239,7 +287,7 @@ fn retargeted_at(id: &str, origin: &str) -> &'static catalog::Operation {
 /// The credential is stored first so that `build_authenticated_request` resolves a value rather
 /// than refusing by address — which is what `host.rs` already asserts, and is not what this file is
 /// about.
-async fn projected(app: &App, entry: &'static catalog::Operation) -> Operation {
+async fn projected(app: &App, egress: Egress, entry: &'static catalog::Operation) -> Operation {
     let reference = CredentialRef::new(TENANT, AUTHORITY, DEFAULT_SERVICE, "api_key")
         .expect("a well-formed credential address");
     app.put_secret(&reference, Secret::new(SENTINEL.to_owned()))
@@ -248,7 +296,7 @@ async fn projected(app: &App, entry: &'static catalog::Operation) -> Operation {
 
     Operation::project(
         entry,
-        app.egress(),
+        egress,
         app.credentials(TENANT).expect("a usable tenant id"),
         // Empty, deliberately: this connector's base URL carries no `{placeholder}`, so an
         // operation that asked for one would be a refusal here rather than a silent default.
@@ -308,7 +356,14 @@ async fn the_vendor_receives_exactly_the_request_the_pack_built() {
     )
     .expect("the crate root exists");
 
-    let operation = projected(&app, retargeted_at(OPERATION, &vendor.origin)).await;
+    let entry = catalog::operation(OperationKey::id(OPERATION))
+        .unwrap_or_else(|| panic!("the shipped catalogue carries `{OPERATION}`"));
+    let operation = projected(
+        &app,
+        Retargeted::wrapping(app.egress(), &vendor.origin),
+        entry,
+    )
+    .await;
     let ctx = app.context();
     let params = params();
 
@@ -330,7 +385,13 @@ async fn the_vendor_receives_exactly_the_request_the_pack_built() {
         received.method, built.method,
         "the method changed in flight"
     );
-    assert_eq!(received.url, built.url, "the URL changed in flight");
+    // The origin is the one field this file rewrites; everything after it — the path, and the
+    // query if the operation had one — is compared verbatim. See this module's documentation.
+    assert_eq!(
+        received.url,
+        retargeted(&built.url, &vendor.origin),
+        "the URL changed in flight beyond the origin this test retargets"
+    );
     assert_eq!(received.body, built.body, "the body changed in flight");
     assert_eq!(
         pack_authored(&received.headers),
@@ -387,7 +448,14 @@ async fn the_response_comes_back_as_a_record_not_a_flat_string() {
     )
     .expect("the crate root exists");
 
-    let operation = projected(&app, retargeted_at(OPERATION, &vendor.origin)).await;
+    let entry = catalog::operation(OperationKey::id(OPERATION))
+        .unwrap_or_else(|| panic!("the shipped catalogue carries `{OPERATION}`"));
+    let operation = projected(
+        &app,
+        Retargeted::wrapping(app.egress(), &vendor.origin),
+        entry,
+    )
+    .await;
     let result = operation
         .execute(&app.context(), params())
         .await
@@ -471,7 +539,14 @@ async fn the_vendor_receives_a_user_agent_that_names_this_software() {
     )
     .expect("the crate root exists");
 
-    let operation = projected(&app, retargeted_at(OPERATION, &vendor.origin)).await;
+    let entry = catalog::operation(OperationKey::id(OPERATION))
+        .unwrap_or_else(|| panic!("the shipped catalogue carries `{OPERATION}`"));
+    let operation = projected(
+        &app,
+        Retargeted::wrapping(app.egress(), &vendor.origin),
+        entry,
+    )
+    .await;
     let params = params();
 
     operation
@@ -527,7 +602,14 @@ async fn the_default_egress_refuses_the_very_request_the_grant_admits() {
     let vendor = Vendor::start().await;
     let app = App::new(env!("CARGO_MANIFEST_DIR")).expect("the crate root exists");
 
-    let operation = projected(&app, retargeted_at(OPERATION, &vendor.origin)).await;
+    let entry = catalog::operation(OperationKey::id(OPERATION))
+        .unwrap_or_else(|| panic!("the shipped catalogue carries `{OPERATION}`"));
+    let operation = projected(
+        &app,
+        Retargeted::wrapping(app.egress(), &vendor.origin),
+        entry,
+    )
+    .await;
     let ctx = app.context();
 
     let error = operation

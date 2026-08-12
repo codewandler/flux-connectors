@@ -349,11 +349,11 @@ impl Credentials {
                     }
                 };
                 let user = user_half(channel, credential, settings)?;
-                assembled.push(Assembled {
-                    credential: credential.name,
-                    value: auth::acquire(credential, secret.expose_secret(), user.as_deref()),
-                    place: credential.place,
-                });
+                assembled.push(Assembled::new(
+                    credential.name,
+                    auth::acquire(credential, secret.expose_secret(), user.as_deref()),
+                    credential.place,
+                ));
             }
             if let Some(path) = missing {
                 unmet.push(path);
@@ -459,11 +459,7 @@ impl Credentials {
                 register(ctx, operation.id, credential, &reference, &travelling)?;
             }
 
-            assembled.push(Assembled {
-                credential: credential.name,
-                value,
-                place: credential.place,
-            });
+            assembled.push(Assembled::new(credential.name, value, credential.place));
         }
         Ok(assembled)
     }

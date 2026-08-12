@@ -1,0 +1,47 @@
+# The plan-deriving core (C-538): the canonical document in, the request plan out.
+#
+# The package carries the `connector-` prefix the workspace uses on the registry; the library is
+# `connector_resolve`, so consumers write `connector_resolve::resolve(…)`. Same split as
+# `codewandler-connector-catalog` / `catalog`.
+
+[package]
+name = "codewandler-connector-resolve"
+description = "Derives a connector's HTTP request plan from the canonical catalog document — no engine, no transport, no socket."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/codewandler-connector-resolve"
+keywords = ["flux", "connector", "catalog", "http", "api"]
+categories = ["api-bindings", "web-programming"]
+
+[lib]
+name = "connector_resolve"
+path = "src/lib.rs"
+
+# **Engine-free is this crate's acceptance criterion** (C-538), not a habit. `connector-pack`'s
+# `resolve` returns `flux_core::Result<Arc<dyn Tool>>`, which couples every consumer to one
+# `codewandler-flux-*` line even when no catalogue content changed. This crate is the half of that
+# work which has no engine in it: a document in, a request plan out, as data.
+# `crates/connector-cli/tests/dependency_fence.rs::the_plan_deriving_core_is_engine_free` asserts it
+# over the resolved graph rather than over this comment.
+[dependencies]
+# The canonical documents, embedded behind the dependency-free reader (C-537). This is the input:
+# the pack's request is the *document's* request by construction, which is the whole of Decision
+# 0022's resolver half.
+catalog-reader.workspace = true
+# The credential vocabulary the placement axis is keyed by — `Placement`, `Acquisition`,
+# `Credential`. `catalog` is itself engine-free (its only dependency is the reader), so this edge
+# adds no engine line; what it adds is the one spelling of "where does this credential go" that this
+# workspace already has.
+catalog.workspace = true
+# `HttpsOrigin`: the one origin grammar that has to mean the same thing in the compiler, here, and
+# in Exchange (C-523). Reached for exactly as `connector-pack` reaches for it today.
+connector-address.workspace = true
+
+serde = { workspace = true }
+serde_json.workspace = true
+thiserror.workspace = true

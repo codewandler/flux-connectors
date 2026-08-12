@@ -31,6 +31,10 @@ members = [
     # it. `crates/catalog` depends on it — the shim over the embedded pack — so it is in the
     # publish closure by derivation, not by listing.
     "crates/catalog-reader",
+    # The plan-deriving core (C-538): the canonical document in, the request plan out, with no
+    # engine in it. `crates/connector-pack` depends on it — its `resolve`/`project`/`pack` survive
+    # as a thin wrapper over this — so it is in the publish closure by derivation, not by listing.
+    "crates/connector-resolve",
     "crates/connector-pack",
     "crates/connector-secrets",
     # The reference host (C-200). `publish = false`, and a **leaf**: nothing in this workspace may
@@ -72,6 +76,11 @@ catalog = { package = "codewandler-connector-catalog", version = "0.22.0", path 
 # as `catalog::reader` — the shim of Decision 0022 — and the resolver work (C-538) consumes it
 # directly. Keyed `catalog-reader`, so dependents bind the extern `catalog_reader`.
 catalog-reader = { package = "codewandler-connector-catalog-reader", version = "0.22.0", path = "crates/catalog-reader" }
+# The plan-deriving core (C-538): `connector-pack`'s request derivation, minus the engine. It reads
+# the canonical document's request template and returns the plan as data, so a consumer that only
+# needs "what request would this make" no longer resolves a `codewandler-flux-*` line to find out.
+# Keyed `connector-resolve`, so dependents bind the extern `connector_resolve`.
+connector-resolve = { package = "codewandler-connector-resolve", version = "0.22.0", path = "crates/connector-resolve" }
 # The Tool pack (C-114): the flux interop layer. It is the one crate here that links flux's
 # *runtime* — see the note under `flux-runtime` below for why that does not contradict
 # "this repo compiles; flux executes".

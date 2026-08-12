@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use connector_address::HttpsOrigin;
-use flux_lang::program::CompositeOpDecl;
 use flux_runtime::{Tool, ToolContext, ToolResult};
 use flux_spec::{
     Intent, IntentBehavior, IntentCertainty, IntentRole, IntentSet, IntentTarget,
@@ -17,7 +16,7 @@ use crate::config::{Field, Snapshot};
 use crate::dry_run::{DryRun, DryRunTransport, Transport};
 use crate::mint;
 use crate::request::{self, Request};
-use crate::{auth, spec, Configuration, Credentials, Error};
+use crate::{base_url_of, document_of, spec, Configuration, Credentials, Error};
 
 /// **The connector's egress**: the tool every projected operation hands its request to.
 ///
@@ -100,10 +99,13 @@ pub struct Operation {
     provider: &'static catalog::Provider,
     /// The projected declaration, complete before the tool is ever registered.
     spec: ToolSpec,
-    /// The operation's own emitted Flux, parsed. The request is **evaluated** from this rather than
-    /// re-lowered from the IR, so the pack's request is the module's request by construction — see
-    /// [`crate::request`].
-    declaration: CompositeOpDecl,
+    /// **The operation's canonical document** (C-538). The request is derived from the request
+    /// template this publishes rather than by walking a parsed module, so the pack's request is the
+    /// *document's* request by construction — see [`connector_resolve`].
+    document: &'static connector_resolve::document::Operation,
+    /// The service base URL template the document declares, before this tenant's connection
+    /// settings are substituted into it.
+    base_url: &'static str,
     /// **flux's egress, not ours.** Every byte this pack sends leaves through this tool, which a
     /// host supplies pre-configured. This repository still opens no socket. See [`Egress`].
     http: Egress,
@@ -118,15 +120,16 @@ pub struct Operation {
     /// *is* the host's egress gate — so a drifting store could gate one host and call another.
     /// Holding a [`Snapshot`] instead removes the second read rather than documenting it away.
     settings: Snapshot,
-    /// The configuration variables this operation's own emitted Flux carries, derived once at
-    /// install for the same reason the spec is: so a connector that cannot be configured is a
-    /// diagnosable refusal at the first call rather than a brace discovered in a URL.
+    /// The configuration variables this operation's canonical document declares, read once at
+    /// install for the same reason the spec is derived once: so a connector that cannot be
+    /// configured is a diagnosable refusal at the first call rather than a brace discovered in a
+    /// URL.
     endpoint_variables: Vec<String>,
-    /// **Where each of those variables lands on the request** (C-214), read off the same body at the
-    /// same moment. A value is checked against its position where it is substituted, so the rule
-    /// binds every host and every `ConfigStore` rather than the loader's view of an `example`.
-    endpoint_slots: BTreeMap<String, request::Slot>,
-    /// Caller-visible parameters the emitted Flux places in the URL path (C-478). Derived once at
+    /// **Where each of those variables lands on the request** (C-214), as the document declares it.
+    /// A value is checked against its position where it is substituted, so the rule binds every host
+    /// and every `ConfigStore` rather than the loader's view of an `example`.
+    endpoint_slots: BTreeMap<String, connector_resolve::Slot>,
+    /// Caller-visible parameters the request template places in the URL path (C-478). Read once at
     /// projection and checked before a request can reach authentication or egress.
     caller_path_parameters: BTreeSet<String>,
     /// **The credential this operation mints, when minting is its whole purpose** (C-136).
@@ -228,21 +231,34 @@ impl Operation {
             });
         }
 
+        // **The contract is still the emitted declaration's** (C-538). The *request* left the Flux
+        // behind; the `ToolSpec` a model is handed did not, because the document publishes the
+        // catalogue's one-line summary rather than the emitter's error-envelope-extended text, and
+        // its parameter schemas are the vendor's rather than the lowered Flux types. Re-deriving
+        // either here would be a second spelling of `connector-flux`'s rules, which is the defect
+        // this migration exists to end rather than to move. See the story's Progress note.
         let declaration = spec::declaration_of(entry.id, entry.flux)?;
         let spec = spec::project_declaration(entry.id, &declaration)?;
-        // **Refused at install, not at the first call** (C-232). A body binding a brace-carrying
-        // literal this pack cannot classify is a connector whose configuration surface is a guess;
-        // registering it would advertise a tool that either refuses every call or sends the vendor a
-        // document a tenant's settings were pasted into.
+        // **Still refused at install** (C-232), and now a coherence check on the retiring artifact
+        // rather than the source of the configuration surface: an emitted body binding a
+        // brace-carrying literal this pack cannot classify is a connector whose two artifacts
+        // disagree about what a placeholder is. It retires with the AST walk in C-540.
         request::refuse_unconfigurable(entry.id, &declaration)?;
-        let endpoint_variables = request::endpoint_variables(&declaration);
-        let mut endpoint_slots = request::endpoint_slots(&declaration);
-        let caller_path_parameters = request::caller_path_parameters(&declaration);
+
+        // **The configuration surface comes from document fields.** `expose`, the endpoint
+        // variables, where each of them lands, and the caller parameters the URL places in a path
+        // segment are all *declared* by the canonical document, so nothing here infers them from
+        // the shape of a string literal any more.
+        let document = document_of(entry.id)?;
+        let base_url = base_url_of(entry)?;
+        let endpoint_variables = document.endpoint_variables().to_vec();
+        let endpoint_slots = document.endpoint_slots().clone();
+        let caller_path_parameters = document.caller_path_parameters().clone();
 
         // **The one read of the configuration port** (C-198). Everything this operation can ever ask
-        // for is knowable here — the endpoint variables off its own emitted Flux, the Basic user
-        // halves off its connector's declared credentials — so the port is consulted once and the
-        // result is frozen. See [`Operation::settings`] for why holding the port instead would be a
+        // for is knowable here — the endpoint variables off its own canonical document, the Basic
+        // user halves off its connector's declared credentials — so the port is consulted once and
+        // the result is frozen. See [`Operation::settings`] for why holding the port instead would be a
         // hole through the host's egress gate.
         let mut fields: Vec<Field<'_>> = endpoint_variables
             .iter()
@@ -259,11 +275,11 @@ impl Operation {
                 if let Some(default) = field.default {
                     settings.insert_default(Field::Endpoint(variable), default);
                 }
-                if field.format == "origin" {
-                    endpoint_slots.insert(variable.clone(), request::Slot::Origin);
-                }
             }
         }
+        // The `format == "origin"` override that used to sit here is gone (C-538): the document
+        // states the position — `"endpoint": {"origin": ["origin"]}` — so recovering it from the
+        // config table would be a second answer to a question the artifact now answers.
 
         // **Whether this operation's whole purpose is to mint a credential** (C-136), read once at
         // install like everything else here. `None` for every operation the catalogue ships today.
@@ -274,7 +290,8 @@ impl Operation {
             endpoint_variables,
             endpoint_slots,
             caller_path_parameters,
-            declaration,
+            document,
+            base_url,
             entry,
             provider,
             http,
@@ -304,14 +321,35 @@ impl Operation {
             .await
     }
 
-    /// The configuration variables this operation's URL carries, in stable order.
+    /// The configuration variables this operation's URL carries, in stable order — the document's
+    /// `endpoint` keys (C-538).
     ///
     /// Public because it is what a host needs in order to know *what to ask a tenant for* before
-    /// C-87 publishes the configuration surface into the manifest. `zendesk-ticket-show` reports
+    /// C-87 publishes the whole configuration surface into the manifest. `zendesk-ticket-show` reports
     /// `["subdomain"]`; a `docusign` operation reports `["account_host", "account_id"]`; an
     /// operation on a connector with a literal base URL reports nothing.
     pub fn endpoint_variables(&self) -> &[String] {
         &self.endpoint_variables
+    }
+
+    /// **Where each of those variables lands on the request**, as the canonical document declares
+    /// it (C-214, C-538).
+    ///
+    /// Public for the same reason [`Operation::endpoint_variables`] is: it is half of the
+    /// configuration surface a product needs in order to ask a tenant for the right thing, and to
+    /// tell it what a value may look like. A variable the document places nowhere is
+    /// [`Slot::Unplaced`](connector_resolve::Slot::Unplaced), which refuses the most.
+    pub fn endpoint_slots(&self) -> &BTreeMap<String, connector_resolve::Slot> {
+        &self.endpoint_slots
+    }
+
+    /// **Caller-visible parameters the request template places in a URL path segment** (C-478).
+    ///
+    /// A string bound to one of these is checked against the path rule before authentication or
+    /// egress sees a request, so a value carrying a `/` is a refusal rather than a call to a
+    /// different route.
+    pub fn caller_path_parameters(&self) -> &BTreeSet<String> {
+        &self.caller_path_parameters
     }
 
     /// Resolve every configuration variable this operation needs, or refuse.
@@ -456,14 +494,12 @@ impl Operation {
     /// `{placeholder}` in the connector's base URL. All refuse rather than sending a
     /// partly-assembled call.
     pub fn build_request(&self, params: &Value) -> Result<Request, Error> {
-        request::build(
-            self.entry.id,
-            &self.declaration,
+        Ok(connector_resolve::build_request(
+            self.document,
+            self.base_url,
             params,
             &self.endpoints()?,
-            &self.endpoint_slots,
-            &self.caller_path_parameters,
-        )
+        )?)
     }
 
     /// **The request as it goes out**: built, then authenticated with the bound credential port.
@@ -495,11 +531,19 @@ impl Operation {
             .resolve(ctx, self.entry, self.provider, &self.settings)
             .await?;
 
-        let mut request = self.build_request(params)?;
-        for credential in &credentials {
-            auth::place(self.entry.id, credential, &mut request)?;
-        }
-        Ok(request)
+        // **The plan is the production path**, not a second one: `resolve` builds the request from
+        // the same template `build_request` reads and places the credentials with the same
+        // `connector_resolve::auth::place`. What stays here is the *order* — the credentials above
+        // were resolved and registered with `ctx.redactor` before this line, so the window between
+        // a value existing and the redactor knowing about it is still closed.
+        let plan = connector_resolve::resolve(
+            self.document,
+            self.base_url,
+            params,
+            &self.endpoints()?,
+            &credentials,
+        )?;
+        Ok(plan.request)
     }
 
     /// Where this call would go, for the host's network policy to judge.
@@ -561,7 +605,7 @@ impl Operation {
                 .endpoint_slots
                 .get(variable)
                 .copied()
-                .unwrap_or(request::Slot::Unplaced);
+                .unwrap_or(connector_resolve::Slot::Unplaced);
             if let Some(value) = self
                 .endpoint(variable)
                 .ok()
