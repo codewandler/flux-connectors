@@ -9,6 +9,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The 55 providers compile concurrently, folded strictly in provider order** (C-544, third
+  delivery of C-546's test-cost program). `compile_all` claims providers off an atomic cursor
+  across scoped std threads — no new dependency — and a single sort by provider index decides
+  everything downstream, so the plan, every diagnostic, the refusal a broken provider raises, and
+  every artifact byte are identical at any width (width 1 is the old loop, and permanent tests
+  compare the full Plan against it; a seeded completion-order fold demonstrably reports the wrong
+  provider's error and stays in the suite as a tripwire). A full `diff` drops from ~31 s to
+  ~13 s (~2.6×) — a floor every whole-tree fixed-point test also pays — with babelforce alone
+  10.3 s of the sequential cost (filed as C-551; the nextest interaction as C-550).
+
 - **The workspace gate runs tests as parallel processes through pinned cargo-nextest** (C-543,
   second delivery of C-546's test-cost program). `cargo test` runs one test binary at a time and
   its serialisation is total — 792.14 s wall clock against a 790.63 s sum of its own per-target
