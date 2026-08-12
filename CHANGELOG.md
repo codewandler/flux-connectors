@@ -25,6 +25,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Emission is additive: every previously emitted artifact is unchanged (the build now reports 1166
   artifacts across 55 providers), and nothing ships that reads the documents until the pack and
   resolver land (C-537, C-538).
+- **The canonical documents compile into one pack, served by a new published reader crate**
+  (C-537, the second delivery of C-534's program). A full build now derives
+  `crates/catalog-reader/catalog.pack` — one uncompressed, offset-indexed, digest-carrying file
+  over the committed document bytes (9,547,465 B; index overhead 52,467 B ≈ 0.55%) —
+  byte-deterministically: three independent builds across two checkouts reproduced
+  `sha256 7670fe86…`, and `connectors.lock` records it as the sixth whole-catalogue artifact
+  under `[pack]`. The new crate `codewandler-connector-catalog-reader` (lib `catalog_reader`)
+  serves the embedded pack with **zero non-optional dependencies** — the digest check is a
+  vendored SHA-256, cross-checked against `sha2` across every padding boundary in tests — through
+  `providers()`, `provider()`, `operation()`, `operations_of()`, and a `Pack::load(path)` that
+  refuses a wrong container format, digest or schema version by name before serving any record.
+  `codewandler-connector-catalog` becomes an additive shim: it re-exports the reader as
+  `catalog::reader` with no breaking change to its public API (`crates/catalog/tests/
+  consumer_api.rs` compiles the whole promised surface to hold that line), and the `&'static`
+  tables remain the legacy API's storage until C-540 — deferral reasoning in
+  `docs/designs/catalog-artifact.md` §2.4. The zstd-CBOR working choice is rejected in writing
+  there (§2.1–2.3): a zero-dependency reader can carry no codec, compression ties
+  byte-determinism to a compressor version, and the raw payload keeps every record byte-identical
+  to its reviewed committed document. The reader joins the derived publish closure (now five
+  crates: address, catalog-reader, catalog, secrets, pack), and `scripts/cut-release.sh` carries
+  the documents and the pack through a release. The build now plans 1167 artifacts.
 
 ### Changed
 

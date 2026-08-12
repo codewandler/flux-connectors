@@ -18,9 +18,11 @@ queryable Rust catalogue, and a flux Tool pack.
 
 The repository currently contains **835 curated connector operations across 55 providers and 67
 services**, plus 53 events and 5 channel bindings. It also publishes 77 Flux-owned core operations, node
-kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **1166
+kinds and capability records, and 3 core JSON Schemas. A full build compiles everything into **1167
 committed, reviewable artifacts** without contacting a vendor — including one canonical
-`catalog/<name>.catalog.json` document per provider, the reviewed artifact of Decision 0022. Browse
+`catalog/<name>.catalog.json` document per provider, the reviewed artifact of Decision 0022, and the
+one `catalog.pack` file those documents compile into, served by the dependency-free
+`codewandler-connector-catalog-reader` crate (C-537). Browse
 them in the [catalogue explorer](https://flux.codewandler.org/explorer).
 
 > These counts are intentionally mutable, but they are checked against a full build plan by
@@ -88,7 +90,7 @@ cargo run -p connector-cli -- build
 On a clean checkout, `diff` reports:
 
 ```text
-1166 artifacts up to date (55 providers checked)
+1167 artifacts up to date (55 providers checked)
 ```
 
 Then inspect [`connectors/zendesk.flux`](connectors/zendesk.flux), browse the
@@ -185,8 +187,8 @@ fails closed:
   is an open question of the catalog-artifact design. A service's `roles` and `quirks.pagination`
   left this list with C-536 — both now reach `catalog/<name>.catalog.json` — and
   `quirks.rate_limit` became representable there (the document schema carries the field; nothing
-  declares one yet, so no document does). Nothing ships that *reads* any of them until the pack
-  and resolver land (C-537, C-538). `config`
+  declares one yet, so no document does). The pack and its reader (C-537) now ship every document
+  whole; nothing *interprets* those fields until the resolver lands (C-538). `config`
   and `verify` left it earlier: C-87 published both, and today 82 config fields across 42 providers
   travel identically into `web/public/catalog.json` and into 46 `connectors/*.connector.toml`
   manifests (more manifests than providers because a multi-service connector emits one per

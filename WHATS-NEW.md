@@ -22,6 +22,13 @@
   the events it can receive, and its safety annotations — readable from any language without
   installing anything of ours. Nothing you use today changes; the documents are additional, and
   the tooling that consumes them directly is on its way.
+- **The whole catalogue now travels as one compact, integrity-checked file.** Everything those
+  per-connector documents describe is also compiled into a single file, together with a small
+  reader library that serves it. A program can carry the entire catalogue with it, prove the copy
+  is intact before trusting a single entry, and look up any connector or operation instantly —
+  including a catalogue newer than the program itself, which is refused loudly if it is damaged
+  or from an incompatible future version rather than half-read. Catalogue updates stop being tied
+  to code updates; nothing you use today changes.
 
 ## [0.21.0] — 2026-08-12
 

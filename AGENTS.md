@@ -10,8 +10,9 @@ local story and reconcile the text before implementation; the roadmap does not o
 repository's implementation acceptance, safety invariants or validation contract. C-507 records the
 current adoption of Decision 0001. C-535 records the adoption of Decision 0022: the compile
 destination is a versioned **catalog artifact** — request shaping as closed declarative data the
-resolver evaluates, behaviour staying in Flux-Lang at the Flux layer — and until C-534's program
-(C-536…C-540) delivers it, the build's emitted artifact set below is unchanged.
+resolver evaluates, behaviour staying in Flux-Lang at the Flux layer. C-534's program (C-536…C-540)
+is delivering it additively — C-536 landed the canonical documents, C-537 the pack and its reader —
+and nothing previously emitted retires before C-538…C-540's differential gate.
 
 <!-- BEGIN track:agents -->
 ## Start here — mandatory workflow for every task
@@ -101,9 +102,9 @@ The coordinator failures from the same session, and each of them cost a rework r
 
 ## Current project boundary
 
-**Snapshot: v0.21.0 + C-536 (re-measured 2026-08-12).** `cargo run -p connector-cli -- build` compiles **55 providers**, **67 services**
+**Snapshot: v0.21.0 + C-537 (re-measured 2026-08-12).** `cargo run -p connector-cli -- build` compiles **55 providers**, **67 services**
 and **835 curated connector operations** — plus 53 events, 5 channel bindings and 77 Flux core entries
-(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **1166 artifacts**. The
+(29 operations, 43 node kinds, 5 capabilities) with 3 core JSON Schemas — into **1167 artifacts**. The
 compiler, the embedded Rust catalogue, the JSON catalogue, the Tool pack and the public explorer all
 work. **The repository now also ships a host**, `connectors-api` (C-200), which makes live API calls
 — it is fenced away from the compile path in both directions, and the compiler itself still reaches
@@ -122,9 +123,12 @@ declarative data the resolver evaluates, and behaviour — composition, retry, s
 in Flux-Lang at the Flux layer. Neither TOML nor the artifact is an execution format for behaviour.
 C-536 landed the artifact's first form **additively**: one canonical `catalog/<name>.catalog.json`
 per provider, carrying the complete surface including the request template, validated against the
-committed `catalog/connector-document.schema.json` and hashed per provider in `connectors.lock`;
-every previously emitted artifact is unchanged until C-537…C-540 deliver the pack, the resolver and
-the retirement.
+committed `catalog/connector-document.schema.json` and hashed per provider in `connectors.lock`.
+C-537 compiled those documents into one whole-catalogue pack —
+`crates/catalog-reader/catalog.pack`, offset-indexed, digest-carrying, recorded as `[pack]` in
+`connectors.lock` — served by the published zero-dependency `catalog-reader` crate, with
+`connector-catalog` an additive shim over it; every previously emitted artifact is unchanged until
+C-538…C-540 deliver the resolver and the retirement.
 
 A connector is **not** a set of operations. It declares what a vendor can do in **both directions**,
 and what an **operator** must supply to use it: operations and services outbound, events and channels
@@ -156,12 +160,13 @@ The connector boundary comes first for any proposed integration:
 | `connector-spec` | IR, provider-TOML loading, validation, provenance, lockfile | Touch the network |
 | `connector-flux` | Lowering the IR to `flux_lang` AST and formatting Flux | Emit Flux with string templates |
 | `connector-cli` | Binary, orchestration, filesystem IO, and all future network IO | Reach the network during `build`, `diff`, or `check` |
-| `connector-catalog` | Static provider/operation metadata and embedded Flux | Execute operations, touch the network/filesystem, or gain runtime dependencies |
+| `connector-catalog` | Static provider/operation metadata and embedded Flux; since C-537 an additive shim re-exporting `catalog-reader` | Execute operations, touch the network/filesystem, or depend on machinery — its one edge is the data-only `catalog-reader` (C-537) |
+| `catalog-reader` | The embedded catalog pack and the code serving it: `providers()`, `provider()`, `operation()`, `operations_of()`, and `Pack::load(path)` refusing a wrong schema version or digest before any record | Gain a non-optional dependency, link a `codewandler-flux-*` crate, execute operations, or touch the network |
 | `connector-pack` | Projecting catalogue operations onto flux `ToolSpec`s, assembling auth onto a request, giving that request this software's `User-Agent` (C-223 — the host constructs no request, and a client-level header would be invisible to the dry run; see [docs/designs/host-identity.md](docs/designs/host-identity.md)), and handing the registry declarations | Open a socket, hold an HTTP client, resolve a host, or construct a runtime — egress is a constructor argument (`Egress`), and `permission_subjects`/`intents` must never be defaulted away |
 | `connector-secrets` | Resolving a `CredentialRef` **address** to a **value**: the `SecretStore` port, `MemoryStore`, the portable owner-only `FileStore` (Unix owner plus `0700`/`0600`; Windows process `TokenUser` SID plus a non-null protected DACL), and the optional Vault KV v2 client | Be reachable from `connector-cli` — it opens sockets, and that edge would end the offline guarantee; also: no expiry, refresh, rotation or revocation |
 | `connectors-api` | **The reference/development host** (C-200): proving the delivered HTTP seams without becoming the official execution placement | Construct a request of its own — every route ends in `connector-pack` (`pack` for the model-facing registry, `resolve` for a caller naming one operation — C-413); compete with Exchange as the supported integration boundary; be depended on by anything (it is a **leaf**, and `dependency_fence.rs` holds both directions); be published (`publish = false`) |
 
-The first four are the **compiler**. `connector-pack` and `connector-secrets` are **host libraries**,
+The first five are the **compiler**. `connector-pack` and `connector-secrets` are **host libraries**,
 built and tested here and excluded from the compile path. `connectors-api` is the **reference host**
 and the one crate here that opens a socket; it proves seams but is not the supported official
 integration boundary. `crates/connector-cli/tests/dependency_fence.rs` asserts
@@ -196,7 +201,7 @@ cargo run -p connector-cli -- build
 cargo run -p connector-cli -- diff
 ```
 
-`diff` must finish with `1166 artifacts up to date (55 providers checked)` for the current catalogue.
+`diff` must finish with `1167 artifacts up to date (55 providers checked)` for the current catalogue.
 The artifact count legitimately changes when providers or operations change: it is not a permanent
 invariant, but it is checked at every commit against the real build plan. Regenerate this sentence
 and the counts under [Current project boundary](#current-project-boundary) when that plan changes;
@@ -207,6 +212,7 @@ do not relax the check.
 | `connectors/*.flux`, `connectors/*.connector.toml` | `providers/`, vendored `specs/`, compiler code |
 | `catalog/<provider>.catalog.json` | Connector IR and the document lowering (`connector-cli`'s `document`) — the canonical per-provider artifact of Decision 0022 (C-536) |
 | `catalog/connector-document.schema.json` | `document::schema` — the versioned JSON Schema every document is validated against at build time |
+| `crates/catalog-reader/catalog.pack` | The canonical documents, compiled into one offset-indexed, digest-carrying file (`connector-cli`'s `pack`) — **whole-catalogue** (C-537) |
 | `crates/catalog/ops/<provider>/*.flux` | Emitted provider operations |
 | `crates/catalog/src/generated/<provider>.rs` | Connector IR and catalogue emitter |
 | `crates/catalog/src/generated.rs` | The provider set in `providers/` — **whole-catalogue** |
@@ -263,7 +269,7 @@ on the strength of nobody having listed it.
 
 ### Whole-catalogue artifacts are coordinator-owned
 
-The five artifacts marked **whole-catalogue** above describe the catalogue *as a whole*. A scoped run
+The six artifacts marked **whole-catalogue** above describe the catalogue *as a whole*. A scoped run
 compiled a subset, so it cannot write one honestly — it would drop every provider it never looked at,
 and it would do so successfully. `build` therefore emits them **only on a full run**, and
 `--provider`/`--service` leave the committed files untouched rather than truncating them
@@ -890,14 +896,15 @@ These failures are recorded decisions. Do not “fix” one without reading its 
 
   | surface | declared today | where it stops |
   |---|---|---|
-  | `[[services]] roles` | 1 role (`anthropic` / `models`) | the canonical document (`grep -l llm_catalogue catalog/*.catalog.json` → `catalog/anthropic.catalog.json`); no consumer reads it until C-537/C-538 |
+  | `[[services]] roles` | 1 role (`anthropic` / `models`) | the canonical document (`grep -l llm_catalogue catalog/*.catalog.json` → `catalog/anthropic.catalog.json`), and since C-537 the pack; nothing interprets it until C-538 |
   | `quirks.pagination` | 4 operations across 2 providers (`grep -c '^\[.*quirks.pagination\]' providers/*.toml` → babelforce 2, twilio 2; the 2026-08-11 "6 across 3" counted comment mentions) | the canonical document, per operation |
   | `[[graphs]]` | none — the lowering exists (`crates/connector-flux/src/graph.rs`) and nothing declares one | no consumer *and* no producer; the document lowering **refuses** a declared graph rather than dropping it (deferred by the catalog-artifact design) |
   | `quirks.rate_limit` | none — `providers/hubspot.toml` records a deliberate non-declaration | no producer; the document schema carries the field, so the first declaration reaches an artifact without new plumbing |
 
   What remains open is the *consumer* half: a host reading an artifact can now find a service's
-  roles or an operation's paging in the document, but nothing ships that reads it until the pack
-  and resolver land (C-537, C-538). Do not close that by widening the manifest ad hoc; the
+  roles or an operation's paging in the document — and since C-537 in the pack the reader serves —
+  but nothing *interprets* it until the resolver lands (C-538). Do not close that by widening the
+  manifest ad hoc; the
   surface-to-artifact mapping is decided in
   [docs/designs/connector-surfaces.md](docs/designs/connector-surfaces.md).
 
@@ -1062,9 +1069,10 @@ version number is burned, and a wrong `description`, `readme` or `keywords` is f
   [`.github/workflows/crates-io.yml`](.github/workflows/crates-io.yml) does the rest. It needs one
   secret, `CARGO_REGISTRY_TOKEN`, checked before anything is packaged, and holds a `concurrency`
   group so two runs cannot race. `workflow_dispatch` resumes a run that died partway.
-- **The publish closure is four crates, not three.** `connector-address`, `connector-catalog`,
-  `connector-secrets`, `connector-pack`. `connector-cli`, `connector-flux` and `connector-spec` are
-  not published. The closure is *derived* from the manifests by
+- **The publish closure is five crates** (C-537 added the reader). `connector-address`,
+  `catalog-reader`, `connector-catalog`, `connector-secrets`, `connector-pack` — that is the
+  topological order `scripts/publish-crates-io.sh --print-order` derives. `connector-cli`,
+  `connector-flux` and `connector-spec` are not published. The closure is *derived* from the manifests by
   [`scripts/publish-crates-io.sh`](scripts/publish-crates-io.sh), which lists only the consumable
   roots; the order is a topological sort, so a new edge changes it automatically.
   `crates/connector-cli/tests/publish_closure.rs` asserts the derivation, the order and the
@@ -1088,9 +1096,10 @@ version number is burned, and a wrong `description`, `readme` or `keywords` is f
   whole closure on every pull request, so a packaging error arrives as a review comment rather than
   as a release incident.
 - **Crate names are settled.** The permanent public packages are
-  `codewandler-connector-address`, `codewandler-connector-catalog`,
-  `codewandler-connector-secrets` and `codewandler-connector-pack`; all four are live and unyanked
-  at `0.19.1` (re-measured 2026-08-04 with the crates.io
+  `codewandler-connector-address`, `codewandler-connector-catalog-reader` (C-537, first published
+  with the next release), `codewandler-connector-catalog`,
+  `codewandler-connector-secrets` and `codewandler-connector-pack`; the four pre-C-537 packages are
+  live and unyanked at `0.19.1` (re-measured 2026-08-04 with the crates.io
   `/api/v1/crates/<name>/0.19.1` endpoint). Their shorter `[lib]` names remain the Rust import names;
   README dependency snippets, crates.io links and docs.rs metadata use the public package names.
 
@@ -1193,7 +1202,7 @@ That is CI's, and the contract below says why.
 - flux-connectors depends on `codewandler-flux-lang` (library `flux_lang`) from crates.io, pinned in
   `[workspace.dependencies]`. Do not replace it with a git or `../flux` path dependency; those do not
   resolve in a fresh clone and couple the build to an unpublished tree.
-- The **compiler** crates — `connector-spec`, `connector-flux`, `connector-cli` — depend on no part of the flux runtime, and `connector-catalog` stays dependency-free. `connector-pack` alone links `flux-runtime`/`flux-spec` among them, because a declaration handed to a host must be spelled in the host's own `ToolSpec`/`Tool` vocabulary. **The compiler constructs no runtime: it compiles; Exchange executes official integrations.** The repository also ships the `connectors-api` reference/development host (C-200), which constructs the delivered HTTP runtime and is fenced away from the compiler in both directions by `crates/connector-cli/tests/dependency_fence.rs`; C-507 explicitly prevents that harness becoming a parallel supported placement. The offline guarantee is a property of the compile path, not of the workspace.
+- The **compiler** crates — `connector-spec`, `connector-flux`, `connector-cli` — depend on no part of the flux runtime, and `connector-catalog` resolves nothing but the data-only `catalog-reader` (C-537), itself dependency-free. `connector-pack` alone links `flux-runtime`/`flux-spec` among them, because a declaration handed to a host must be spelled in the host's own `ToolSpec`/`Tool` vocabulary. **The compiler constructs no runtime: it compiles; Exchange executes official integrations.** The repository also ships the `connectors-api` reference/development host (C-200), which constructs the delivered HTTP runtime and is fenced away from the compiler in both directions by `crates/connector-cli/tests/dependency_fence.rs`; C-507 explicitly prevents that harness becoming a parallel supported placement. The offline guarantee is a property of the compile path, not of the workspace.
 - **flux's `$auth` support for `http.request` is no longer the critical path**, and had been listed
   here as though it were. C-114/C-115/C-116 assemble auth in Rust inside `connector-pack`, so the
   whole-value `{"$secret"}` marker never has to grow a prefix or an encoder.

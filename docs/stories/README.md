@@ -66,7 +66,6 @@ _The generalized-provider vocabulary so far names things a service *is* or *hold
 - [C-448 — A contract cannot require a derived value, and nothing says so](C-448-a-contract-cannot-require-a-derived-value.md) · Spec · found via openrouter: its balance is `total_credits - total_usage`, arithmetic this repository has no way to express — AGENTS.md refuses formulas outright. Conformance can map INPUTS; nothing can derive an OUTPUT, and no design records the limit
 
 ### the catalog artifact
-- [C-537 — Compile the pack and publish the reader](C-537-compile-the-pack-and-reader.md) · Build · One versioned, digest-carrying compressed pack derived from the canonical documents; a dependency-free reader preserving the catalog API; the catalog crate becomes a shim over the embedded pack
 - [C-538 — Resolve requests from the document, not the Flux](C-538-resolve-from-the-document.md) · Connector · connector-pack derives the request plan from the request template; the parse at spec.rs:250 and the AST walk leave the resolve path behind a whole-catalogue byte-identical differential gate
 - [C-542 — The emitted manifest header cites a superseded story](C-542-manifest-header-cites-a-superseded-story.md) · Codegen · seam.rs writes '# Auth and the http_hosts allowlist land in C-10.' into all 67 manifests; C-10 is closed as superseded (C-535), so the generated comment now points readers at a story that is never coming
 
@@ -530,6 +529,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-532 — Internal infrastructure markers leave the public repository](C-532-internal-markers-leave-the-public-repo.md) · Surfaces · docs/designs/spec-front-end.md quoted the internal forge host and the repository paths that its own leak-marker regex names as strings which must never be published
 - [C-535 — Adopt Decision 0022 across the repository contract](C-535-adopt-decision-0022.md) · Bridge · Contract correction: amend the vision north star, close C-10/C-15 as superseded, restate Path C and the artifact table for the catalog-artifact destination
 - [C-536 — Emit the canonical catalog document per provider](C-536-canonical-catalog-document.md) · Codegen · One deterministic committed catalog/<name>.catalog.json per provider carrying the complete surface incl. the request template and the four surfaces that reach no artifact today
+- [C-537 — Compile the pack and publish the reader](C-537-compile-the-pack-and-reader.md) · Build · One versioned, digest-carrying compressed pack derived from the canonical documents; a dependency-free reader preserving the catalog API; the catalog crate becomes a shim over the embedded pack
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->
