@@ -7,6 +7,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`connector-pack` derives every request from the canonical document, behind a whole-catalogue
+  byte-identity gate** (C-538, the resolver delivery of C-534's program). The plan-deriving core
+  is a new published, engine-free crate — `codewandler-connector-resolve` (lib
+  `connector_resolve`), whose `resolve` returns the request plan as data with secret-bearing
+  fields on the redacted-`Debug` pattern and no `codewandler-flux-*` edge (pinned by a
+  dependency-direction test). `build_request` reads the document's request template; the AST walk
+  is unreachable from the request path; `DocumentRehearsal` ships beside `Rehearsal` with the
+  same surface for Exchange's settings/verify migration (C-539). The differential gate compares
+  method, URL, headers, body, `permission_subjects`, the registered redaction set AND the
+  configuration surface for all 835 operations — it went red at its base on a real divergence
+  class (the document publishes IR parameter names, callers address Flux symbols; 23 operations)
+  and every `connector_pack::Error` variant keeps its name and wording, enforced by test. The
+  recorded residue: the `ToolSpec` projection still parses emitted Flux for the extended
+  description and contract `input_schema` the document does not yet carry — that closure, which
+  is also what C-540's deletion actually waits on, is C-552.
+
 ### Changed
 
 - **The 55 providers compile concurrently, folded strictly in provider order** (C-544, third

@@ -163,10 +163,11 @@ The connector boundary comes first for any proposed integration:
 | `connector-catalog` | Static provider/operation metadata and embedded Flux; since C-537 an additive shim re-exporting `catalog-reader` | Execute operations, touch the network/filesystem, or depend on machinery — its one edge is the data-only `catalog-reader` (C-537) |
 | `catalog-reader` | The embedded catalog pack and the code serving it: `providers()`, `provider()`, `operation()`, `operations_of()`, and `Pack::load(path)` refusing a wrong schema version or digest before any record | Gain a non-optional dependency, link a `codewandler-flux-*` crate, execute operations, or touch the network |
 | `connector-pack` | Projecting catalogue operations onto flux `ToolSpec`s, assembling auth onto a request, giving that request this software's `User-Agent` (C-223 — the host constructs no request, and a client-level header would be invisible to the dry run; see [docs/designs/host-identity.md](docs/designs/host-identity.md)), and handing the registry declarations | Open a socket, hold an HTTP client, resolve a host, or construct a runtime — egress is a constructor argument (`Egress`), and `permission_subjects`/`intents` must never be defaulted away |
+| `connector-resolve` | Deriving the request plan from the canonical document (C-538): the closed template evaluation, endpoint slot placement, auth placement, and the plan-as-data `resolve` — secret-bearing fields on the redacted-`Debug` pattern | Link a `codewandler-flux-*` crate (`crates/connector-cli/tests/main/engine_free_core.rs` pins it), open a socket, hold an HTTP client, or become a second request-composition path — `connector-pack` wraps the plan; consumers dispatch it |
 | `connector-secrets` | Resolving a `CredentialRef` **address** to a **value**: the `SecretStore` port, `MemoryStore`, the portable owner-only `FileStore` (Unix owner plus `0700`/`0600`; Windows process `TokenUser` SID plus a non-null protected DACL), and the optional Vault KV v2 client | Be reachable from `connector-cli` — it opens sockets, and that edge would end the offline guarantee; also: no expiry, refresh, rotation or revocation |
 | `connectors-api` | **The reference/development host** (C-200): proving the delivered HTTP seams without becoming the official execution placement | Construct a request of its own — every route ends in `connector-pack` (`pack` for the model-facing registry, `resolve` for a caller naming one operation — C-413); compete with Exchange as the supported integration boundary; be depended on by anything (it is a **leaf**, and `dependency_fence.rs` holds both directions); be published (`publish = false`) |
 
-The first five are the **compiler**. `connector-pack` and `connector-secrets` are **host libraries**,
+The first five are the **compiler**. `connector-pack`, `connector-resolve` and `connector-secrets` are **host libraries**,
 built and tested here and excluded from the compile path. `connectors-api` is the **reference host**
 and the one crate here that opens a socket; it proves seams but is not the supported official
 integration boundary. `crates/connector-cli/tests/dependency_fence.rs` asserts
@@ -1114,10 +1115,11 @@ version number is burned, and a wrong `description`, `readme` or `keywords` is f
   pack whose digest disagrees with the tag's `connectors.lock` `[pack]` row. It is deliberately a
   sibling workflow — the publish must gain no new way to go red, and it alone holds
   `contents: write`. `web/test/release_assets.test.mjs` pins it.
-- **The publish closure is five crates** (C-537 added the reader). `connector-address`,
-  `catalog-reader`, `connector-catalog`, `connector-secrets`, `connector-pack` — that is the
-  topological order `scripts/publish-crates-io.sh --print-order` derives. `connector-cli`,
-  `connector-flux` and `connector-spec` are not published. The closure is *derived* from the manifests by
+- **The publish closure is six crates** (C-537 added the reader, C-538 the resolve core).
+  `connector-address`, `catalog-reader`, `connector-catalog`, `connector-resolve`,
+  `connector-secrets`, `connector-pack` — that is the topological order
+  `scripts/publish-crates-io.sh --print-order` derives. `connector-cli`, `connector-flux` and
+  `connector-spec` are not published. The closure is *derived* from the manifests by
   [`scripts/publish-crates-io.sh`](scripts/publish-crates-io.sh), which lists only the consumable
   roots; the order is a topological sort, so a new edge changes it automatically.
   `crates/connector-cli/tests/publish_closure.rs` asserts the derivation, the order and the
@@ -1142,11 +1144,12 @@ version number is burned, and a wrong `description`, `readme` or `keywords` is f
   as a release incident.
 - **Crate names are settled.** The permanent public packages are
   `codewandler-connector-address`, `codewandler-connector-catalog-reader`,
-  `codewandler-connector-catalog`, `codewandler-connector-secrets` and
-  `codewandler-connector-pack`. All five are live and unyanked at `0.22.0`; the reader is the
-  newest of them, added by C-537 and first published in v0.22.0 (re-measured 2026-08-12 with
+  `codewandler-connector-catalog`, `codewandler-connector-resolve`,
+  `codewandler-connector-secrets` and `codewandler-connector-pack`. All but the resolve core are
+  live and unyanked at `0.22.0` (re-measured 2026-08-12 with
   `curl -s https://index.crates.io/co/de/<name> | tail -1`, which reports `"vers":"0.22.0"` and
-  `"yanked":false` for each). Their shorter `[lib]` names remain the Rust import names; README
+  `"yanked":false` for each); the resolve core was added by C-538 and first publishes with the
+  next release. Their shorter `[lib]` names remain the Rust import names; README
   dependency snippets, crates.io links and docs.rs metadata use the public package names.
 
 See [docs/designs/crates-io-publishing.md](docs/designs/crates-io-publishing.md) for the reasoning

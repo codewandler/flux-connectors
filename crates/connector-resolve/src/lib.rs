@@ -28,7 +28,7 @@
 //! couples every consumer to one `codewandler-flux-*` line even when no catalogue content changed
 //! (`docs/designs/catalog-artifact.md` §3). This crate is the half of that work which has no engine
 //! in it: it links no `codewandler-flux-*` crate, and
-//! `crates/connector-cli/tests/engine_free_core.rs::the_plan_deriving_core_links_no_engine_crate`
+//! `crates/connector-cli/tests/main/engine_free_core.rs::the_plan_deriving_core_links_no_engine_crate`
 //! asserts that over the graph cargo resolves — kinds filtered to the edges a *consumer* links —
 //! rather than over this paragraph.
 //!

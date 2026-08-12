@@ -212,7 +212,7 @@ pub use name::{dotted_name, NameError};
 // **Two rehearsals, side by side, deliberately** (C-538). `Rehearsal` reads the emitted Flux;
 // `DocumentRehearsal` reads the canonical document, with the same observable semantics. Both are
 // exported until Exchange's settings and connection-verification call sites migrate (C-539), and
-// `tests/catalogue_differential.rs` requires them to agree for every operation in the catalogue
+// `tests/main/catalogue_differential.rs` requires them to agree for every operation in the catalogue
 // until C-540 deletes the first.
 pub use document_rehearsal::DocumentRehearsal;
 pub use rehearsal::Rehearsal;

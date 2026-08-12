@@ -9,7 +9,7 @@
 //! changed is the *input*: the closed template the document publishes instead of a parsed module.
 //! Decision 0022's migration rule is that the two are proven byte-identical for every operation in
 //! the catalogue before either is deleted, which is
-//! `connector-pack/tests/catalogue_differential.rs`.
+//! `connector-pack/tests/main/catalogue_differential.rs`.
 //!
 //! # The order the refusals happen in is part of the contract
 //!

@@ -6,7 +6,7 @@
 //! [`connector_resolve`], and the AST evaluation below is unreachable from it. What still reaches
 //! here is [`crate::Rehearsal`], which takes a module's text and nothing else — and which is
 //! therefore the *Flux-derived* half of the whole-catalogue differential gate in
-//! `tests/catalogue_differential.rs`. Both halves have to exist for that gate to compare anything,
+//! `tests/main/catalogue_differential.rs`. Both halves have to exist for that gate to compare anything,
 //! which is why this module is retired rather than deleted; the deletion is C-540's, behind the
 //! gate, per Decision 0022's migration rule.
 //!

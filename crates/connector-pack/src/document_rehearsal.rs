@@ -4,7 +4,7 @@
 //! semantics, exported beside it until Exchange's settings and connection-verification paths
 //! migrate (C-539). The two answer the same questions — the contract, whether it is exposed, the
 //! configuration surface, and the request over a bound [`Configuration`] — and
-//! `tests/catalogue_differential.rs` requires them to answer identically for every operation in the
+//! `tests/main/catalogue_differential.rs` requires them to answer identically for every operation in the
 //! catalogue.
 //!
 //! # What is different, and what that costs
@@ -126,7 +126,7 @@ impl DocumentRehearsal {
     /// The document publishes the IR name (`time.start`) and the wire name; the name a *caller*
     /// addresses is the Flux symbol the emitted declaration declares (`time_start`), which the
     /// document does not carry. `connector-resolve` reproduces that allocation, and
-    /// `tests/catalogue_differential.rs` holds the reproduction to the declaration for every
+    /// `tests/main/catalogue_differential.rs` holds the reproduction to the declaration for every
     /// operation in the catalogue.
     pub fn caller_parameters(&self) -> Vec<&str> {
         self.document.caller_parameters()

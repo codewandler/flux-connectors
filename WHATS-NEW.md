@@ -16,6 +16,12 @@
 
 ### New
 
+- **Requests are now built from the catalogue's own documents.** The library that assembles a
+  connector call no longer reconstructs it by re-reading generated source code: it reads the same
+  validated per-connector document the catalogue publishes, and an automated comparison proves —
+  for every one of the 835 operations — that what goes on the wire is byte-for-byte identical to
+  what was sent before. A new lightweight library exposes that request plan as plain data, so a
+  host can inspect exactly what would be sent, with secrets always shown redacted.
 - **The catalogue file is now downloadable from every release page, with its checksum beside
   it.** You no longer need any of our tooling to obtain the full connector catalogue: fetch the
   file and its checksum from the release, verify the checksum, and read it — from any language.

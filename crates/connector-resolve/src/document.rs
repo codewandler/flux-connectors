@@ -19,7 +19,7 @@
 //!
 //! [`Symbols`] therefore reproduces that allocation, and the reproduction is held to the same
 //! standard Decision 0022 sets for everything else in this migration: the whole-catalogue
-//! differential gate (`connector-pack/tests/catalogue_differential.rs`) asserts, for all 835
+//! differential gate (`connector-pack/tests/main/catalogue_differential.rs`) asserts, for all 835
 //! operations, that the names derived here are exactly the names the emitted declaration declares.
 //! A divergence is a red gate rather than a request sent under the wrong parameter name.
 //!

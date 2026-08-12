@@ -26,7 +26,7 @@ path = "src/lib.rs"
 # `resolve` returns `flux_core::Result<Arc<dyn Tool>>`, which couples every consumer to one
 # `codewandler-flux-*` line even when no catalogue content changed. This crate is the half of that
 # work which has no engine in it: a document in, a request plan out, as data.
-# `crates/connector-cli/tests/engine_free_core.rs::the_plan_deriving_core_links_no_engine_crate`
+# `crates/connector-cli/tests/main/engine_free_core.rs::the_plan_deriving_core_links_no_engine_crate`
 # asserts it over the graph cargo resolves rather than over this comment.
 [dependencies]
 # The canonical documents, embedded behind the dependency-free reader (C-537). This is the input:

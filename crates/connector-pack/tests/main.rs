@@ -16,6 +16,8 @@
 #[path = "../../connector-address/tests/fixtures/origin_corpus.rs"]
 mod origin_corpus;
 
+#[path = "main/catalogue_differential.rs"]
+mod catalogue_differential;
 #[path = "main/channel_plan.rs"]
 mod channel_plan;
 #[path = "main/configuration_value_guard.rs"]

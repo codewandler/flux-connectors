@@ -35,6 +35,8 @@ mod credential_requirement;
 mod cut_release;
 #[path = "main/dependency_fence.rs"]
 mod dependency_fence;
+#[path = "main/engine_free_core.rs"]
+mod engine_free_core;
 #[path = "main/exposure_artifacts.rs"]
 mod exposure_artifacts;
 #[path = "main/fixture_hygiene.rs"]

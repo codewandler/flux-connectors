@@ -124,7 +124,7 @@ pub fn project(operation: &catalog::Operation) -> Result<ToolSpec, Error> {
 ///
 /// The module still says the same thing — `crates/catalog/ops/<provider>/<id>.flux` carries its own
 /// `expose` line, [`Rehearsal::is_exposed`](crate::Rehearsal::is_exposed) reads it, and
-/// `tests/catalogue_differential.rs` requires the two to agree for every operation in the catalogue
+/// `tests/main/catalogue_differential.rs` requires the two to agree for every operation in the catalogue
 /// until C-540 deletes one of them.
 ///
 /// **Unexposed is not uncatalogued.** An operation this returns `false` for is still in the
@@ -275,7 +275,7 @@ mod tests {
 
     /// Whether an emitted declaration states exposure. The **document** is what [`is_exposed`]
     /// reads since C-538; this is the module's answer, and
-    /// `tests/catalogue_differential.rs` is what requires the two to agree for every shipped
+    /// `tests/main/catalogue_differential.rs` is what requires the two to agree for every shipped
     /// operation. Both arms of the branch are exercised here, because nothing shipped is unexposed
     /// and the `false` arm would otherwise be untested until a provider first used the feature.
     fn exposure(id: &str, flux: &str) -> bool {
