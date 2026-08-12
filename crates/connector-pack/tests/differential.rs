@@ -22,8 +22,11 @@
 //! would pass while comparing nothing. The Flux evaluator it was written for is still reachable —
 //! from [`Rehearsal`], which takes the module text and nothing else — so the comparison moved there
 //! rather than being deleted or, worse, left green and vacuous.
-//! `tests/catalogue_differential.rs` is the other half: the *document* against the Flux, for every
-//! operation.
+//! **So this file no longer exercises the production request path at all**, and that is worth
+//! stating plainly rather than leaving a reader to infer it from a `use` line: what it compares is
+//! two runs of the *retiring* Flux evaluator over two Flux artifacts, and it retires with them in
+//! C-540. `tests/catalogue_differential.rs` is the production-path gate — the document-derived plan
+//! `Operation::build_request` actually returns, against the Flux-derived one, for every operation.
 //!
 //! `catalog::Operation::flux`'s own documentation states they are the same bytes. That claim is
 //! exactly the kind that is true when written and quietly false after a partial regeneration — one

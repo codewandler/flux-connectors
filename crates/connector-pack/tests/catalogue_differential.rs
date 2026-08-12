@@ -39,11 +39,17 @@
 //! gate is what holds the reproduction to the emitted declaration for all 835 operations. It is also
 //! the gap C-540 has to close before it deletes the emitter.
 //!
-//! # A refusal is part of the comparison
+//! # A refusal is part of the comparison — and is counted separately
 //!
 //! An operation one derivation composes a request for and the other refuses is the loudest
 //! divergence there is, so both the refusal *and its sentence* are compared rather than only the
 //! success case.
+//!
+//! But two derivations that **both** refuse have agreed about nothing, and an operation that lands
+//! there never reaches the byte comparison at all. So the gate counts what it rehearsed and what it
+//! actually byte-compared, and asserts the two are equal: today that is **835 of 835**. Reporting
+//! the first number alone would overstate the gate by exactly the level of care it demands of the
+//! catalogue.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -156,13 +162,29 @@ fn endpoint_values(
 }
 
 /// The same values, through the port a host binds.
+///
+/// **`username.` is the one reserved qualifier, and it has to be honoured here** — the same rule
+/// `Field::from_placeholder` applies. Twilio's account SID is an endpoint variable spelled
+/// `username.twilio.basic_auth`: one value that both scopes the request path and is the Basic user
+/// half. Storing it with `with_endpoint` files it under a key the snapshot never reads, so all four
+/// twilio operations refuse for a reason belonging to *this helper* rather than to either
+/// derivation — which is how they used to land in the both-refuse arm and never reach the byte
+/// comparison at all.
 fn configured(
     entry: &'static catalog::Operation,
     values: &BTreeMap<String, String>,
 ) -> Configuration {
     let mut config = MemoryConfig::new();
     for (variable, value) in values {
-        config = config.with_endpoint(TENANT, entry.provider, entry.service, variable, value);
+        config = match variable
+            .strip_prefix("username.")
+            .filter(|name| !name.is_empty())
+        {
+            Some(credential) => {
+                config.with_username(TENANT, entry.provider, entry.service, credential, value)
+            }
+            None => config.with_endpoint(TENANT, entry.provider, entry.service, variable, value),
+        };
     }
     Configuration::new(Arc::new(config), TENANT).expect("a valid tenant id")
 }
@@ -223,6 +245,8 @@ fn redaction_set(credentials: &[Assembled]) -> Vec<String> {
 fn the_document_and_the_flux_derivations_agree_for_every_operation() {
     let mut divergences: Vec<String> = Vec::new();
     let mut compared = 0usize;
+    let mut byte_compared = 0usize;
+    let mut refused: Vec<String> = Vec::new();
 
     for entry in catalog::operations() {
         let id = entry.id;
@@ -321,6 +345,7 @@ fn the_document_and_the_flux_derivations_agree_for_every_operation() {
                          `{document}`"
                     ));
                 }
+                refused.push(format!("`{id}`: {flux}"));
                 continue;
             }
             (Ok(request), Err(error)) => {
@@ -338,6 +363,8 @@ fn the_document_and_the_flux_derivations_agree_for_every_operation() {
                 continue;
             }
         };
+
+        byte_compared += 1;
 
         // The subject a host's network policy is shown: the URL **before** any credential is
         // placed, on both sides.
@@ -406,6 +433,27 @@ fn the_document_and_the_flux_derivations_agree_for_every_operation() {
         compared,
         catalog::operations().count(),
         "an operation was skipped rather than compared, which a green run would not have shown"
+    );
+    // **What was actually byte-compared**, which is not the same number as what was rehearsed.
+    //
+    // The arm above where both derivations *refuse* agrees on the refusal and then `continue`s, so
+    // an operation that lands there never reaches the method, URL, headers, body,
+    // `permission_subjects` or redaction-set comparisons. A gate reporting "835 compared" while
+    // some of those 835 only ever agreed about a refusal would be overstating itself by exactly one
+    // level — the same argument this file makes two assertions below, applied to itself.
+    //
+    // It is asserted as **equality** rather than tolerated with an exemption list, because today
+    // the honest number is 835 of 835 and nothing legitimately refuses. A refusal both sides share
+    // is agreement about nothing: it means the inputs this file binds did not let the operation
+    // compose, which is this test's defect and not the catalogue's. The four twilio operations that
+    // used to land here are the worked example — see [`configured`].
+    assert_eq!(
+        byte_compared,
+        compared,
+        "{} of {compared} operations agreed only by both derivations refusing, so their method, \
+         URL, headers, body, permission subjects and redaction set were never compared:\n{}",
+        refused.len(),
+        refused.join("\n")
     );
     assert!(
         divergences.is_empty(),

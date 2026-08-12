@@ -7,15 +7,25 @@
 //! `tests/catalogue_differential.rs` requires them to answer identically for every operation in the
 //! catalogue.
 //!
-//! # What is different, and why it is better rather than merely other
+//! # What is different, and what that costs
 //!
-//! [`Rehearsal::of`](crate::Rehearsal::of) takes the operation's **emitted Flux** as text, which is
-//! what made it usable from a provider story before a full build: no index, no whole-catalogue
-//! artifact. This one takes the operation **id**, because the canonical documents are the artifact
-//! a scoped `flux-connectors build --provider <id>` writes, and the pack the reader embeds is built
-//! from them. So the same story-time question — *does this connector compose a request at all* — is
-//! still askable, and the answer no longer depends on re-parsing a text this repository is
-//! retiring.
+//! [`Rehearsal::of`](crate::Rehearsal::of) takes the operation's **emitted Flux** as text, and that
+//! is what made C-233's question — *does this connector compose a request at all* — askable from a
+//! provider story before a full build: no index, no whole-catalogue artifact, just the text a
+//! scoped `flux-connectors build --provider <id>` writes.
+//!
+//! **This one does not inherit that property, and saying otherwise would be false.** It takes an
+//! operation **id**, and resolving one needs two artifacts a scoped run deliberately does not
+//! write: `catalog::operation` reads the whole-catalogue index in `crates/catalog/src/generated/`,
+//! and the document behind it is served from the pack `catalog-reader` **embeds**. Both are
+//! whole-catalogue by rule — `crates/connector-cli/src/pipeline.rs`'s `if whole_catalogue` guard
+//! says why: a pack written from a scoped run would silently drop every provider the run never
+//! compiled. So a new connector is not rehearsable this way until integration.
+//!
+//! C-233's property therefore survives through [`Rehearsal`](crate::Rehearsal) and only there, for
+//! as long as the emitter exists. Whatever closes that gap — a rehearsal over a document read from
+//! `catalog/<id>.catalog.json` on disk, which a scoped run *does* write — is C-540's to decide
+//! alongside the emitter's deletion, and it is not this story's.
 //!
 //! It is **the same code path**, not a parallel one: [`DocumentRehearsal::request`] resolves values
 //! through the same [`Configuration`] port a host binds and then calls the same

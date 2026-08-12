@@ -1027,7 +1027,8 @@ pub(crate) fn document_of(
 ) -> Result<&'static connector_resolve::document::Operation, Error> {
     connector_resolve::document::operation(operation).ok_or_else(|| Error::Unbuildable {
         operation: operation.to_owned(),
-        message: "the embedded catalogue carries no canonical document for it, so no request                   template could be read"
+        message: "the embedded catalogue carries no canonical document for it, so no request \
+                  template could be read"
             .to_owned(),
     })
 }
@@ -1044,7 +1045,8 @@ pub(crate) fn base_url_of(operation: &catalog::Operation) -> Result<&'static str
         .ok_or_else(|| Error::Unbuildable {
             operation: operation.id.to_owned(),
             message: format!(
-                "its provider's canonical document declares no service `{}`, so no base URL                  composes",
+                "its provider's canonical document declares no service `{}`, so no base URL \
+                 composes",
                 operation.service
             ),
         })
