@@ -190,6 +190,76 @@
 //!
 //! What this still does *not* do is publish the whole configuration surface — the labels, help text
 //! and `binds` targets that let a product render "connect your Zendesk". That is C-87.
+//!
+//! # The consumer contract: obtaining a plan and dispatching it yourself (C-553)
+//!
+//! **Read this before writing a `Tool` projection of your own.** It is the contract Exchange's
+//! `X-156` adopts and the one upstream `C-541`'s wrapper retirement keys on: when this crate's
+//! `Tool`-returning [`resolve`] is no longer called from any consumer path, the wrapper retires and
+//! what remains is exactly the four calls below.
+//!
+//! ```no_run
+//! # async fn consumer(
+//! #     entry: &'static catalog::Operation,
+//! #     http: connector_pack::Egress,
+//! #     credentials: connector_pack::Credentials,
+//! #     configuration: connector_pack::Configuration,
+//! #     ctx: &flux_runtime::ToolContext,
+//! #     params: &serde_json::Value,
+//! # ) -> Result<flux_runtime::ToolResult, Box<dyn std::error::Error>> {
+//! // 1. Project the operation onto the ports this host bound.
+//! let operation = connector_pack::Operation::project(entry, http.clone(), credentials, configuration)?;
+//!
+//! // 2. Ask for the whole plan — request, permission subjects, redaction set.
+//! let plan = operation.build_request_plan(ctx, params).await?;
+//!
+//! // 3. Judge the call with the host's own network policy, on the subjects the plan names.
+//! //    They are the URL *before* any credential was placed, so they are safe to quote in an
+//! //    approval prompt, a policy rule and an evidence record.
+//! for subject in &plan.permission_subjects {
+//!     # let _ = subject;
+//!     // host_policy.admit(subject)?;
+//! }
+//!
+//! // 4. Hand the request back to the bound transport. `Egress::tool()` is never needed.
+//! let result = http.send(ctx, plan.request).await?;
+//! # Ok(result)
+//! # }
+//! ```
+//!
+//! Four properties of that sequence are load-bearing, and each is a way a consumer could get the
+//! same four lines wrong:
+//!
+//! - **Project the plan; never compose one.** A consumer that reads `plan.request`'s parts and
+//!   rebuilds a request from them has become the second request-composition path this family
+//!   already rejected. Carry it across whole. See [`RequestPlan`].
+//! - **The redaction set is already registered when you reach it through this crate.**
+//!   [`RequestPlan::redactions`] documents itself as a *requirement* — a consumer of
+//!   `connector-resolve` alone must register the strings before formatting, logging or dispatching
+//!   the plan. [`Operation::build_request_plan`] keeps the stronger order this crate has always
+//!   kept: every value is resolved and registered with `ctx.redactor` **before a request exists**,
+//!   so the field is a checkable restatement rather than the only defence. Pass the same `ctx` on
+//!   to step 4 and the guarantee travels.
+//! - **Nothing here dispatches for you, and nothing consults `http.request`'s own network gate.**
+//!   [`Egress::send`] calls the tool's `execute` directly and therefore bypasses
+//!   `Executor::dispatch`, exactly as this crate's own [`Operation`] does. Step 3 is not optional;
+//!   it is the gate.
+//! - **The transport stays inside the port.** [`Egress::send`] is the published dispatch seam
+//!   precisely so [`Egress::tool`] can be refused outright by a consumer that does not want a second
+//!   request path — which is the rule Exchange enforces in every one of its files.
+//! - **A `produces_credential` login does not go through this path** (C-136). Its answer is a
+//!   credential, and [`Tool::execute`] diverts that answer into the bound store rather than
+//!   returning it; the plan path derives a request and dispatches it, applying no diversion, so it
+//!   would hand the caller the vendor's token in the clear. No shipped connector mints today, but
+//!   this is permanent API — such an operation must go through the [`Tool`] projection. See
+//!   [`Operation::build_request_plan`], "the one operation shape the plan path does *not* serve".
+//!
+//! What is *not* published, deliberately: `Credentials::resolve` and `Configuration::snapshot`, the
+//! two ingredients X-156 offered as an alternative to the plan. Handing those out would put the
+//! **ordering** between them — registration before construction, endpoint resolution before
+//! substitution — in the consumer's hands, and Decision 0022's "enforcement topology unchanged" is
+//! the invariant that ordering *is*. See [`Operation::build_request_plan`] for the four steps it
+//! applies and `docs/designs/catalog-artifact.md` §3 for the written decision.
 
 mod auth;
 mod channel;
@@ -220,7 +290,13 @@ pub use rehearsal::Rehearsal;
 // unchanged, so a consumer's `use connector_pack::Request` keeps resolving. They moved because the
 // plan is the unit the differential gate compares, and a comparison between two structurally
 // identical types would be a comparison of two copies rather than of two derivations.
-pub use connector_resolve::{Request, Slot, DEFAULT_USER_AGENT};
+//
+// **`RequestPlan` joins them** (C-553), as the return type of [`Operation::build_request_plan`]. It
+// is the same type `connector_resolve::resolve` produces — re-exported rather than wrapped, because
+// a `connector_pack::RequestPlan` that merely looked like one would be the second plan vocabulary a
+// consumer has to reconcile. `SensitiveText`, its redaction set's element type, is already
+// re-exported above through [`channel`].
+pub use connector_resolve::{Request, RequestPlan, Slot, DEFAULT_USER_AGENT};
 pub use spec::{is_exposed, project};
 pub use tool::{Egress, Operation};
 
