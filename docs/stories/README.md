@@ -214,6 +214,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 ### the catalog artifact
 - [C-539 — Sibling adoption: Exchange reads the artifact](C-539-sibling-adoption.md) · Bridge · Cut the schema release Exchange consumes; zero runtime Flux parses remain in exchange-host; .connector.toml stays emitted as a projection until flux/D-214 repoints inbound
 - [C-540 — Retire connector-flux and the compiled Flux artifacts](C-540-retire-connector-flux.md) · Build · Delete the emitter, connectors/*.flux, catalog/ops/**, and the parse-back halves of connector-pack — in the same release train as proven adoption, per the Decision 0022 migration rule
+- [C-541 — Retire the Tool wrapper and the engine-line machinery](C-541-retire-the-tool-wrapper-and-engine-line.md) · Build · Gated on Exchange's plan-API adoption (X-151): delete connector-pack's Tool-returning wrapper and its codewandler-flux-* dependencies in the same change as flux_engine_line.rs — a pin constant must not outlive its constraint
 
 ### channel bindings — generalize a flux `channel` over a connector
 _[inbound-events.md](inbound-events.md) models an **event** — the vendor calls us — and stops there._

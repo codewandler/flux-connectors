@@ -39,6 +39,10 @@ catalogue data from the crates.io engine-line release train.
       parses; `.connector.toml` remains emitted as a projection until flux/D-214 repoints (C-539).
 - [ ] `connector-flux`, `connectors/*.flux`, `crates/catalog/ops/**` and the generated Rust are
       deleted in the same release train as their replacement's proven adoption (C-540).
+- [ ] After Exchange adopts the plan API (X-151): the Tool-returning wrapper and the engine-line
+      machinery (`flux_engine_line.rs`, the pin-set comments) are deleted in one change, ending
+      the `codewandler-flux-*` coupling entirely (C-541 — deliberately a separate gate and release
+      train from C-540).
 
 ## Progress
 

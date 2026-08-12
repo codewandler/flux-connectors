@@ -33,12 +33,6 @@ replacement.
       are regenerated and `readme_snippet.rs` passes.
 - [ ] The `.connector.toml` projection and `web/public/catalog.json` continue to be emitted from
       the canonical documents; the explorer renders the request template where it rendered Flux.
-- [ ] Once Exchange consumes the plan API (X-151 landed): `connector-pack`'s Tool-returning
-      wrapper and its `codewandler-flux-*` dependencies are deleted **in the same change** as the
-      engine-line machinery they justify — `crates/connector-cli/tests/flux_engine_line.rs`
-      (`ENGINE_LINE`/`SPEC_LINE`) is retired or re-scoped to whatever still links the engine
-      (possibly nothing in the publish closure). A pin constant that outlives its constraint is
-      how folklore starts; the pairing is the acceptance, not a cleanup note.
 - [ ] `CHANGELOG.md` and `WHATS-NEW.md` state the removal and the exact consumer action (none, if
       the shims held their API line).
 
@@ -50,5 +44,8 @@ replacement.
 
 - Blocked on C-538 and C-539. Nothing in this story may land before both; a partial deletion that
   leaves the catalogue claiming a `.flux` it no longer ships is the failure mode to refuse.
+- Deliberately **not** gated on X-151: the Tool-returning wrapper and the engine-line machinery
+  retire in C-541, whose gate is Exchange's plan-API adoption. Two deletions, two adoption proofs,
+  two release trains — this story must not stall behind a sibling repo's merge queue.
 - `flux_lang` may remain a dev-dependency wherever a test still asserts about historical
   renderings; the production dependency edge from the resolve path must be gone.
