@@ -2,7 +2,7 @@
 id: C-558
 title: "Expose the engine-free channel-handshake producer"
 pillar: Connector
-status: in-progress
+status: done
 priority: 0
 design: docs/designs/catalog-artifact.md
 epic: catalog-artifact

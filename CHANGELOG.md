@@ -13,6 +13,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Channel handshakes resolve engine-free too** (C-558, completing the engine-free producer set).
+  The sibling of C-557 for the inbound side: `connector-resolve` gains `channel_plan` over the same
+  `ConfigPort` + `SecretStore` ports, relocating the channel base-URL substitution, the declared-
+  authority validation and the `connect.auth` credential placement out of the flux-linked
+  `connector-pack` (whose `channel_plan` now delegates down). A parity check holds the engine-free
+  channel plan byte-identical to the flux-fed one across all five catalogue channel bindings. With
+  this, `connector-resolve` resolves both operations and channels with no `codewandler-flux-*`
+  dependency — a host can build every connector request and channel handshake as data.
+
 - **The plan producers are engine-free, so a host derives a request plan without flux** (C-557,
   the last piece un-gating Exchange's engine-free adoption). C-538 moved the plan *derivation* to
   the engine-free `connector-resolve`; this moves the two *producers* of its inputs there too —

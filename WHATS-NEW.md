@@ -14,6 +14,13 @@
 
 ## [Unreleased]
 
+### New
+
+- **A host can now build a connector's inbound channel connection from data too, without the Flux
+  engine** — the same engine-free treatment 0.25 gave outbound requests now covers the channel
+  handshake, so a host that composes and supervises connector channels no longer links the Flux
+  runtime for it.
+
 ## [0.25.0] — 2026-08-13
 
 ### New
