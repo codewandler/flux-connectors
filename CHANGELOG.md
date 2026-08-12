@@ -79,6 +79,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The status route no longer points a machine-readable consumer at a superseded story** (C-545,
+  from C-542's adjacent findings). `connector-cli`'s status surface served an `Issue` with
+  `story: "C-10"` behind `CREDENTIALS_REACH_THE_REQUEST = false`; it now names C-534's program —
+  the same successor the manifest header cites — and a sweeping unit test refuses any issue naming
+  a superseded story. The four stale C-10 source comments in `seam.rs`/`catalog.rs` are reconciled
+  in the same change; no artifact byte moves (`Issue::story` is never serialized). The ~45
+  remaining C-10 comment references across five other crates are filed as C-548.
 - **The emitted manifest header no longer promises a superseded story** (C-542, from C-535's
   review finding). Every generated `.connector.toml` opened with `# Auth and the \`http_hosts\`
   allowlist land in C-10.`; C-535 closed C-10 as superseded-never-implemented, so 67 committed
