@@ -47,6 +47,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   crates: address, catalog-reader, catalog, secrets, pack), and `scripts/cut-release.sh` carries
   the documents and the pack through a release. The build now plans 1167 artifacts.
 
+### Fixed
+
+- **The emitted manifest header no longer promises a superseded story** (C-542, from C-535's
+  review finding). Every generated `.connector.toml` opened with `# Auth and the \`http_hosts\`
+  allowlist land in C-10.`; C-535 closed C-10 as superseded-never-implemented, so 67 committed
+  manifests pointed readers at work that is never coming. The header now states the current
+  arrangement — auth is assembled by the host resolver (`connector-pack`), and the manifest
+  becomes a projection of the catalog artifact under C-534's program. A unit test beside the
+  emitter (`crates/connector-cli/src/seam.rs`) pins both header lines and refuses any `C-10`
+  mention; all 67 manifests and the lockfile were regenerated, with every other artifact
+  byte-identical. The machine-readable sibling — `status.rs` serving an `Issue` with
+  `story: "C-10"` — is filed as C-545.
+
 ### Changed
 
 - **The compile destination is a catalog artifact, not Flux source** (C-535, adopting flux-roadmap

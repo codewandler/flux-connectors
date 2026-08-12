@@ -2,7 +2,7 @@
 id: C-542
 title: "The emitted manifest header cites a superseded story"
 pillar: Codegen
-status: ready
+status: done
 priority: 3
 design: docs/designs/catalog-artifact.md
 epic: catalog-artifact
@@ -22,17 +22,24 @@ e.g. `connectors/zendesk.connector.toml:2`).
 
 ## Acceptance
 
-- [ ] The emitted header comment states the honest current arrangement — auth is assembled by the
+- [x] The emitted header comment states the honest current arrangement — auth is assembled by the
       host resolver (`connector-pack`), and the manifest becomes a projection of the catalog
       artifact under C-534's program — without naming a superseded story as pending.
-- [ ] A failing-first test pins the new header text (the old text is the seeded failure).
-- [ ] A full `build` regenerates all 67 manifests and `connectors.lock` consistently; `diff`
+- [x] A failing-first test pins the new header text (the old text is the seeded failure).
+- [x] A full `build` regenerates all 67 manifests and `connectors.lock` consistently; `diff`
       reports clean afterwards and the artifact count claims in `README.md`/`AGENTS.md` are
       re-verified (the count does not change — only bytes inside existing artifacts).
 
 ## Progress
 
-- (not started)
+- 2026-08-12 — Implemented on `impl/C-542` (`de1915ef` emitter fix + test, `05e31319` the 67
+  regenerated manifests), merged at integration with the lockfile regenerated on top (`diff` →
+  `1167 artifacts up to date (55 providers checked)`). The new second header line: `# Auth is
+  assembled by the host resolver (\`connector-pack\`); this manifest becomes a projection of the
+  catalog artifact (C-534).` — `grep -l 'C-10' connectors/*.connector.toml | wc -l` → 0 (was 67).
+  The unit test beside the emitter pins both header lines and refuses any `C-10` mention. Adjacent
+  findings (stale C-10 source comments; `status.rs` serving a machine-readable `story: "C-10"`
+  Issue) filed as C-545.
 
 ## Notes
 
