@@ -1,0 +1,37 @@
+# cargo-nextest configuration for the workspace gate (C-543).
+#
+# The gate runs the test suite through nextest because `cargo test` runs one test *binary* at a
+# time. Since C-533 that is nine integration binaries plus the per-crate unit tests, and the
+# serialisation is total rather than partial: measured on 2026-08-12 at 108fd7a4 on a 20-core
+# machine, `cargo test --workspace --no-fail-fast` took 792.14s while the sum of its own per-target
+# "finished in" figures was 790.63s — the two agree to 0.2%, so nothing overlaps anything, and
+# three of the targets carried 774.58s of it. nextest runs every test as its own process across
+# every core instead; the same suite took 365.01s, and its floor is now the single slowest test
+# (284.35s), not the slowest binary.
+#
+# ## Why the runner is pinned
+#
+# A gate whose behaviour depends on whichever version a machine happens to have is not a gate, and
+# nextest is deliberately configurable in ways that change what a run *means* — `fail-fast` below
+# is one. It does **not** refuse a configuration key it does not recognise: a key from a newer
+# release produces `warning: ignoring unknown configuration key` and the run continues, so without
+# `required` this file could silently mean something different on two machines. `required` makes
+# that a refusal instead — an older runner exits 92 naming the version it needs (verified
+# 2026-08-12 by setting `required = "0.9.999"`).
+#
+# Bumping it: change both values, run the gate, and change the version in
+# `.github/workflows/ci.yml`'s "Install cargo-nextest" step in the same commit.
+nextest-version = { required = "0.9.143", recommended = "0.9.143" }
+
+[profile.default]
+# AGENTS.md § Validation: "`--no-fail-fast` is not optional here." A story adding a provider is
+# EXPECTED to leave nine whole-catalogue staleness tests red, and the documented workflow is to
+# report that complete named list from ONE run and stop.
+#
+# This is nextest's own default rather than a change to it (measured: a scratch crate with three
+# failures across three binaries reports all three under a plain `cargo nextest run`). It is stated
+# anyway, because the property is load-bearing here and an unstated default is one upstream release
+# note or one added profile away from not being the default any more. The gate commands still pass
+# `--no-fail-fast` explicitly for the same reason: it is the flag the documentation names, and a
+# gate should read as what it does.
+fail-fast = false

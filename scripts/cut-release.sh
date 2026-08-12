@@ -204,7 +204,26 @@ DATE=$(date +%Y-%m-%d)
 #   - at step 8: commit by explicit pathspec with `--only`, so nothing another session merely
 #     *staged* rides along in the index.
 # ---------------------------------------------------------------------------------------------
+
+# The gate's test runner is a pinned tool the cut cannot substitute for (C-543), so its absence is
+# checked HERE rather than at step 7. The gate runs at the END, after both changelogs are promoted
+# and every artifact regenerated, so a missing runner discovered there costs a full regeneration and
+# a restore to report something knowable before anything was touched — and this file's own heading
+# says a refusal costs nothing.
 #
+# `command -v cargo-nextest` and not `cargo nextest --version`: the cargo-subcommand form goes
+# through whatever `cargo` is first on PATH, and `crates/connector-cli/tests/main/cut_release.rs`
+# deliberately puts a stub there. Asking after the binary answers the question actually being asked
+# — is the runner installed — without consulting the stub. `--no-gate` is exempt: it runs no gate,
+# and it is refused a tag for exactly that reason.
+if [ "$NO_GATE" -eq 0 ] && ! command -v cargo-nextest >/dev/null 2>&1; then
+  echo "!! refusing to cut: cargo-nextest is not installed, and the gate runs the test suite" >&2
+  echo "!! through it (AGENTS.md § Validation). Install it and re-run:" >&2
+  echo "!!" >&2
+  echo "!!   cargo install cargo-nextest --locked --version 0.9.143" >&2
+  exit 1
+fi
+
 # `git status --porcelain` rather than `git diff HEAD`, and the difference is not cosmetic: it names
 # the individual files (a directory pathspec through `git diff --quiet` can only say "connectors"),
 # and it reports **untracked** ones. An untracked artifact sitting in `connectors/` is invisible to
@@ -442,19 +461,28 @@ echo "   $stamped generated file(s) now carry the $NEW generator string"
 
 # ---------------------------------------------------------------------------------------------
 # 7) Every CI gate — AGENTS.md § Validation, in its order. `--no-fail-fast` is not optional: without
-#    it `cargo test --workspace` stops at the first failing binary and reports a number that is
-#    wrong. The two Node trees are explicit too: v0.12.0 proved that leaving them to post-push CI
-#    lets the tag publish crates before the site reports red (C-453).
+#    it a run stops at the first failure and reports a number that is wrong. The two Node trees are
+#    explicit too: v0.12.0 proved that leaving them to post-push CI lets the tag publish crates
+#    before the site reports red (C-453).
+#
+#    The test runner is cargo-nextest (C-543), which is the same runner `.github/workflows/ci.yml`
+#    and AGENTS.md § Validation name — a release gate that tested through a different runner than
+#    the documented one would be evidence about something nobody runs. Two consequences here:
+#    doc-tests get their own step, because nextest executes test binaries and rustdoc runs those;
+#    and a machine without the runner is refused BEFORE anything is touched rather than at the gate.
 # ---------------------------------------------------------------------------------------------
 if [ "$NO_GATE" -eq 0 ]; then
   echo "== gate =="
+  # That cargo-nextest exists was settled at step 2, before anything was touched.
+  #
   # `set -e` would abort here anyway; naming the step matters because a bare non-zero exit scrolled
   # off screen reads as "the script died", not "the gate is red", and the restore message below is
   # easier to trust when it says which step caused it.
   gate() { "$@" || { echo "!! gate step failed: $*" >&2; exit 1; }; }
   gate cargo fmt --all
   gate cargo build --workspace
-  gate cargo test --workspace --no-fail-fast
+  gate cargo nextest run --workspace --no-fail-fast
+  gate cargo test --workspace --doc
   gate cargo clippy --workspace --all-targets -- -D warnings
   gate cargo fmt --all --check
   gate npm --prefix web ci
