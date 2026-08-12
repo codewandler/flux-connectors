@@ -9,6 +9,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Anthropic declares both of its OAuth2 login flows** (C-555, completing the cross-repo login
+  goal's third vendor). The **Console flow** — single-host, a public PKCE client (no client
+  secret) — authorizes the connector's model catalogue and Admin API (`org:admin`). The
+  **subscription flow** (the one Claude Code uses) is two-host: authorize on `claude.ai`, token on
+  `platform.claude.com`, expressed through C-556's `token_endpoint` reference, PKCE S256, with
+  refresh. Both are public clients, exempt from the operator-secret requirement via C-556's
+  discriminator; endpoints are web-verified (Anthropic publishes none, so each is recorded with
+  its source and measurement in the connector), and no registration value enters the artifact. A
+  host composes either authorize URL from the declaration alone, exactly as for GitHub and GitLab.
+  The catalogue is now 70 services / 1173 artifacts.
+
 - **An OAuth2 declaration may place its token endpoint on a second service, and mark a public
   client** (C-556, for the Anthropic flows). `OAuth2Spec` gains `token_endpoint` — the name of a
   second declared service whose base URL the token path resolves against, a reference never a URL,

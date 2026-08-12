@@ -1252,7 +1252,9 @@
       "base_url": "https://api.anthropic.com",
       "api_version": "v1",
       "hosts": [
-        "api.anthropic.com"
+        "api.anthropic.com",
+        "platform.claude.com",
+        "claude.ai"
       ],
       "services": [
         {
@@ -1276,11 +1278,34 @@
           "api_version": "v1",
           "gid": "com.anthropic.api/admin:v1",
           "operation_count": 9
+        },
+        {
+          "name": "login",
+          "description": "Anthropic's Console OAuth2 authorize and token endpoints on platform.claude.com; also the subscription flow's token host, which redeems here while authorizing on claude.ai.",
+          "base_url": "https://platform.claude.com",
+          "hosts": [
+            "platform.claude.com"
+          ],
+          "api_version": "v1",
+          "gid": "com.anthropic.api/login:v1",
+          "operation_count": 0
+        },
+        {
+          "name": "subscription-authorize",
+          "description": "Anthropic's Claude Pro/Max subscription OAuth2 authorize endpoint, served by claude.ai. The matching token exchange is on the `login` service (platform.claude.com).",
+          "base_url": "https://claude.ai",
+          "hosts": [
+            "claude.ai"
+          ],
+          "api_version": "v1",
+          "gid": "com.anthropic.api/subscription-authorize:v1",
+          "operation_count": 0
         }
       ],
       "auth": {
         "schemes": [
-          "header"
+          "header",
+          "bearer"
         ],
         "credentials": [
           {
@@ -1312,11 +1337,93 @@
             "user_env": [],
             "user_suffix": null,
             "oauth2": null
+          },
+          {
+            "name": "anthropic.console_oauth",
+            "scheme": {
+              "kind": "bearer",
+              "name": null,
+              "prefix": "Bearer "
+            },
+            "description": "Anthropic Console OAuth2 access token (sk-ant-oat01-), obtained on behalf of a signed-in user and sent as a bearer. Workspace-scoped: enough for the model catalogue, and deliberately not enough for the Admin API",
+            "env": [],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": {
+              "endpoint": "login",
+              "authorize_path": "/oauth/authorize",
+              "token_path": "/v1/oauth/token",
+              "client_id": "",
+              "scopes": [],
+              "grants": [
+                "authorization_code",
+                "refresh_token"
+              ],
+              "redirect": null
+            }
+          },
+          {
+            "name": "anthropic.console_oauth_admin",
+            "scheme": {
+              "kind": "bearer",
+              "name": null,
+              "prefix": "Bearer "
+            },
+            "description": "Anthropic Console OAuth2 access token carrying the org:admin scope, sent as a bearer. Required for the Admin API operations; issued only to an organization member holding the admin, owner or primary-owner role",
+            "env": [],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": {
+              "endpoint": "login",
+              "authorize_path": "/oauth/authorize",
+              "token_path": "/v1/oauth/token",
+              "client_id": "",
+              "scopes": [
+                "org:admin"
+              ],
+              "grants": [
+                "authorization_code",
+                "refresh_token"
+              ],
+              "redirect": null
+            }
+          },
+          {
+            "name": "anthropic.subscription_oauth",
+            "scheme": {
+              "kind": "bearer",
+              "name": null,
+              "prefix": "Bearer "
+            },
+            "description": "Anthropic Claude Pro/Max subscription OAuth2 access token (sk-ant-oat01-), acquired on behalf of a signed-in consumer-plan user and sent as a bearer. Authorizes inference against Anthropic's consumer surfaces, which this catalogue does not model — it is declared so a host can compose the two-host acquisition, not to authenticate an operation here. Anthropic restricts this flow to Claude Code and Claude.ai; using the token elsewhere violates the Consumer Terms (owner-accepted 2026-08-12)",
+            "env": [],
+            "user_env": [],
+            "user_suffix": null,
+            "oauth2": {
+              "endpoint": "subscription-authorize",
+              "authorize_path": "/oauth/authorize",
+              "token_path": "/v1/oauth/token",
+              "client_id": "",
+              "scopes": [
+                "user:profile",
+                "user:inference",
+                "user:sessions:claude_code",
+                "user:mcp_servers"
+              ],
+              "grants": [
+                "authorization_code",
+                "refresh_token"
+              ],
+              "redirect": null
+            }
           }
         ],
         "default": [
           [
             "anthropic.api_key"
+          ],
+          [
+            "anthropic.console_oauth"
           ]
         ]
       },
@@ -1391,6 +1498,9 @@
           "credentials": [
             [
               "anthropic.api_key"
+            ],
+            [
+              "anthropic.console_oauth"
             ]
           ],
           "hosts": [
@@ -1487,6 +1597,9 @@
           "credentials": [
             [
               "anthropic.api_key"
+            ],
+            [
+              "anthropic.console_oauth"
             ]
           ],
           "hosts": [
@@ -1548,6 +1661,9 @@
           "credentials": [
             [
               "anthropic.admin_key"
+            ],
+            [
+              "anthropic.console_oauth_admin"
             ]
           ],
           "hosts": [
@@ -1647,6 +1763,9 @@
           "credentials": [
             [
               "anthropic.admin_key"
+            ],
+            [
+              "anthropic.console_oauth_admin"
             ]
           ],
           "hosts": [
@@ -1741,6 +1860,9 @@
           "credentials": [
             [
               "anthropic.admin_key"
+            ],
+            [
+              "anthropic.console_oauth_admin"
             ]
           ],
           "hosts": [
@@ -1829,6 +1951,9 @@
           "credentials": [
             [
               "anthropic.admin_key"
+            ],
+            [
+              "anthropic.console_oauth_admin"
             ]
           ],
           "hosts": [
@@ -1951,6 +2076,9 @@
           "credentials": [
             [
               "anthropic.admin_key"
+            ],
+            [
+              "anthropic.console_oauth_admin"
             ]
           ],
           "hosts": [
@@ -2060,6 +2188,9 @@
           "credentials": [
             [
               "anthropic.admin_key"
+            ],
+            [
+              "anthropic.console_oauth_admin"
             ]
           ],
           "hosts": [
@@ -2161,6 +2292,9 @@
           "credentials": [
             [
               "anthropic.admin_key"
+            ],
+            [
+              "anthropic.console_oauth_admin"
             ]
           ],
           "hosts": [
@@ -2253,6 +2387,9 @@
           "credentials": [
             [
               "anthropic.admin_key"
+            ],
+            [
+              "anthropic.console_oauth_admin"
             ]
           ],
           "hosts": [
@@ -2370,6 +2507,9 @@
           "credentials": [
             [
               "anthropic.admin_key"
+            ],
+            [
+              "anthropic.console_oauth_admin"
             ]
           ],
           "hosts": [
@@ -2414,6 +2554,28 @@
           "docs_url": "https://docs.anthropic.com/en/docs/manage-claude/admin-api-keys",
           "binds": "credential.anthropic.admin_key",
           "level": "connection"
+        },
+        {
+          "name": "oauth_client_id",
+          "service": "login",
+          "label": "Anthropic OAuth client ID",
+          "help": "The OAuth client ID this deployment authorizes as. Anthropic does not currently operate a public client-registration program for third-party applications, so a deployment supplies the id it has been issued; the value is public, and PKCE rather than a client secret protects the exchange",
+          "required": false,
+          "docs_url": "https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication",
+          "binds": "oauth.client_id",
+          "level": "operator"
+        },
+        {
+          "name": "oauth_redirect_uri",
+          "service": "login",
+          "label": "Anthropic OAuth callback URL",
+          "help": "The callback address this deployment serves, registered against the client ID above. Anthropic's own clients use a loopback callback and fall back to displaying the code for manual paste when no loopback is reachable",
+          "example": "https://exchange.internal/api/oauth/callback",
+          "format": "url",
+          "required": false,
+          "docs_url": "https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication",
+          "binds": "oauth.redirect_uri",
+          "level": "operator"
         }
       ],
       "verify": "anthropic-models-list",

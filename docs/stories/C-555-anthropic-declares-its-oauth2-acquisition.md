@@ -2,7 +2,7 @@
 id: C-555
 title: "Anthropic declares its OAuth2 acquisition"
 pillar: Connector
-status: in-progress
+status: done
 priority: 1
 epic: catalog-artifact
 areas: [providers, connector-spec]
@@ -21,26 +21,26 @@ Exchange's composition (X-154) and autodev's Anthropic login are the consumers.
 
 ## Acceptance
 
-- [ ] The two-host shape is expressed honestly within the model — an auth-host service for the
+- [x] The two-host shape is expressed honestly within the model — an auth-host service for the
       authorize leg plus the token endpoint carried where the model puts a cross-host token URL
       (the `[[auth.quirks.token_endpoint]]` surface babelforce established is the first candidate;
       read its loader semantics before inventing anything). If the model genuinely cannot express
       it, STOP at that finding: report precisely what is missing, and the model extension becomes
       its own loader/spec story rather than an ad-hoc widening inside this one.
-- [ ] Grants `authorization_code` + `refresh_token` (this flow issues refresh tokens); PKCE's
+- [x] Grants `authorization_code` + `refresh_token` (this flow issues refresh tokens); PKCE's
       mandatory-S256 property is recorded in the declaration's comments with its source; scopes
       are the minimal set the connector's operations need (`user:inference` for the models
       surface; each scope's reason a comment).
-- [ ] No registration value in the artifact; the client id is deployment configuration (the flow
+- [x] No registration value in the artifact; the client id is deployment configuration (the flow
       has a well-known public client id — that FACT may be recorded in a comment, the VALUE must
       not be a declaration field the loader would refuse anyway).
-- [ ] The credential relationship is deliberate: how the OAuth2-acquired token relates to the
+- [x] The credential relationship is deliberate: how the OAuth2-acquired token relates to the
       existing API-key credential slot(s) is decided and recorded (a sibling credential the
       operations can authenticate with, or a distinct acquisition on the existing slot) — not
       left implicit.
-- [ ] Scoped provider gate green with only the documented expected staleness reds;
+- [x] Scoped provider gate green with only the documented expected staleness reds;
       `catalog/anthropic.catalog.json`'s auth block quoted in the report.
-- [ ] Composability sanity: every base URL the composition needs is non-templated or carries a
+- [x] Composability sanity: every base URL the composition needs is non-templated or carries a
       declared default (X-154's `NoDeclaredDefault` rule is the consumer contract).
 
 ## Progress
@@ -51,6 +51,21 @@ Exchange's composition (X-154) and autodev's Anthropic login are the consumers.
   `[auth.oauth2]` block was written; `providers/anthropic.toml` is unchanged. The four findings
   below are what a follow-up story needs. Nothing here is implementable until the owner rules on
   finding 4, which is upstream of the loader question.
+
+- 2026-08-12 (round 2): **Both flows shipped.** The operator ruled on finding 4 — ship both
+  Anthropic OAuth2 flows, accepting the subscription flow's attested ToS restriction explicitly.
+  C-556 landed the two spec extensions the findings named (`token_endpoint` two-host reference and
+  `public_client` PKCE discriminator). Delivered on `impl/C-555` (`97e4760a` Console flow,
+  `36eae6ef` subscription flow, merged): the **Console flow** (single-host, `public_client`,
+  `console_oauth` + `console_oauth_admin` with `org:admin`) and the **subscription flow**
+  (`subscription_oauth`, authorize on `claude.ai` via a `subscription-authorize` service, token on
+  `platform.claude.com` via `token_endpoint: login`, PKCE S256, refresh). Endpoints web-verified
+  with sources this session; `console.anthropic.com` corrected to `platform.claude.com` per
+  finding 2; `org:admin`/`user:*` scopes per findings 3. The subscription credential authorizes no
+  operation deliberately (a URL-composition token for the host). `auth_archetypes` green — the
+  public clients are exempt from C-22's operator-secret requirement. Anthropic now ships 4 services
+  / 22 per-provider artifacts; the catalogue is 70 services / 1173 artifacts. The findings below are
+  kept as the record of why the model needed extending first.
 
 ## Findings (C-555, measured 2026-08-12)
 

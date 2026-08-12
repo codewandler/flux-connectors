@@ -6,7 +6,7 @@ version = 1
 [pack]
 path = "crates/catalog-reader/catalog.pack"
 schema_version = 1
-sha256 = "f079256ef6a4ab6b73b17f210118d3c1bc2ea14be052a9a839d12e2fa48463d9"
+sha256 = "1d7d6e11d9e55e016813b68e65f8f271a851ff5ded83c3557ec0fe6121fd4d3f"
 
 [[provider]]
 id = "airtable"
@@ -44,15 +44,19 @@ ir_sha256 = "bc7091a04423b9ed39bf083d8c4d541eca0d5971052e91081fb718d7f719b453"
 [[provider]]
 id = "anthropic"
 generator = "flux-connectors 0.23.0"
-toml_sha256 = "e556993a2ae8f6a0d456d2a1bce4b850be483c083b3f9e2c8c985218b645815e"
-ir_sha256 = "a2f8299277cd5fa4b7a46aee529914495f17251b3be2b76426bbdf9fadb846fb"
+toml_sha256 = "8847f33972313e8380451c51ee280878d468b024deed018ebf97940604375b29"
+ir_sha256 = "31427a3d76670495281cb704ae58186f79f7426f486941d11d372b38d3c4186c"
 
 [provider.artifacts]
-"catalog/anthropic.catalog.json" = "fa1fb8f48628df520364907efd0370d01c34f4d8bb5544ceda87e190e4d5da75"
-"connectors/anthropic-admin.connector.toml" = "86be3935da4ad738baa36913a170975139ae2d472bf5be0eece36985c8355ada"
+"catalog/anthropic.catalog.json" = "5b4b5b6184394c26b563f0bc534384e529642d4ec47a76c27e382e302be265ba"
+"connectors/anthropic-admin.connector.toml" = "033ae3fc504ebc64a827455af619c7f50ccc6b74c6c912effea9509021963753"
 "connectors/anthropic-admin.flux" = "5ff741dc28cfd088cb1197685ea6acdce9c78c7edc691fad91c325858741b683"
-"connectors/anthropic-models.connector.toml" = "9a17cbf44f2fe93f414c7d04256072a8c328a4e2306e6a65237f686faf0192f0"
+"connectors/anthropic-login.connector.toml" = "28eeae1150fb61d05e11c34640a683d0386ce0bf9ab6ba9ab506d6fc5346d7ff"
+"connectors/anthropic-login.flux" = "6085c32efecc083f0bbca17e1b729a431ec6d967a3c9349c35a4bb3b4f58b0d9"
+"connectors/anthropic-models.connector.toml" = "1f77131633ff117c682d2dbe2720c4b5937c9cf11c57382b1b1865d97da9fec8"
 "connectors/anthropic-models.flux" = "7dec631a8cf31be068046dc841e0f3e6517ad1688aa60368e0e773d4dcc11103"
+"connectors/anthropic-subscription-authorize.connector.toml" = "de67f1d7b299a1de5cbb8159f1e78edd86586ee43ef293fb453bd2bf07f8fd18"
+"connectors/anthropic-subscription-authorize.flux" = "96f5560c1b80e463db2c014b8f261d65d0b74aa998ab03af5a7c68e13da4ed26"
 "crates/catalog/ops/anthropic/anthropic-api-keys-list.flux" = "5109162c4baf10597eb6eb1c33759cbcdda56e0ec9d4c071670feb9d2e51ea2c"
 "crates/catalog/ops/anthropic/anthropic-invites-list.flux" = "6768d685468d62e28bc858de5458e667be7cbc64c8f1ada884205775481586ac"
 "crates/catalog/ops/anthropic/anthropic-model-get.flux" = "28646f1fe7ca3fa572a7891b34944b5565bef8200a4d706bcb42f3e48e8f3756"
@@ -64,7 +68,7 @@ ir_sha256 = "a2f8299277cd5fa4b7a46aee529914495f17251b3be2b76426bbdf9fadb846fb"
 "crates/catalog/ops/anthropic/anthropic-workspace-member-get.flux" = "9b15e4261ecd0606b1a7d4962a423e9319f9db165df900ba95fc6bd091237999"
 "crates/catalog/ops/anthropic/anthropic-workspace-members-list.flux" = "3f59c3b3fcc535c794790e0f6d13ae2cc016acd5676e6a5903f07be440aa0c9d"
 "crates/catalog/ops/anthropic/anthropic-workspaces-list.flux" = "b0680b7b0a8a739244adda0cca6384fbc61b218b61e6d2f036a4fcf35c13bb27"
-"crates/catalog/src/generated/anthropic.rs" = "8320ef9a5f60f1faf5275760eecce127a6f668ab7f0732fe888631ea29020239"
+"crates/catalog/src/generated/anthropic.rs" = "fcb267b9da682a9b106d74e5bfd3b541e97b288403c6352a85713c57e22a5899"
 
 [[provider]]
 id = "asana"

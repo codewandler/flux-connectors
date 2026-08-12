@@ -1,63 +1,63 @@
 flux-connectors-catalog-pack 1
-digest sha256 f6bfd5eeb108ee5381585fbbac417538c9f80f829e6b5329a978b5600cf4b5b5
+digest sha256 4d0ef0a36e39b64d6e7cc91d92bddad11e0ba00c509d7f345d05e2f4ead82fff
 schema 1
 providers 55
 operations 835
 p airtable 0 13356
 p algolia 13356 19245
-p anthropic 32601 33590
-p asana 66191 10040
-p asterisk 76231 517453
-p babelforce 593684 3732973
-p bitbucket 4326657 33706
-p box 4360363 13634
-p calendly 4373997 19660
-p clickup 4393657 22963
-p cloudflare 4416620 18775
-p confluence 4435395 31659
-p contentful 4467054 17620
-p datadog 4484674 10069
-p discord 4494743 29559
-p docusign 4524302 20318
-p dropbox 4544620 14857
-p figma 4559477 16369
-p fly 4575846 13911
-p freshdesk 4589757 46807
-p front 4636564 18909
-p github 4655473 278750
-p gitlab 4934223 38846
-p google 4973069 28100
-p hubspot 5001169 14979
-p intercom 5016148 24804
-p jira 5040952 21570
-p klaviyo 5062522 31522
-p launchdarkly 5094044 19854
-p mailchimp 5113898 33926
-p microsoft_graph 5147824 1073324
-p miro 6221148 26761
-p newrelic 6247909 23683
-p notion 6271592 13553
-p okta 6285145 17311
-p openai 6302456 1676530
-p openrouter 7978986 9696
-p pagerduty 7988682 31268
-p postmark 8019950 15605
-p resend 8035555 15093
-p salesforce 8050648 14565
-p sendgrid 8065213 12004
-p sentry 8077217 22709
-p shopify 8099926 22435
-p slack 8122361 18535
-p statuspage 8140896 23720
-p stripe 8164616 58694
-p supabase 8223310 10394
-p trello 8233704 21202
-p twilio 8254906 63533
-p typeform 8318439 22571
-p vercel 8341010 13184
-p webflow 8354194 15870
-p zendesk 8370064 1120961
-p zoom 9491025 7440
+p anthropic 32601 42459
+p asana 75060 10040
+p asterisk 85100 517453
+p babelforce 602553 3732973
+p bitbucket 4335526 33706
+p box 4369232 13634
+p calendly 4382866 19660
+p clickup 4402526 22963
+p cloudflare 4425489 18775
+p confluence 4444264 31659
+p contentful 4475923 17620
+p datadog 4493543 10069
+p discord 4503612 29559
+p docusign 4533171 20318
+p dropbox 4553489 14857
+p figma 4568346 16369
+p fly 4584715 13911
+p freshdesk 4598626 46807
+p front 4645433 18909
+p github 4664342 278750
+p gitlab 4943092 38846
+p google 4981938 28100
+p hubspot 5010038 14979
+p intercom 5025017 24804
+p jira 5049821 21570
+p klaviyo 5071391 31522
+p launchdarkly 5102913 19854
+p mailchimp 5122767 33926
+p microsoft_graph 5156693 1073324
+p miro 6230017 26761
+p newrelic 6256778 23683
+p notion 6280461 13553
+p okta 6294014 17311
+p openai 6311325 1676530
+p openrouter 7987855 9696
+p pagerduty 7997551 31268
+p postmark 8028819 15605
+p resend 8044424 15093
+p salesforce 8059517 14565
+p sendgrid 8074082 12004
+p sentry 8086086 22709
+p shopify 8108795 22435
+p slack 8131230 18535
+p statuspage 8149765 23720
+p stripe 8173485 58694
+p supabase 8232179 10394
+p trello 8242573 21202
+p twilio 8263775 63533
+p typeform 8327308 22571
+p vercel 8349879 13184
+p webflow 8363063 15870
+p zendesk 8378933 1120961
+p zoom 9499894 7440
 o airtable-record-create airtable default 3693 3392
 o airtable-record-delete airtable default 10625 2446
 o airtable-record-get airtable default 711 2976
@@ -67,833 +67,833 @@ o algolia-index-search algolia default 19169 5352
 o algolia-object-delete algolia default 30134 2150
 o algolia-object-get algolia default 24527 1932
 o algolia-object-save algolia default 26465 3663
-o anthropic-api-keys-list anthropic admin 58840 2585
-o anthropic-invites-list anthropic admin 61431 3955
-o anthropic-model-get anthropic models 37543 2278
-o anthropic-models-list anthropic models 35047 2490
-o anthropic-organization-get anthropic admin 39827 1137
-o anthropic-organization-member-get anthropic admin 44432 2580
-o anthropic-organization-members-list anthropic admin 40970 3456
-o anthropic-workspace-get anthropic admin 49363 3718
-o anthropic-workspace-member-get anthropic admin 56406 2428
-o anthropic-workspace-members-list anthropic admin 53087 3313
-o anthropic-workspaces-list anthropic admin 47018 2339
-o asana-project-get asana default 74621 1322
-o asana-task-create asana default 68409 2147
-o asana-task-get asana default 66898 1505
-o asana-task-story-add asana default 72563 2052
-o asana-task-update asana default 70562 1995
-o asterisk-ari-applications-filter asterisk default 426202 3019
-o asterisk-ari-applications-get asterisk default 423611 2585
-o asterisk-ari-applications-list asterisk default 383579 2483
-o asterisk-ari-asterisk-add-log asterisk default 436408 1181
-o asterisk-ari-asterisk-delete-log asterisk default 437595 791
-o asterisk-ari-asterisk-delete-object asterisk default 433624 1364
-o asterisk-ari-asterisk-get-global-var asterisk default 444911 1264
-o asterisk-ari-asterisk-get-module asterisk default 440800 1752
-o asterisk-ari-asterisk-get-object asterisk default 429227 1948
-o asterisk-ari-asterisk-list-log-channels asterisk default 434994 1408
-o asterisk-ari-asterisk-list-modules asterisk default 439187 1607
-o asterisk-ari-asterisk-load-module asterisk default 442558 773
-o asterisk-ari-asterisk-ping asterisk default 386068 1122
-o asterisk-ari-asterisk-reload-module asterisk default 443337 776
-o asterisk-ari-asterisk-rotate-log asterisk default 438392 789
-o asterisk-ari-asterisk-set-global-var asterisk default 446181 1293
-o asterisk-ari-asterisk-unload-module asterisk default 444119 786
-o asterisk-ari-asterisk-update-object asterisk default 431181 2437
-o asterisk-ari-bridges-clear-video-source asterisk default 467580 1002
-o asterisk-ari-bridges-create asterisk default 390061 4370
-o asterisk-ari-bridges-create-with-id asterisk default 450389 4252
-o asterisk-ari-bridges-destroy asterisk default 394437 756
-o asterisk-ari-bridges-get asterisk default 447480 2903
-o asterisk-ari-bridges-get-bridge-var asterisk default 462778 1516
-o asterisk-ari-bridges-list asterisk default 387196 2859
-o asterisk-ari-bridges-record asterisk default 456620 6152
-o asterisk-ari-bridges-set-bridge-var asterisk default 464300 2000
-o asterisk-ari-bridges-set-bridge-vars asterisk default 466306 1268
-o asterisk-ari-bridges-set-video-source asterisk default 468588 1113
-o asterisk-ari-bridges-start-moh asterisk default 454647 1179
-o asterisk-ari-bridges-stop-moh asterisk default 455832 782
-o asterisk-ari-channels-answer asterisk default 502296 757
-o asterisk-ari-channels-continue-in-dialplan asterisk default 503059 2347
-o asterisk-ari-channels-create asterisk default 469707 7864
-o asterisk-ari-channels-dial asterisk default 505412 1559
-o asterisk-ari-channels-external-media asterisk default 477577 9420
-o asterisk-ari-channels-get asterisk default 487003 4733
-o asterisk-ari-channels-get-channel-var asterisk default 549892 1524
-o asterisk-ari-channels-hangup asterisk default 410689 2169
-o asterisk-ari-channels-hold asterisk default 509939 751
-o asterisk-ari-channels-list asterisk default 395199 4826
-o asterisk-ari-channels-move asterisk default 513435 1598
-o asterisk-ari-channels-mute asterisk default 515039 1277
-o asterisk-ari-channels-originate asterisk default 400031 10652
-o asterisk-ari-channels-originate-with-id asterisk default 491742 10548
-o asterisk-ari-channels-progress asterisk default 517620 775
-o asterisk-ari-channels-record asterisk default 518401 5690
-o asterisk-ari-channels-redirect asterisk default 524097 1188
-o asterisk-ari-channels-ring asterisk default 525291 766
-o asterisk-ari-channels-ring-stop asterisk default 526063 808
-o asterisk-ari-channels-rtpstatistics asterisk default 526877 6486
-o asterisk-ari-channels-send-dtmf asterisk default 506977 2956
-o asterisk-ari-channels-set-channel-var asterisk default 551422 2009
-o asterisk-ari-channels-set-channel-vars asterisk default 553437 1275
-o asterisk-ari-channels-snoop-channel asterisk default 534945 6915
-o asterisk-ari-channels-snoop-channel-with-id asterisk default 541866 6804
-o asterisk-ari-channels-start-moh asterisk default 511476 1159
-o asterisk-ari-channels-start-silence asterisk default 533369 774
-o asterisk-ari-channels-stop-moh asterisk default 512641 788
-o asterisk-ari-channels-stop-silence asterisk default 534149 790
-o asterisk-ari-channels-transfer_progress asterisk default 548676 1210
-o asterisk-ari-channels-unhold asterisk default 510696 774
-o asterisk-ari-channels-unmute asterisk default 516322 1292
-o asterisk-ari-device-states-delete asterisk default 557683 800
-o asterisk-ari-device-states-get asterisk default 554718 1486
-o asterisk-ari-device-states-list asterisk default 412864 1333
-o asterisk-ari-device-states-update asterisk default 556210 1467
-o asterisk-ari-endpoints-get asterisk default 565715 2122
-o asterisk-ari-endpoints-list asterisk default 414203 1751
-o asterisk-ari-endpoints-list-by-tech asterisk default 563638 2071
-o asterisk-ari-endpoints-refer asterisk default 558489 2866
-o asterisk-ari-endpoints-refer-to-endpoint asterisk default 567843 2914
-o asterisk-ari-endpoints-send-message asterisk default 561361 2271
-o asterisk-ari-endpoints-send-message-to-endpoint asterisk default 570763 2318
-o asterisk-ari-events-claim-channel asterisk default 573087 1344
-o asterisk-ari-mailboxes-delete asterisk default 577597 773
-o asterisk-ari-mailboxes-get asterisk default 574437 1487
-o asterisk-ari-mailboxes-list asterisk default 415960 1303
-o asterisk-ari-mailboxes-update asterisk default 575930 1661
-o asterisk-ari-playbacks-control asterisk default 578376 1325
-o asterisk-ari-playbacks-get asterisk default 417269 2110
-o asterisk-ari-playbacks-stop asterisk default 419385 760
-o asterisk-ari-recordings-cancel asterisk default 582261 809
-o asterisk-ari-recordings-copy-stored asterisk default 589064 1611
-o asterisk-ari-recordings-delete-stored asterisk default 588251 807
-o asterisk-ari-recordings-get-live asterisk default 579707 2548
-o asterisk-ari-recordings-get-stored asterisk default 587091 1154
-o asterisk-ari-recordings-get-stored-file asterisk default 590681 822
-o asterisk-ari-recordings-list-stored asterisk default 420151 964
-o asterisk-ari-recordings-mute asterisk default 583076 788
-o asterisk-ari-recordings-pause asterisk default 584677 791
-o asterisk-ari-recordings-stop asterisk default 586284 801
-o asterisk-ari-recordings-unmute asterisk default 583870 801
-o asterisk-ari-recordings-unpause asterisk default 585474 804
-o asterisk-ari-sounds-get asterisk default 591509 1838
-o asterisk-ari-sounds-list asterisk default 421121 2484
-o babelforce-add-agent-to-group babelforce manager 832139 16803
-o babelforce-add-agent-to-queue-selection babelforce manager 3539262 27138
-o babelforce-add-business-hour-ranges babelforce manager 2402015 15074
-o babelforce-add-calendar-date babelforce manager 2454835 4836
-o babelforce-add-conversation-event babelforce manager 2738490 26490
-o babelforce-add-dashboard-user babelforce manager 2841855 1920
-o babelforce-add-group-to-queue-selection babelforce manager 3593303 27137
-o babelforce-add-integration-association babelforce manager 3027507 1613
-o babelforce-add-outbound-lead babelforce manager 3261559 6679
-o babelforce-add-roles babelforce manager 4047134 2114
-o babelforce-add-tag-to-queue-selection babelforce manager 3647348 27131
-o babelforce-add-tags-to-number babelforce manager 3102311 3762
-o babelforce-agent-action-on-task babelforce task-automation 4064267 23011
-o babelforce-agent-get babelforce manager 619250 13057
-o babelforce-agent-interaction-duration babelforce task-automation 4184675 1903
-o babelforce-agent-interactions babelforce task-automation 4186584 1855
-o babelforce-agent-list babelforce manager 598071 21173
-o babelforce-agent-status-update babelforce manager 632313 4192
-o babelforce-authorize-integration babelforce manager 3000843 5733
-o babelforce-bulk-agent-action babelforce manager 785410 20691
-o babelforce-bulk-delete-agent-groups babelforce manager 813183 1817
-o babelforce-bulk-delete-business-hours babelforce manager 2373159 1831
-o babelforce-bulk-delete-calendars babelforce manager 2439523 1807
-o babelforce-bulk-delete-event-triggers babelforce manager 2879927 1823
-o babelforce-bulk-delete-files babelforce manager 2943357 1833
-o babelforce-bulk-delete-integrations babelforce manager 2983007 1629
-o babelforce-bulk-delete-outbound-leads babelforce manager 3273099 2375
-o babelforce-bulk-delete-outbound-leads-alt babelforce manager 3270709 2384
-o babelforce-bulk-delete-phonebook-entries babelforce manager 3299510 1823
-o babelforce-bulk-recording-action babelforce manager 3729261 3248
-o babelforce-bulk-trigger-action babelforce manager 3974570 3214
-o babelforce-bulk-update-applications babelforce manager 1413358 1382
-o babelforce-bulk-update-business-hours babelforce manager 2359167 13986
-o babelforce-bulk-update-calendars babelforce manager 2433275 6242
-o babelforce-bulk-update-event-triggers babelforce manager 2877860 2061
-o babelforce-bulk-update-integrations babelforce manager 2981623 1378
-o babelforce-bulk-update-queues babelforce manager 3347862 6951
-o babelforce-call-get babelforce manager 665050 18923
-o babelforce-call-hangup babelforce manager 683979 18967
-o babelforce-call-list babelforce manager 636511 28533
-o babelforce-call-session-set babelforce manager 702952 2034
-o babelforce-cancel-call babelforce manager 2515415 18959
-o babelforce-change-agent-lock babelforce task-automation 4063242 1019
-o babelforce-change-task-state babelforce task-automation 4313945 1352
-o babelforce-clear-all-settings babelforce manager 3817525 2122
-o babelforce-clear-outbound-list babelforce manager 3268244 2459
-o babelforce-clear-setting babelforce manager 3914208 2268
-o babelforce-clear-settings-in-scope babelforce manager 3911819 2383
-o babelforce-clone-application babelforce manager 2042109 201596
-o babelforce-clone-event-trigger babelforce manager 2901875 6563
-o babelforce-clone-integration babelforce manager 3006582 5310
-o babelforce-clone-trigger babelforce manager 4006407 6365
-o babelforce-close-conversation babelforce manager 2706836 2637
-o babelforce-create-agent babelforce manager 762680 22724
-o babelforce-create-agent-group babelforce manager 810081 3096
-o babelforce-create-agent-outbound-call babelforce manager 934077 21159
-o babelforce-create-agent-presence babelforce manager 888078 2642
-o babelforce-create-application babelforce manager 1208579 202940
-o babelforce-create-babeldesk babelforce manager 2273581 9087
-o babelforce-create-babeldesk-widget babelforce manager 2307746 10142
-o babelforce-create-business-hour babelforce manager 2348373 10788
-o babelforce-create-calendar babelforce manager 2428806 4463
-o babelforce-create-campaign babelforce manager 3123110 6137
-o babelforce-create-conversation babelforce manager 2674121 3203
-o babelforce-create-custom-event babelforce manager 2853142 3988
-o babelforce-create-dashboard babelforce manager 2829043 2973
-o babelforce-create-dialer-behaviour babelforce manager 3204447 3424
-o babelforce-create-global-automation babelforce manager 2866842 11012
-o babelforce-create-inbound-test-call babelforce manager 2494759 20650
-o babelforce-create-integration babelforce manager 2964246 8980
-o babelforce-create-local-automation babelforce manager 1426546 8569
-o babelforce-create-outbound-list babelforce manager 3239874 2991
-o babelforce-create-phonebook-entry babelforce manager 3295045 3993
-o babelforce-create-queue babelforce manager 3342814 5042
-o babelforce-create-queue-selection babelforce manager 3418291 36417
-o babelforce-create-routing babelforce manager 3797541 5667
-o babelforce-create-secrets babelforce task-automation 4164719 1120
-o babelforce-create-selection-configuration babelforce task-automation 4169979 4750
-o babelforce-create-session babelforce manager 3813296 2113
-o babelforce-create-trigger babelforce manager 3964149 10415
-o babelforce-create-user babelforce manager 4028576 6966
-o babelforce-delete-agent babelforce manager 933391 680
-o babelforce-delete-agent-group babelforce manager 857120 705
-o babelforce-delete-agent-presence babelforce manager 895635 1145
-o babelforce-delete-application babelforce manager 2041399 704
-o babelforce-delete-babeldesk babelforce manager 2297797 713
-o babelforce-delete-babeldesk-widget babelforce manager 2334757 720
-o babelforce-delete-business-hour babelforce manager 2395703 729
-o babelforce-delete-calendar babelforce manager 2450515 691
-o babelforce-delete-campaign babelforce manager 3140066 4462
-o babelforce-delete-conversation babelforce manager 2828330 707
-o babelforce-delete-custom-event babelforce manager 2857136 707
-o babelforce-delete-dashboard babelforce manager 2837406 2267
-o babelforce-delete-dialer-behaviour babelforce manager 3213937 2419
-o babelforce-delete-file babelforce manager 2955152 1090
-o babelforce-delete-global-automation babelforce manager 2901152 717
-o babelforce-delete-integration babelforce manager 3000133 704
-o babelforce-delete-integration-association babelforce manager 3029126 1628
-o babelforce-delete-integration-token babelforce manager 3021682 1372
-o babelforce-delete-local-automation babelforce manager 1448995 964
-o babelforce-delete-many-applications babelforce manager 1414746 1767
-o babelforce-delete-outbound-lead babelforce manager 3289642 928
-o babelforce-delete-outbound-list babelforce manager 3248392 2375
-o babelforce-delete-phonebook-entry babelforce manager 3308223 712
-o babelforce-delete-prompt babelforce manager 3334522 683
-o babelforce-delete-queue babelforce manager 3373244 679
-o babelforce-delete-queue-selection babelforce manager 3538309 947
-o babelforce-delete-recording babelforce manager 3750131 8366
-o babelforce-delete-routing babelforce manager 3812605 685
-o babelforce-delete-schedule-task babelforce task-schedule 4324551 752
-o babelforce-delete-script babelforce task-automation 4208679 1079
-o babelforce-delete-secret-keys babelforce task-automation 4166990 1124
-o babelforce-delete-selection-configuration babelforce task-automation 4179490 447
-o babelforce-delete-sms babelforce manager 3946640 4618
-o babelforce-delete-trigger babelforce manager 4005714 687
-o babelforce-delete-users babelforce manager 4040714 1301
-o babelforce-disable-agent babelforce manager 955242 1095
-o babelforce-disable-live-logging babelforce manager 3053148 862
-o babelforce-disable-users babelforce manager 4042021 1304
-o babelforce-dispatch-action babelforce manager 3034412 4277
-o babelforce-dispatch-action-get babelforce manager 3030760 3646
-o babelforce-dispatch-event-trigger babelforce manager 2881756 1915
-o babelforce-dispatch-integration-type-action babelforce manager 3048003 1618
-o babelforce-dispatch-local-automations babelforce manager 2243711 2320
-o babelforce-download-file babelforce manager 2956248 672
-o babelforce-download-phonebook-entries babelforce manager 3299044 460
-o babelforce-echo babelforce manager 2848649 842
-o babelforce-enable-agent babelforce manager 956343 1092
-o babelforce-enable-live-logging babelforce manager 3054016 859
-o babelforce-enable-users babelforce manager 4043331 1301
-o babelforce-evaluate-expression babelforce manager 2911674 3025
-o babelforce-execute-action babelforce manager 755192 1766
-o babelforce-export-agents babelforce manager 896786 913
-o babelforce-export-templates babelforce manager 3954493 884
-o babelforce-flag-recording babelforce manager 3775256 8357
-o babelforce-flush-dialer babelforce manager 752143 1592
-o babelforce-get-agent-group babelforce manager 851542 2310
-o babelforce-get-agent-import-job babelforce manager 897705 8257
-o babelforce-get-agent-presence babelforce manager 890726 2019
-o babelforce-get-agent-status babelforce manager 989742 3990
-o babelforce-get-agents-for-queue-selection babelforce manager 3388918 2681
-o babelforce-get-all-metric-definitions babelforce manager 3055717 11489
-o babelforce-get-api-status babelforce manager 3951264 835
-o babelforce-get-application babelforce manager 1449965 201579
-o babelforce-get-babeldesk babelforce manager 2282674 5794
-o babelforce-get-babeldesk-widget babelforce manager 2317894 6482
-o babelforce-get-bulk-file-download babelforce manager 2929315 907
-o babelforce-get-business-hour babelforce manager 2374996 9762
-o babelforce-get-business-hour-range babelforce manager 2417095 5176
-o babelforce-get-calendar babelforce manager 2442612 3297
-o babelforce-get-calendar-date babelforce manager 2459677 3404
-o babelforce-get-calender-dates babelforce manager 2451212 3617
-o babelforce-get-campaign babelforce manager 3129253 4440
-o babelforce-get-campaign-hopper babelforce manager 3154792 2767
-o babelforce-get-campaign-list babelforce manager 3175923 2372
-o babelforce-get-campaign-statistics babelforce manager 3193816 3229
-o babelforce-get-campaign-status babelforce manager 3197051 3307
-o babelforce-get-conference babelforce manager 2606331 62642
-o babelforce-get-conversation babelforce manager 2822295 2597
-o babelforce-get-conversation-session babelforce manager 2818527 1543
-o babelforce-get-dashboard babelforce manager 2832022 2245
-o babelforce-get-dialer-behaviour babelforce manager 3207877 2397
-o babelforce-get-dialer-info babelforce manager 2847787 856
-o babelforce-get-file babelforce manager 2950827 4319
-o babelforce-get-first-conversation-event babelforce manager 2764986 25442
-o babelforce-get-global-automation babelforce manager 2883677 6550
-o babelforce-get-integration babelforce manager 2985740 5293
-o babelforce-get-integration-provider-logo babelforce manager 3038695 2786
-o babelforce-get-integration-provider-template babelforce manager 3045850 762
-o babelforce-get-integration-template babelforce manager 3049627 1008
-o babelforce-get-integration-token babelforce manager 3019669 2007
-o babelforce-get-latest-conversation-event babelforce manager 2790434 25445
-o babelforce-get-lead-in-list babelforce manager 3275480 7245
-o babelforce-get-local-automation babelforce manager 1435121 5379
-o babelforce-get-me babelforce manager 3054881 830
-o babelforce-get-metric babelforce manager 3071297 10534
-o babelforce-get-metric-definition babelforce manager 3081837 9996
-o babelforce-get-outbound-list babelforce manager 3242871 2353
-o babelforce-get-phonebook-entry babelforce manager 3301339 2740
-o babelforce-get-prompt babelforce manager 3318376 6160
-o babelforce-get-prompt-uses babelforce manager 3335211 1295
-o babelforce-get-push-token babelforce manager 3336512 854
-o babelforce-get-queue babelforce manager 3364472 3564
-o babelforce-get-queue-selection babelforce manager 3480880 20862
-o babelforce-get-recording babelforce manager 3732515 8344
-o babelforce-get-recording-flag babelforce manager 3758503 8367
-o babelforce-get-routing babelforce manager 3803214 3608
-o babelforce-get-script babelforce task-automation 4199424 4273
-o babelforce-get-server-time babelforce manager 2845146 869
-o babelforce-get-service-number babelforce manager 3096360 2758
-o babelforce-get-settings-for-app-agent-status babelforce manager 3819653 1981
-o babelforce-get-settings-for-app-conversations babelforce manager 3825002 2483
-o babelforce-get-settings-for-app-customer-logging babelforce manager 3831785 1966
-o babelforce-get-settings-for-app-integrations babelforce manager 3837087 3959
-o babelforce-get-settings-for-audit-default babelforce manager 3847916 2207
-o babelforce-get-settings-for-retention-periods babelforce manager 3853912 2559
-o babelforce-get-settings-for-telephony-agent-inbound babelforce manager 3860881 2695
-o babelforce-get-settings-for-telephony-agent-outbound babelforce manager 3868210 2705
-o babelforce-get-settings-for-telephony-agent-recording babelforce manager 3875564 3637
-o babelforce-get-settings-for-telephony-agent-wrapup babelforce manager 3885487 4454
-o babelforce-get-settings-for-telephony-post-call babelforce manager 3897692 2114
-o babelforce-get-settings-for-ui-i18n babelforce manager 3903403 2201
-o babelforce-get-sms babelforce manager 3942038 4596
-o babelforce-get-task-schedule babelforce task-schedule 4322412 2133
-o babelforce-get-task-schedules babelforce task-schedule 4315303 3534
-o babelforce-get-trigger babelforce manager 3988833 6348
-o babelforce-get-trigger-uses babelforce manager 4026235 2335
-o babelforce-get-user babelforce manager 4051386 5118
-o babelforce-get-user-by-email babelforce manager 4035548 5160
-o babelforce-get-widget-settings babelforce manager 4056510 2651
-o babelforce-hangup-agent-call babelforce manager 957441 1106
-o babelforce-integrate-integration babelforce manager 3011898 5734
-o babelforce-integration-api-proxy-get babelforce manager 3025095 992
-o babelforce-integration-api-proxy-post babelforce manager 3026093 1408
-o babelforce-list babelforce task-automation 4179943 4726
-o babelforce-list-accounts babelforce user 4059167 3198
-o babelforce-list-action-params babelforce manager 756964 1622
-o babelforce-list-actions babelforce manager 753741 1445
-o babelforce-list-agent-groups babelforce manager 806107 3968
-o babelforce-list-agent-logs babelforce manager 958553 29449
-o babelforce-list-agent-presences babelforce manager 886180 1892
-o babelforce-list-agents-in-group babelforce manager 815006 17127
-o babelforce-list-all-agent-logs babelforce manager 857831 28343
-o babelforce-list-all-conversation-events babelforce manager 2677330 29500
-o babelforce-list-all-local-automations babelforce manager 2257924 7341
-o babelforce-list-all-settings babelforce manager 3815415 2104
-o babelforce-list-all-simple-reporting-calls babelforce manager 710424 21425
-o babelforce-list-application-actions babelforce manager 1411525 1827
-o babelforce-list-application-errors babelforce manager 1416519 1063
-o babelforce-list-applications babelforce manager 993738 214835
-o babelforce-list-audit-logs babelforce manager 2246037 11881
-o babelforce-list-available-agent-statuses babelforce manager 908048 2453
-o babelforce-list-available-integrations babelforce manager 2973232 8385
-o babelforce-list-available-roles babelforce manager 4045955 1173
-o babelforce-list-babeldesk-widgets babelforce manager 2298516 9224
-o babelforce-list-babeldesks babelforce manager 2265271 8304
-o babelforce-list-backup-files babelforce manager 2923693 5616
-o babelforce-list-business-hour-ranges babelforce manager 2396438 5571
-o babelforce-list-business-hours babelforce manager 2335483 12884
-o babelforce-list-calendars babelforce manager 2423660 5140
-o babelforce-list-campaign-attempts babelforce manager 3144534 10252
-o babelforce-list-campaign-leads babelforce manager 3157565 9160
-o babelforce-list-campaign-processed-leads babelforce manager 3166731 9186
-o babelforce-list-campaigns babelforce manager 3118164 4940
-o babelforce-list-conferences babelforce manager 2534380 71945
-o babelforce-list-conversation-events babelforce manager 2709479 29005
-o babelforce-list-conversations babelforce manager 2668979 5136
-o babelforce-list-dashboard-users babelforce manager 2839679 2170
-o babelforce-list-dashboards babelforce manager 731855 5417
-o babelforce-list-dialer-behaviours babelforce manager 3200364 4077
-o babelforce-list-dialer-simple-reporting-calls babelforce manager 2469523 8403
-o babelforce-list-events babelforce manager 2849497 3639
-o babelforce-list-expressions babelforce manager 2908444 3224
-o babelforce-list-files babelforce manager 2914705 8982
-o babelforce-list-files-by-type babelforce manager 2931687 6042
-o babelforce-list-global-automations babelforce manager 2857849 8987
-o babelforce-list-global-queue-selections babelforce manager 3354819 9647
-o babelforce-list-inbound-simple-reporting-calls babelforce manager 2477932 8406
-o babelforce-list-integration-providers babelforce manager 2984642 1092
-o babelforce-list-integration-tokens babelforce manager 3017638 2025
-o babelforce-list-integration-type-actions babelforce manager 3046618 1379
-o babelforce-list-integrations babelforce manager 2956926 7314
-o babelforce-list-leads-in-list babelforce manager 3250773 10780
-o babelforce-list-live-logs babelforce manager 737278 4469
-o babelforce-list-local-automations babelforce manager 1418939 7601
-o babelforce-list-metric-ids babelforce manager 3067212 4079
-o babelforce-list-modules babelforce manager 1417588 1345
-o babelforce-list-outbound-attempts babelforce manager 3106079 12079
-o babelforce-list-outbound-leads babelforce manager 3216362 11254
-o babelforce-list-outbound-lists babelforce manager 3237315 2553
-o babelforce-list-outbound-simple-reporting-calls babelforce manager 2486344 8409
-o babelforce-list-phonebook-entrys babelforce manager 3290576 4463
-o babelforce-list-processed-outbound-leads babelforce manager 3227622 9687
-o babelforce-list-prompt-files babelforce manager 2937735 5616
-o babelforce-list-prompts babelforce manager 3309785 8585
-o babelforce-list-provider-session-variables babelforce manager 3041487 4357
-o babelforce-list-queue-selections babelforce manager 3391605 26680
-o babelforce-list-queue-triggers babelforce manager 3701373 7435
-o babelforce-list-queued-calls babelforce manager 3376442 12470
-o babelforce-list-queues babelforce manager 3337372 5436
-o babelforce-list-recording-files babelforce manager 2945196 5625
-o babelforce-list-recordings babelforce manager 3708814 11092
-o babelforce-list-routings babelforce manager 3791996 5539
-o babelforce-list-scripts babelforce task-automation 4191338 3332
-o babelforce-list-secret-keys babelforce task-automation 4163920 793
-o babelforce-list-secret-prefixes babelforce task-automation 4163318 596
-o babelforce-list-service-numbers babelforce manager 3091839 4515
-o babelforce-list-settings-in-scope babelforce manager 3909404 2409
-o babelforce-list-single-action-session-variables babelforce manager 758592 4082
-o babelforce-list-smss babelforce manager 3916482 6665
-o babelforce-list-tags babelforce manager 3952105 1024
-o babelforce-list-tags-by-category babelforce manager 3953135 1352
-o babelforce-list-timezones babelforce manager 2846021 1760
-o babelforce-list-trigger-conditions babelforce manager 4012778 3517
-o babelforce-list-trigger-expressions babelforce manager 3977790 1068
-o babelforce-list-trigger-operators babelforce manager 3978864 1062
-o babelforce-list-triggers babelforce manager 3955383 8760
-o babelforce-list-users babelforce manager 741753 6978
-o babelforce-logout-all-campaign-agents babelforce manager 3192672 1138
-o babelforce-manager-interrupt-on-task babelforce task-automation 4312269 1670
-o babelforce-open-conversation babelforce manager 2815885 2636
-o babelforce-patch-secrets babelforce task-automation 4165845 1139
-o babelforce-ping babelforce manager 3308941 838
-o babelforce-post-bulk-file-download babelforce manager 2930228 1453
-o babelforce-push-to-agent babelforce manager 905968 2074
-o babelforce-queue-callback babelforce manager 3373929 2507
-o babelforce-read-selection-configuration babelforce task-automation 4168120 1853
-o babelforce-refresh-integration-token babelforce manager 3023060 2029
-o babelforce-remove-agent-from-group babelforce manager 848948 2588
-o babelforce-remove-agent-from-queue-selection babelforce manager 3566406 26891
-o babelforce-remove-business-hour-range babelforce manager 2422277 1377
-o babelforce-remove-calendar-date babelforce manager 2468162 1355
-o babelforce-remove-dashboard-user babelforce manager 2843781 1359
-o babelforce-remove-group-from-queue-selection babelforce manager 3620446 26896
-o babelforce-remove-roles babelforce manager 4049254 2126
-o babelforce-remove-tag-from-queue-selection babelforce manager 3674485 26882
-o babelforce-report-sms babelforce manager 3929241 6676
-o babelforce-reset-password babelforce user 4062371 865
-o babelforce-reset-passwords babelforce manager 4044638 1311
-o babelforce-send-sms babelforce manager 3923153 6082
-o babelforce-session-get babelforce manager 704992 2361
-o babelforce-session-update babelforce manager 707359 3059
-o babelforce-set-campaign-list babelforce manager 3178301 5188
-o babelforce-set-campaign-list-by-id babelforce manager 3187969 4697
-o babelforce-set-queue-selections-priority babelforce manager 3454714 26160
-o babelforce-set-trigger-conditions babelforce manager 4016301 9928
-o babelforce-start-recording babelforce manager 3719912 9343
-o babelforce-submit-script babelforce task-automation 4194676 4742
-o babelforce-submit-task babelforce task-automation 4114242 41581
-o babelforce-submit-task-schedule babelforce task-schedule 4318843 3563
-o babelforce-submit-task-template babelforce task-automation 4209764 29157
-o babelforce-task babelforce task-automation 4243881 22189
-o babelforce-task-journal babelforce task-automation 4188445 2887
-o babelforce-task-usage babelforce task-automation 4238927 3624
-o babelforce-task-usage-types babelforce task-automation 4242557 1318
-o babelforce-tasks babelforce task-automation 4087284 26952
-o babelforce-test-calendar-date babelforce manager 2441336 1270
-o babelforce-test-inbound-sms babelforce manager 3935923 6109
-o babelforce-test-triggers babelforce manager 3979932 8895
-o babelforce-testing babelforce task-automation 4155829 7483
-o babelforce-toggle-recording-flag babelforce manager 3766876 8374
-o babelforce-unflag-recording babelforce manager 3783619 8371
-o babelforce-unset-campaign-list babelforce manager 3183495 4468
-o babelforce-update-agent babelforce manager 910507 22878
-o babelforce-update-agent-group babelforce manager 853858 3256
-o babelforce-update-agent-password babelforce manager 988008 1728
-o babelforce-update-agent-presence babelforce manager 892751 2878
-o babelforce-update-application babelforce manager 1651550 389843
-o babelforce-update-babeldesk babelforce manager 2288474 9317
-o babelforce-update-babeldesk-widget babelforce manager 2324382 10369
-o babelforce-update-business-hour babelforce manager 2384764 10933
-o babelforce-update-calendar babelforce manager 2445915 4594
-o babelforce-update-calendar-date babelforce manager 2463087 5069
-o babelforce-update-campaign babelforce manager 3133699 6361
-o babelforce-update-conversation babelforce manager 2824898 3426
-o babelforce-update-conversation-session babelforce manager 2820076 2213
-o babelforce-update-dashboard babelforce manager 2834273 3127
-o babelforce-update-dialer-behaviour babelforce manager 3210280 3651
-o babelforce-update-global-automation babelforce manager 2890233 10913
-o babelforce-update-integration babelforce manager 2991039 9088
-o babelforce-update-local-automation babelforce manager 1440506 8483
-o babelforce-update-outbound-lead babelforce manager 3282731 6905
-o babelforce-update-outbound-list babelforce manager 3245230 3156
-o babelforce-update-phonebook-entry babelforce manager 3304085 4132
-o babelforce-update-prompt babelforce manager 3324542 9974
-o babelforce-update-queue babelforce manager 3368042 5196
-o babelforce-update-queue-selection babelforce manager 3501748 36555
-o babelforce-update-recording babelforce manager 3740865 9260
-o babelforce-update-routing babelforce manager 3806828 5771
-o babelforce-update-script babelforce task-automation 4203703 4970
-o babelforce-update-selection-configuration babelforce task-automation 4174735 4749
-o babelforce-update-service-number babelforce manager 3099124 3181
-o babelforce-update-settings-for-app-agent-status babelforce manager 3821640 3356
-o babelforce-update-settings-for-app-conversations babelforce manager 3827491 4288
-o babelforce-update-settings-for-app-customer-logging babelforce manager 3833757 3324
-o babelforce-update-settings-for-app-integrations babelforce manager 3841052 6858
-o babelforce-update-settings-for-audit-default babelforce manager 3850129 3777
-o babelforce-update-settings-for-retention-periods babelforce manager 3856477 4398
-o babelforce-update-settings-for-telephony-agent-inbound babelforce manager 3863582 4622
-o babelforce-update-settings-for-telephony-agent-outbound babelforce manager 3870921 4637
-o babelforce-update-settings-for-telephony-agent-recording babelforce manager 3879207 6274
-o babelforce-update-settings-for-telephony-agent-wrapup babelforce manager 3889947 7739
-o babelforce-update-settings-for-telephony-post-call babelforce manager 3899812 3585
-o babelforce-update-settings-for-ui-i18n babelforce manager 3905610 3788
-o babelforce-update-task babelforce task-automation 4266076 46187
-o babelforce-update-trigger babelforce manager 3995187 10521
-o babelforce-user-me-get babelforce user 748737 3400
-o babelforce-write-log babelforce manager 3050641 2501
-o bitbucket-pull-request-approve bitbucket default 4357292 2730
-o bitbucket-pull-request-comment bitbucket default 4353469 3817
-o bitbucket-pull-request-create bitbucket default 4348249 5214
-o bitbucket-pull-request-get bitbucket default 4343031 5212
-o bitbucket-pull-request-list bitbucket default 4338132 4893
-o bitbucket-repository-get bitbucket default 4334449 3677
-o bitbucket-repository-list bitbucket default 4329167 5276
-o box-file-copy box default 4371460 2239
-o box-file-get box default 4366937 2130
-o box-folder-create box default 4369073 2381
-o box-folder-get box default 4362842 2095
-o box-folder-items-list box default 4364943 1988
-o box-user-me box default 4361735 1101
-o calendly-event-type-list calendly default 4377504 3622
-o calendly-invitee-list calendly default 4389155 4246
-o calendly-scheduled-event-get calendly default 4385962 3187
-o calendly-scheduled-event-list calendly default 4381132 4824
-o calendly-user-me calendly default 4375239 2259
-o clickup-list-task-list clickup default 4399912 5945
-o clickup-space-folder-list clickup default 4396901 3005
-o clickup-task-create clickup default 4408456 4025
-o clickup-task-get clickup default 4405863 2587
-o clickup-task-update clickup default 4412487 3801
-o clickup-team-list clickup default 4395069 1826
-o cloudflare-cache-purge cloudflare default 4432494 2558
-o cloudflare-dns-record-create cloudflare default 4426404 3853
-o cloudflare-dns-record-delete cloudflare default 4430263 2225
-o cloudflare-dns-record-list cloudflare default 4422255 4143
-o cloudflare-zone-list cloudflare default 4418749 3500
-o confluence-comment-add confluence default 4462597 4110
-o confluence-page-create confluence default 4457532 5059
-o confluence-page-get confluence default 4451858 5668
-o confluence-space-get confluence default 4442736 3045
-o confluence-space-list confluence default 4438073 4657
-o confluence-space-pages confluence default 4445787 6065
-o contentful-asset-get contentful delivery 4476384 1935
-o contentful-entries-list contentful delivery 4473827 2551
-o contentful-entry-create contentful management 4478325 2947
-o contentful-entry-get contentful delivery 4471862 1959
-o contentful-entry-publish contentful management 4481278 2554
-o datadog-incident-get datadog default 4493726 754
-o datadog-incident-list datadog default 4493252 468
-o datadog-monitor-get datadog default 4490158 3088
-o datadog-monitor-list datadog default 4487055 3097
-o discord-channel-messages discord default 4512264 6033
-o discord-current-user discord default 4497107 3107
-o discord-guild-channels discord default 4508224 4034
-o discord-guild-get discord default 4502793 5425
-o discord-guild-list discord default 4500220 2567
-o discord-message-create discord default 4518303 5674
-o docusign-envelope-create-from-template docusign default 4537776 4268
-o docusign-envelope-get docusign default 4531897 2135
-o docusign-envelope-list docusign default 4528701 3190
-o docusign-envelope-recipients-get docusign default 4534038 3732
-o docusign-envelope-void docusign default 4542050 2214
-o docusign-verify docusign default 4526861 1834
-o dropbox-folder-create dropbox default 4555172 2078
-o dropbox-folder-list dropbox default 4547692 2308
-o dropbox-metadata-get dropbox default 4550006 3041
-o dropbox-search dropbox default 4553053 2113
-o dropbox-temporary-link-get dropbox default 4557256 1908
-o dropbox-user-me dropbox default 4546020 1666
-o figma-file-comments-list figma default 4572419 3124
-o figma-file-get figma default 4562083 3223
-o figma-file-nodes-get figma default 4565312 2567
-o figma-image-render-get figma default 4567885 2238
-o figma-project-files-list figma default 4570129 2284
-o figma-user-me figma default 4560775 1302
-o fly-machine-create fly machines 4582411 2069
-o fly-machine-delete fly machines 4588093 1271
-o fly-machine-events-list fly machines 4580672 1733
-o fly-machine-get fly machines 4578889 1777
-o fly-machine-restart fly machines 4586879 1208
-o fly-machine-start fly machines 4584486 1183
-o fly-machine-stop fly machines 4585675 1198
-o fly-machines-list fly machines 4577468 1415
-o fly-regions-list fly machines 4576537 925
-o freshdesk-contact-create freshdesk default 4632626 3623
-o freshdesk-contact-get freshdesk default 4629238 3382
-o freshdesk-contact-list freshdesk default 4624430 4802
-o freshdesk-test freshdesk default 4590650 1623
-o freshdesk-ticket-create freshdesk default 4601677 9565
-o freshdesk-ticket-get freshdesk default 4597177 4494
-o freshdesk-ticket-list freshdesk default 4592279 4892
-o freshdesk-ticket-note-add freshdesk default 4619983 4441
-o freshdesk-ticket-update freshdesk default 4611248 8729
-o front-conversation-get front default 4642628 3092
-o front-conversation-list front default 4639368 3254
-o front-conversation-message-list front default 4645726 4890
-o front-conversation-reply front default 4650622 2586
-o front-conversation-tag-add front default 4653214 2012
-o front-verify front default 4637793 1569
-o github-commit-list github default 4851762 17298
-o github-issue-comment-add github default 4676922 3785
-o github-issue-create github default 4671959 4957
-o github-issue-get github default 4662617 4802
-o github-issue-list github default 4680713 93171
-o github-org-list github default 4881746 3324
-o github-org-repo-list github default 4885076 23752
-o github-pull-files-list github default 4773890 4201
-o github-pull-get github default 4667425 4528
-o github-repo-get github default 4658874 3737
-o github-user-get github default 4869066 12674
-o github-user-repo-list github default 4908834 24890
-o github-workflow-run-list github default 4778097 73659
-o gitlab-branch-list gitlab default 4969285 3200
-o gitlab-group-list gitlab default 4940190 3552
-o gitlab-issue-create gitlab default 4956992 3963
-o gitlab-issue-get gitlab default 4953492 3494
-o gitlab-issue-list gitlab default 4948698 4788
-o gitlab-merge-request-list gitlab default 4960961 4807
-o gitlab-pipeline-get gitlab default 4965774 3505
-o gitlab-project-list gitlab default 4943748 4944
-o gitlab-user-get gitlab default 4938800 1384
-o google-calendar-calendar-get google calendar 4994583 2674
-o google-calendar-event-get google calendar 4983605 5478
-o google-calendar-event-insert google calendar 4989089 5488
-o google-drive-file-get google drive 4997263 1259
-o google-drive-file-update google drive 4998528 1702
-o google-gmail-labels-list google gmail 4980504 3095
-o google-gmail-message-get google gmail 4973826 3877
-o google-gmail-message-send google gmail 4977709 2789
-o hubspot-company-get hubspot default 5010503 2643
-o hubspot-contact-create hubspot default 5005434 2903
-o hubspot-contact-get hubspot default 5001930 3498
-o hubspot-contact-update hubspot default 5008343 2154
-o hubspot-deal-get hubspot default 5013152 2720
-o intercom-contact-create intercom default 5023181 4089
-o intercom-contact-get intercom default 5018072 5103
-o intercom-contact-note-create intercom default 5037654 3087
-o intercom-conversation-get intercom default 5027276 5083
-o intercom-conversation-reply intercom default 5032365 5283
-o jira-issue-comment-add jira default 5053330 3232
-o jira-issue-comment-list jira default 5049386 3938
-o jira-issue-create jira default 5045986 3394
-o jira-issue-get jira default 5043092 2888
-o jira-issue-transition jira default 5060299 1902
-o jira-issue-transitions-list jira default 5056568 3725
-o klaviyo-account-list klaviyo default 5064450 4037
-o klaviyo-event-create klaviyo default 5088819 4966
-o klaviyo-list-list klaviyo default 5085715 3098
-o klaviyo-profile-create klaviyo default 5078564 7145
-o klaviyo-profile-get klaviyo default 5074049 4509
-o klaviyo-profile-list klaviyo default 5068493 5550
-o launchdarkly-environment-list launchdarkly default 5098391 3339
-o launchdarkly-flag-get launchdarkly default 5106094 3057
-o launchdarkly-flag-list launchdarkly default 5101736 4352
-o launchdarkly-flag-toggle launchdarkly default 5109157 4389
-o launchdarkly-project-list launchdarkly default 5095584 2801
-o mailchimp-audience-get mailchimp default 5121561 3209
-o mailchimp-audience-list mailchimp default 5117621 3934
-o mailchimp-audience-member-get mailchimp default 5130836 5133
-o mailchimp-audience-member-list mailchimp default 5124776 6054
-o mailchimp-audience-member-upsert mailchimp default 5135975 7332
-o mailchimp-campaign-list mailchimp default 5143313 4181
-o mailchimp-ping mailchimp default 5116413 1202
-o microsoft_graph-calendar-calendar-get microsoft_graph calendar 5169579 2830
-o microsoft_graph-calendar-category-list microsoft_graph calendar 6054985 159060
-o microsoft_graph-calendar-event-create microsoft_graph calendar 5163892 5681
-o microsoft_graph-calendar-event-get microsoft_graph calendar 5158337 5549
-o microsoft_graph-calendar-language-list microsoft_graph calendar 6216913 3155
-o microsoft_graph-calendar-time-zone-list microsoft_graph calendar 6214051 2856
-o microsoft_graph-files-item-get microsoft_graph files 5172415 4470
-o microsoft_graph-files-item-update microsoft_graph files 5176891 3682
-o microsoft_graph-mail-folder-list microsoft_graph mail 5156035 2296
-o microsoft_graph-mail-message-get microsoft_graph mail 5149565 4608
-o microsoft_graph-mail-message-list microsoft_graph mail 5180579 874400
-o microsoft_graph-mail-message-reply microsoft_graph mail 5154179 1850
-o miro-board-item-get miro default 6233554 6917
-o miro-board-item-list miro default 6224569 8979
-o miro-board-list miro default 6222530 2033
-o miro-sticky-note-create miro default 6240477 2748
-o miro-sticky-note-delete miro default 6246522 1082
-o miro-sticky-note-update miro default 6243231 3285
-o newrelic-alert-policy-list newrelic default 6258046 2233
-o newrelic-alert-violation-list newrelic default 6260285 3396
-o newrelic-application-get newrelic default 6254754 3286
-o newrelic-application-list newrelic default 6250900 3848
-o newrelic-deployment-create newrelic default 6266503 4766
-o newrelic-deployment-list newrelic default 6263687 2810
-o notion-database-query notion default 6276801 2346
-o notion-page-create notion default 6281267 3563
-o notion-page-get notion default 6274415 2380
-o notion-search notion default 6279153 2108
-o notion-user-me notion default 6273150 1259
-o okta-group-list okta default 6294416 2990
-o okta-user-deactivate okta default 6300286 1864
-o okta-user-get okta default 6291533 2877
-o okta-user-group-list okta default 6297412 2868
-o okta-user-list okta default 6287440 4087
-o openai-batch-list openai default 7966533 12180
-o openai-chat-completion openai default 6306109 4122
-o openai-embeddings-create openai default 6310237 3204
-o openai-file-list openai default 7961951 4576
-o openai-model-get openai default 6304713 1390
-o openai-models-list openai default 6303127 1580
-o openai-response-get openai default 6313447 1211990
-o openai-response-input-item-list openai default 7525443 436502
-o openrouter-chat-completion openrouter default 7982439 4740
-o openrouter-credits-get openrouter default 7987185 1218
-o openrouter-model-endpoints-list openrouter default 7980706 1727
-o openrouter-models-list openrouter default 7979674 1026
-o pagerduty-incident-acknowledge pagerduty default 8011990 3960
-o pagerduty-incident-get pagerduty default 7997708 4839
-o pagerduty-incident-list pagerduty default 7990250 7452
-o pagerduty-incident-resolve pagerduty default 8015956 3723
-o pagerduty-oncall-list pagerduty default 8007904 4080
-o pagerduty-service-list pagerduty default 8002553 5345
-o postmark-bounce-get postmark server 8032688 2394
-o postmark-bounce-list postmark server 8028752 3930
-o postmark-deliverystats-get postmark server 8026966 1780
-o postmark-email-send postmark server 8021457 5503
-o resend-domain-get resend default 8046091 4308
-o resend-domain-list resend default 8043474 2611
-o resend-email-get resend default 8039459 4009
-o resend-email-send resend default 8036386 3067
-o salesforce-record-create salesforce default 8057145 2336
-o salesforce-record-get salesforce default 8054717 2422
-o salesforce-record-update salesforce default 8059487 1944
-o salesforce-sobject-describe salesforce default 8061437 3512
-o salesforce-whoami salesforce default 8052543 2168
-o sendgrid-email-validate sendgrid default 8073809 3088
-o sendgrid-suppression-bounce-list sendgrid default 8071366 2437
-o sendgrid-template-get sendgrid default 8069752 1608
-o sendgrid-template-list sendgrid default 8066551 3195
-o sentry-issue-event-latest sentry default 8093908 5742
-o sentry-issue-get sentry default 8077926 5852
-o sentry-issue-update sentry default 8083784 4997
-o sentry-project-get sentry default 8088787 5115
-o shopify-customer-get shopify default 8115380 4178
-o shopify-inventory-level-list shopify default 8119564 2499
-o shopify-order-get shopify default 8101794 5480
-o shopify-product-get shopify default 8107280 3918
-o shopify-product-update shopify default 8111204 4170
-o slack-chat-post-message slack default 8128569 3283
-o slack-conversations-history slack default 8131858 3794
-o slack-reactions-add slack default 8138051 2572
-o slack-users-info slack default 8135658 2387
-o statuspage-component-list statuspage default 8160924 3324
-o statuspage-incident-create statuspage default 8150728 5106
-o statuspage-incident-get statuspage default 8147273 3449
-o statuspage-incident-list statuspage default 8142980 4287
-o statuspage-incident-update statuspage default 8155840 5078
-o stripe-balance-get stripe default 8171933 1723
-o stripe-billing-meter-list stripe default 8214612 8385
-o stripe-charge-get stripe default 8175628 2701
-o stripe-charge-refund-create stripe default 8189088 3320
-o stripe-country-spec-list stripe default 8192414 8402
-o stripe-customer-get stripe default 8173662 1960
-o stripe-event-list stripe default 8200822 8727
-o stripe-exchange-rate-list stripe default 8209555 5051
-o stripe-payment-intent-cancel stripe default 8186370 2712
-o stripe-payment-intent-capture stripe default 8183096 3268
-o stripe-payment-intent-get stripe default 8178335 2757
-o stripe-refund-get stripe default 8181098 1992
-o supabase-auth-settings supabase default 8231158 2186
-o supabase-rows-list supabase default 8229000 2152
-o supabase-schema-describe supabase default 8226042 2952
-o trello-board-get trello default 8239294 2918
-o trello-board-list trello default 8236245 3043
-o trello-board-lists trello default 8242218 835
-o trello-card-archive trello default 8251145 3439
-o trello-card-create trello default 8247023 4116
-o trello-list-cards trello default 8243059 3958
-o twilio-account-get twilio default 8263315 2234
-o twilio-call-get twilio default 8282906 3662
-o twilio-call-list twilio default 8276033 6867
-o twilio-conference-list twilio default 8311193 6884
-o twilio-message-get twilio default 8272023 4004
-o twilio-message-list twilio default 8265555 6462
-o twilio-recording-get twilio default 8296332 7524
-o twilio-recording-list twilio default 8286574 9752
-o twilio-usage-record-list twilio default 8303862 7325
-o typeform-form-get typeform default 8325594 4125
-o typeform-form-list typeform default 8321258 4330
-o typeform-response-delete typeform default 8338919 1840
-o typeform-response-list typeform default 8329725 9188
-o typeform-user-me typeform default 8319795 1457
-o vercel-deployment-cancel vercel default 8352167 1740
-o vercel-deployment-get vercel default 8350077 2084
-o vercel-deployments-list vercel default 8345686 4385
-o vercel-project-get vercel default 8343573 2107
-o vercel-projects-list vercel default 8342797 770
-o webflow-collection-get webflow default 8359926 3140
-o webflow-collection-item-get webflow default 8366100 2434
-o webflow-collection-item-list webflow default 8363072 3022
-o webflow-collection-list webflow default 8357767 2153
-o webflow-site-list webflow default 8355740 2021
-o webflow-site-publish webflow default 8368540 1211
-o zendesk-custom-object-list zendesk default 8492726 5131
-o zendesk-custom-status-list zendesk default 8692504 4802
-o zendesk-group-list zendesk default 8666179 3160
-o zendesk-help-center-article-create zendesk help-center 8985898 8560
-o zendesk-help-center-article-get zendesk help-center 8966722 7128
-o zendesk-help-center-article-incremental-list zendesk help-center 8978104 7788
-o zendesk-help-center-article-list zendesk help-center 8958952 7764
-o zendesk-help-center-category-list zendesk help-center 8951430 3554
-o zendesk-help-center-section-list zendesk help-center 8954990 3956
-o zendesk-help-center-translation-list zendesk help-center 8973856 4242
-o zendesk-incremental-organization-list zendesk default 8480165 7728
-o zendesk-incremental-ticket-event-list zendesk default 8487899 4821
-o zendesk-incremental-ticket-list zendesk default 8381109 73918
-o zendesk-incremental-user-list zendesk default 8455033 25126
-o zendesk-messaging-conversation-create zendesk messaging 8994464 9573
-o zendesk-messaging-conversation-get zendesk messaging 9004043 9695
-o zendesk-messaging-conversation-update zendesk messaging 9013744 10280
-o zendesk-messaging-message-create zendesk messaging 9030322 275338
-o zendesk-messaging-message-list zendesk messaging 9305666 157342
-o zendesk-messaging-participant-list zendesk messaging 9024030 6286
-o zendesk-messaging-user-create zendesk messaging 9463014 9358
-o zendesk-messaging-user-get zendesk messaging 9472378 8595
-o zendesk-messaging-user-update zendesk messaging 9480979 9052
-o zendesk-organization-show zendesk default 8660900 5273
-o zendesk-test zendesk default 8697312 22496
-o zendesk-ticket-audit-list zendesk default 8376059 5044
-o zendesk-ticket-comment-list zendesk default 8792202 18853
-o zendesk-ticket-field-list zendesk default 8669345 14424
-o zendesk-ticket-form-list zendesk default 8683775 8723
-o zendesk-ticket-recent-list zendesk default 8497863 70893
-o zendesk-ticket-search zendesk default 8719814 4340
-o zendesk-ticket-show zendesk default 8724160 68036
-o zendesk-ticket-update zendesk default 8811061 140363
-o zendesk-user-show zendesk default 8640092 20802
-o zendesk-view-ticket-list zendesk default 8568762 71324
-o zoom-meeting-delete zoom default 9491893 1310
-o zoom-user-get zoom default 9493209 4953
-payload 9498465
+o anthropic-api-keys-list anthropic admin 66865 2648
+o anthropic-invites-list anthropic admin 69519 4018
+o anthropic-model-get anthropic models 45070 2335
+o anthropic-models-list anthropic models 42517 2547
+o anthropic-organization-get anthropic admin 47411 1200
+o anthropic-organization-member-get anthropic admin 52142 2643
+o anthropic-organization-members-list anthropic admin 48617 3519
+o anthropic-workspace-get anthropic admin 57199 3781
+o anthropic-workspace-member-get anthropic admin 64368 2491
+o anthropic-workspace-members-list anthropic admin 60986 3376
+o anthropic-workspaces-list anthropic admin 54791 2402
+o asana-project-get asana default 83490 1322
+o asana-task-create asana default 77278 2147
+o asana-task-get asana default 75767 1505
+o asana-task-story-add asana default 81432 2052
+o asana-task-update asana default 79431 1995
+o asterisk-ari-applications-filter asterisk default 435071 3019
+o asterisk-ari-applications-get asterisk default 432480 2585
+o asterisk-ari-applications-list asterisk default 392448 2483
+o asterisk-ari-asterisk-add-log asterisk default 445277 1181
+o asterisk-ari-asterisk-delete-log asterisk default 446464 791
+o asterisk-ari-asterisk-delete-object asterisk default 442493 1364
+o asterisk-ari-asterisk-get-global-var asterisk default 453780 1264
+o asterisk-ari-asterisk-get-module asterisk default 449669 1752
+o asterisk-ari-asterisk-get-object asterisk default 438096 1948
+o asterisk-ari-asterisk-list-log-channels asterisk default 443863 1408
+o asterisk-ari-asterisk-list-modules asterisk default 448056 1607
+o asterisk-ari-asterisk-load-module asterisk default 451427 773
+o asterisk-ari-asterisk-ping asterisk default 394937 1122
+o asterisk-ari-asterisk-reload-module asterisk default 452206 776
+o asterisk-ari-asterisk-rotate-log asterisk default 447261 789
+o asterisk-ari-asterisk-set-global-var asterisk default 455050 1293
+o asterisk-ari-asterisk-unload-module asterisk default 452988 786
+o asterisk-ari-asterisk-update-object asterisk default 440050 2437
+o asterisk-ari-bridges-clear-video-source asterisk default 476449 1002
+o asterisk-ari-bridges-create asterisk default 398930 4370
+o asterisk-ari-bridges-create-with-id asterisk default 459258 4252
+o asterisk-ari-bridges-destroy asterisk default 403306 756
+o asterisk-ari-bridges-get asterisk default 456349 2903
+o asterisk-ari-bridges-get-bridge-var asterisk default 471647 1516
+o asterisk-ari-bridges-list asterisk default 396065 2859
+o asterisk-ari-bridges-record asterisk default 465489 6152
+o asterisk-ari-bridges-set-bridge-var asterisk default 473169 2000
+o asterisk-ari-bridges-set-bridge-vars asterisk default 475175 1268
+o asterisk-ari-bridges-set-video-source asterisk default 477457 1113
+o asterisk-ari-bridges-start-moh asterisk default 463516 1179
+o asterisk-ari-bridges-stop-moh asterisk default 464701 782
+o asterisk-ari-channels-answer asterisk default 511165 757
+o asterisk-ari-channels-continue-in-dialplan asterisk default 511928 2347
+o asterisk-ari-channels-create asterisk default 478576 7864
+o asterisk-ari-channels-dial asterisk default 514281 1559
+o asterisk-ari-channels-external-media asterisk default 486446 9420
+o asterisk-ari-channels-get asterisk default 495872 4733
+o asterisk-ari-channels-get-channel-var asterisk default 558761 1524
+o asterisk-ari-channels-hangup asterisk default 419558 2169
+o asterisk-ari-channels-hold asterisk default 518808 751
+o asterisk-ari-channels-list asterisk default 404068 4826
+o asterisk-ari-channels-move asterisk default 522304 1598
+o asterisk-ari-channels-mute asterisk default 523908 1277
+o asterisk-ari-channels-originate asterisk default 408900 10652
+o asterisk-ari-channels-originate-with-id asterisk default 500611 10548
+o asterisk-ari-channels-progress asterisk default 526489 775
+o asterisk-ari-channels-record asterisk default 527270 5690
+o asterisk-ari-channels-redirect asterisk default 532966 1188
+o asterisk-ari-channels-ring asterisk default 534160 766
+o asterisk-ari-channels-ring-stop asterisk default 534932 808
+o asterisk-ari-channels-rtpstatistics asterisk default 535746 6486
+o asterisk-ari-channels-send-dtmf asterisk default 515846 2956
+o asterisk-ari-channels-set-channel-var asterisk default 560291 2009
+o asterisk-ari-channels-set-channel-vars asterisk default 562306 1275
+o asterisk-ari-channels-snoop-channel asterisk default 543814 6915
+o asterisk-ari-channels-snoop-channel-with-id asterisk default 550735 6804
+o asterisk-ari-channels-start-moh asterisk default 520345 1159
+o asterisk-ari-channels-start-silence asterisk default 542238 774
+o asterisk-ari-channels-stop-moh asterisk default 521510 788
+o asterisk-ari-channels-stop-silence asterisk default 543018 790
+o asterisk-ari-channels-transfer_progress asterisk default 557545 1210
+o asterisk-ari-channels-unhold asterisk default 519565 774
+o asterisk-ari-channels-unmute asterisk default 525191 1292
+o asterisk-ari-device-states-delete asterisk default 566552 800
+o asterisk-ari-device-states-get asterisk default 563587 1486
+o asterisk-ari-device-states-list asterisk default 421733 1333
+o asterisk-ari-device-states-update asterisk default 565079 1467
+o asterisk-ari-endpoints-get asterisk default 574584 2122
+o asterisk-ari-endpoints-list asterisk default 423072 1751
+o asterisk-ari-endpoints-list-by-tech asterisk default 572507 2071
+o asterisk-ari-endpoints-refer asterisk default 567358 2866
+o asterisk-ari-endpoints-refer-to-endpoint asterisk default 576712 2914
+o asterisk-ari-endpoints-send-message asterisk default 570230 2271
+o asterisk-ari-endpoints-send-message-to-endpoint asterisk default 579632 2318
+o asterisk-ari-events-claim-channel asterisk default 581956 1344
+o asterisk-ari-mailboxes-delete asterisk default 586466 773
+o asterisk-ari-mailboxes-get asterisk default 583306 1487
+o asterisk-ari-mailboxes-list asterisk default 424829 1303
+o asterisk-ari-mailboxes-update asterisk default 584799 1661
+o asterisk-ari-playbacks-control asterisk default 587245 1325
+o asterisk-ari-playbacks-get asterisk default 426138 2110
+o asterisk-ari-playbacks-stop asterisk default 428254 760
+o asterisk-ari-recordings-cancel asterisk default 591130 809
+o asterisk-ari-recordings-copy-stored asterisk default 597933 1611
+o asterisk-ari-recordings-delete-stored asterisk default 597120 807
+o asterisk-ari-recordings-get-live asterisk default 588576 2548
+o asterisk-ari-recordings-get-stored asterisk default 595960 1154
+o asterisk-ari-recordings-get-stored-file asterisk default 599550 822
+o asterisk-ari-recordings-list-stored asterisk default 429020 964
+o asterisk-ari-recordings-mute asterisk default 591945 788
+o asterisk-ari-recordings-pause asterisk default 593546 791
+o asterisk-ari-recordings-stop asterisk default 595153 801
+o asterisk-ari-recordings-unmute asterisk default 592739 801
+o asterisk-ari-recordings-unpause asterisk default 594343 804
+o asterisk-ari-sounds-get asterisk default 600378 1838
+o asterisk-ari-sounds-list asterisk default 429990 2484
+o babelforce-add-agent-to-group babelforce manager 841008 16803
+o babelforce-add-agent-to-queue-selection babelforce manager 3548131 27138
+o babelforce-add-business-hour-ranges babelforce manager 2410884 15074
+o babelforce-add-calendar-date babelforce manager 2463704 4836
+o babelforce-add-conversation-event babelforce manager 2747359 26490
+o babelforce-add-dashboard-user babelforce manager 2850724 1920
+o babelforce-add-group-to-queue-selection babelforce manager 3602172 27137
+o babelforce-add-integration-association babelforce manager 3036376 1613
+o babelforce-add-outbound-lead babelforce manager 3270428 6679
+o babelforce-add-roles babelforce manager 4056003 2114
+o babelforce-add-tag-to-queue-selection babelforce manager 3656217 27131
+o babelforce-add-tags-to-number babelforce manager 3111180 3762
+o babelforce-agent-action-on-task babelforce task-automation 4073136 23011
+o babelforce-agent-get babelforce manager 628119 13057
+o babelforce-agent-interaction-duration babelforce task-automation 4193544 1903
+o babelforce-agent-interactions babelforce task-automation 4195453 1855
+o babelforce-agent-list babelforce manager 606940 21173
+o babelforce-agent-status-update babelforce manager 641182 4192
+o babelforce-authorize-integration babelforce manager 3009712 5733
+o babelforce-bulk-agent-action babelforce manager 794279 20691
+o babelforce-bulk-delete-agent-groups babelforce manager 822052 1817
+o babelforce-bulk-delete-business-hours babelforce manager 2382028 1831
+o babelforce-bulk-delete-calendars babelforce manager 2448392 1807
+o babelforce-bulk-delete-event-triggers babelforce manager 2888796 1823
+o babelforce-bulk-delete-files babelforce manager 2952226 1833
+o babelforce-bulk-delete-integrations babelforce manager 2991876 1629
+o babelforce-bulk-delete-outbound-leads babelforce manager 3281968 2375
+o babelforce-bulk-delete-outbound-leads-alt babelforce manager 3279578 2384
+o babelforce-bulk-delete-phonebook-entries babelforce manager 3308379 1823
+o babelforce-bulk-recording-action babelforce manager 3738130 3248
+o babelforce-bulk-trigger-action babelforce manager 3983439 3214
+o babelforce-bulk-update-applications babelforce manager 1422227 1382
+o babelforce-bulk-update-business-hours babelforce manager 2368036 13986
+o babelforce-bulk-update-calendars babelforce manager 2442144 6242
+o babelforce-bulk-update-event-triggers babelforce manager 2886729 2061
+o babelforce-bulk-update-integrations babelforce manager 2990492 1378
+o babelforce-bulk-update-queues babelforce manager 3356731 6951
+o babelforce-call-get babelforce manager 673919 18923
+o babelforce-call-hangup babelforce manager 692848 18967
+o babelforce-call-list babelforce manager 645380 28533
+o babelforce-call-session-set babelforce manager 711821 2034
+o babelforce-cancel-call babelforce manager 2524284 18959
+o babelforce-change-agent-lock babelforce task-automation 4072111 1019
+o babelforce-change-task-state babelforce task-automation 4322814 1352
+o babelforce-clear-all-settings babelforce manager 3826394 2122
+o babelforce-clear-outbound-list babelforce manager 3277113 2459
+o babelforce-clear-setting babelforce manager 3923077 2268
+o babelforce-clear-settings-in-scope babelforce manager 3920688 2383
+o babelforce-clone-application babelforce manager 2050978 201596
+o babelforce-clone-event-trigger babelforce manager 2910744 6563
+o babelforce-clone-integration babelforce manager 3015451 5310
+o babelforce-clone-trigger babelforce manager 4015276 6365
+o babelforce-close-conversation babelforce manager 2715705 2637
+o babelforce-create-agent babelforce manager 771549 22724
+o babelforce-create-agent-group babelforce manager 818950 3096
+o babelforce-create-agent-outbound-call babelforce manager 942946 21159
+o babelforce-create-agent-presence babelforce manager 896947 2642
+o babelforce-create-application babelforce manager 1217448 202940
+o babelforce-create-babeldesk babelforce manager 2282450 9087
+o babelforce-create-babeldesk-widget babelforce manager 2316615 10142
+o babelforce-create-business-hour babelforce manager 2357242 10788
+o babelforce-create-calendar babelforce manager 2437675 4463
+o babelforce-create-campaign babelforce manager 3131979 6137
+o babelforce-create-conversation babelforce manager 2682990 3203
+o babelforce-create-custom-event babelforce manager 2862011 3988
+o babelforce-create-dashboard babelforce manager 2837912 2973
+o babelforce-create-dialer-behaviour babelforce manager 3213316 3424
+o babelforce-create-global-automation babelforce manager 2875711 11012
+o babelforce-create-inbound-test-call babelforce manager 2503628 20650
+o babelforce-create-integration babelforce manager 2973115 8980
+o babelforce-create-local-automation babelforce manager 1435415 8569
+o babelforce-create-outbound-list babelforce manager 3248743 2991
+o babelforce-create-phonebook-entry babelforce manager 3303914 3993
+o babelforce-create-queue babelforce manager 3351683 5042
+o babelforce-create-queue-selection babelforce manager 3427160 36417
+o babelforce-create-routing babelforce manager 3806410 5667
+o babelforce-create-secrets babelforce task-automation 4173588 1120
+o babelforce-create-selection-configuration babelforce task-automation 4178848 4750
+o babelforce-create-session babelforce manager 3822165 2113
+o babelforce-create-trigger babelforce manager 3973018 10415
+o babelforce-create-user babelforce manager 4037445 6966
+o babelforce-delete-agent babelforce manager 942260 680
+o babelforce-delete-agent-group babelforce manager 865989 705
+o babelforce-delete-agent-presence babelforce manager 904504 1145
+o babelforce-delete-application babelforce manager 2050268 704
+o babelforce-delete-babeldesk babelforce manager 2306666 713
+o babelforce-delete-babeldesk-widget babelforce manager 2343626 720
+o babelforce-delete-business-hour babelforce manager 2404572 729
+o babelforce-delete-calendar babelforce manager 2459384 691
+o babelforce-delete-campaign babelforce manager 3148935 4462
+o babelforce-delete-conversation babelforce manager 2837199 707
+o babelforce-delete-custom-event babelforce manager 2866005 707
+o babelforce-delete-dashboard babelforce manager 2846275 2267
+o babelforce-delete-dialer-behaviour babelforce manager 3222806 2419
+o babelforce-delete-file babelforce manager 2964021 1090
+o babelforce-delete-global-automation babelforce manager 2910021 717
+o babelforce-delete-integration babelforce manager 3009002 704
+o babelforce-delete-integration-association babelforce manager 3037995 1628
+o babelforce-delete-integration-token babelforce manager 3030551 1372
+o babelforce-delete-local-automation babelforce manager 1457864 964
+o babelforce-delete-many-applications babelforce manager 1423615 1767
+o babelforce-delete-outbound-lead babelforce manager 3298511 928
+o babelforce-delete-outbound-list babelforce manager 3257261 2375
+o babelforce-delete-phonebook-entry babelforce manager 3317092 712
+o babelforce-delete-prompt babelforce manager 3343391 683
+o babelforce-delete-queue babelforce manager 3382113 679
+o babelforce-delete-queue-selection babelforce manager 3547178 947
+o babelforce-delete-recording babelforce manager 3759000 8366
+o babelforce-delete-routing babelforce manager 3821474 685
+o babelforce-delete-schedule-task babelforce task-schedule 4333420 752
+o babelforce-delete-script babelforce task-automation 4217548 1079
+o babelforce-delete-secret-keys babelforce task-automation 4175859 1124
+o babelforce-delete-selection-configuration babelforce task-automation 4188359 447
+o babelforce-delete-sms babelforce manager 3955509 4618
+o babelforce-delete-trigger babelforce manager 4014583 687
+o babelforce-delete-users babelforce manager 4049583 1301
+o babelforce-disable-agent babelforce manager 964111 1095
+o babelforce-disable-live-logging babelforce manager 3062017 862
+o babelforce-disable-users babelforce manager 4050890 1304
+o babelforce-dispatch-action babelforce manager 3043281 4277
+o babelforce-dispatch-action-get babelforce manager 3039629 3646
+o babelforce-dispatch-event-trigger babelforce manager 2890625 1915
+o babelforce-dispatch-integration-type-action babelforce manager 3056872 1618
+o babelforce-dispatch-local-automations babelforce manager 2252580 2320
+o babelforce-download-file babelforce manager 2965117 672
+o babelforce-download-phonebook-entries babelforce manager 3307913 460
+o babelforce-echo babelforce manager 2857518 842
+o babelforce-enable-agent babelforce manager 965212 1092
+o babelforce-enable-live-logging babelforce manager 3062885 859
+o babelforce-enable-users babelforce manager 4052200 1301
+o babelforce-evaluate-expression babelforce manager 2920543 3025
+o babelforce-execute-action babelforce manager 764061 1766
+o babelforce-export-agents babelforce manager 905655 913
+o babelforce-export-templates babelforce manager 3963362 884
+o babelforce-flag-recording babelforce manager 3784125 8357
+o babelforce-flush-dialer babelforce manager 761012 1592
+o babelforce-get-agent-group babelforce manager 860411 2310
+o babelforce-get-agent-import-job babelforce manager 906574 8257
+o babelforce-get-agent-presence babelforce manager 899595 2019
+o babelforce-get-agent-status babelforce manager 998611 3990
+o babelforce-get-agents-for-queue-selection babelforce manager 3397787 2681
+o babelforce-get-all-metric-definitions babelforce manager 3064586 11489
+o babelforce-get-api-status babelforce manager 3960133 835
+o babelforce-get-application babelforce manager 1458834 201579
+o babelforce-get-babeldesk babelforce manager 2291543 5794
+o babelforce-get-babeldesk-widget babelforce manager 2326763 6482
+o babelforce-get-bulk-file-download babelforce manager 2938184 907
+o babelforce-get-business-hour babelforce manager 2383865 9762
+o babelforce-get-business-hour-range babelforce manager 2425964 5176
+o babelforce-get-calendar babelforce manager 2451481 3297
+o babelforce-get-calendar-date babelforce manager 2468546 3404
+o babelforce-get-calender-dates babelforce manager 2460081 3617
+o babelforce-get-campaign babelforce manager 3138122 4440
+o babelforce-get-campaign-hopper babelforce manager 3163661 2767
+o babelforce-get-campaign-list babelforce manager 3184792 2372
+o babelforce-get-campaign-statistics babelforce manager 3202685 3229
+o babelforce-get-campaign-status babelforce manager 3205920 3307
+o babelforce-get-conference babelforce manager 2615200 62642
+o babelforce-get-conversation babelforce manager 2831164 2597
+o babelforce-get-conversation-session babelforce manager 2827396 1543
+o babelforce-get-dashboard babelforce manager 2840891 2245
+o babelforce-get-dialer-behaviour babelforce manager 3216746 2397
+o babelforce-get-dialer-info babelforce manager 2856656 856
+o babelforce-get-file babelforce manager 2959696 4319
+o babelforce-get-first-conversation-event babelforce manager 2773855 25442
+o babelforce-get-global-automation babelforce manager 2892546 6550
+o babelforce-get-integration babelforce manager 2994609 5293
+o babelforce-get-integration-provider-logo babelforce manager 3047564 2786
+o babelforce-get-integration-provider-template babelforce manager 3054719 762
+o babelforce-get-integration-template babelforce manager 3058496 1008
+o babelforce-get-integration-token babelforce manager 3028538 2007
+o babelforce-get-latest-conversation-event babelforce manager 2799303 25445
+o babelforce-get-lead-in-list babelforce manager 3284349 7245
+o babelforce-get-local-automation babelforce manager 1443990 5379
+o babelforce-get-me babelforce manager 3063750 830
+o babelforce-get-metric babelforce manager 3080166 10534
+o babelforce-get-metric-definition babelforce manager 3090706 9996
+o babelforce-get-outbound-list babelforce manager 3251740 2353
+o babelforce-get-phonebook-entry babelforce manager 3310208 2740
+o babelforce-get-prompt babelforce manager 3327245 6160
+o babelforce-get-prompt-uses babelforce manager 3344080 1295
+o babelforce-get-push-token babelforce manager 3345381 854
+o babelforce-get-queue babelforce manager 3373341 3564
+o babelforce-get-queue-selection babelforce manager 3489749 20862
+o babelforce-get-recording babelforce manager 3741384 8344
+o babelforce-get-recording-flag babelforce manager 3767372 8367
+o babelforce-get-routing babelforce manager 3812083 3608
+o babelforce-get-script babelforce task-automation 4208293 4273
+o babelforce-get-server-time babelforce manager 2854015 869
+o babelforce-get-service-number babelforce manager 3105229 2758
+o babelforce-get-settings-for-app-agent-status babelforce manager 3828522 1981
+o babelforce-get-settings-for-app-conversations babelforce manager 3833871 2483
+o babelforce-get-settings-for-app-customer-logging babelforce manager 3840654 1966
+o babelforce-get-settings-for-app-integrations babelforce manager 3845956 3959
+o babelforce-get-settings-for-audit-default babelforce manager 3856785 2207
+o babelforce-get-settings-for-retention-periods babelforce manager 3862781 2559
+o babelforce-get-settings-for-telephony-agent-inbound babelforce manager 3869750 2695
+o babelforce-get-settings-for-telephony-agent-outbound babelforce manager 3877079 2705
+o babelforce-get-settings-for-telephony-agent-recording babelforce manager 3884433 3637
+o babelforce-get-settings-for-telephony-agent-wrapup babelforce manager 3894356 4454
+o babelforce-get-settings-for-telephony-post-call babelforce manager 3906561 2114
+o babelforce-get-settings-for-ui-i18n babelforce manager 3912272 2201
+o babelforce-get-sms babelforce manager 3950907 4596
+o babelforce-get-task-schedule babelforce task-schedule 4331281 2133
+o babelforce-get-task-schedules babelforce task-schedule 4324172 3534
+o babelforce-get-trigger babelforce manager 3997702 6348
+o babelforce-get-trigger-uses babelforce manager 4035104 2335
+o babelforce-get-user babelforce manager 4060255 5118
+o babelforce-get-user-by-email babelforce manager 4044417 5160
+o babelforce-get-widget-settings babelforce manager 4065379 2651
+o babelforce-hangup-agent-call babelforce manager 966310 1106
+o babelforce-integrate-integration babelforce manager 3020767 5734
+o babelforce-integration-api-proxy-get babelforce manager 3033964 992
+o babelforce-integration-api-proxy-post babelforce manager 3034962 1408
+o babelforce-list babelforce task-automation 4188812 4726
+o babelforce-list-accounts babelforce user 4068036 3198
+o babelforce-list-action-params babelforce manager 765833 1622
+o babelforce-list-actions babelforce manager 762610 1445
+o babelforce-list-agent-groups babelforce manager 814976 3968
+o babelforce-list-agent-logs babelforce manager 967422 29449
+o babelforce-list-agent-presences babelforce manager 895049 1892
+o babelforce-list-agents-in-group babelforce manager 823875 17127
+o babelforce-list-all-agent-logs babelforce manager 866700 28343
+o babelforce-list-all-conversation-events babelforce manager 2686199 29500
+o babelforce-list-all-local-automations babelforce manager 2266793 7341
+o babelforce-list-all-settings babelforce manager 3824284 2104
+o babelforce-list-all-simple-reporting-calls babelforce manager 719293 21425
+o babelforce-list-application-actions babelforce manager 1420394 1827
+o babelforce-list-application-errors babelforce manager 1425388 1063
+o babelforce-list-applications babelforce manager 1002607 214835
+o babelforce-list-audit-logs babelforce manager 2254906 11881
+o babelforce-list-available-agent-statuses babelforce manager 916917 2453
+o babelforce-list-available-integrations babelforce manager 2982101 8385
+o babelforce-list-available-roles babelforce manager 4054824 1173
+o babelforce-list-babeldesk-widgets babelforce manager 2307385 9224
+o babelforce-list-babeldesks babelforce manager 2274140 8304
+o babelforce-list-backup-files babelforce manager 2932562 5616
+o babelforce-list-business-hour-ranges babelforce manager 2405307 5571
+o babelforce-list-business-hours babelforce manager 2344352 12884
+o babelforce-list-calendars babelforce manager 2432529 5140
+o babelforce-list-campaign-attempts babelforce manager 3153403 10252
+o babelforce-list-campaign-leads babelforce manager 3166434 9160
+o babelforce-list-campaign-processed-leads babelforce manager 3175600 9186
+o babelforce-list-campaigns babelforce manager 3127033 4940
+o babelforce-list-conferences babelforce manager 2543249 71945
+o babelforce-list-conversation-events babelforce manager 2718348 29005
+o babelforce-list-conversations babelforce manager 2677848 5136
+o babelforce-list-dashboard-users babelforce manager 2848548 2170
+o babelforce-list-dashboards babelforce manager 740724 5417
+o babelforce-list-dialer-behaviours babelforce manager 3209233 4077
+o babelforce-list-dialer-simple-reporting-calls babelforce manager 2478392 8403
+o babelforce-list-events babelforce manager 2858366 3639
+o babelforce-list-expressions babelforce manager 2917313 3224
+o babelforce-list-files babelforce manager 2923574 8982
+o babelforce-list-files-by-type babelforce manager 2940556 6042
+o babelforce-list-global-automations babelforce manager 2866718 8987
+o babelforce-list-global-queue-selections babelforce manager 3363688 9647
+o babelforce-list-inbound-simple-reporting-calls babelforce manager 2486801 8406
+o babelforce-list-integration-providers babelforce manager 2993511 1092
+o babelforce-list-integration-tokens babelforce manager 3026507 2025
+o babelforce-list-integration-type-actions babelforce manager 3055487 1379
+o babelforce-list-integrations babelforce manager 2965795 7314
+o babelforce-list-leads-in-list babelforce manager 3259642 10780
+o babelforce-list-live-logs babelforce manager 746147 4469
+o babelforce-list-local-automations babelforce manager 1427808 7601
+o babelforce-list-metric-ids babelforce manager 3076081 4079
+o babelforce-list-modules babelforce manager 1426457 1345
+o babelforce-list-outbound-attempts babelforce manager 3114948 12079
+o babelforce-list-outbound-leads babelforce manager 3225231 11254
+o babelforce-list-outbound-lists babelforce manager 3246184 2553
+o babelforce-list-outbound-simple-reporting-calls babelforce manager 2495213 8409
+o babelforce-list-phonebook-entrys babelforce manager 3299445 4463
+o babelforce-list-processed-outbound-leads babelforce manager 3236491 9687
+o babelforce-list-prompt-files babelforce manager 2946604 5616
+o babelforce-list-prompts babelforce manager 3318654 8585
+o babelforce-list-provider-session-variables babelforce manager 3050356 4357
+o babelforce-list-queue-selections babelforce manager 3400474 26680
+o babelforce-list-queue-triggers babelforce manager 3710242 7435
+o babelforce-list-queued-calls babelforce manager 3385311 12470
+o babelforce-list-queues babelforce manager 3346241 5436
+o babelforce-list-recording-files babelforce manager 2954065 5625
+o babelforce-list-recordings babelforce manager 3717683 11092
+o babelforce-list-routings babelforce manager 3800865 5539
+o babelforce-list-scripts babelforce task-automation 4200207 3332
+o babelforce-list-secret-keys babelforce task-automation 4172789 793
+o babelforce-list-secret-prefixes babelforce task-automation 4172187 596
+o babelforce-list-service-numbers babelforce manager 3100708 4515
+o babelforce-list-settings-in-scope babelforce manager 3918273 2409
+o babelforce-list-single-action-session-variables babelforce manager 767461 4082
+o babelforce-list-smss babelforce manager 3925351 6665
+o babelforce-list-tags babelforce manager 3960974 1024
+o babelforce-list-tags-by-category babelforce manager 3962004 1352
+o babelforce-list-timezones babelforce manager 2854890 1760
+o babelforce-list-trigger-conditions babelforce manager 4021647 3517
+o babelforce-list-trigger-expressions babelforce manager 3986659 1068
+o babelforce-list-trigger-operators babelforce manager 3987733 1062
+o babelforce-list-triggers babelforce manager 3964252 8760
+o babelforce-list-users babelforce manager 750622 6978
+o babelforce-logout-all-campaign-agents babelforce manager 3201541 1138
+o babelforce-manager-interrupt-on-task babelforce task-automation 4321138 1670
+o babelforce-open-conversation babelforce manager 2824754 2636
+o babelforce-patch-secrets babelforce task-automation 4174714 1139
+o babelforce-ping babelforce manager 3317810 838
+o babelforce-post-bulk-file-download babelforce manager 2939097 1453
+o babelforce-push-to-agent babelforce manager 914837 2074
+o babelforce-queue-callback babelforce manager 3382798 2507
+o babelforce-read-selection-configuration babelforce task-automation 4176989 1853
+o babelforce-refresh-integration-token babelforce manager 3031929 2029
+o babelforce-remove-agent-from-group babelforce manager 857817 2588
+o babelforce-remove-agent-from-queue-selection babelforce manager 3575275 26891
+o babelforce-remove-business-hour-range babelforce manager 2431146 1377
+o babelforce-remove-calendar-date babelforce manager 2477031 1355
+o babelforce-remove-dashboard-user babelforce manager 2852650 1359
+o babelforce-remove-group-from-queue-selection babelforce manager 3629315 26896
+o babelforce-remove-roles babelforce manager 4058123 2126
+o babelforce-remove-tag-from-queue-selection babelforce manager 3683354 26882
+o babelforce-report-sms babelforce manager 3938110 6676
+o babelforce-reset-password babelforce user 4071240 865
+o babelforce-reset-passwords babelforce manager 4053507 1311
+o babelforce-send-sms babelforce manager 3932022 6082
+o babelforce-session-get babelforce manager 713861 2361
+o babelforce-session-update babelforce manager 716228 3059
+o babelforce-set-campaign-list babelforce manager 3187170 5188
+o babelforce-set-campaign-list-by-id babelforce manager 3196838 4697
+o babelforce-set-queue-selections-priority babelforce manager 3463583 26160
+o babelforce-set-trigger-conditions babelforce manager 4025170 9928
+o babelforce-start-recording babelforce manager 3728781 9343
+o babelforce-submit-script babelforce task-automation 4203545 4742
+o babelforce-submit-task babelforce task-automation 4123111 41581
+o babelforce-submit-task-schedule babelforce task-schedule 4327712 3563
+o babelforce-submit-task-template babelforce task-automation 4218633 29157
+o babelforce-task babelforce task-automation 4252750 22189
+o babelforce-task-journal babelforce task-automation 4197314 2887
+o babelforce-task-usage babelforce task-automation 4247796 3624
+o babelforce-task-usage-types babelforce task-automation 4251426 1318
+o babelforce-tasks babelforce task-automation 4096153 26952
+o babelforce-test-calendar-date babelforce manager 2450205 1270
+o babelforce-test-inbound-sms babelforce manager 3944792 6109
+o babelforce-test-triggers babelforce manager 3988801 8895
+o babelforce-testing babelforce task-automation 4164698 7483
+o babelforce-toggle-recording-flag babelforce manager 3775745 8374
+o babelforce-unflag-recording babelforce manager 3792488 8371
+o babelforce-unset-campaign-list babelforce manager 3192364 4468
+o babelforce-update-agent babelforce manager 919376 22878
+o babelforce-update-agent-group babelforce manager 862727 3256
+o babelforce-update-agent-password babelforce manager 996877 1728
+o babelforce-update-agent-presence babelforce manager 901620 2878
+o babelforce-update-application babelforce manager 1660419 389843
+o babelforce-update-babeldesk babelforce manager 2297343 9317
+o babelforce-update-babeldesk-widget babelforce manager 2333251 10369
+o babelforce-update-business-hour babelforce manager 2393633 10933
+o babelforce-update-calendar babelforce manager 2454784 4594
+o babelforce-update-calendar-date babelforce manager 2471956 5069
+o babelforce-update-campaign babelforce manager 3142568 6361
+o babelforce-update-conversation babelforce manager 2833767 3426
+o babelforce-update-conversation-session babelforce manager 2828945 2213
+o babelforce-update-dashboard babelforce manager 2843142 3127
+o babelforce-update-dialer-behaviour babelforce manager 3219149 3651
+o babelforce-update-global-automation babelforce manager 2899102 10913
+o babelforce-update-integration babelforce manager 2999908 9088
+o babelforce-update-local-automation babelforce manager 1449375 8483
+o babelforce-update-outbound-lead babelforce manager 3291600 6905
+o babelforce-update-outbound-list babelforce manager 3254099 3156
+o babelforce-update-phonebook-entry babelforce manager 3312954 4132
+o babelforce-update-prompt babelforce manager 3333411 9974
+o babelforce-update-queue babelforce manager 3376911 5196
+o babelforce-update-queue-selection babelforce manager 3510617 36555
+o babelforce-update-recording babelforce manager 3749734 9260
+o babelforce-update-routing babelforce manager 3815697 5771
+o babelforce-update-script babelforce task-automation 4212572 4970
+o babelforce-update-selection-configuration babelforce task-automation 4183604 4749
+o babelforce-update-service-number babelforce manager 3107993 3181
+o babelforce-update-settings-for-app-agent-status babelforce manager 3830509 3356
+o babelforce-update-settings-for-app-conversations babelforce manager 3836360 4288
+o babelforce-update-settings-for-app-customer-logging babelforce manager 3842626 3324
+o babelforce-update-settings-for-app-integrations babelforce manager 3849921 6858
+o babelforce-update-settings-for-audit-default babelforce manager 3858998 3777
+o babelforce-update-settings-for-retention-periods babelforce manager 3865346 4398
+o babelforce-update-settings-for-telephony-agent-inbound babelforce manager 3872451 4622
+o babelforce-update-settings-for-telephony-agent-outbound babelforce manager 3879790 4637
+o babelforce-update-settings-for-telephony-agent-recording babelforce manager 3888076 6274
+o babelforce-update-settings-for-telephony-agent-wrapup babelforce manager 3898816 7739
+o babelforce-update-settings-for-telephony-post-call babelforce manager 3908681 3585
+o babelforce-update-settings-for-ui-i18n babelforce manager 3914479 3788
+o babelforce-update-task babelforce task-automation 4274945 46187
+o babelforce-update-trigger babelforce manager 4004056 10521
+o babelforce-user-me-get babelforce user 757606 3400
+o babelforce-write-log babelforce manager 3059510 2501
+o bitbucket-pull-request-approve bitbucket default 4366161 2730
+o bitbucket-pull-request-comment bitbucket default 4362338 3817
+o bitbucket-pull-request-create bitbucket default 4357118 5214
+o bitbucket-pull-request-get bitbucket default 4351900 5212
+o bitbucket-pull-request-list bitbucket default 4347001 4893
+o bitbucket-repository-get bitbucket default 4343318 3677
+o bitbucket-repository-list bitbucket default 4338036 5276
+o box-file-copy box default 4380329 2239
+o box-file-get box default 4375806 2130
+o box-folder-create box default 4377942 2381
+o box-folder-get box default 4371711 2095
+o box-folder-items-list box default 4373812 1988
+o box-user-me box default 4370604 1101
+o calendly-event-type-list calendly default 4386373 3622
+o calendly-invitee-list calendly default 4398024 4246
+o calendly-scheduled-event-get calendly default 4394831 3187
+o calendly-scheduled-event-list calendly default 4390001 4824
+o calendly-user-me calendly default 4384108 2259
+o clickup-list-task-list clickup default 4408781 5945
+o clickup-space-folder-list clickup default 4405770 3005
+o clickup-task-create clickup default 4417325 4025
+o clickup-task-get clickup default 4414732 2587
+o clickup-task-update clickup default 4421356 3801
+o clickup-team-list clickup default 4403938 1826
+o cloudflare-cache-purge cloudflare default 4441363 2558
+o cloudflare-dns-record-create cloudflare default 4435273 3853
+o cloudflare-dns-record-delete cloudflare default 4439132 2225
+o cloudflare-dns-record-list cloudflare default 4431124 4143
+o cloudflare-zone-list cloudflare default 4427618 3500
+o confluence-comment-add confluence default 4471466 4110
+o confluence-page-create confluence default 4466401 5059
+o confluence-page-get confluence default 4460727 5668
+o confluence-space-get confluence default 4451605 3045
+o confluence-space-list confluence default 4446942 4657
+o confluence-space-pages confluence default 4454656 6065
+o contentful-asset-get contentful delivery 4485253 1935
+o contentful-entries-list contentful delivery 4482696 2551
+o contentful-entry-create contentful management 4487194 2947
+o contentful-entry-get contentful delivery 4480731 1959
+o contentful-entry-publish contentful management 4490147 2554
+o datadog-incident-get datadog default 4502595 754
+o datadog-incident-list datadog default 4502121 468
+o datadog-monitor-get datadog default 4499027 3088
+o datadog-monitor-list datadog default 4495924 3097
+o discord-channel-messages discord default 4521133 6033
+o discord-current-user discord default 4505976 3107
+o discord-guild-channels discord default 4517093 4034
+o discord-guild-get discord default 4511662 5425
+o discord-guild-list discord default 4509089 2567
+o discord-message-create discord default 4527172 5674
+o docusign-envelope-create-from-template docusign default 4546645 4268
+o docusign-envelope-get docusign default 4540766 2135
+o docusign-envelope-list docusign default 4537570 3190
+o docusign-envelope-recipients-get docusign default 4542907 3732
+o docusign-envelope-void docusign default 4550919 2214
+o docusign-verify docusign default 4535730 1834
+o dropbox-folder-create dropbox default 4564041 2078
+o dropbox-folder-list dropbox default 4556561 2308
+o dropbox-metadata-get dropbox default 4558875 3041
+o dropbox-search dropbox default 4561922 2113
+o dropbox-temporary-link-get dropbox default 4566125 1908
+o dropbox-user-me dropbox default 4554889 1666
+o figma-file-comments-list figma default 4581288 3124
+o figma-file-get figma default 4570952 3223
+o figma-file-nodes-get figma default 4574181 2567
+o figma-image-render-get figma default 4576754 2238
+o figma-project-files-list figma default 4578998 2284
+o figma-user-me figma default 4569644 1302
+o fly-machine-create fly machines 4591280 2069
+o fly-machine-delete fly machines 4596962 1271
+o fly-machine-events-list fly machines 4589541 1733
+o fly-machine-get fly machines 4587758 1777
+o fly-machine-restart fly machines 4595748 1208
+o fly-machine-start fly machines 4593355 1183
+o fly-machine-stop fly machines 4594544 1198
+o fly-machines-list fly machines 4586337 1415
+o fly-regions-list fly machines 4585406 925
+o freshdesk-contact-create freshdesk default 4641495 3623
+o freshdesk-contact-get freshdesk default 4638107 3382
+o freshdesk-contact-list freshdesk default 4633299 4802
+o freshdesk-test freshdesk default 4599519 1623
+o freshdesk-ticket-create freshdesk default 4610546 9565
+o freshdesk-ticket-get freshdesk default 4606046 4494
+o freshdesk-ticket-list freshdesk default 4601148 4892
+o freshdesk-ticket-note-add freshdesk default 4628852 4441
+o freshdesk-ticket-update freshdesk default 4620117 8729
+o front-conversation-get front default 4651497 3092
+o front-conversation-list front default 4648237 3254
+o front-conversation-message-list front default 4654595 4890
+o front-conversation-reply front default 4659491 2586
+o front-conversation-tag-add front default 4662083 2012
+o front-verify front default 4646662 1569
+o github-commit-list github default 4860631 17298
+o github-issue-comment-add github default 4685791 3785
+o github-issue-create github default 4680828 4957
+o github-issue-get github default 4671486 4802
+o github-issue-list github default 4689582 93171
+o github-org-list github default 4890615 3324
+o github-org-repo-list github default 4893945 23752
+o github-pull-files-list github default 4782759 4201
+o github-pull-get github default 4676294 4528
+o github-repo-get github default 4667743 3737
+o github-user-get github default 4877935 12674
+o github-user-repo-list github default 4917703 24890
+o github-workflow-run-list github default 4786966 73659
+o gitlab-branch-list gitlab default 4978154 3200
+o gitlab-group-list gitlab default 4949059 3552
+o gitlab-issue-create gitlab default 4965861 3963
+o gitlab-issue-get gitlab default 4962361 3494
+o gitlab-issue-list gitlab default 4957567 4788
+o gitlab-merge-request-list gitlab default 4969830 4807
+o gitlab-pipeline-get gitlab default 4974643 3505
+o gitlab-project-list gitlab default 4952617 4944
+o gitlab-user-get gitlab default 4947669 1384
+o google-calendar-calendar-get google calendar 5003452 2674
+o google-calendar-event-get google calendar 4992474 5478
+o google-calendar-event-insert google calendar 4997958 5488
+o google-drive-file-get google drive 5006132 1259
+o google-drive-file-update google drive 5007397 1702
+o google-gmail-labels-list google gmail 4989373 3095
+o google-gmail-message-get google gmail 4982695 3877
+o google-gmail-message-send google gmail 4986578 2789
+o hubspot-company-get hubspot default 5019372 2643
+o hubspot-contact-create hubspot default 5014303 2903
+o hubspot-contact-get hubspot default 5010799 3498
+o hubspot-contact-update hubspot default 5017212 2154
+o hubspot-deal-get hubspot default 5022021 2720
+o intercom-contact-create intercom default 5032050 4089
+o intercom-contact-get intercom default 5026941 5103
+o intercom-contact-note-create intercom default 5046523 3087
+o intercom-conversation-get intercom default 5036145 5083
+o intercom-conversation-reply intercom default 5041234 5283
+o jira-issue-comment-add jira default 5062199 3232
+o jira-issue-comment-list jira default 5058255 3938
+o jira-issue-create jira default 5054855 3394
+o jira-issue-get jira default 5051961 2888
+o jira-issue-transition jira default 5069168 1902
+o jira-issue-transitions-list jira default 5065437 3725
+o klaviyo-account-list klaviyo default 5073319 4037
+o klaviyo-event-create klaviyo default 5097688 4966
+o klaviyo-list-list klaviyo default 5094584 3098
+o klaviyo-profile-create klaviyo default 5087433 7145
+o klaviyo-profile-get klaviyo default 5082918 4509
+o klaviyo-profile-list klaviyo default 5077362 5550
+o launchdarkly-environment-list launchdarkly default 5107260 3339
+o launchdarkly-flag-get launchdarkly default 5114963 3057
+o launchdarkly-flag-list launchdarkly default 5110605 4352
+o launchdarkly-flag-toggle launchdarkly default 5118026 4389
+o launchdarkly-project-list launchdarkly default 5104453 2801
+o mailchimp-audience-get mailchimp default 5130430 3209
+o mailchimp-audience-list mailchimp default 5126490 3934
+o mailchimp-audience-member-get mailchimp default 5139705 5133
+o mailchimp-audience-member-list mailchimp default 5133645 6054
+o mailchimp-audience-member-upsert mailchimp default 5144844 7332
+o mailchimp-campaign-list mailchimp default 5152182 4181
+o mailchimp-ping mailchimp default 5125282 1202
+o microsoft_graph-calendar-calendar-get microsoft_graph calendar 5178448 2830
+o microsoft_graph-calendar-category-list microsoft_graph calendar 6063854 159060
+o microsoft_graph-calendar-event-create microsoft_graph calendar 5172761 5681
+o microsoft_graph-calendar-event-get microsoft_graph calendar 5167206 5549
+o microsoft_graph-calendar-language-list microsoft_graph calendar 6225782 3155
+o microsoft_graph-calendar-time-zone-list microsoft_graph calendar 6222920 2856
+o microsoft_graph-files-item-get microsoft_graph files 5181284 4470
+o microsoft_graph-files-item-update microsoft_graph files 5185760 3682
+o microsoft_graph-mail-folder-list microsoft_graph mail 5164904 2296
+o microsoft_graph-mail-message-get microsoft_graph mail 5158434 4608
+o microsoft_graph-mail-message-list microsoft_graph mail 5189448 874400
+o microsoft_graph-mail-message-reply microsoft_graph mail 5163048 1850
+o miro-board-item-get miro default 6242423 6917
+o miro-board-item-list miro default 6233438 8979
+o miro-board-list miro default 6231399 2033
+o miro-sticky-note-create miro default 6249346 2748
+o miro-sticky-note-delete miro default 6255391 1082
+o miro-sticky-note-update miro default 6252100 3285
+o newrelic-alert-policy-list newrelic default 6266915 2233
+o newrelic-alert-violation-list newrelic default 6269154 3396
+o newrelic-application-get newrelic default 6263623 3286
+o newrelic-application-list newrelic default 6259769 3848
+o newrelic-deployment-create newrelic default 6275372 4766
+o newrelic-deployment-list newrelic default 6272556 2810
+o notion-database-query notion default 6285670 2346
+o notion-page-create notion default 6290136 3563
+o notion-page-get notion default 6283284 2380
+o notion-search notion default 6288022 2108
+o notion-user-me notion default 6282019 1259
+o okta-group-list okta default 6303285 2990
+o okta-user-deactivate okta default 6309155 1864
+o okta-user-get okta default 6300402 2877
+o okta-user-group-list okta default 6306281 2868
+o okta-user-list okta default 6296309 4087
+o openai-batch-list openai default 7975402 12180
+o openai-chat-completion openai default 6314978 4122
+o openai-embeddings-create openai default 6319106 3204
+o openai-file-list openai default 7970820 4576
+o openai-model-get openai default 6313582 1390
+o openai-models-list openai default 6311996 1580
+o openai-response-get openai default 6322316 1211990
+o openai-response-input-item-list openai default 7534312 436502
+o openrouter-chat-completion openrouter default 7991308 4740
+o openrouter-credits-get openrouter default 7996054 1218
+o openrouter-model-endpoints-list openrouter default 7989575 1727
+o openrouter-models-list openrouter default 7988543 1026
+o pagerduty-incident-acknowledge pagerduty default 8020859 3960
+o pagerduty-incident-get pagerduty default 8006577 4839
+o pagerduty-incident-list pagerduty default 7999119 7452
+o pagerduty-incident-resolve pagerduty default 8024825 3723
+o pagerduty-oncall-list pagerduty default 8016773 4080
+o pagerduty-service-list pagerduty default 8011422 5345
+o postmark-bounce-get postmark server 8041557 2394
+o postmark-bounce-list postmark server 8037621 3930
+o postmark-deliverystats-get postmark server 8035835 1780
+o postmark-email-send postmark server 8030326 5503
+o resend-domain-get resend default 8054960 4308
+o resend-domain-list resend default 8052343 2611
+o resend-email-get resend default 8048328 4009
+o resend-email-send resend default 8045255 3067
+o salesforce-record-create salesforce default 8066014 2336
+o salesforce-record-get salesforce default 8063586 2422
+o salesforce-record-update salesforce default 8068356 1944
+o salesforce-sobject-describe salesforce default 8070306 3512
+o salesforce-whoami salesforce default 8061412 2168
+o sendgrid-email-validate sendgrid default 8082678 3088
+o sendgrid-suppression-bounce-list sendgrid default 8080235 2437
+o sendgrid-template-get sendgrid default 8078621 1608
+o sendgrid-template-list sendgrid default 8075420 3195
+o sentry-issue-event-latest sentry default 8102777 5742
+o sentry-issue-get sentry default 8086795 5852
+o sentry-issue-update sentry default 8092653 4997
+o sentry-project-get sentry default 8097656 5115
+o shopify-customer-get shopify default 8124249 4178
+o shopify-inventory-level-list shopify default 8128433 2499
+o shopify-order-get shopify default 8110663 5480
+o shopify-product-get shopify default 8116149 3918
+o shopify-product-update shopify default 8120073 4170
+o slack-chat-post-message slack default 8137438 3283
+o slack-conversations-history slack default 8140727 3794
+o slack-reactions-add slack default 8146920 2572
+o slack-users-info slack default 8144527 2387
+o statuspage-component-list statuspage default 8169793 3324
+o statuspage-incident-create statuspage default 8159597 5106
+o statuspage-incident-get statuspage default 8156142 3449
+o statuspage-incident-list statuspage default 8151849 4287
+o statuspage-incident-update statuspage default 8164709 5078
+o stripe-balance-get stripe default 8180802 1723
+o stripe-billing-meter-list stripe default 8223481 8385
+o stripe-charge-get stripe default 8184497 2701
+o stripe-charge-refund-create stripe default 8197957 3320
+o stripe-country-spec-list stripe default 8201283 8402
+o stripe-customer-get stripe default 8182531 1960
+o stripe-event-list stripe default 8209691 8727
+o stripe-exchange-rate-list stripe default 8218424 5051
+o stripe-payment-intent-cancel stripe default 8195239 2712
+o stripe-payment-intent-capture stripe default 8191965 3268
+o stripe-payment-intent-get stripe default 8187204 2757
+o stripe-refund-get stripe default 8189967 1992
+o supabase-auth-settings supabase default 8240027 2186
+o supabase-rows-list supabase default 8237869 2152
+o supabase-schema-describe supabase default 8234911 2952
+o trello-board-get trello default 8248163 2918
+o trello-board-list trello default 8245114 3043
+o trello-board-lists trello default 8251087 835
+o trello-card-archive trello default 8260014 3439
+o trello-card-create trello default 8255892 4116
+o trello-list-cards trello default 8251928 3958
+o twilio-account-get twilio default 8272184 2234
+o twilio-call-get twilio default 8291775 3662
+o twilio-call-list twilio default 8284902 6867
+o twilio-conference-list twilio default 8320062 6884
+o twilio-message-get twilio default 8280892 4004
+o twilio-message-list twilio default 8274424 6462
+o twilio-recording-get twilio default 8305201 7524
+o twilio-recording-list twilio default 8295443 9752
+o twilio-usage-record-list twilio default 8312731 7325
+o typeform-form-get typeform default 8334463 4125
+o typeform-form-list typeform default 8330127 4330
+o typeform-response-delete typeform default 8347788 1840
+o typeform-response-list typeform default 8338594 9188
+o typeform-user-me typeform default 8328664 1457
+o vercel-deployment-cancel vercel default 8361036 1740
+o vercel-deployment-get vercel default 8358946 2084
+o vercel-deployments-list vercel default 8354555 4385
+o vercel-project-get vercel default 8352442 2107
+o vercel-projects-list vercel default 8351666 770
+o webflow-collection-get webflow default 8368795 3140
+o webflow-collection-item-get webflow default 8374969 2434
+o webflow-collection-item-list webflow default 8371941 3022
+o webflow-collection-list webflow default 8366636 2153
+o webflow-site-list webflow default 8364609 2021
+o webflow-site-publish webflow default 8377409 1211
+o zendesk-custom-object-list zendesk default 8501595 5131
+o zendesk-custom-status-list zendesk default 8701373 4802
+o zendesk-group-list zendesk default 8675048 3160
+o zendesk-help-center-article-create zendesk help-center 8994767 8560
+o zendesk-help-center-article-get zendesk help-center 8975591 7128
+o zendesk-help-center-article-incremental-list zendesk help-center 8986973 7788
+o zendesk-help-center-article-list zendesk help-center 8967821 7764
+o zendesk-help-center-category-list zendesk help-center 8960299 3554
+o zendesk-help-center-section-list zendesk help-center 8963859 3956
+o zendesk-help-center-translation-list zendesk help-center 8982725 4242
+o zendesk-incremental-organization-list zendesk default 8489034 7728
+o zendesk-incremental-ticket-event-list zendesk default 8496768 4821
+o zendesk-incremental-ticket-list zendesk default 8389978 73918
+o zendesk-incremental-user-list zendesk default 8463902 25126
+o zendesk-messaging-conversation-create zendesk messaging 9003333 9573
+o zendesk-messaging-conversation-get zendesk messaging 9012912 9695
+o zendesk-messaging-conversation-update zendesk messaging 9022613 10280
+o zendesk-messaging-message-create zendesk messaging 9039191 275338
+o zendesk-messaging-message-list zendesk messaging 9314535 157342
+o zendesk-messaging-participant-list zendesk messaging 9032899 6286
+o zendesk-messaging-user-create zendesk messaging 9471883 9358
+o zendesk-messaging-user-get zendesk messaging 9481247 8595
+o zendesk-messaging-user-update zendesk messaging 9489848 9052
+o zendesk-organization-show zendesk default 8669769 5273
+o zendesk-test zendesk default 8706181 22496
+o zendesk-ticket-audit-list zendesk default 8384928 5044
+o zendesk-ticket-comment-list zendesk default 8801071 18853
+o zendesk-ticket-field-list zendesk default 8678214 14424
+o zendesk-ticket-form-list zendesk default 8692644 8723
+o zendesk-ticket-recent-list zendesk default 8506732 70893
+o zendesk-ticket-search zendesk default 8728683 4340
+o zendesk-ticket-show zendesk default 8733029 68036
+o zendesk-ticket-update zendesk default 8819930 140363
+o zendesk-user-show zendesk default 8648961 20802
+o zendesk-view-ticket-list zendesk default 8577631 71324
+o zoom-meeting-delete zoom default 9500762 1310
+o zoom-user-get zoom default 9502078 4953
+payload 9507334
 {
   "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
   "auth": [
@@ -1904,6 +1904,94 @@ payload 9498465
         "name": "x-api-key"
       },
       "subject": "unstated"
+    },
+    {
+      "description": "Anthropic Console OAuth2 access token (sk-ant-oat01-), obtained on behalf of a signed-in user and sent as a bearer. Workspace-scoped: enough for the model catalogue, and deliberately not enough for the Admin API",
+      "name": "anthropic.console_oauth",
+      "oauth2": {
+        "authorize_path": "/oauth/authorize",
+        "endpoint": "login",
+        "grants": [
+          "authorization_code",
+          "refresh_token"
+        ],
+        "public_client": true,
+        "token_path": "/v1/oauth/token"
+      },
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "user",
+      "token_endpoint_quirks": [
+        {
+          "attribution": "Anthropic's own CLI docs (https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication) describe the flow as \"a browser-based OAuth flow against the Claude Console\" and publish no URLs. The URLs come from third-party implementations of the same flow — github.com/querymt/anthropic-auth records the Console authorize endpoint as `console.anthropic.com/oauth/authorize` (pre-rename) alongside the subscription flow's `claude.ai/oauth/authorize` — and from the live-host check recorded in NousResearch/hermes-agent#49821, where the console token host 404s and the platform host answers. Not confirmed against a vendor specification, because none is published.",
+          "behaviour": "Anthropic documents that this flow exists and what it is for, but publishes no authorize or token URL for it on any page under platform.claude.com/docs or code.claude.com/docs. Both values above are therefore measured rather than quoted. The token endpoint additionally MOVED: `console.anthropic.com/v1/oauth/token` now returns 404, and the live endpoint is `platform.claude.com/v1/oauth/token`, following the console.anthropic.com to platform.claude.com rename. A host that hard-codes the legacy console host from an older integration will 404 on fresh logins while token *refresh* keeps working, which is how the migration usually presents.",
+          "grant": "authorization_code",
+          "measured": "2026-08-12"
+        }
+      ]
+    },
+    {
+      "description": "Anthropic Console OAuth2 access token carrying the org:admin scope, sent as a bearer. Required for the Admin API operations; issued only to an organization member holding the admin, owner or primary-owner role",
+      "name": "anthropic.console_oauth_admin",
+      "oauth2": {
+        "authorize_path": "/oauth/authorize",
+        "endpoint": "login",
+        "grants": [
+          "authorization_code",
+          "refresh_token"
+        ],
+        "public_client": true,
+        "scopes": [
+          "org:admin"
+        ],
+        "token_path": "/v1/oauth/token"
+      },
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "user",
+      "token_endpoint_quirks": [
+        {
+          "attribution": "See `anthropic.console_oauth`'s measurement for the full provenance: Anthropic's CLI docs describe the flow without URLs; the values come from third-party implementations of the same flow and a live-host check.",
+          "behaviour": "Same measured endpoints as `anthropic.console_oauth` — Anthropic publishes no authorize or token URL for the Console flow, and the token host moved from console.anthropic.com to platform.claude.com. Recorded again here rather than cross-referenced because a quirk is read per credential.",
+          "grant": "authorization_code",
+          "measured": "2026-08-12"
+        }
+      ]
+    },
+    {
+      "description": "Anthropic Claude Pro/Max subscription OAuth2 access token (sk-ant-oat01-), acquired on behalf of a signed-in consumer-plan user and sent as a bearer. Authorizes inference against Anthropic's consumer surfaces, which this catalogue does not model — it is declared so a host can compose the two-host acquisition, not to authenticate an operation here. Anthropic restricts this flow to Claude Code and Claude.ai; using the token elsewhere violates the Consumer Terms (owner-accepted 2026-08-12)",
+      "name": "anthropic.subscription_oauth",
+      "oauth2": {
+        "authorize_path": "/oauth/authorize",
+        "endpoint": "subscription-authorize",
+        "grants": [
+          "authorization_code",
+          "refresh_token"
+        ],
+        "public_client": true,
+        "scopes": [
+          "user:profile",
+          "user:inference",
+          "user:sessions:claude_code",
+          "user:mcp_servers"
+        ],
+        "token_endpoint": "login",
+        "token_path": "/v1/oauth/token"
+      },
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "user",
+      "token_endpoint_quirks": [
+        {
+          "attribution": "The endpoints, the shared public client id and the `user:*` scopes come from third-party implementations of the Claude Code flow — github.com/querymt/anthropic-auth (\"Max Mode\": authorize `claude.ai/oauth/authorize`) and flopsstuff.github.io/coqu/claude-oauth (token `platform.claude.com/v1/oauth/token`, client id `9d1c250a-e61b-44d9-88ed-5944d1962f5e`, scopes `user:profile user:inference user:sessions:claude_code user:mcp_servers`, PKCE enforced). The console→platform token-host move is the live-host check in NousResearch/hermes-agent#49821. Anthropic's own docs describe consumer OAuth without publishing endpoints, so none of this is confirmed against a vendor specification.",
+          "behaviour": "Authorize is `https://claude.ai/oauth/authorize` and the token exchange is `https://platform.claude.com/v1/oauth/token` — two different origins, PKCE S256 mandatory (omitting `code_verifier` fails the exchange). The token host is `platform.claude.com`, NOT the legacy `console.anthropic.com`, which now 404s: the console.anthropic.com to platform.claude.com rename moved it, and an older integration that hard-codes the console host will 404 on fresh logins while refresh keeps working. Anthropic publishes no URL for this flow; both values are measured.",
+          "grant": "authorization_code",
+          "measured": "2026-08-12"
+        }
+      ]
     }
   ],
   "authority": "com.anthropic.api",
@@ -1933,12 +2021,42 @@ payload 9498465
       "required": true,
       "secret": true,
       "service": "admin"
+    },
+    {
+      "approval": "none",
+      "binds": "oauth.client_id",
+      "docs_url": "https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication",
+      "format": "text",
+      "help": "The OAuth client ID this deployment authorizes as. Anthropic does not currently operate a public client-registration program for third-party applications, so a deployment supplies the id it has been issued; the value is public, and PKCE rather than a client secret protects the exchange",
+      "label": "Anthropic OAuth client ID",
+      "level": "operator",
+      "name": "oauth_client_id",
+      "required": false,
+      "secret": false,
+      "service": "login"
+    },
+    {
+      "approval": "none",
+      "binds": "oauth.redirect_uri",
+      "docs_url": "https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication",
+      "example": "https://exchange.internal/api/oauth/callback",
+      "format": "url",
+      "help": "The callback address this deployment serves, registered against the client ID above. Anthropic's own clients use a loopback callback and fall back to displaying the code for manual paste when no loopback is reachable",
+      "label": "Anthropic OAuth callback URL",
+      "level": "operator",
+      "name": "oauth_redirect_uri",
+      "required": false,
+      "secret": false,
+      "service": "login"
     }
   ],
   "connector": "anthropic",
   "default_auth": [
     [
       "anthropic.api_key"
+    ],
+    [
+      "anthropic.console_oauth"
     ]
   ],
   "description": "Anthropic platform: the live model catalogue, and organization info, members, workspaces, workspace members, API keys and outstanding invites from the Admin API — all read-only",
@@ -1948,6 +2066,9 @@ payload 9498465
       "auth": [
         [
           "anthropic.api_key"
+        ],
+        [
+          "anthropic.console_oauth"
         ]
       ],
       "description": "List the models available to this API key, most recently released first. Unpaginated — this connector cannot request a further page",
@@ -2022,6 +2143,9 @@ payload 9498465
       "auth": [
         [
           "anthropic.api_key"
+        ],
+        [
+          "anthropic.console_oauth"
         ]
       ],
       "description": "Retrieve one model by id, or resolve an alias to the model id it currently points at",
@@ -2097,6 +2221,9 @@ payload 9498465
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "Get the organization this Admin API key belongs to. Takes no parameters; useful for confirming which organization a key resolves to",
@@ -2144,6 +2271,9 @@ payload 9498465
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "List the people in this organization, with each member's name, email address, organization role and the date they joined. Returns personal data about real individuals. Unpaginated — this connector cannot request a further page, so on an organization larger than one page this is a sample and not a roster",
@@ -2229,6 +2359,9 @@ payload 9498465
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "Retrieve one organization member by user id, returning their name, email address, organization role and join date. Returns personal data about a real individual",
@@ -2302,6 +2435,9 @@ payload 9498465
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "List the organization's workspaces. Unpaginated and excludes archived workspaces by default — this connector cannot request a further page or ask for archived ones",
@@ -2376,6 +2512,9 @@ payload 9498465
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "Retrieve one workspace by id, including its name, creation date, whether it is archived, and its data-residency configuration. Unlike anthropic-workspaces-list this reaches an archived workspace, since the id is given rather than filtered for",
@@ -2477,6 +2616,9 @@ payload 9498465
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "List who belongs to one workspace and the role each holds in it. Returns the user ids of real individuals; resolve one to a name and email with anthropic-organization-member-get. Unpaginated — this connector cannot request a further page, so on a workspace larger than one page this is a sample and not a roster",
@@ -2565,6 +2707,9 @@ payload 9498465
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "Retrieve one person's membership of one workspace, and the role they hold in it. This is the direct answer to whether a given user is in a given workspace; it returns the user id of a real individual",
@@ -2639,6 +2784,9 @@ payload 9498465
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "List the organization's API keys, with each key's name, status and a redacted hint — never the key itself. Unpaginated and unfiltered",
@@ -2717,6 +2865,9 @@ payload 9498465
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "List the organization's invites, with the email address invited, the role offered, and whether the invite is still pending. Returns personal data — an email address for a real person. Unpaginated and unfiltered by status, so a `pending` invite must be selected from the returned entries rather than asked for",
@@ -2842,6 +2993,20 @@ payload 9498465
       "tags": [
         "ai"
       ]
+    },
+    {
+      "api_version": "v1",
+      "base_url": "https://platform.claude.com",
+      "description": "Anthropic's Console OAuth2 authorize and token endpoints on platform.claude.com; also the subscription flow's token host, which redeems here while authorizing on claude.ai.",
+      "gid": "com.anthropic.api/login:v1",
+      "name": "login"
+    },
+    {
+      "api_version": "v1",
+      "base_url": "https://claude.ai",
+      "description": "Anthropic's Claude Pro/Max subscription OAuth2 authorize endpoint, served by claude.ai. The matching token exchange is on the `login` service (platform.claude.com).",
+      "gid": "com.anthropic.api/subscription-authorize:v1",
+      "name": "subscription-authorize"
     }
   ],
   "vendor": "Anthropic",
