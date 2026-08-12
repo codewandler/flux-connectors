@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-08-12
+
 ### New
 
 - **Every connector is now also published as one machine-readable document.** For each provider

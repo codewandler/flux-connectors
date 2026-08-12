@@ -36,7 +36,7 @@
     ]
   ],
   "description": "Front shared inbox: read and reply to conversations, and tag them",
-  "generator": "flux-connectors 0.21.0",
+  "generator": "flux-connectors 0.22.0",
   "operations": [
     {
       "auth": [

@@ -7,9 +7,9 @@ descriptions into [Flux-Lang](https://github.com/codewandler/flux).
 
 ```toml
 [dependencies]
-codewandler-connector-secrets = "0.21"
+codewandler-connector-secrets = "0.22"
 # The Vault store and its HTTP transport are opt-in:
-# codewandler-connector-secrets = { version = "0.21", features = ["vault"] }
+# codewandler-connector-secrets = { version = "0.22", features = ["vault"] }
 ```
 
 ## What it is

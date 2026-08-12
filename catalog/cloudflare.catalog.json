@@ -50,7 +50,7 @@
     ]
   ],
   "description": "Cloudflare zones and DNS: list zones, list and manage DNS records for a zone, and purge a zone's cache",
-  "generator": "flux-connectors 0.21.0",
+  "generator": "flux-connectors 0.22.0",
   "operations": [
     {
       "auth": [

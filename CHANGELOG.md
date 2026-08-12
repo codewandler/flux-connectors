@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-08-12
+
 ### Added
 
 - **Every provider now compiles to a canonical catalog document** (C-536, the first delivery of

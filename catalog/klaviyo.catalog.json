@@ -38,7 +38,7 @@
     ]
   ],
   "description": "Klaviyo marketing platform: read the account a key belongs to, read and create customer profiles, read lists, and post an event that can trigger a flow. Every request carries a dated API revision the vendor requires",
-  "generator": "flux-connectors 0.21.0",
+  "generator": "flux-connectors 0.22.0",
   "operations": [
     {
       "auth": [

@@ -116,7 +116,7 @@
     ]
   ],
   "description": "Contentful headless CMS: read published content from the Content Delivery API, and create and publish entries through the Content Management API — two different hosts and two different tokens for one vendor",
-  "generator": "flux-connectors 0.21.0",
+  "generator": "flux-connectors 0.22.0",
   "operations": [
     {
       "auth": [

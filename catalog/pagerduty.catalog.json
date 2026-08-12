@@ -38,7 +38,7 @@
     ]
   ],
   "description": "PagerDuty incident response: read incidents, services and who is on call, and acknowledge or resolve an incident",
-  "generator": "flux-connectors 0.21.0",
+  "generator": "flux-connectors 0.22.0",
   "operations": [
     {
       "auth": [
