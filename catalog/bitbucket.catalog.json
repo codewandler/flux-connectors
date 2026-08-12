@@ -50,7 +50,7 @@
     ]
   ],
   "description": "Bitbucket Cloud repositories and pull requests for one pinned workspace: list the workspace's repositories, read one, list and read its open pull requests, open a pull request, comment on one, and approve one",
-  "generator": "flux-connectors 0.24.0",
+  "generator": "flux-connectors 0.25.0",
   "operations": [
     {
       "auth": [

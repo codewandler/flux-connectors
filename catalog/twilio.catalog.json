@@ -256,7 +256,7 @@
       "service": "default"
     }
   ],
-  "generator": "flux-connectors 0.24.0",
+  "generator": "flux-connectors 0.25.0",
   "operations": [
     {
       "auth": [

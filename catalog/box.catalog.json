@@ -36,7 +36,7 @@
     ]
   ],
   "description": "Box: browse folder contents, read file and folder metadata, create folders, and copy files",
-  "generator": "flux-connectors 0.24.0",
+  "generator": "flux-connectors 0.25.0",
   "operations": [
     {
       "auth": [

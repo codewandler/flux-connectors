@@ -21,7 +21,7 @@
     ]
   ],
   "description": "Asana work management: read tasks and projects, create and update tasks, comment on a task",
-  "generator": "flux-connectors 0.24.0",
+  "generator": "flux-connectors 0.25.0",
   "operations": [
     {
       "auth": [

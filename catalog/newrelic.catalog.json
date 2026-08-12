@@ -61,7 +61,7 @@
     ]
   ],
   "description": "New Relic APM and alerting over the REST v2 API: list the applications an account is monitoring and read one in detail, read the account's alert policies and its current violations, and list or record deployment markers against an application. The account's region host is configured once, not chosen per call",
-  "generator": "flux-connectors 0.24.0",
+  "generator": "flux-connectors 0.25.0",
   "operations": [
     {
       "auth": [

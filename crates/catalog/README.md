@@ -7,7 +7,7 @@ descriptions into [Flux-Lang](https://github.com/codewandler/flux).
 
 ```toml
 [dependencies]
-codewandler-connector-catalog = "0.24"
+codewandler-connector-catalog = "0.25"
 ```
 
 The library is `catalog`, so you write `catalog::operation(…)`.

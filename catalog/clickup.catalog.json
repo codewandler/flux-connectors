@@ -37,7 +37,7 @@
     ]
   ],
   "description": "ClickUp: list workspaces and a space's folders, and read, list, create and update tasks in a list",
-  "generator": "flux-connectors 0.24.0",
+  "generator": "flux-connectors 0.25.0",
   "operations": [
     {
       "auth": [

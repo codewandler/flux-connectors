@@ -36,7 +36,7 @@
     ]
   ],
   "description": "Typeform: read the authenticated account, forms and their responses, and delete responses",
-  "generator": "flux-connectors 0.24.0",
+  "generator": "flux-connectors 0.25.0",
   "operations": [
     {
       "auth": [

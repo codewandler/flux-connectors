@@ -36,7 +36,7 @@
     ]
   ],
   "description": "Microsoft Graph: read and reply to Outlook mail, inspect Outlook settings, read and create Calendar events, and read and rename OneDrive files",
-  "generator": "flux-connectors 0.24.0",
+  "generator": "flux-connectors 0.25.0",
   "operations": [
     {
       "auth": [

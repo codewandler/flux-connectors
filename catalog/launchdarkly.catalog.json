@@ -37,7 +37,7 @@
     ]
   ],
   "description": "LaunchDarkly feature management: read projects, environments and feature flags, and toggle a flag on or off in one environment",
-  "generator": "flux-connectors 0.24.0",
+  "generator": "flux-connectors 0.25.0",
   "operations": [
     {
       "auth": [

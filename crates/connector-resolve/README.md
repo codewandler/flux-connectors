@@ -11,7 +11,7 @@ back the result as data.
 
 ```toml
 [dependencies]
-codewandler-connector-resolve = "0.24"
+codewandler-connector-resolve = "0.25"
 ```
 
 The library name is `connector_resolve`:

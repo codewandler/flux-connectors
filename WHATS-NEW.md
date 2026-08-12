@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.25.0] — 2026-08-13
+
 ### New
 
 - **A host can now build a connector request entirely from data, without the Flux engine.** The

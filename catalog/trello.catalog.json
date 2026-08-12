@@ -63,7 +63,7 @@
     ]
   ],
   "description": "Trello boards and cards: list the boards a token can see, read a board and its lists, read a list's cards, create a card, and archive one. Authenticates every request with an API key and a token together, both in the query string",
-  "generator": "flux-connectors 0.24.0",
+  "generator": "flux-connectors 0.25.0",
   "operations": [
     {
       "auth": [

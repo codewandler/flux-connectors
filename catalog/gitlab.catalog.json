@@ -120,7 +120,7 @@
     ]
   ],
   "description": "GitLab: discover reachable groups and projects; read, filter and create project issues, list merge requests, read a pipeline, and list a project's branches — every project addressed by its numeric id only",
-  "generator": "flux-connectors 0.24.0",
+  "generator": "flux-connectors 0.25.0",
   "operations": [
     {
       "auth": [

@@ -37,7 +37,7 @@
     ]
   ],
   "description": "Figma REST API: read a file, specific nodes, rendered images, a project's files and a file's comments — a read-only design surface",
-  "generator": "flux-connectors 0.24.0",
+  "generator": "flux-connectors 0.25.0",
   "operations": [
     {
       "auth": [

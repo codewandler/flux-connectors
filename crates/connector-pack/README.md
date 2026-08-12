@@ -7,7 +7,7 @@ descriptions into [Flux-Lang](https://github.com/codewandler/flux).
 
 ```toml
 [dependencies]
-codewandler-connector-pack = "0.24"
+codewandler-connector-pack = "0.25"
 ```
 
 ## What it is

@@ -50,7 +50,7 @@
     ]
   ],
   "description": "Mailchimp Marketing API: check connectivity, read audiences and their contacts, add or update a contact, and list campaigns. Authenticates with a single API key sent as a bearer token, against a host whose datacentre label the operator supplies",
-  "generator": "flux-connectors 0.24.0",
+  "generator": "flux-connectors 0.25.0",
   "operations": [
     {
       "auth": [
