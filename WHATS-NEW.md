@@ -14,6 +14,15 @@
 
 ## [Unreleased]
 
+### New
+
+- **A host can now build a connector request entirely from data, without the Flux engine.** The
+  library that turns a connector operation into an outbound request — resolving its endpoint,
+  assembling its credential, and computing what must be redacted — is now available as plain
+  functions over small ports a host supplies, returning the request and its redaction set as data.
+  A host that only needs to compose and send connector calls no longer has to build against the
+  Flux runtime at all.
+
 ## [0.24.0] — 2026-08-12
 
 ### New
