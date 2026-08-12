@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-08-12
+
 ### Added
 
 - **`connector-pack` derives every request from the canonical document, behind a whole-catalogue

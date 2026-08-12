@@ -21,7 +21,7 @@
     ]
   ],
   "description": "Sentry error tracking: read an issue and its latest event, triage an issue, read a project",
-  "generator": "flux-connectors 0.22.0",
+  "generator": "flux-connectors 0.23.0",
   "operations": [
     {
       "auth": [

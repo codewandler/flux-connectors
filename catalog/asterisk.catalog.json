@@ -9238,7 +9238,7 @@
       "wire_value": "CallClaimed"
     }
   ],
-  "generator": "flux-connectors 0.22.0",
+  "generator": "flux-connectors 0.23.0",
   "operations": [
     {
       "auth": [

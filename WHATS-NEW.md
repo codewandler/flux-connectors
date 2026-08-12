@@ -14,6 +14,8 @@
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-08-12
+
 ### New
 
 - **Requests are now built from the catalogue's own documents.** The library that assembles a

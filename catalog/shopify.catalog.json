@@ -51,7 +51,7 @@
     ]
   ],
   "description": "Shopify Admin REST API: read orders, products, customers and inventory levels, and update a product",
-  "generator": "flux-connectors 0.22.0",
+  "generator": "flux-connectors 0.23.0",
   "operations": [
     {
       "auth": [

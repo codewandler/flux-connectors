@@ -7,7 +7,7 @@ descriptions into [Flux-Lang](https://github.com/codewandler/flux).
 
 ```toml
 [dependencies]
-codewandler-connector-address = "0.22"
+codewandler-connector-address = "0.23"
 ```
 
 The library is `connector_address`.

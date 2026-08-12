@@ -54,7 +54,7 @@
     ]
   ],
   "description": "Algolia search: list an application's indices, search one, and read, save or delete a single record by its object id",
-  "generator": "flux-connectors 0.22.0",
+  "generator": "flux-connectors 0.23.0",
   "operations": [
     {
       "auth": [

@@ -66,7 +66,7 @@
     ]
   ],
   "description": "Jira Cloud issue tracking: read and create issues, comment on them, and drive workflow transitions",
-  "generator": "flux-connectors 0.22.0",
+  "generator": "flux-connectors 0.23.0",
   "operations": [
     {
       "auth": [

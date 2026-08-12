@@ -36,7 +36,7 @@
     ]
   ],
   "description": "Dropbox: browse folder contents, read file and folder metadata, search files, create folders, and get temporary download links",
-  "generator": "flux-connectors 0.22.0",
+  "generator": "flux-connectors 0.23.0",
   "operations": [
     {
       "auth": [

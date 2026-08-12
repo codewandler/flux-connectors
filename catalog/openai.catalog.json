@@ -21,7 +21,7 @@
     ]
   ],
   "description": "OpenAI platform: inspect models, stored responses, files and batches, and create chat completions and embeddings",
-  "generator": "flux-connectors 0.22.0",
+  "generator": "flux-connectors 0.23.0",
   "operations": [
     {
       "auth": [
