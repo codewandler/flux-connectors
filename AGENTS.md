@@ -8,7 +8,10 @@ Accepted cross-repository architecture decisions in `../flux-roadmap` take prece
 conflicting sibling-repository narrative. When one conflicts with this file, create or amend the
 local story and reconcile the text before implementation; the roadmap does not override this
 repository's implementation acceptance, safety invariants or validation contract. C-507 records the
-current adoption of Decision 0001.
+current adoption of Decision 0001. C-535 records the adoption of Decision 0022: the compile
+destination is a versioned **catalog artifact** — request shaping as closed declarative data the
+resolver evaluates, behaviour staying in Flux-Lang at the Flux layer — and until C-534's program
+(C-536…C-540) delivers it, the build's emitted artifact set below is unchanged.
 
 <!-- BEGIN track:agents -->
 ## Start here — mandatory workflow for every task
@@ -111,10 +114,13 @@ no network. Read
 > build plan by `crates/connector-cli/tests/readme_snippet.rs`. When the catalogue changes, regenerate
 > the stated numbers here and in `README.md`; do not relax the check.
 
-flux-connectors compiles vendor API descriptions into Flux-Lang. A provider is described in
-`providers/<name>.toml`; the build emits an installable Flux module, a capability manifest,
-per-operation renderings, Rust catalogue tables, and public catalogue data. Flux—not TOML—is the
-execution format.
+flux-connectors compiles vendor API descriptions. A provider is described in
+`providers/<name>.toml`; today the build emits a Flux module, a capability manifest, per-operation
+renderings, Rust catalogue tables, and public catalogue data. The compile **destination** is a
+versioned catalog artifact (Decision 0022, adopted by C-535): request shaping becomes closed
+declarative data the resolver evaluates, and behaviour — composition, retry, saga, approval — stays
+in Flux-Lang at the Flux layer. Neither TOML nor the artifact is an execution format for behaviour;
+the emitted set above is what a build writes until C-536…C-540 deliver the artifact.
 
 A connector is **not** a set of operations. It declares what a vendor can do in **both directions**,
 and what an **operator** must supply to use it: operations and services outbound, events and channels
@@ -918,7 +924,10 @@ These failures are recorded decisions. Do not “fix” one without reading its 
   `body_encoding = "form"`, a nested field, a free-form `body_schema`, or an encoding declared on an
   operation that sends no body. Each refusal names its owning story.
 - **`check`, `fetch`, and `install` are unimplemented.** They exit explicitly and point to C-14 or
-  C-15. Do not turn them into partial, best-effort behavior.
+  C-15. Do not turn them into partial, best-effort behavior. C-15 is now closed as **superseded**
+  by Decision 0022 (C-535) — the pointer lands on honest history, and a module installer is no
+  longer coming; whether `install` gains a catalog-artifact meaning or retires is C-534's program
+  to decide.
 - **~~`connectors.lock` is designed, hashed against, and never written.~~ CLOSED 2026-08-01 (C-189)
   — this gap is no longer real.** `build` emits `connectors.lock` at the repository root on a full
   run and `diff` reports a stale one, so vision principle 1 ("drift is detected, not absorbed") now
@@ -1180,3 +1189,14 @@ That is CI's, and the contract below says why.
   [docs/designs/auth-seam.md](docs/designs/auth-seam.md) is kept as the composite-path design; C-26's
   paste-ready flux drafts should not be filed as written. What still genuinely waits on a flux release
   is the **form encoder** (upstream `L-101`) — see the form-body gap above.
+- **The compile destination is a catalog artifact, not Flux source** (Decision 0022, 2026-08-12;
+  adopted by [C-535](docs/stories/C-535-adopt-decision-0022.md), program in
+  [C-534](docs/stories/C-534-catalog-artifact-epic.md)). The build will lower the IR to one
+  canonical committed document per provider and compile the documents into a pack the resolver —
+  today's `connector-pack` assembly path — reads instead of re-parsing emitted Flux;
+  `connector-flux` and the `.flux` artifacts retire only behind the byte-identical differential
+  gate in [docs/designs/catalog-artifact.md](docs/designs/catalog-artifact.md). Flux never grows a
+  connector module loader: C-10 and C-15 are closed as superseded, not pending. None of this moves
+  the secrets boundary, the offline guarantee or the fail-closed rules — Decision 0022 changes the
+  compile target, not those invariants — and nothing of it has shipped yet: the emitter still runs
+  and every artifact above still ships.

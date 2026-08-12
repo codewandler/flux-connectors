@@ -60,6 +60,15 @@ Generated Flux is built as real `flux_lang` AST nodes and formatted by flux-lang
 assembled with string templates. Generated artifacts are committed so changes arrive as ordinary,
 reviewable diffs.
 
+This table is the delivered state, not the destination. flux-roadmap **Decision 0022** (2026-08-12,
+adopted by [C-535](docs/stories/C-535-adopt-decision-0022.md)) makes the compiled form of a
+connector a versioned **catalog artifact**: one canonical committed document per provider, compiled
+into a single pack the resolver reads, with the emitted `.flux` modules retiring only after a
+differential gate proves the document-derived requests byte-identical to the Flux-derived ones.
+That program is [C-534](docs/stories/C-534-catalog-artifact-epic.md) (C-536…C-540); none of it has
+shipped, and today's build writes exactly the table above. See
+[docs/designs/catalog-artifact.md](docs/designs/catalog-artifact.md).
+
 ## Try it locally
 
 You need Rust 1.87 or newer. From the repository root:
@@ -105,7 +114,7 @@ dependencies.
 | `diff` | Implemented; reports what `build` would change without writing. |
 | `check` | Planned in C-14; currently exits with an error. |
 | `fetch` | Planned in C-14; currently exits with an error. |
-| `install` | Planned in C-15; currently exits with an error. |
+| `install` | Superseded by Decision 0022 — C-15 is closed and no module installer is coming; currently exits with an error. |
 
 ## An example of generated Flux
 
@@ -137,9 +146,11 @@ op zendesk-ticket-update(ticket_id: Number, ticket: Any) -> Any
 
 ## Design in one screen
 
-**TOML is compiler input; Flux is the execution format.** Flux already has a parser, analyzer,
-formatter, control flow, retry and throttle primitives, sagas, and approval gates. Connector
-behavior belongs there instead of in a second configuration language.
+**TOML is compiler input; behaviour is Flux; the compiled form is becoming data.** Connector
+behavior — control flow, retry and throttle, sagas, approval gates — belongs in Flux-Lang, which
+already has a parser, analyzer and formatter, instead of in a second configuration language.
+Request shaping, by contrast, is closed declarative data a resolver evaluates: Decision 0022 makes
+that the compile destination, and today it still ships as emitted Flux that the pack parses back.
 
 **The vendor spec is the source of truth; drift is detected, not silently absorbed.** Artifacts
 record the hashes that produced them. Once C-14 lands, `flux-connectors check` will use that
@@ -154,9 +165,13 @@ applying their scheme, and registering secret values with its redactor.
 These are stated plainly because a connector that merely looks executable is worse than one that
 fails closed:
 
-- **A generated provider cannot make a live call *as Flux*.** `connectors/*.flux` is unauthenticated:
-  `$auth` was taken off the critical path rather than landed, so the module path has no way to name a
-  credential. What closed instead is the *host* path — `connector-pack` assembles auth in Rust (the
+- **A generated provider cannot make a live call *as Flux*, and never will.** `connectors/*.flux` is
+  unauthenticated: `$auth` was taken off the critical path rather than landed, so the module path has
+  no way to name a credential. Decision 0022 closed that path permanently rather than eventually —
+  the module seam ([C-10](docs/stories/C-10-auth-injection-and-manifest.md)) and the installer
+  ([C-15](docs/stories/C-15-install-and-live-e2e.md)) are superseded, and the `.flux` artifacts
+  themselves retire under [C-534](docs/stories/C-534-catalog-artifact-epic.md)'s differential gate.
+  What closed instead is the *host* path — `connector-pack` assembles auth in Rust (the
   `Bearer ` prefix, the base64-joined Basic pair, query placement) and registers the value with flux's
   redactor before building the request, and `crates/connectors-api` binds that to a real
   `http.request` from `codewandler-flux-web`. This repository has sent real bytes to a real vendor;
