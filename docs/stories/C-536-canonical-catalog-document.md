@@ -2,7 +2,7 @@
 id: C-536
 title: "Emit the canonical catalog document per provider"
 pillar: Codegen
-status: ready
+status: done
 priority: 0
 design: docs/designs/catalog-artifact.md
 epic: catalog-artifact
@@ -67,6 +67,11 @@ template and the surfaces the op grammar cannot say today.
   resuming agent should know: the four-surfaces table in `AGENTS.md` §Intentional gaps was
   re-measured and rewritten (pagination is 4 ops across 2 providers; the old "6 across 3" counted
   comment mentions).
+- 2026-08-12 (integration): merged as `99938aa3` after an independent PASS review (three minor
+  findings, all fixed in `ace7552d`; the two post-review commits were coordinator-read). BASE_PROOF
+  verified two ways: the implementor's failing runs at `7494eefd`, and the reviewer's structural
+  argument (every named test lives in a file absent at base). Integration gate green on main:
+  216/216 test-result lines ok, `diff` at 1166, clippy/fmt clean, web 48/48.
 
 ## Notes
 

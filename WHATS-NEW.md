@@ -14,6 +14,15 @@
 
 ## [Unreleased]
 
+### New
+
+- **Every connector is now also published as one machine-readable document.** For each provider
+  there is a single validated JSON file describing everything the connector can do — every
+  operation with its exact request shape, the credentials and settings an operator must supply,
+  the events it can receive, and its safety annotations — readable from any language without
+  installing anything of ours. Nothing you use today changes; the documents are additional, and
+  the tooling that consumes them directly is on its way.
+
 ## [0.21.0] — 2026-08-12
 
 ### New

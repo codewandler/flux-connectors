@@ -7,6 +7,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Every provider now compiles to a canonical catalog document** (C-536, the first delivery of
+  C-534's program). `catalog/<name>.catalog.json` — 55 documents plus their published JSON Schema
+  (`catalog/connector-document.schema.json`), all committed, byte-deterministic, hashed per
+  provider in `connectors.lock`, and validated in-process at render time. Each document carries the
+  complete published surface including an explicit request template (method, URL template,
+  parameter placement, body encoding, constant headers, endpoint slots) equivalent to what
+  `connector-pack` derives by parsing the emitted Flux — proven field-for-field for zendesk's 35
+  operations by `crates/connector-pack/tests/document_differential.rs`, the mechanism C-538's
+  whole-catalogue gate extends. A service's `roles` and `quirks.pagination` reach an artifact for
+  the first time; `quirks.rate_limit` becomes representable (nothing declares one yet). The
+  template vocabulary is closed: a construct the pack's evaluator would refuse is a build error,
+  never a degraded document, and the schema carries no field for an OAuth2 registration value at
+  all — `client_id` is published as an operator-level configuration requirement, never a value.
+  Emission is additive: every previously emitted artifact is unchanged (the build now reports 1166
+  artifacts across 55 providers), and nothing ships that reads the documents until the pack and
+  resolver land (C-537, C-538).
+
 ### Changed
 
 - **The compile destination is a catalog artifact, not Flux source** (C-535, adopting flux-roadmap
