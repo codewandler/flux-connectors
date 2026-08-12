@@ -51,8 +51,9 @@ catalogue data from the crates.io engine-line release train.
   re-measure before quoting any of its numbers.
 - Sibling work: Exchange adoption stories X-151 (epic), X-152 (Rehearsal → document), X-153 (pack
   reader), X-154 (OAuth2 from the artifact) are filed in `../flux-exchange` on branch
-  `backlog/catalog-artifact-adoption` (commit 5135304, 2026-08-12) — pending merge into its main.
-  Flux owes nothing at the invoke seam (its embedded Exchange client is the unchanged consumer).
+  `backlog/catalog-artifact-adoption`, arriving via its PR #69 — the branch moves, so re-measure
+  rather than pin a commit here. Flux owes nothing at the invoke seam (its embedded Exchange
+  client is the unchanged consumer).
 - 2026-08-12 review amendments: the resolver core is engine-free (plan-returning, no
   `codewandler-flux-*` edge) so the decoupling covers the engine line, not only the release train;
   OAuth2 registration identity is published as a requirement, never a value; the differential gate

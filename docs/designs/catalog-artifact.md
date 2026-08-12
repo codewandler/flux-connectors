@@ -131,8 +131,13 @@ plan already uses. Dispatch and the `Tool`/`ToolSpec` projection are the consume
 depends on the engine directly for its own workflows and wraps the plan there.
 `connector-pack`'s existing `resolve`/`project`/`pack` surface survives the migration as a thin
 wrapper over the core so no consumer breaks mid-flight; the wrapper retires when Exchange adopts
-the plan API (X-151 in `../flux-exchange`). A dependency-direction test pins the core's engine
-freedom the way `dependency_fence.rs` pins the compiler's offline guarantee.
+the plan API (X-151 in `../flux-exchange`), and that deletion — owned by C-540 — takes the
+engine-line machinery (`crates/connector-cli/tests/flux_engine_line.rs`) with it in the same
+change. A dependency-direction test pins the core's engine freedom the way `dependency_fence.rs`
+pins the compiler's offline guarantee. One boundary the plan API must hold, named on the Exchange
+side and worth stating here too: **projecting a plan into a Tool is not composing a request** — the
+consumer wraps and dispatches the plan it was handed; a consumer that edits one has become the
+second request path this family already rejected.
 
 ## Compatibility projections
 

@@ -40,7 +40,10 @@ template and the surfaces the op grammar cannot say today.
       through the existing `binds = "oauth.client_id"` grammar. The vestigial empty `client_id`
       value (`client_id: ""` for gitlab and babelforce in today's generated catalogue) does not
       survive into the document; a provider TOML declaring a non-empty one is a build error, not
-      emitted data.
+      emitted data — and the published document **schema has no field for a registration value at
+      all**, so a future document cannot carry one for a consumer to mistakenly trust
+      (Exchange-side X-154 additionally ignores any such value; unrepresentable-plus-ignored is
+      the pairing, not a promise).
 - [ ] The document schema is published as a versioned JSON Schema and validated in the build, the
       way `core_catalog.rs` validates `web/public/v1/**`.
 - [ ] A failing-first differential test proves, for at least one provider, that the request

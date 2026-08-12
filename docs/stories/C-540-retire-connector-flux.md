@@ -33,6 +33,12 @@ replacement.
       are regenerated and `readme_snippet.rs` passes.
 - [ ] The `.connector.toml` projection and `web/public/catalog.json` continue to be emitted from
       the canonical documents; the explorer renders the request template where it rendered Flux.
+- [ ] Once Exchange consumes the plan API (X-151 landed): `connector-pack`'s Tool-returning
+      wrapper and its `codewandler-flux-*` dependencies are deleted **in the same change** as the
+      engine-line machinery they justify — `crates/connector-cli/tests/flux_engine_line.rs`
+      (`ENGINE_LINE`/`SPEC_LINE`) is retired or re-scoped to whatever still links the engine
+      (possibly nothing in the publish closure). A pin constant that outlives its constraint is
+      how folklore starts; the pairing is the acceptance, not a cleanup note.
 - [ ] `CHANGELOG.md` and `WHATS-NEW.md` state the removal and the exact consumer action (none, if
       the shims held their API line).
 
