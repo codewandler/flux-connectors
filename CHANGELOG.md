@@ -7,6 +7,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **GitHub declares its OAuth2 acquisition** (C-554, for the cross-repo login goal). A new
+  `github-login` auth-host service (`https://github.com`, distinct from the API host) plus a
+  `github.oauth_token` credential composing the authorization-code grant — endpoints verified
+  against docs.github.com with the sources recorded in `providers/github.toml`. Grants are
+  `authorization_code` only (the classic-OAuth-app model, chosen because it takes scopes and
+  issues no refresh token; the GitHub App model is the recorded reversible alternative), scopes
+  are `["repo", "read:org"]` at the vendor's documented floor, and no registration value is
+  carried — `client_id`/secret/redirect stay deployment configuration. A host composes GitHub's
+  authorize URL from the artifact exactly as it does GitLab's. The catalogue grows to 68 services
+  and 1169 artifacts.
+
 ## [0.23.0] — 2026-08-12
 
 ### Added
