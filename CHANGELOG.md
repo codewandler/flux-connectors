@@ -9,6 +9,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **An OAuth2 declaration may place its token endpoint on a second service, and mark a public
+  client** (C-556, for the Anthropic flows). `OAuth2Spec` gains `token_endpoint` — the name of a
+  second declared service whose base URL the token path resolves against, a reference never a URL,
+  so `http_hosts` and declared-authority validation keep working — and `public_client`, marking a
+  PKCE client that issues no client secret. The credential-archetype gate now requires the
+  operator-level secret client-secret field only of a **confidential** authorization-code client;
+  a public one is exempt, and the default stays confidential so nothing escapes the requirement by
+  omission. Both fields are additive and skipped when absent, so every existing document and
+  manifest is byte-identical; `catalog::OAuth2` and the document schema carry them.
+
 - **`connector-pack` publishes the request plan and the dispatch seam** (C-553, un-gating
   Exchange's engine-free adoption and upstream's Tool-wrapper retirement). `Operation::build_request_plan`
   yields the complete `RequestPlan` — request, permission subjects, redaction set — through the

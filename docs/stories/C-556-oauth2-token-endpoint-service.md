@@ -62,6 +62,17 @@ unchanged. This is the loader/spec extension C-555 stopped at, specified from it
   the only red is `lockfile::the_committed_lockfile_is_a_fixed_point_of_a_build`, the expected
   whole-catalogue staleness.
 
+- 2026-08-12: Implemented on `impl/C-556` (`44f34a81`), merged and lock-regenerated at
+  integration. Two additive OAuth2Spec fields — `token_endpoint` (a second declared service the
+  token_path resolves against, a name never a URL) and `public_client` (a PKCE client that owes no
+  client secret). The C-22 archetype gate now requires the operator client_secret only of a
+  CONFIDENTIAL authorization_code client; the exemption is fail-safe — `public_client` defaults
+  absent/false, so a connector must explicitly opt into public and nothing escapes by omission
+  (proven both directions over fixtures). Both fields skip when absent, so every existing document
+  and manifest is byte-identical; `catalog::OAuth2` gains both (a deliberate breaking addition to
+  the published crate, its two exhaustive downstream sites updated) and the document schema gains
+  two optional properties. C-555 round 2 is the first declarer.
+
 ## Notes
 
 - Write set: `crates/connector-spec/src/auth.rs`, the document lowering in
