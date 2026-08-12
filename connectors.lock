@@ -6,7 +6,7 @@ version = 1
 [pack]
 path = "crates/catalog-reader/catalog.pack"
 schema_version = 1
-sha256 = "7203f1c1370f4bd9e4b854f6516aacd736fc72c35677a1f3fa22b4fbf5550767"
+sha256 = "f079256ef6a4ab6b73b17f210118d3c1bc2ea14be052a9a839d12e2fa48463d9"
 
 [[provider]]
 id = "airtable"
@@ -910,18 +910,21 @@ generator = "flux-connectors 0.23.0"
 source_url = "https://raw.githubusercontent.com/github/rest-api-description/5e28810649ba41b5483753ba74f976f83856a504/descriptions/api.github.com/api.github.com.2022-11-28.json"
 upstream_version = "1.1.4"
 spec_sha256 = "a7a3293268f062d09eb576806f0e5af271c039b9427f9852c8280c8fecc692e7"
-toml_sha256 = "27679dc370a07afbe2d7946b469af38fec73e368311358f677485badfc6dcca3"
-ir_sha256 = "27e8914628c899b1c74949c1dd054a7b3ec99456fe7ef4e9797da10d41e29085"
+toml_sha256 = "8cefed87d2da4f3d2234cbad6e8607512f27078b89162438225284bd4182ca00"
+ir_sha256 = "4bffed4ee7ded86c0c55e4ddd0ad06558b4134c45461e55192f5c28eb1fe7b6d"
 
 [[provider.specs]]
 path = "specs/github/api.github.com.2022-11-28-2026-08-02.openapi.json"
+service = "default"
 source_url = "https://raw.githubusercontent.com/github/rest-api-description/5e28810649ba41b5483753ba74f976f83856a504/descriptions/api.github.com/api.github.com.2022-11-28.json"
 upstream_version = "1.1.4"
 sha256 = "a7a3293268f062d09eb576806f0e5af271c039b9427f9852c8280c8fecc692e7"
 
 [provider.artifacts]
-"catalog/github.catalog.json" = "568e3399b49413a276851d30b9ab677c38975bc0d5253376c80576ca27a74739"
-"connectors/github.connector.toml" = "e5558875e63d1427d0c8b1247a986d23fcbdd95d621e30679a06bd7dfee8ef1e"
+"catalog/github.catalog.json" = "febf0fde12e284ef648c920fe63453d96ceb8f588713b08d9effbe1840cdfe68"
+"connectors/github-login.connector.toml" = "29fc589da0538f0ab42686ed8510212c9551134d94d08d75f3db4da207a41a91"
+"connectors/github-login.flux" = "f767b64de2f2981f8384a1452cbfa45b0febaaa677eb23180b31a62f168424ed"
+"connectors/github.connector.toml" = "23c2328396e44d37b610e5ae1b2967302ce7b3dabffbd9e76d0a1fe6f33dd017"
 "connectors/github.flux" = "8d318cc150cc57bd0165ac3eba8b0341c1f5b0aefb7c1b8dce95baff4609cb66"
 "crates/catalog/ops/github/github-commit-list.flux" = "13b22e3a453f6328db80fceb4fa30159b2ec9c73d96746004ad43044cba79e9e"
 "crates/catalog/ops/github/github-issue-comment-add.flux" = "6969b58893a080709aa1156e6960f51e8975c41d8d8a707fde91b9625c4ef477"
@@ -936,7 +939,7 @@ sha256 = "a7a3293268f062d09eb576806f0e5af271c039b9427f9852c8280c8fecc692e7"
 "crates/catalog/ops/github/github-user-get.flux" = "5e7e1da514fcd8b17549df8f9ad556692e68ec86561bd528e8fd41d92dd62222"
 "crates/catalog/ops/github/github-user-repo-list.flux" = "cb01be508559855548fc9cb2103b212d5ea53f513b2dddebddee1a144c1a27b3"
 "crates/catalog/ops/github/github-workflow-run-list.flux" = "484d14f0cbd0b53314253db2754270602d9523f735998ed3de92eace41ffeb6c"
-"crates/catalog/src/generated/github.rs" = "4dc82fe62effb54f8bd4b917f9b353f29c316cc8606d808a2e30da349577c2c3"
+"crates/catalog/src/generated/github.rs" = "4ccf91d299b9f9dbc042c2b8c7246f6fce2769f95fa61ac1d1cd25f106634a36"
 
 [[provider]]
 id = "gitlab"

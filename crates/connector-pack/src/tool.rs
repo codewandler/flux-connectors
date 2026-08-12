@@ -58,16 +58,44 @@ impl Egress {
         &self.0
     }
 
-    /// Hand `request` to the host's tool, under the **same** `ctx`.
+    /// **The dispatch seam**: hand `request` to the host's tool, under the **same** `ctx`.
     ///
     /// The second half of [`Transport::carry`], named so that the minting path
     /// ([`Tool::execute`]) can run the two halves separately without a second copy of this line —
     /// see that method for why only the second half is withheld.
-    pub(crate) async fn send(
-        &self,
-        ctx: &ToolContext,
-        request: Request,
-    ) -> flux_core::Result<ToolResult> {
+    ///
+    /// # Why this is public, and what that decided (C-553)
+    ///
+    /// A consumer that owns its own `Tool`/`ToolSpec` projection — Exchange's X-156 — derives a plan
+    /// through [`Operation::build_request_plan`] and then has to *send* it. Until C-553 the only
+    /// public route from an [`Egress`] to the transport was [`Egress::tool`], and that spelling is
+    /// refused in **every** file on the Exchange side with no exception list
+    /// (`no_second_request_path.rs`'s `UNWRAPS_THE_TRANSPORT`): unwrapping the port is the second
+    /// request path, in one line. Publishing this method is what makes that refusal survivable — the
+    /// consumer keeps the ban and still reaches the wire.
+    ///
+    /// It **narrows** rather than widens. `tool()` hands out the `Arc<dyn Tool>` and with it the
+    /// ability to call `execute` with any `Value` at all; this takes a [`Request`], which in this
+    /// family is produced by a derivation and not by hand. The transport itself never leaves the
+    /// newtype.
+    ///
+    /// # The named consequence
+    ///
+    /// This calls the tool's `execute` **directly**, which bypasses `Executor::dispatch` — exactly
+    /// as [`Tool::execute`] on a projected [`Operation`] already does, and for the same reason. So
+    /// `http.request`'s own `permission_subjects` is not consulted for the inner call, and neither
+    /// is flux's post-dispatch scrub of the result. A consumer therefore owes two things it would
+    /// otherwise get for free, and the plan hands it both:
+    /// [`RequestPlan::permission_subjects`](connector_resolve::RequestPlan::permission_subjects) is
+    /// what its network policy judges, and
+    /// [`RequestPlan::redactions`](connector_resolve::RequestPlan::redactions) is what its redactor
+    /// must hold. Reaching the plan through this crate discharges the second already —
+    /// [`Operation::build_request_plan`] registers every value with `ctx.redactor` before the plan
+    /// exists — so passing the same `ctx` here is what carries that guarantee to the result.
+    ///
+    /// A consumer that *edits* the request between the two calls has become the second
+    /// request-composition path this family rejects. Carry the plan across; do not compose one.
+    pub async fn send(&self, ctx: &ToolContext, request: Request) -> flux_core::Result<ToolResult> {
         self.0.execute(ctx, request.to_params()).await
     }
 }
@@ -526,6 +554,84 @@ impl Operation {
         ctx: &ToolContext,
         params: &Value,
     ) -> Result<Request, Error> {
+        Ok(self.build_request_plan(ctx, params).await?.request)
+    }
+
+    /// **The whole plan** this operation makes when called with `params`: the request as it goes
+    /// out, the subjects a host's network policy judges it by, and every credential-derived string
+    /// a redactor must hold (C-553).
+    ///
+    /// This is the seam a consumer that owns its own `Tool`/`ToolSpec` projection reaches for —
+    /// Exchange's X-156 — and [`Operation::build_authenticated_request`] is one line over it,
+    /// returning `plan.request` and discarding the rest. That relationship is the whole design:
+    /// **the same code, its result published instead of swallowed**, never a second derivation
+    /// beside it. `tests/main/catalogue_differential.rs` holds the two to being one plan for every
+    /// operation in the catalogue.
+    ///
+    /// # The enforcement topology is the point, and it is applied here rather than described
+    ///
+    /// Everything a consumer would otherwise have to reimplement runs on this path, in this order:
+    ///
+    /// 1. **Credential resolution** through the bound [`Credentials`] port — the declared
+    ///    alternatives tried in order, the first whose credentials all resolve winning, a transport
+    ///    failure never reported as "not configured".
+    /// 2. **Checked redactor registration**, before a request exists at all. Every form that
+    ///    travels is registered — the stored value, the acquired one, and the placed one when the
+    ///    placement transforms it — and a value flux's redactor would silently decline to hold is
+    ///    [`Error::UnredactableCredential`] rather than a request. So
+    ///    [`RequestPlan::redactions`](connector_resolve::RequestPlan::redactions), which for a bare
+    ///    `connector-resolve` consumer is a *requirement*, is already discharged when the plan is
+    ///    reached through here.
+    /// 3. **Endpoint substitution** through the bound [`Configuration`] port, with the live
+    ///    per-variable resolution: declared defaults, `Approval::Operator`, [`HttpsOrigin`]
+    ///    normalisation, and the slot check each value is held to. Total or refused.
+    /// 4. **Scheme placement** and the declared-authority validation, in `connector_resolve`.
+    ///
+    /// This is why the seam is a plan rather than its ingredients. Publishing
+    /// `Credentials::resolve` and `Configuration::snapshot` instead — the other shape X-156 named —
+    /// would hand a consumer the two inputs and leave the *ordering* between them a matter of
+    /// convention, which is exactly the reimplementation Decision 0022's "enforcement topology
+    /// unchanged" forbids.
+    ///
+    /// # What the consumer still owns
+    ///
+    /// Dispatch, and the network gate. Hand `plan.request` back to the bound transport with
+    /// [`Egress::send`]; judge `plan.permission_subjects` against the host's egress policy first —
+    /// this crate's own [`Tool::permission_subjects`] is the same answer, and calling `execute`
+    /// directly bypasses `Executor::dispatch`, so nothing else will ask. And **project the plan,
+    /// never edit it**: a consumer that composes a request from a plan's parts has become the second
+    /// request path this family already rejected.
+    ///
+    /// # The one operation shape the plan path does *not* serve (C-136)
+    ///
+    /// A `produces_credential` operation is a **login**: its whole purpose is to mint a credential,
+    /// and its response body *is* that credential. [`Tool::execute`] on a projected [`Operation`]
+    /// handles it specially — it dispatches, then diverts the vendor's answer into the bound store
+    /// through [`mint::divert`], returning the handle `{ "credential": "tenants/…" }` in its place,
+    /// so nothing derived from the credential-bearing body ever leaves. **The plan path applies none
+    /// of that.** `build_request_plan` derives the request, and [`Egress::send`] dispatches it and
+    /// returns what the transport produced — for a minting operation, the credential in the clear.
+    ///
+    /// This is a documented boundary rather than a bug, because it is a boundary the plan
+    /// *vocabulary* cannot express: a [`RequestPlan`](connector_resolve::RequestPlan) is request
+    /// data, and the diversion is a rule about what to do with a *response*. No shipped connector
+    /// mints today (the four C-430 withheld are the closest the catalogue has come), so nothing
+    /// reaches this today — but this is permanent public API, and the day a minting operation ships
+    /// a consumer that routed it through the plan path would hand a caller the vendor's token. **A
+    /// `produces_credential` operation must go through the [`Tool`] projection**, whose `execute`
+    /// diverts; the plan seam is for the operations whose answer is theirs to read.
+    ///
+    /// # Errors
+    ///
+    /// Whatever [`Operation::build_request`] refuses, plus every credential refusal: no value
+    /// stored, a store that could not answer, a connector with no address to look at, an inbound
+    /// signing secret, a header the operation's own template already sets. **None of them sends
+    /// anything**, and none of them carries a credential value.
+    pub async fn build_request_plan(
+        &self,
+        ctx: &ToolContext,
+        params: &Value,
+    ) -> Result<connector_resolve::RequestPlan, Error> {
         let credentials = self
             .credentials
             .resolve(ctx, self.entry, self.provider, &self.settings)
@@ -536,14 +642,13 @@ impl Operation {
         // `connector_resolve::auth::place`. What stays here is the *order* — the credentials above
         // were resolved and registered with `ctx.redactor` before this line, so the window between
         // a value existing and the redactor knowing about it is still closed.
-        let plan = connector_resolve::resolve(
+        Ok(connector_resolve::resolve(
             self.document,
             self.base_url,
             params,
             &self.endpoints()?,
             &credentials,
-        )?;
-        Ok(plan.request)
+        )?)
     }
 
     /// Where this call would go, for the host's network policy to judge.

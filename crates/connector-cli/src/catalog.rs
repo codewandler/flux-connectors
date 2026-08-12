@@ -864,13 +864,15 @@ fn oauth2_acquisition(spec: &connector_spec::OAuth2Spec) -> String {
     };
 
     format!(
-        "crate::Acquisition::OAuth2(&crate::OAuth2 {{ endpoint: {}, authorize_path: {}, \
-         token_path: {}, client_id: {}, scopes: &[{scopes}], grants: &[{grants}], \
-         redirect: {redirect} }})",
+        "crate::Acquisition::OAuth2(&crate::OAuth2 {{ endpoint: {}, token_endpoint: {}, \
+         authorize_path: {}, token_path: {}, client_id: {}, scopes: &[{scopes}], \
+         grants: &[{grants}], redirect: {redirect}, public_client: {} }})",
         string(&spec.endpoint),
+        string(&spec.token_endpoint),
         string(&spec.authorize_path),
         string(&spec.token_path),
         string(&spec.client_id),
+        spec.public_client,
     )
 }
 
@@ -1466,6 +1468,7 @@ mod tests {
         let mut connector = connector();
         connector.auth[0].oauth2 = Some(connector_spec::OAuth2Spec {
             endpoint: "login".to_string(),
+            token_endpoint: "token-host".to_string(),
             authorize_path: "/oauth/authorize".to_string(),
             token_path: "/oauth/token".to_string(),
             client_id: "acme-client".to_string(),
@@ -1478,6 +1481,7 @@ mod tests {
                 port: 8976,
                 path: "/callback".to_string(),
             }),
+            public_client: true,
         });
 
         let rendered = render_auth(&connector).expect("an oauth2 credential must render");
@@ -1488,12 +1492,14 @@ mod tests {
         );
         for expected in [
             r#"endpoint: "login""#,
+            r#"token_endpoint: "token-host""#,
             r#"authorize_path: "/oauth/authorize""#,
             r#"token_path: "/oauth/token""#,
             r#"client_id: "acme-client""#,
             r#"scopes: &["read:thing", "write:thing"]"#,
             "grants: &[crate::OAuthGrant::AuthorizationCode, crate::OAuthGrant::RefreshToken]",
             r#"redirect: Some(crate::OAuthRedirect { port: 8976, path: "/callback" })"#,
+            "public_client: true",
         ] {
             assert!(
                 rendered.contains(expected),

@@ -264,7 +264,10 @@ fn a_signing_secret_is_collected_like_any_credential_and_sent_nowhere() {
 /// - the app registration is **operator** level and its secret is marked secret — asking a tenant
 ///   for a client secret hands them the product's own credential, which is the defect the two-level
 ///   model exists to prevent, and `Level` is derived from `binds` so an author cannot state it
-///   wrongly;
+///   wrongly. The secret is owed only by a **confidential** client (C-556): a public PKCE client
+///   (`public_client = true`) issues none, so it declares its `client_id` and redirect URI but no
+///   secret, and the test below reads the discriminator rather than requiring the field of every
+///   `authorization_code` connector;
 /// - the grant names a **declared service** rather than carrying a URL, which is what keeps the
 ///   token exchange inside the host allow-list;
 /// - the credential states its [`Subject`], because a delegated token that cannot say whose
@@ -339,24 +342,39 @@ fn every_oauth_connector_generates_the_operator_connection_split() {
                     .contains(&connector_spec::OAuthGrant::AuthorizationCode)
             })
         });
+        // ...and the client SECRET belongs only to the *confidential* half of that leg (C-556). A
+        // public PKCE client — Anthropic's Console OAuth — authenticates the exchange with PKCE and
+        // no secret, so requiring an operator to supply one would collect a value nothing uses. The
+        // discriminator is per credential, so a connector needs the secret only if some
+        // `authorization_code` client of it is not public.
+        let confidential_redirect = granted.iter().any(|method| {
+            method.oauth2.as_ref().is_some_and(|spec| {
+                spec.grants
+                    .contains(&connector_spec::OAuthGrant::AuthorizationCode)
+                    && !spec.public_client
+            })
+        });
         if redirects {
             assert_eq!(
                 level_of("oauth.client_id"),
                 Some((Some(connector_spec::Level::Operator), false)),
                 "providers/{name}.toml declares an `authorization_code` grant without a public, operator-level client id"
             );
-            assert_eq!(
-                level_of("oauth.client_secret"),
-                Some((Some(connector_spec::Level::Operator), true)),
-                "providers/{name}.toml declares an `authorization_code` grant without an operator-level, secret client secret"
-            );
-            // The third half of the same registration (C-531). A grant whose redirect URI cannot be
+            // The third half of the registration (C-531). A grant whose redirect URI cannot be
             // supplied is one only a loopback deployment can complete, and `OAuth2Spec::redirect`
-            // models nothing else — so without this a hosted host has nowhere to put its callback.
+            // models nothing else — so without this a hosted host has nowhere to put its callback. A
+            // public client still runs the browser leg, so it owes this one too.
             assert_eq!(
                 level_of("oauth.redirect_uri"),
                 Some((Some(connector_spec::Level::Operator), false)),
                 "providers/{name}.toml declares an `authorization_code` grant without an operator-level, public redirect URI"
+            );
+        }
+        if confidential_redirect {
+            assert_eq!(
+                level_of("oauth.client_secret"),
+                Some((Some(connector_spec::Level::Operator), true)),
+                "providers/{name}.toml declares a confidential `authorization_code` grant without an operator-level, secret client secret. A public PKCE client is exempt (`public_client = true`); a confidential one is not"
             );
         }
 
@@ -403,6 +421,122 @@ fn every_oauth_connector_generates_the_operator_connection_split() {
     assert!(
         !with_oauth.is_empty(),
         "no shipped provider declares `[auth.oauth2]`, so archetype 7 is unexercised once more"
+    );
+}
+
+/// An OAuth2 fixture with `authorization_code`, optionally a public PKCE client, declaring a
+/// `client_id` config field and — deliberately — no `client_secret`. No shipped provider is public
+/// yet (that is C-555 round 2), so the public/confidential split can only be exercised over fixtures.
+fn oauth_fixture(public_client: bool) -> String {
+    let discriminator = if public_client {
+        "public_client = true\n"
+    } else {
+        ""
+    };
+    format!(
+        r#"
+id = "acme"
+vendor = "Acme"
+base_url = "https://api.acme.example"
+
+[[auth]]
+name = "acme.oauth"
+scheme = "bearer"
+env = ["ACME_ACCESS_TOKEN"]
+subject = "user"
+
+[auth.oauth2]
+authorize_path = "/oauth/authorize"
+token_path = "/oauth/token"
+client_id = ""
+grants = ["authorization_code"]
+{discriminator}
+[[operations]]
+id = "acme-ping"
+method = "GET"
+direction = "read"
+path = "/ping"
+risk = "low"
+idempotency = "idempotent"
+
+[[config]]
+name = "client_id"
+label = "Client ID"
+help = "From the app you registered with Acme"
+binds = "oauth.client_id"
+"#
+    )
+}
+
+/// **The client secret is required of a confidential client and waived for a public one** (C-556).
+///
+/// The walk above requires an operator-level, secret `oauth.client_secret` field of every
+/// `authorization_code` connector. That held only because every OAuth connector shipped so far is
+/// confidential. A public PKCE client (Anthropic's Console OAuth) authenticates the exchange with
+/// PKCE and no secret, so it must declare its `client_id` but not be required to publish a secret —
+/// proven here over fixtures, because no shipped provider is public yet.
+///
+/// The discriminator is read through the **wire form** — `serde_json` — so this also pins that the
+/// flag is what a document consumer sees, absent (confidential) by default and present only when
+/// declared.
+#[test]
+fn a_public_client_is_exempt_from_the_client_secret_a_confidential_one_owes() {
+    fn is_public(connector: &Connector) -> bool {
+        connector.auth.iter().any(|method| {
+            serde_json::to_value(method)
+                .ok()
+                .and_then(|value| value["oauth2"]["public_client"].as_bool())
+                .unwrap_or(false)
+        })
+    }
+    // The walk test's rule, stated once over the discriminator: a confidential `authorization_code`
+    // client owes a client secret, a public one does not.
+    fn client_secret_required(connector: &Connector) -> bool {
+        connector.auth.iter().any(|method| {
+            let public = serde_json::to_value(method)
+                .ok()
+                .and_then(|value| value["oauth2"]["public_client"].as_bool())
+                .unwrap_or(false);
+            method.oauth2.as_ref().is_some_and(|spec| {
+                spec.grants
+                    .contains(&connector_spec::OAuthGrant::AuthorizationCode)
+            }) && !public
+        })
+    }
+    fn declares_client_secret(connector: &Connector) -> bool {
+        connector
+            .config
+            .iter()
+            .any(|field| field.binds == "oauth.client_secret")
+    }
+
+    let public = provider::load("providers/fixture.toml", &oauth_fixture(true))
+        .expect("a public-client fixture must load")
+        .connector;
+    let confidential = provider::load("providers/fixture.toml", &oauth_fixture(false))
+        .expect("a confidential-client fixture must load")
+        .connector;
+
+    assert!(
+        is_public(&public),
+        "the public fixture must publish `public_client = true`"
+    );
+    assert!(
+        !is_public(&confidential),
+        "a confidential client omits the discriminator — absent is the default"
+    );
+
+    // Neither fixture declares a client secret. For the public client that is complete; for the
+    // confidential one it is exactly the omission the walk test above must still catch.
+    assert!(!declares_client_secret(&public));
+    assert!(!declares_client_secret(&confidential));
+    assert!(
+        !client_secret_required(&public),
+        "a public PKCE client must not be required to publish a client secret"
+    );
+    assert!(
+        client_secret_required(&confidential),
+        "a confidential `authorization_code` client without a client secret is still incomplete"
     );
 }
 

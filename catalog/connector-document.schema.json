@@ -433,6 +433,9 @@
           },
           "type": "array"
         },
+        "public_client": {
+          "type": "boolean"
+        },
         "redirect": {
           "additionalProperties": false,
           "properties": {
@@ -456,6 +459,9 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "token_endpoint": {
+          "type": "string"
         },
         "token_path": {
           "type": "string"

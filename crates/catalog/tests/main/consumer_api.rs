@@ -119,12 +119,14 @@ fn the_closed_vocabularies_match_exhaustively() {
             Acquisition::OAuth2(spec) => {
                 let OAuth2 {
                     endpoint: _,
+                    token_endpoint: _,
                     authorize_path: _,
                     token_path: _,
                     client_id: _,
                     scopes: _,
                     grants,
                     redirect,
+                    public_client: _,
                 } = *spec;
                 for grant in grants {
                     match grant {

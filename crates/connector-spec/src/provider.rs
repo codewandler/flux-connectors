@@ -5120,6 +5120,42 @@ fn validate_one_credential_acquisition(
     }
 }
 
+/// **An OAuth2 `token_endpoint` names a declared service, or the loader refuses it** (C-556).
+///
+/// The token endpoint may live on a different host from the authorize endpoint — Anthropic's
+/// subscription flow authorizes on `claude.ai` and redeems its token on `platform.claude.com`. The
+/// second host is declared by *reference*: [`OAuth2Spec::token_endpoint`] names a `[[services]]`
+/// entry whose base URL the token exchange resolves against. That is what keeps the host set derived
+/// from declared services rather than from a URL nothing admitted — so a name no service declares is
+/// a typo pointing the token exchange at a host the allow-list never admitted, and it is refused
+/// loudly. An empty value is the common case and means the exchange resolves against `endpoint`,
+/// which needs no check here.
+fn validate_one_credential_token_endpoint(
+    connector: &Connector,
+    method: &AuthMethod,
+    problems: &mut Vec<String>,
+) {
+    let Some(spec) = &method.oauth2 else {
+        return;
+    };
+    if spec.token_endpoint.is_empty()
+        || connector
+            .service_names()
+            .contains(&spec.token_endpoint.as_str())
+    {
+        return;
+    }
+    let listed = connector.service_names().join(", ");
+    problems.push(format!(
+        "credential {:?} resolves its token exchange against token_endpoint {:?}, which is not a \
+         declared service — a `token_endpoint` names the declared service whose base URL the token \
+         exchange resolves against, and a name nothing declares reaches a host the allow-list never \
+         admitted. This provider declares: {listed}. Leaving it empty is the other legal answer, and \
+         means the token exchange resolves against the `endpoint` service",
+        method.name, spec.token_endpoint
+    ));
+}
+
 /// **A grant that carries a declared weakness must declare it** (C-440).
 ///
 /// The closed [`AuthHazard`] vocabulary is only worth having if a connector cannot opt out of it by
@@ -5292,6 +5328,7 @@ fn validate_credentials(connector: &Connector, problems: &mut Vec<String>) {
         }
 
         validate_one_credential_acquisition(connector, method, problems);
+        validate_one_credential_token_endpoint(connector, method, problems);
         validate_one_credential_hazard(method, problems);
         validate_one_credential_quirks(method, problems);
         for key in method.env.iter().chain(&method.user_env) {

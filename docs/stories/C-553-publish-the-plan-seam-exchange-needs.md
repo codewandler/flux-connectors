@@ -2,7 +2,7 @@
 id: C-553
 title: "Publish the plan seam Exchange's adoption actually needs"
 pillar: Connector
-status: ready
+status: done
 priority: 1
 design: docs/designs/catalog-artifact.md
 epic: catalog-artifact
@@ -27,27 +27,37 @@ the one public plan-deriving function, `Operation::build_authenticated_request`,
 
 ## Acceptance
 
-- [ ] A public `connector-pack` path yields the complete `RequestPlan` for a catalogued operation
+- [x] A public `connector-pack` path yields the complete `RequestPlan` for a catalogued operation
       with the SAME enforcement topology the Tool path applies — credential resolution ordering,
       checked redactor registration, scheme placement, endpoint substitution with
       declared-authority validation, the live per-variable resolution (declared defaults,
       operator approval, origin normalisation). Not a parallel derivation: the same code, its
       result published instead of swallowed.
-- [ ] A public seam accepts a plan-derived request for dispatch through a bound `Egress` without
+- [x] A public seam accepts a plan-derived request for dispatch through a bound `Egress` without
       exposing the transport (`Egress::tool()` stays refusable) — or the design records, with
       Exchange's agreement, that dispatch stays behind the Tool projection and only the plan is
       published; either way the decision is written, not defaulted.
-- [ ] The differential gate covers the new public path: the plan it yields is byte-identical to
+- [x] The differential gate covers the new public path: the plan it yields is byte-identical to
       the wrapper-Tool derivation for every operation, subjects and redaction set included — the
       C-538 gate extended to the published seam, failing-first against a seeded divergence.
-- [ ] No secret-bearing value gains a printable path: `SensitiveText`/redacted-`Debug` discipline
+- [x] No secret-bearing value gains a printable path: `SensitiveText`/redacted-`Debug` discipline
       holds on everything newly public, pinned by test.
-- [ ] The consumer contract is documented on the crate (this is what Exchange's X-156 and
+- [x] The consumer contract is documented on the crate (this is what Exchange's X-156 and
       upstream C-541's wrapper retirement both key on; name both in the doc).
 
 ## Progress
 
 - 2026-08-12: Filed by the cross-repo coordinator from Exchange X-156's blocked findings.
+
+- 2026-08-12: Implemented on `impl/C-553` (`0c4fa683` + review follow-up `7ccb8d09`), merged
+  `635a652c`. `Operation::build_request_plan` publishes the complete `RequestPlan` through the
+  same body `build_authenticated_request` already had (now one line over it), and `Egress::send`
+  is public — the reviewer confirmed it is a strict subset of the already-public
+  `tool().execute()`, and materially safer than the pre-existing public `build_authenticated_request`
+  which dropped subjects and redactions. The differential gate's third arm holds the published
+  plan byte-identical to the Flux derivation for all 835 operations with live per-field seeded
+  controls. Independent review PASS, zero blocking; the C-136 diversion boundary is documented as
+  a plan-path limit. Un-gates Exchange X-156 and upstream C-541.
 
 ## Notes
 

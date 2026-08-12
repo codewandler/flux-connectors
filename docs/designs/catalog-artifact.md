@@ -91,6 +91,24 @@ carries the complete published surface — the IR minus nothing:
   declares the operator-level `oauth_client_id` config field binding `oauth.client_id`. The
   document publishes the registration **requirement** through that existing `binds` grammar and
   never a value; the vestigial `client_id` value field does not survive into the document.
+  - **Two hosts for one grant (C-556).** `OAuth2Spec.token_endpoint` optionally names a *second*
+    declared service, so a connector whose token endpoint lives on a different host from its
+    authorize endpoint — Anthropic's subscription flow authorizes on `claude.ai` and redeems on
+    `platform.claude.com` — is expressible. It is a service **name** and never a URL, so the host
+    set stays derived from declared services and X-154's `NoDeclaredDefault` composition holds: a
+    host joins `token_path` onto `token_endpoint`'s service base URL when set, and `endpoint`'s
+    otherwise (the declared-defaults rule applies to the token leg identically). The loader refuses a
+    name no `[[services]]` entry declares. Absent — every shipped declaration — is single-host
+    behaviour byte-for-byte, so no committed document moves.
+  - **Public vs confidential clients (C-556).** `OAuth2Spec.public_client` (default `false`)
+    declares a PKCE public client that issues and uses no client secret. A confidential client
+    registers a secret an operator supplies once; a public client needs only its `client_id`. The
+    archetype form matrix (`auth_archetypes.rs`) reads this discriminator: it requires the secret
+    operator-level `oauth.client_secret` config field only of a *confidential*
+    `authorization_code` client. Both fields are additive-optional, skipped when absent/false, so
+    every shipped document and manifest is byte-identical; the document schema gains the two
+    optional properties (an additive minor bump under the C-537 forward-compat contract, which an
+    older reader tolerates).
 - **Config**: every field with label/help/format/choices/level/approval and its `binds` targets.
 - **`verify`**, **events**, **channel bindings** (transport, verification matrix, payload maps,
   reply, subscription/setup), **runtime bindings** (C-497 vocabulary as it lands).
@@ -249,6 +267,65 @@ pins the compiler's offline guarantee. One boundary the plan API must hold, name
 side and worth stating here too: **projecting a plan into a Tool is not composing a request** — the
 consumer wraps and dispatches the plan it was handed; a consumer that edits one has become the
 second request path this family already rejected.
+
+#### 3.1 The plan seam, and the dispatch decision (C-553)
+
+The paragraph above described the plan API; it did not say how a consumer *reaches* one for a live
+invocation, and Exchange's X-156 parked BLOCKED on the difference. Read out of the vendored 0.23.0
+sources: every input to `connector_resolve::resolve` was produced only by `pub(crate)` paths in
+`connector-pack` (`Credentials::resolve` at `src/credentials.rs:268`, `Configuration::snapshot` at
+`src/config.rs:417`, with the live per-variable resolution private in `tool.rs`), dispatch was
+`pub(crate)` (`Egress::send`), and the one public plan-deriving function,
+`Operation::build_authenticated_request`, returned `plan.request` and dropped `permission_subjects`
+and `redactions`.
+
+C-553 closes it with **three** newly public items and no fourth:
+
+| published | what it is |
+|---|---|
+| `Operation::build_request_plan(&self, ctx, params)` | the whole `RequestPlan`, derived by the code `build_authenticated_request` now calls — the same path, its result published instead of swallowed |
+| `Egress::send(&self, ctx, request)` | the dispatch seam: a plan-derived request onto the bound transport |
+| `RequestPlan` | re-exported from `connector-resolve`, not re-wrapped |
+
+**The plan, not its ingredients.** X-156 offered two shapes — publish the `Vec<Assembled>` and the
+endpoints map, or publish a `RequestPlan` directly. The plan is chosen because the *ordering*
+between those two ingredients is the enforcement topology itself: credentials resolved and
+registered with the redactor before a request exists, endpoints resolved with declared defaults,
+operator approval and origin normalisation before substitution. Handing out the ingredients would
+make that ordering a matter of convention on the consumer's side, which is precisely what
+"enforcement topology unchanged" forbids. It also keeps `Snapshot` unpublished, and
+`connector-pack` is published — everything made public is API forever.
+
+**Dispatch is published rather than deferred**, and this is the decision the story asked to be
+written rather than defaulted. The alternative — leaving dispatch behind the `Tool` projection —
+was rejected on three grounds:
+
+1. It would leave `Egress::tool()` as the only public route from the port to the wire, and that
+   spelling is refused in **every** Exchange file with no exception list
+   (`no_second_request_path.rs`'s `UNWRAPS_THE_TRANSPORT`). A consumer that owns its own projection
+   would have to choose between its own rule and reaching the network.
+2. It would require Exchange's written agreement, which C-553 has no way to obtain; publishing the
+   seam needs none, because it takes nothing away.
+3. `send` **narrows** the surface rather than widening it. `tool()` is already public and hands out
+   the `Arc<dyn Tool>` — with it, `execute` on any `Value` whatsoever. `send` takes a `Request`,
+   which in this family is produced by a derivation. The transport never leaves the newtype.
+
+The named consequence, documented on the method: `send` calls `execute` directly and so bypasses
+`Executor::dispatch`, exactly as a projected `Operation` already does. `http.request`'s own
+`permission_subjects` is not consulted and flux's post-dispatch scrub does not run, so the consumer
+owes the network gate and the scrub — and the plan hands it both halves,
+`permission_subjects` to judge and `redactions` to hold.
+
+**The differential gate covers the published path.** `catalogue_differential.rs` gained a third arm:
+for every operation, the plan reached through `build_request_plan` over *bound ports* — a seeded
+`MemoryStore` behind `Credentials`, a `MemoryConfig` behind `Configuration` — must be byte-identical
+to the Flux-derived request with the same credentials placed, subjects and redaction set included.
+It is not a third copy of the document arm: that one is fed inputs the test assembles, while this
+one exercises the alternative-selection rule, the acquisition axis, the checked registration and the
+live endpoint resolution. `a_seeded_divergence_in_the_published_plan_is_caught` is its control.
+
+The consumer contract is written on the crate itself — `connector-pack`'s module documentation — and
+names X-156 and C-541, because those are the two stories that key on it.
 
 ## Compatibility projections
 

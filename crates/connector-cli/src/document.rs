@@ -175,6 +175,11 @@ struct DocScheme<'a> {
 struct DocOAuth2<'a> {
     #[serde(skip_serializing_if = "str::is_empty")]
     endpoint: &'a str,
+    /// The declared service the token exchange resolves against when it is not `endpoint` (C-556) —
+    /// a name, never a URL, so a consumer joins `token_path` onto this service's base URL when set
+    /// and onto `endpoint`'s otherwise. Skipped when absent, so no single-host document moves.
+    #[serde(skip_serializing_if = "str::is_empty")]
+    token_endpoint: &'a str,
     #[serde(skip_serializing_if = "str::is_empty")]
     authorize_path: &'a str,
     #[serde(skip_serializing_if = "str::is_empty")]
@@ -185,6 +190,10 @@ struct DocOAuth2<'a> {
     grants: &'a [OAuthGrant],
     #[serde(skip_serializing_if = "Option::is_none")]
     redirect: Option<&'a OAuthRedirect>,
+    /// Whether this is a public PKCE client that uses no client secret (C-556). Skipped when
+    /// `false` — a confidential client — so no already-published document moves.
+    #[serde(skip_serializing_if = "is_false")]
+    public_client: bool,
 }
 
 /// One configuration field: the declaration plus the level derived from what it binds — the same
@@ -601,11 +610,13 @@ fn doc_auth<'a>(connector: &Connector, method: &'a AuthMethod) -> Result<DocAuth
             }
             Some(DocOAuth2 {
                 endpoint: &spec.endpoint,
+                token_endpoint: &spec.token_endpoint,
                 authorize_path: &spec.authorize_path,
                 token_path: &spec.token_path,
                 scopes: &spec.scopes,
                 grants: &spec.grants,
                 redirect: spec.redirect.as_ref(),
+                public_client: spec.public_client,
             })
         }
     };
@@ -1516,10 +1527,12 @@ pub fn schema() -> &'static Value {
                     "type": "object",
                     "properties": {
                         "endpoint": { "type": "string" },
+                        "token_endpoint": { "type": "string" },
                         "authorize_path": { "type": "string" },
                         "token_path": { "type": "string" },
                         "scopes": { "type": "array", "items": { "type": "string" } },
                         "grants": { "type": "array", "items": { "enum": ["authorization_code", "password", "refresh_token", "client_credentials"] } },
+                        "public_client": { "type": "boolean" },
                         "redirect": {
                             "type": "object",
                             "properties": {
