@@ -30,19 +30,60 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache cargo
+        # `cache-bin` defaults to `true` at this SHA, so `$CARGO_HOME/bin` — and therefore the
+        # `cargo-nextest` the next step installs — is restored with the rest of the cargo cache.
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      # The test runner is a pinned tool, exactly like the toolchain above (C-543). The version is
+      # the one `.config/nextest.toml` requires, and that file refuses an older one (exit 92) —
+      # nextest only *warns* on a configuration key it does not recognise, so without the pin the
+      # same config could quietly mean two different things on two machines.
+      #
+      # `cargo install` rather than a prebuilt-binary action: it builds from the same crates.io
+      # source the workspace already trusts and adds no fourth third-party action to the job that
+      # decides whether a pull request merges. The cost is honest — a cold cache pays a source
+      # build here — which is why the step is guarded and why `cache-bin` above matters.
+      # `taiki-e/install-action` would make this a few seconds; that trade is recorded in C-543
+      # and is one line to change if the cold-cache cost outweighs the narrower trust surface.
+      - name: Install cargo-nextest
+        # The guard reads the `release:` line, not the first one: `cargo nextest --version` prints
+        # `cargo-nextest 0.9.143 (60fa45f63 2026-08-04)` there, so an exact-line match against the
+        # version alone never matches and the step would reinstall on every run.
+        run: |
+          if ! cargo nextest --version 2>/dev/null | grep -qx "release: 0.9.143"; then
+            cargo install cargo-nextest --locked --version 0.9.143
+          fi
+          cargo nextest --version
 
       # `--locked` here, not on the build/test steps below: it makes a stale or hand-edited
       # `Cargo.lock` an obvious, named failure rather than something cargo silently repairs, while
-      # the four gate commands stay byte-identical to the ones in AGENTS.md's dev loop.
+      # the gate commands stay byte-identical to the ones in AGENTS.md's dev loop.
       - name: Fetch locked dependencies
         run: cargo fetch --locked
 
       - name: Build
         run: cargo build --workspace
 
+      # `cargo test` runs one test *binary* at a time — since C-533 that is nine integration
+      # binaries plus the per-crate unit tests, serialised. nextest schedules every test as its own
+      # process across every core instead.
+      #
+      # `--no-fail-fast` is the one thing this step did NOT say before C-543, while AGENTS.md
+      # § Validation has required it throughout — plain `cargo test --workspace` stops at the first
+      # failing binary, so this job could report one failure where the tree had several. A provider
+      # story is EXPECTED to leave nine whole-catalogue staleness tests red, spread across the
+      # workspace, and the documented workflow is to report that complete named list from ONE run.
+      # For nextest the flag restates its own default; it is spelled out because that is the flag
+      # the documentation names, and `.config/nextest.toml` pins the default behind it.
       - name: Test
-        run: cargo test --workspace
+        run: cargo nextest run --workspace --no-fail-fast
+
+      # nextest executes test binaries; a doc-test is compiled and run by rustdoc, so nextest runs
+      # none of the workspace's 12. They stay in the gate under their own name — otherwise adopting
+      # a faster runner would have silently shrunk what this job verifies, which is the failure mode
+      # C-543 exists to avoid rather than to cause.
+      - name: Doc-tests
+        run: cargo test --workspace --doc
 
       - name: Clippy (deny warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
