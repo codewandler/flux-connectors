@@ -318,8 +318,13 @@ fn the_connector_verifies_with_the_regular_key_over_x_api_key() {
     );
     assert_eq!(
         by_scheme(|scheme| matches!(scheme, connector_spec::AuthScheme::Bearer)),
-        ["anthropic.console_oauth", "anthropic.console_oauth_admin"],
-        "the OAuth2-acquired tokens, and only those, travel as bearers (C-555)"
+        [
+            "anthropic.console_oauth",
+            "anthropic.console_oauth_admin",
+            "anthropic.subscription_oauth"
+        ],
+        "the three OAuth2-acquired tokens, and only those, travel as bearers: the two Console \
+         credentials and the Claude Pro/Max subscription token (C-555 round 2)"
     );
 
     assert_eq!(
@@ -508,34 +513,87 @@ fn the_login_service_base_url_is_resolvable_without_configuration() {
     );
 }
 
-/// **The two-host subscription flow is absent rather than half-declared** (C-555, blocked on C-556).
+/// **The subscription flow is the two-host acquisition, declared honestly across two services**
+/// (C-555 round 2, expressible since C-556).
 ///
 /// Anthropic's Claude Pro/Max sign-in authorizes on `claude.ai` and exchanges on
-/// `platform.claude.com`. `OAuth2Spec` binds both legs to one `endpoint` service and therefore to
-/// one origin, so the flow cannot be stated truthfully today.
+/// `platform.claude.com` — two origins one `endpoint` cannot express. C-556's `token_endpoint` is
+/// what makes it declarable: `endpoint` names the authorize host and `token_endpoint` names the
+/// token host, both resolved from declared services.
 ///
-/// This test exists because the half-declaration would not otherwise be caught: nothing in the
-/// loader requires `authorize_path` or `token_path` to be present, so a block naming one host and
-/// omitting the other loads clean and composes the missing leg against the wrong origin — and the
-/// wrong origin here is a *live endpoint* (`platform.claude.com/oauth/authorize` is the Console
-/// authorize page), so the failure would be a plausible URL for the wrong flow rather than a 404.
+/// Round 1 this test asserted the flow was *absent* rather than half-declared, because the model
+/// could not state it truthfully. It now asserts the opposite: that the flow is present and each leg
+/// resolves against the host it actually uses. The invariant it defends is unchanged — no leg is
+/// silently composed against the wrong origin — but it is now checked over a real declaration rather
+/// than over its absence.
+///
+/// **The half-declaration guard still bites.** Every OAuth2 grant on the connector must state both
+/// paths; the loader requires neither, so an omitted one would compose against whatever host the
+/// remaining `endpoint`/`token_endpoint` names — and the failure would be a plausible URL for the
+/// wrong flow rather than a 404. That check now covers all three credentials.
 #[test]
-fn the_two_host_subscription_flow_is_not_half_declared() {
+fn the_subscription_flow_is_two_host_and_each_leg_resolves_against_its_own_service() {
     let connector = anthropic();
 
-    for service in &connector.services {
-        if let Some(base_url) = service.base_url.as_deref() {
-            assert!(
-                !base_url.contains("claude.ai"),
-                "service `{}` declares the subscription flow's authorize host {base_url:?}. That \
-                 flow's token leg is on a different origin, which `OAuth2Spec`'s single `endpoint` \
-                 cannot express — declaring half of it is what this test refuses. The spec \
-                 extension is C-556",
-                service.name
-            );
-        }
-    }
+    let base_of = |service_name: &str| -> String {
+        connector
+            .services
+            .iter()
+            .find(|service| service.name == service_name)
+            .unwrap_or_else(|| panic!("service `{service_name}` should be declared"))
+            .base_url
+            .clone()
+            .unwrap_or_else(|| panic!("service `{service_name}` should declare its own base URL"))
+    };
 
+    let subscription = connector
+        .auth
+        .iter()
+        .find(|method| method.name == "anthropic.subscription_oauth")
+        .expect("the subscription credential should be declared");
+    let spec = subscription
+        .oauth2
+        .as_ref()
+        .expect("the subscription credential declares an `[auth.oauth2]` grant");
+
+    // The authorize leg is on claude.ai; the token leg is on platform.claude.com. Reading the hosts
+    // back through the declared services is what proves the two references point where they must.
+    assert_eq!(
+        base_of(&spec.endpoint),
+        "https://claude.ai",
+        "the subscription authorize leg (`endpoint` = {:?}) must resolve to claude.ai",
+        spec.endpoint
+    );
+    assert!(
+        !spec.token_endpoint.is_empty(),
+        "the subscription flow is two-host, so `token_endpoint` must name a second service — an \
+         empty one would silently redeem the token against the authorize host claude.ai, which is \
+         not where the exchange lives"
+    );
+    assert_eq!(
+        base_of(&spec.token_endpoint),
+        "https://platform.claude.com",
+        "the subscription token leg (`token_endpoint` = {:?}) must resolve to platform.claude.com — \
+         the console.anthropic.com host it used to live on now 404s",
+        spec.token_endpoint
+    );
+    assert_ne!(
+        spec.endpoint, spec.token_endpoint,
+        "the whole point of a two-host declaration is that the authorize and token services differ; \
+         if they were equal this would be a single-host flow wearing `token_endpoint` for show"
+    );
+    assert!(
+        spec.public_client,
+        "the subscription flow is a public PKCE client — it ships a shared public client id and no \
+         secret, and a confidential marking here would demand an operator client secret that does \
+         not exist"
+    );
+    assert!(
+        spec.client_id.is_empty(),
+        "the shared client id is a fact for a comment, never a declaration value"
+    );
+
+    // The half-declaration guard, now over all three OAuth2 credentials.
     for method in &connector.auth {
         let Some(spec) = &method.oauth2 else {
             continue;
@@ -544,7 +602,8 @@ fn the_two_host_subscription_flow_is_not_half_declared() {
             !spec.authorize_path.is_empty() && !spec.token_path.is_empty(),
             "credential `{}` declares an OAuth2 grant with an empty leg (authorize {:?}, token \
              {:?}). The loader does not require either path, so an omitted one is silently composed \
-             against whatever origin `endpoint` names — state both legs or declare no grant",
+             against whatever origin `endpoint`/`token_endpoint` names — state both legs or declare \
+             no grant",
             method.name,
             spec.authorize_path,
             spec.token_path

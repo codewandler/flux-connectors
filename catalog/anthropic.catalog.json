@@ -35,6 +35,7 @@
           "authorization_code",
           "refresh_token"
         ],
+        "public_client": true,
         "token_path": "/v1/oauth/token"
       },
       "scheme": {
@@ -60,6 +61,7 @@
           "authorization_code",
           "refresh_token"
         ],
+        "public_client": true,
         "scopes": [
           "org:admin"
         ],
@@ -73,6 +75,39 @@
         {
           "attribution": "See `anthropic.console_oauth`'s measurement for the full provenance: Anthropic's CLI docs describe the flow without URLs; the values come from third-party implementations of the same flow and a live-host check.",
           "behaviour": "Same measured endpoints as `anthropic.console_oauth` — Anthropic publishes no authorize or token URL for the Console flow, and the token host moved from console.anthropic.com to platform.claude.com. Recorded again here rather than cross-referenced because a quirk is read per credential.",
+          "grant": "authorization_code",
+          "measured": "2026-08-12"
+        }
+      ]
+    },
+    {
+      "description": "Anthropic Claude Pro/Max subscription OAuth2 access token (sk-ant-oat01-), acquired on behalf of a signed-in consumer-plan user and sent as a bearer. Authorizes inference against Anthropic's consumer surfaces, which this catalogue does not model — it is declared so a host can compose the two-host acquisition, not to authenticate an operation here. Anthropic restricts this flow to Claude Code and Claude.ai; using the token elsewhere violates the Consumer Terms (owner-accepted 2026-08-12)",
+      "name": "anthropic.subscription_oauth",
+      "oauth2": {
+        "authorize_path": "/oauth/authorize",
+        "endpoint": "subscription-authorize",
+        "grants": [
+          "authorization_code",
+          "refresh_token"
+        ],
+        "public_client": true,
+        "scopes": [
+          "user:profile",
+          "user:inference",
+          "user:sessions:claude_code",
+          "user:mcp_servers"
+        ],
+        "token_endpoint": "login",
+        "token_path": "/v1/oauth/token"
+      },
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "user",
+      "token_endpoint_quirks": [
+        {
+          "attribution": "The endpoints, the shared public client id and the `user:*` scopes come from third-party implementations of the Claude Code flow — github.com/querymt/anthropic-auth (\"Max Mode\": authorize `claude.ai/oauth/authorize`) and flopsstuff.github.io/coqu/claude-oauth (token `platform.claude.com/v1/oauth/token`, client id `9d1c250a-e61b-44d9-88ed-5944d1962f5e`, scopes `user:profile user:inference user:sessions:claude_code user:mcp_servers`, PKCE enforced). The console→platform token-host move is the live-host check in NousResearch/hermes-agent#49821. Anthropic's own docs describe consumer OAuth without publishing endpoints, so none of this is confirmed against a vendor specification.",
+          "behaviour": "Authorize is `https://claude.ai/oauth/authorize` and the token exchange is `https://platform.claude.com/v1/oauth/token` — two different origins, PKCE S256 mandatory (omitting `code_verifier` fails the exchange). The token host is `platform.claude.com`, NOT the legacy `console.anthropic.com`, which now 404s: the console.anthropic.com to platform.claude.com rename moved it, and an older integration that hard-codes the console host will 404 on fresh logins while refresh keeps working. Anthropic publishes no URL for this flow; both values are measured.",
           "grant": "authorization_code",
           "measured": "2026-08-12"
         }
@@ -1082,9 +1117,16 @@
     {
       "api_version": "v1",
       "base_url": "https://platform.claude.com",
-      "description": "Anthropic's Console OAuth2 authorize and token endpoints, served by platform.claude.com rather than by the API host.",
+      "description": "Anthropic's Console OAuth2 authorize and token endpoints on platform.claude.com; also the subscription flow's token host, which redeems here while authorizing on claude.ai.",
       "gid": "com.anthropic.api/login:v1",
       "name": "login"
+    },
+    {
+      "api_version": "v1",
+      "base_url": "https://claude.ai",
+      "description": "Anthropic's Claude Pro/Max subscription OAuth2 authorize endpoint, served by claude.ai. The matching token exchange is on the `login` service (platform.claude.com).",
+      "gid": "com.anthropic.api/subscription-authorize:v1",
+      "name": "subscription-authorize"
     }
   ],
   "vendor": "Anthropic",

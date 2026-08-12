@@ -2,24 +2,19 @@
 # Auth is assembled by the host resolver (`connector-pack`); this manifest becomes a projection of the catalog artifact (C-534).
 generator = "flux-connectors 0.23.0"
 connector = "anthropic"
-service = "models"
-gid = "com.anthropic.api/models:v1"
+service = "subscription-authorize"
+gid = "com.anthropic.api/subscription-authorize:v1"
 vendor = "Anthropic"
 description = "Anthropic platform: the live model catalogue, and organization info, members, workspaces, workspace members, API keys and outstanding invites from the Admin API — all read-only"
 runtime = "http"
-base_url = "https://api.anthropic.com"
+base_url = "https://claude.ai"
 api_version = "v1"
-module = "anthropic-models.flux"
-operations = ["anthropic-models-list", "anthropic-model-get"]
-verify = "anthropic-models-list"
+module = "anthropic-subscription-authorize.flux"
+operations = []
 
 [operation_directions]
-anthropic-model-get = "read"
-anthropic-models-list = "read"
 
 [operation_semantic_effects]
-anthropic-model-get = []
-anthropic-models-list = []
 
 [[auth]]
 name = "anthropic.api_key"
@@ -102,14 +97,3 @@ credentials = ["anthropic.api_key"]
 
 [[default_auth]]
 credentials = ["anthropic.console_oauth"]
-
-[[config]]
-name = "api_key"
-service = "models"
-label = "API key"
-help = "Create a key in the Anthropic Console (console.anthropic.com), under API Keys. This is the standard key used for the model catalogue"
-format = "token"
-secret = true
-docs_url = "https://docs.anthropic.com/en/api/getting-started"
-binds = "credential.anthropic.api_key"
-level = "connection"

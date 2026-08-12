@@ -42,7 +42,7 @@ static AUTH: &[crate::Credential] = &[
     crate::Credential {
         name: "anthropic.console_oauth",
         leaf: "console_oauth",
-        acquire: crate::Acquisition::OAuth2(&crate::OAuth2 { endpoint: "login", authorize_path: "/oauth/authorize", token_path: "/v1/oauth/token", client_id: "", scopes: &[], grants: &[crate::OAuthGrant::AuthorizationCode, crate::OAuthGrant::RefreshToken], redirect: None }),
+        acquire: crate::Acquisition::OAuth2(&crate::OAuth2 { endpoint: "login", token_endpoint: "", authorize_path: "/oauth/authorize", token_path: "/v1/oauth/token", client_id: "", scopes: &[], grants: &[crate::OAuthGrant::AuthorizationCode, crate::OAuthGrant::RefreshToken], redirect: None, public_client: true }),
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
         subject: crate::Subject::User,
         hazard: None,
@@ -50,7 +50,15 @@ static AUTH: &[crate::Credential] = &[
     crate::Credential {
         name: "anthropic.console_oauth_admin",
         leaf: "console_oauth_admin",
-        acquire: crate::Acquisition::OAuth2(&crate::OAuth2 { endpoint: "login", authorize_path: "/oauth/authorize", token_path: "/v1/oauth/token", client_id: "", scopes: &["org:admin"], grants: &[crate::OAuthGrant::AuthorizationCode, crate::OAuthGrant::RefreshToken], redirect: None }),
+        acquire: crate::Acquisition::OAuth2(&crate::OAuth2 { endpoint: "login", token_endpoint: "", authorize_path: "/oauth/authorize", token_path: "/v1/oauth/token", client_id: "", scopes: &["org:admin"], grants: &[crate::OAuthGrant::AuthorizationCode, crate::OAuthGrant::RefreshToken], redirect: None, public_client: true }),
+        place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
+        subject: crate::Subject::User,
+        hazard: None,
+    },
+    crate::Credential {
+        name: "anthropic.subscription_oauth",
+        leaf: "subscription_oauth",
+        acquire: crate::Acquisition::OAuth2(&crate::OAuth2 { endpoint: "subscription-authorize", token_endpoint: "login", authorize_path: "/oauth/authorize", token_path: "/v1/oauth/token", client_id: "", scopes: &["user:profile", "user:inference", "user:sessions:claude_code", "user:mcp_servers"], grants: &[crate::OAuthGrant::AuthorizationCode, crate::OAuthGrant::RefreshToken], redirect: None, public_client: true }),
         place: crate::Placement::Header { name: "Authorization", prefix: "Bearer " },
         subject: crate::Subject::User,
         hazard: None,

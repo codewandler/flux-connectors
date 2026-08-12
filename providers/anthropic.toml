@@ -257,10 +257,12 @@ description = "Anthropic Admin API key (starts sk-ant-admin), sent as x-api-key.
 #      (https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication, read 2026-08-12).
 #      It issues `sk-ant-oat01-…` tokens that authenticate the Claude API, and it is the flow that
 #      authorizes **this connector's operations**: the Models API and the Admin API. Authorize and
-#      token are both on the Console origin, so one `endpoint` expresses it — which is why it is
-#      declared here and the subscription flow below is not.
+#      token are both on the Console origin, so one `endpoint` expresses it — the two credentials
+#      declared immediately below.
 #   2. The **subscription** flow (Claude Pro/Max sign-in), whose authorize leg is on `claude.ai`
-#      while its token leg is on `platform.claude.com`. See the non-declaration note below it.
+#      while its token leg is on `platform.claude.com`. It is a two-host flow, declared further down
+#      as `anthropic.subscription_oauth` using C-556's `token_endpoint`, and it authorizes inference
+#      that this connector does not model — see its own section for what it is for.
 #
 # **Two credentials rather than one, and the reason is privilege.** The Admin API needs the
 # `org:admin` scope; the model catalogue does not. Collapsing both surfaces onto one OAuth
@@ -299,6 +301,12 @@ token_path = "/v1/oauth/token"
 # ordinary workspace-scoped token, so requesting none is what this flow actually does; inventing a
 # scope name here would be a string the authorize endpoint has never seen.
 grants = ["authorization_code", "refresh_token"]
+# **A public PKCE client, so no operator client secret** (C-556). Anthropic's Console OAuth
+# authenticates the token exchange with PKCE alone — its CLI profile exposes `client_id` as a
+# writable key and no client secret at all. Marking it public is what exempts it from the
+# operator-secret requirement `auth_archetypes.rs` otherwise enforces on an `authorization_code`
+# grant, and it is the honest description: there is no secret for an operator to supply.
+public_client = true
 
 [[auth.quirks.token_endpoint]]
 # **The endpoints above are measured, not published — and this is the surface for exactly that.**
@@ -329,6 +337,9 @@ token_path = "/v1/oauth/token"
 # catalogue asks for.
 scopes = ["org:admin"]
 grants = ["authorization_code", "refresh_token"]
+# Public PKCE client, same as `anthropic.console_oauth` — the org:admin scope changes what the token
+# can do, not how the client authenticates the exchange.
+public_client = true
 
 [[auth.quirks.token_endpoint]]
 grant = "authorization_code"
@@ -337,34 +348,79 @@ attribution = "See `anthropic.console_oauth`'s measurement for the full provenan
 measured = "2026-08-12"
 
 # ---------------------------------------------------------------------------------------------
-# THE SUBSCRIPTION FLOW IS DELIBERATELY NOT DECLARED HERE, AND THE REASON IS THE MODEL (C-555).
+# THE SUBSCRIPTION OAUTH2 ACQUISITION (C-555, expressible since C-556) — the two-host flow.
 # ---------------------------------------------------------------------------------------------
 #
 # Anthropic's Claude Pro/Max sign-in is a **two-host** OAuth2 flow: the browser leg is
-# `https://claude.ai/oauth/authorize` and the exchange is `https://platform.claude.com/v1/oauth/token`
-# (PKCE S256 mandatory, grants `authorization_code` + `refresh_token`, and a well-known public client
-# id that Claude Code ships — the FACT is recorded here, the VALUE deliberately is not, because a
-# registration value is deployment configuration and never a declaration field).
+# `https://claude.ai/oauth/authorize` and the exchange is `https://platform.claude.com/v1/oauth/token`.
+# One `endpoint` cannot express two origins — which is why this was a documented non-declaration in
+# C-555's first round. C-556 added `OAuth2Spec::token_endpoint`, a second service *reference*, and it
+# is what makes this declarable: `endpoint` names the authorize host and `token_endpoint` names the
+# token host, both resolved from declared `[[services]]` base URLs so `http_hosts` and X-154's
+# `NoDeclaredDefault` composition rule keep working. The authorize host is the new
+# `subscription-authorize` service below; the token host is the existing `login` service
+# (`platform.claude.com`), reused rather than duplicated because it is byte-for-byte the same origin.
 #
-# **`OAuth2Spec` cannot express it, so nothing is written rather than something half-written.**
-# `crates/connector-spec/src/auth.rs` binds `authorize_path` and `token_path` to a single `endpoint`
-# service, and therefore to a single origin; `OAuthRedirect` is `{port, path}` and carries no host;
-# `[[auth.quirks.token_endpoint]]` is four prose/provenance strings under `deny_unknown_fields` and
-# is not a URL carrier. The spec extension is **C-556**.
+# **What this credential authorizes: none of this connector's operations, deliberately.** A Pro/Max
+# subscription OAuth token is a consumer *inference* credential — Anthropic's own Claude Code docs say
+# a `setup-token` OAuth token "can only make model requests" — and this file's charter is "NO
+# INFERENCE OPERATION IN THIS FILE". So it appears in neither `default_auth` nor any operation's
+# `auth`, and the loader permits that: a requirement must name a declared credential, but no rule
+# forces a credential to be named by a requirement (`validate_requirements`,
+# `crates/connector-spec/src/provider.rs`). The credential is declared because the story's consumer is
+# **Exchange's authorize-URL composition and autodev's Anthropic login** (`## Goal`), not an operation
+# here: a host acquires this token to make inference calls that live in flux's native `anthropic`
+# provider, and this connector declares *how the acquisition composes* without modelling the call.
 #
-# The half-declaration is the thing to refuse, and it would not be caught: nothing in the loader
-# requires `authorize_path` or `token_path` to be present, so a block naming one host and omitting
-# the other loads clean and silently composes the missing leg against the wrong origin. Note that the
-# wrong origin here is not a 404 but a *real endpoint* — `platform.claude.com/oauth/authorize` is the
-# Console authorize page declared above — so the failure would be a plausible URL for the wrong flow.
+# **The client id is a FACT recorded, never a declaration value.** Claude Code ships a single
+# well-known public client id for this flow — `9d1c250a-e61b-44d9-88ed-5944d1962f5e`, recorded here in
+# prose so a reader can recognise it. It is deliberately NOT the `client_id` field of the block below,
+# and there is no `oauth_client_id` config binding it: a registration value is deployment
+# configuration, and the loader would refuse a populated registration field anyway. PKCE S256 is
+# mandatory and is what a public client authenticates the exchange with — coqu's implementation notes
+# it plainly: "The auth server enforces PKCE. Omitting `code_verifier` in the token request fails."
 #
-# **A second reason the owner should keep in view.** Anthropic states that OAuth on Free, Pro and Max
-# plans "is intended exclusively for Claude Code and Claude.ai", does not offer an OAuth program for
-# third-party tools, and does not provide a way to register third-party client ids; server-side
-# enforcement rejecting consumer-plan OAuth tokens outside those surfaces has been in place since
-# January 2026. The owner weighed this and accepted it explicitly on 2026-08-12 for the subscription
-# flow. It is recorded because the same "no third-party client registration" position covers the
-# Console flow declared above, and a future reader should not rediscover it as news.
+# ⚠ **THE TERMS-OF-SERVICE POSITION, AND THAT THE OWNER ACCEPTED IT EXPLICITLY.** Anthropic states
+# that OAuth on Free, Pro and Max plans "is intended exclusively for Claude Code and Claude.ai", that
+# it "does not offer an OAuth program for third-party tools", and that it "does not provide a way to
+# register new client IDs for third-party projects"; server-side enforcement rejecting consumer-plan
+# OAuth tokens outside those surfaces has been in place since January 2026, and a documentation update
+# on 2026-02-19 confirmed that using such tokens in third-party tools violates the Consumer Terms.
+# **The owner weighed this on 2026-08-12 and accepted it explicitly, choosing to ship the subscription
+# flow anyway** (round-2 re-scope of C-555). This is recorded rather than argued because it is not the
+# connector model's decision to make — the model can express the flow honestly, and whether a
+# deployment is permitted to run it is the operator's and the owner's call, made here with the facts in
+# front of them. Sources: querymt/anthropic-auth and flopsstuff.github.io/coqu (endpoints, client id,
+# scopes, PKCE), NousResearch/hermes-agent#49821 (the console→platform token-host move), and the
+# widely-reported February 2026 Anthropic policy update (the ToS position).
+
+[[auth]]
+name = "anthropic.subscription_oauth"
+scheme = "bearer"
+subject = "user"
+description = "Anthropic Claude Pro/Max subscription OAuth2 access token (sk-ant-oat01-), acquired on behalf of a signed-in consumer-plan user and sent as a bearer. Authorizes inference against Anthropic's consumer surfaces, which this catalogue does not model — it is declared so a host can compose the two-host acquisition, not to authenticate an operation here. Anthropic restricts this flow to Claude Code and Claude.ai; using the token elsewhere violates the Consumer Terms (owner-accepted 2026-08-12)"
+
+[auth.oauth2]
+# Two hosts (C-556): `endpoint` is the authorize origin, `token_endpoint` is the exchange origin.
+endpoint = "subscription-authorize"
+token_endpoint = "login"
+authorize_path = "/oauth/authorize"
+token_path = "/v1/oauth/token"
+# The four `user:*` scopes Claude Code requests on this flow, quoted from the same third-party
+# implementations that carry the endpoints (querymt/anthropic-auth, flopsstuff.github.io/coqu). They
+# are inference/session/mcp scopes — none maps to an operation in this connector, which is the point:
+# the acquisition is real and the operations it would authorize live elsewhere.
+scopes = ["user:profile", "user:inference", "user:sessions:claude_code", "user:mcp_servers"]
+grants = ["authorization_code", "refresh_token"]
+# A public PKCE client — the client id is public and shared, and there is no client secret. See the
+# section comment above for the id (recorded as a fact, not a value) and the PKCE-S256 source.
+public_client = true
+
+[[auth.quirks.token_endpoint]]
+grant = "authorization_code"
+behaviour = "Authorize is `https://claude.ai/oauth/authorize` and the token exchange is `https://platform.claude.com/v1/oauth/token` — two different origins, PKCE S256 mandatory (omitting `code_verifier` fails the exchange). The token host is `platform.claude.com`, NOT the legacy `console.anthropic.com`, which now 404s: the console.anthropic.com to platform.claude.com rename moved it, and an older integration that hard-codes the console host will 404 on fresh logins while refresh keeps working. Anthropic publishes no URL for this flow; both values are measured."
+attribution = "The endpoints, the shared public client id and the `user:*` scopes come from third-party implementations of the Claude Code flow — github.com/querymt/anthropic-auth (\"Max Mode\": authorize `claude.ai/oauth/authorize`) and flopsstuff.github.io/coqu/claude-oauth (token `platform.claude.com/v1/oauth/token`, client id `9d1c250a-e61b-44d9-88ed-5944d1962f5e`, scopes `user:profile user:inference user:sessions:claude_code user:mcp_servers`, PKCE enforced). The console→platform token-host move is the live-host check in NousResearch/hermes-agent#49821. Anthropic's own docs describe consumer OAuth without publishing endpoints, so none of this is confirmed against a vendor specification."
+measured = "2026-08-12"
 
 # ---------------------------------------------------------------------------------------------
 # Configuration — what a human supplies before any of this runs
@@ -470,8 +526,24 @@ description = "Admin API: organization info and members, workspaces and their me
 # endpoint's response body *is* a credential, so neither is a connector operation — AGENTS.md
 # § Authentication contract. The host runs the grant; this service exists so the host knows where.
 name = "login"
-description = "Anthropic's Console OAuth2 authorize and token endpoints, served by platform.claude.com rather than by the API host."
+description = "Anthropic's Console OAuth2 authorize and token endpoints on platform.claude.com; also the subscription flow's token host, which redeems here while authorizing on claude.ai."
 base_url = "https://platform.claude.com"
+
+[[services]]
+# **The subscription flow's authorize host, which is neither the API host nor the token host**
+# (C-555, two-host since C-556).
+#
+# Claude Pro/Max sign-in authorizes on `claude.ai` and redeems its token on `platform.claude.com`.
+# This service is the first origin; the `login` service above is the second. `anthropic.subscription_oauth`
+# names this one as its `endpoint` (authorize) and `login` as its `token_endpoint` (exchange), so a
+# host joins each path onto the right host and `http_hosts` admits both. Same `NoDeclaredDefault`
+# reasoning as `login`: `claude.ai` is a single origin with no per-tenant subdomain, so the base URL
+# is a literal a consumer can compose against with no configuration.
+#
+# It declares no operations, and must not — it is a browser-redirect host, not an API surface.
+name = "subscription-authorize"
+description = "Anthropic's Claude Pro/Max subscription OAuth2 authorize endpoint, served by claude.ai. The matching token exchange is on the `login` service (platform.claude.com)."
+base_url = "https://claude.ai"
 
 # ---------------------------------------------------------------------------------------------
 # Operations — the models service (2), then the admin service (9). All eleven are GET, all
