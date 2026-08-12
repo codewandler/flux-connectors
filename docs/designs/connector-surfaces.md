@@ -80,7 +80,7 @@ Artifacts, abbreviated: **F** = `connectors/<provider>[-<service>].flux` · **M*
 |---|---|---|---|---|
 | **operations** | `[[operations]]` | **F** one `op` each · **M** ids only · **R** + **J** full rows · **T** one `ToolSpec` each | flux's module loader; the explorer; `connector-pack` | **complete** — the only surface that reaches every artifact |
 | **services** | `[[services]]` | **F**+**M** the *emission unit*: one module and one manifest per service · **J** a `services[]` block · **R** a `service` field on every operation row | the build's file split; the explorer; `connector-pack`, keying tenant configuration by service | **complete** — the embedded `Operation` carries `pub service` (`crates/catalog/src/lib.rs:239`), closing the R gap this row once recorded |
-| **auth** | `[[auth]]`, `[[default_auth]]` | **R** + **J** only · applied at execute by `connector-pack` | `connector-pack`; the explorer | **not in F, not in M** — that is [C-10](../stories/C-10-auth-injection-and-manifest.md), still `ready` |
+| **auth** | `[[auth]]`, `[[default_auth]]` | **R** + **J** only · applied at execute by `connector-pack` | `connector-pack`; the explorer | **not in F, not in M** — that was [C-10](../stories/C-10-auth-injection-and-manifest.md), now closed as superseded; auth is assembled by the host resolver |
 | **events** | `[[events]]` | **M** minus `schema`/`when` · **J** with both | a host registering subscriptions | **complete**; the omission is deliberate, see below · absent from **R** |
 | **channels** | `[[channels]]` | **M** + **J** · **nothing into F, by design** | a host; the explorer | **declaration complete, no runtime.** The adapter is [C-118](../stories/C-118-connector-channel-adapter.md) |
 | **config** | `[[config]]` | **M** + **R** + **J** · **nothing into F, by design** | a host and operator UI; the explorer | **complete** (C-87) — M/J carry the authored declaration plus derived level; R carries the value-free declaration |
@@ -114,8 +114,9 @@ Artifacts, abbreviated: **F** = `connectors/<provider>[-<service>].flux` · **M*
 - **auth** — `crates/connector-flux/src/op.rs:57` records that no credential is emitted, and
   `grep -l Authorization connectors/*.flux` is empty. The manifest's whole wire shape is
   `crates/connector-cli/src/seam.rs:362-386` — twelve fields, none of them auth — and the emitted
-  header says so out loud: *"Auth and the `http_hosts` allowlist land in C-10."* Both catalogues do
-  carry it: `crates/connector-cli/src/catalog.rs:396-415`,
+  header says so out loud: *"Auth is assembled by the host resolver (`connector-pack`); this manifest
+  becomes a projection of the catalog artifact (C-534)."* Both catalogues do carry it:
+  `crates/connector-cli/src/catalog.rs:396-415`,
   `crates/connector-cli/src/site.rs:737-771`. `connector-pack` resolves and places it at
   `crates/connector-pack/src/tool.rs:213`.
 - **events / channels** — `ManifestEvent` at `crates/connector-cli/src/seam.rs:440-455`,
@@ -180,7 +181,9 @@ would be the misread this document exists to prevent.
 - **`auth` is absent from `.flux` on purpose and absent from the manifest on schedule.** The module
   never names a credential because [auth-seam.md](auth-seam.md)'s whole argument is that acquisition
   in Flux would expose raw tokens in model-visible symbols. The *manifest*'s absence is different: it
-  is C-10, unstarted, and the generated header says so in every file.
+  was C-10, now closed as superseded rather than done, and the generated header says so in every
+  file — auth is assembled by the host resolver, and the manifest becomes a projection of the catalog
+  artifact (C-534).
 
   One credential name does leak into the manifest today, and it is worth knowing about: a channel's
   HMAC block carries `secret = "slack.signing_secret"`

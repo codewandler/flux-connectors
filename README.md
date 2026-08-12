@@ -54,6 +54,7 @@ Describe a provider once in `providers/<name>.toml`. `flux-connectors build` wri
 |---|---|
 | `catalog/<name>.catalog.json` | The canonical per-provider document (Decision 0022): the complete surface, request templates included. |
 | `catalog/connector-document.schema.json` | The versioned JSON Schema every document is validated against at build time. |
+| `crates/catalog-reader/catalog.pack` | The whole catalogue's documents in one offset-indexed, digest-carrying file (C-537). |
 | `connectors/<name>.flux` | The provider's typed Flux `op` declarations. |
 | `connectors/<name>.connector.toml` | The host-facing capability and credential manifest. |
 | `crates/catalog/ops/<name>/*.flux` | One standalone rendering per operation. |
@@ -70,9 +71,9 @@ adopted by [C-535](docs/stories/C-535-adopt-decision-0022.md)) makes the compile
 connector a versioned **catalog artifact**: one canonical committed document per provider, compiled
 into a single pack the resolver reads, with the emitted `.flux` modules retiring only after a
 differential gate proves the document-derived requests byte-identical to the Flux-derived ones.
-That program is [C-534](docs/stories/C-534-catalog-artifact-epic.md) (C-536…C-540); C-536 shipped
-the canonical document additively, every other artifact above is unchanged, and the pack, the
-resolver and the retirement are still ahead. See
+That program is [C-534](docs/stories/C-534-catalog-artifact-epic.md) (C-536…C-541); C-536 shipped
+the canonical document and C-537 the pack and its dependency-free reader, both additively, so every
+other artifact above is unchanged; only the resolver and the retirement are ahead. See
 [docs/designs/catalog-artifact.md](docs/designs/catalog-artifact.md).
 
 ## Try it locally
@@ -109,8 +110,20 @@ assert_eq!(op.risk, Risk::Low);
 println!("{}", op.flux);
 ```
 
-The crate contains static data only: no filesystem access, initialization, runtime, or transitive
-dependencies.
+The crate contains static data only: no filesystem access, initialization or runtime. Its one
+dependency is the data-only `catalog-reader`, which carries the pack and resolves nothing.
+
+If you have no Rust toolchain and no clone, take the pack from the release instead. Every tag
+attaches it beside a one-line checksum, so a consumer verifies before parsing:
+
+```bash
+base=https://github.com/codewandler/flux-connectors/releases/download/v0.22.0
+curl -fsSLO "$base/catalog.pack" -O "$base/catalog.pack.sha256"
+sha256sum -c catalog.pack.sha256   # catalog.pack: OK
+```
+
+That single file is the whole catalogue — every provider's canonical document, offset-indexed —
+readable with `catalog_reader::Pack::load` or by any implementation of the container format.
 
 ### CLI status
 
@@ -189,8 +202,8 @@ fails closed:
   `quirks.rate_limit` became representable there (the document schema carries the field; nothing
   declares one yet, so no document does). The pack and its reader (C-537) now ship every document
   whole; nothing *interprets* those fields until the resolver lands (C-538). `config`
-  and `verify` left it earlier: C-87 published both, and today 82 config fields across 42 providers
-  travel identically into `web/public/catalog.json` and into 46 `connectors/*.connector.toml`
+  and `verify` left it earlier: C-87 published both, and today 85 config fields across 42 providers
+  travel identically into `web/public/catalog.json` and into 67 `connectors/*.connector.toml`
   manifests (more manifests than providers because a multi-service connector emits one per
   service), alongside `verify` on 43 of them. A host can now render a settings page and find the
   "Test connection" operation from the artifact alone.
@@ -247,12 +260,13 @@ workflow.
 | `crates/connector-spec` | Connector IR, provider loading, validation, and lockfile. No network IO. |
 | `crates/connector-flux` | Flux emission through `flux_lang`'s AST and formatter. |
 | `crates/connector-cli` | Filesystem and future network orchestration for the `flux-connectors` binary. |
-| `crates/catalog` | Dependency-free `connector-catalog`, with every operation embedded at compile time. |
+| `crates/catalog` | `connector-catalog`, with every operation embedded at compile time. Data plus lookups over it; its one dependency is `catalog-reader`. |
+| `crates/catalog-reader` | Dependency-free reader for `catalog.pack` — the whole catalogue's canonical documents in one verifiable file. Resolves nothing. |
 | `crates/connector-pack` | Host library: projects catalogue operations onto flux `ToolSpec`s and installs them as a Tool pack. Assembles auth; opens no socket. |
 | `crates/connector-secrets` | Host library: resolves a credential *address* to a *value*. `SecretStore`, generation-fenced recoverable prepared transactions in memory or an owner-only leased file, and an optional Vault KV v2 client. Unreachable from the compiler, by test. |
 | `providers/` | Hand-authored provider definitions. |
 | `connectors/` | The generated Flux modules and capability manifests. |
-| `specs/` | Vendored spec cache used by offline builds. Currently flux's own core catalogue only — no vendor spec is vendored yet. |
+| `specs/` | Vendored spec cache used by offline builds: vendor documents beside flux's own core catalogue, each hash-pinned by a provenance record. |
 | `docs/` | Vision, roadmap, designs, and the story board. |
 | `web/` | The public VitePress documentation and operation explorer. |
 

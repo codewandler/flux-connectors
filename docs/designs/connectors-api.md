@@ -256,8 +256,9 @@ allowed, which is what keeps `curl` usable and is therefore also the check's lim
 - **A second request path.** Unchanged, and the reason `connectors-app` superseded
   `connectors-proxy`. Untouched by tenancy.
 - **Publication.** `publish = false` (`crates/connectors-api/Cargo.toml`); the publish closure stays
-  four crates ([C-190](../stories/C-190-publish-catalog-pack-secrets.md)). The amendment is about
-  deployment, not crates.io.
+  five crates and does not include this host
+  ([C-190](../stories/C-190-publish-catalog-pack-secrets.md)). The amendment is about deployment, not
+  crates.io.
 - **Being flux's execution path.** flux loads `.flux` modules from `~/.flux/flows`. A change that
   routes flux's own connector traffic through this service inverts the project.
 - **Inbound delivery.** No webhook endpoint, no relay. Inbound stays compiled, not hosted.

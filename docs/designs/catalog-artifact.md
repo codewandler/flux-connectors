@@ -5,8 +5,9 @@
 The cross-family source of truth is
 `../flux-roadmap/decisions/0022-connectors-compile-to-a-catalog-artifact.md`. This record applies
 that decision to this repository: the build stops emitting Flux source and instead lowers the IR to
-one canonical document per provider, compiles the documents into a compressed pack, and hands the
-resolver (today's `connector-pack` assembly path) document data instead of Flux text to re-parse.
+one canonical document per provider, compiles the documents into one uncompressed, offset-indexed
+pack, and hands the resolver (today's `connector-pack` assembly path) document data instead of Flux
+text to re-parse.
 The epic is [C-534](../stories/C-534-catalog-artifact-epic.md).
 
 ## The defect this closes
@@ -25,8 +26,11 @@ Measured 2026-08-12, commands inline:
 - The round trip costs a full emitter (`crates/connector-flux`: 34,077 lines,
   `find crates/connector-flux -name '*.rs' | xargs wc -l`), 835 per-operation renderings
   (`ls crates/catalog/ops/*/ | grep -c '\.flux$'`), and 16,792 lines of generated Rust — while four
-  declared surfaces (`roles`, `quirks.pagination`, `quirks.rate_limit`, `graphs`) reach no artifact
-  at all because the op grammar cannot say them.
+  declared surfaces (`roles`, `quirks.pagination`, `quirks.rate_limit`, `graphs`) reached no artifact
+  at all when this was written, because the op grammar cannot say them. Three of the four left that
+  list with C-536: `roles` and `quirks.pagination` reach the canonical document, and
+  `quirks.rate_limit` is representable there with nothing declaring one yet. `graphs` is the one
+  that remains.
 - Nothing executes the emitted Flux as Flux: `connectors/*.flux` has no non-test consumer in this
   repository or either sibling (see `docs/integrating-with-flux.md`, Path C).
 
