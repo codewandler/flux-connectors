@@ -1,0 +1,467 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Dropbox access token sent as a bearer — a scoped app access token or an OAuth2 access token",
+      "env": [
+        "DROPBOX_ACCESS_TOKEN"
+      ],
+      "name": "dropbox.access_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.dropbox.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.dropbox.access_token",
+      "docs_url": "https://developers.dropbox.com/oauth-guide",
+      "format": "token",
+      "help": "Create an app at dropbox.com/developers/apps. For a quick connection, generate an access token directly from the app's Settings tab. For a token that keeps working for other users, complete the app's OAuth2 authorization flow and supply the resulting access token",
+      "label": "Access token",
+      "level": "connection",
+      "name": "access_token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "dropbox",
+  "default_auth": [
+    [
+      "dropbox.access_token"
+    ]
+  ],
+  "description": "Dropbox: browse folder contents, read file and folder metadata, search files, create folders, and get temporary download links",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "dropbox.access_token"
+        ]
+      ],
+      "description": "Get the account this access token authenticates as, confirming the token resolves and naming the account it belongs to. Takes no parameters. Dropbox routes this read through POST, like every operation this connector declares — there is no GET anywhere in Dropbox's v2 API",
+      "direction": "read",
+      "expose": true,
+      "id": "dropbox-user-me",
+      "idempotency": "idempotent",
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error_summary"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/2/users/get_current_account"
+      },
+      "response_schema": {
+        "properties": {
+          "account_id": {
+            "description": "The account's unique, opaque id",
+            "type": "string"
+          },
+          "account_type": {
+            "description": "{\".tag\": \"basic\" | \"pro\" | \"business\"}",
+            "type": "object"
+          },
+          "country": {
+            "description": "ISO 3166-1 alpha-2 country code, if known",
+            "type": "string"
+          },
+          "disabled": {
+            "type": "boolean"
+          },
+          "email": {
+            "type": "string"
+          },
+          "email_verified": {
+            "type": "boolean"
+          },
+          "name": {
+            "description": "{given_name, surname, familiar_name, display_name, abbreviated_name}",
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "dropbox.access_token"
+        ]
+      ],
+      "description": "List the files and folders directly inside a folder, first page only. Each entry names its own type (file, folder, or deleted), name and full path. Direction remains conservatively authored as write pending individual review; POST is transport only and supplied no evidence",
+      "direction": "write",
+      "expose": true,
+      "id": "dropbox-folder-list",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The full path of the folder to list, from the account root — or the empty string \"\" for the root folder itself. Dropbox's root has no other spelling: \"/\" is a documented error (path/not_found or path/malformed_path), not an alias for \"\"",
+          "name": "path",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "default": "",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error_summary"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "path": {
+              "$param": "path"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/2/files/list_folder"
+      },
+      "response_schema": {
+        "properties": {
+          "cursor": {
+            "description": "The cursor for continuing to the next page. This connector cannot fetch it — list_folder/continue is not shipped",
+            "type": "string"
+          },
+          "entries": {
+            "description": "This page's items, each {\".tag\": \"file\"|\"folder\"|\"deleted\", name, path_lower, path_display, id}",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "has_more": {
+            "description": "True when the folder holds more entries than this page returned. This connector cannot fetch them; see cursor",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "dropbox.access_token"
+        ]
+      ],
+      "description": "Get metadata for a file or folder at a given path: its type, name, id, and — for a file — size and content hash. Does not return a folder's contents (use dropbox-folder-list) or a file's content (use dropbox-temporary-link-get). Direction remains conservatively authored as write pending individual review; POST is transport only and supplied no evidence",
+      "direction": "write",
+      "expose": true,
+      "id": "dropbox-metadata-get",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The full path of the file or folder to inspect, from the account root. Unlike dropbox-folder-list, the account root itself (\"\") is not addressable this way — this path must name an existing file or folder",
+          "name": "path",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error_summary"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "path": {
+              "$param": "path"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/2/files/get_metadata"
+      },
+      "response_schema": {
+        "properties": {
+          ".tag": {
+            "description": "\"file\", \"folder\" or \"deleted\" — which fields below apply depends on this",
+            "type": "string"
+          },
+          "client_modified": {
+            "description": "File only: the modification time the uploading client claimed, not verified by Dropbox",
+            "format": "date-time",
+            "type": "string"
+          },
+          "content_hash": {
+            "description": "File only: Dropbox's own content hash, for verifying a download performed some other way",
+            "type": "string"
+          },
+          "id": {
+            "description": "An opaque id stable across moves and renames",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path_display": {
+            "type": "string"
+          },
+          "path_lower": {
+            "type": "string"
+          },
+          "rev": {
+            "description": "File only: an opaque revision id",
+            "type": "string"
+          },
+          "server_modified": {
+            "description": "File only: when Dropbox's server last saw this content change",
+            "format": "date-time",
+            "type": "string"
+          },
+          "size": {
+            "description": "File only: size in bytes",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "dropbox.access_token"
+        ]
+      ],
+      "description": "Search file and folder names across the account, returning the first page of matches. Dropbox matches on name, not file content. Direction remains conservatively authored as write pending individual review; POST is transport only and supplied no evidence",
+      "direction": "write",
+      "expose": true,
+      "id": "dropbox-search",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The text to match against file and folder names",
+          "name": "query",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error_summary"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "query": {
+              "$param": "query"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/2/files/search_v2"
+      },
+      "response_schema": {
+        "properties": {
+          "cursor": {
+            "description": "The cursor for the next page, present only when has_more is true. Unusable here, for the reason given on has_more",
+            "type": "string"
+          },
+          "has_more": {
+            "description": "True when more matches exist than this page returned. This connector cannot fetch them — no continuation cursor is shipped",
+            "type": "boolean"
+          },
+          "matches": {
+            "description": "The matching files and folders, each {metadata: {...}, match_type: {\".tag\": \"filename\"|\"content\"|\"both\"}}",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "dropbox.access_token"
+        ]
+      ],
+      "description": "Create a new folder at the given path, including any missing parent folders. Naming a path that already exists answers 409 conflict rather than creating a duplicate, since autorename is not offered by this connector",
+      "direction": "write",
+      "expose": true,
+      "id": "dropbox-folder-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The full path of the new folder, from the account root, e.g. \"/Homework/math\". Dropbox creates any missing parent folders along the way",
+          "name": "path",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error_summary"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "path": {
+              "$param": "path"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/2/files/create_folder_v2"
+      },
+      "response_schema": {
+        "properties": {
+          "metadata": {
+            "description": "The created folder's metadata: {name, path_lower, path_display, id}",
+            "properties": {
+              "id": {
+                "description": "The created folder's id — what a later call addresses it by",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "path_display": {
+                "type": "string"
+              },
+              "path_lower": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "dropbox.access_token"
+        ]
+      ],
+      "description": "Get a temporary, unauthenticated download link for an existing file's content, valid for approximately four hours. This connector cannot follow the link itself — it only returns the URL, for a caller to fetch separately. Direction remains conservatively authored as write pending individual review; POST is transport only and supplied no evidence",
+      "direction": "write",
+      "expose": true,
+      "id": "dropbox-temporary-link-get",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The full path of the file to link, from the account root. Must name a file, not a folder",
+          "name": "path",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error_summary"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "path": {
+              "$param": "path"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/2/files/get_temporary_link"
+      },
+      "response_schema": {
+        "properties": {
+          "link": {
+            "description": "The temporary download URL, valid for approximately four hours from this call",
+            "type": "string"
+          },
+          "metadata": {
+            "description": "The linked file's metadata, the same shape dropbox-metadata-get returns for a file",
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "2",
+      "base_url": "https://api.dropboxapi.com",
+      "gid": "com.dropbox.api:2",
+      "name": "default",
+      "tags": [
+        "storage"
+      ]
+    }
+  ],
+  "vendor": "Dropbox",
+  "verify": "dropbox-user-me"
+}

@@ -1,0 +1,766 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Discord bot token, sent as `Authorization: Bot <token>`. The `Bot ` scheme word is supplied by the connector; the token is the value alone. `Bearer ` is a valid Discord scheme word for a different credential — an OAuth2 user token — so sending this token with that prefix yields a 401 indistinguishable from a revoked token",
+      "env": [
+        "DISCORD_BOT_TOKEN"
+      ],
+      "name": "discord.bot_token",
+      "scheme": {
+        "kind": "header",
+        "name": "Authorization",
+        "prefix": "Bot "
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.discord.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.discord.bot_token",
+      "docs_url": "https://discord.com/developers/docs/reference#authentication",
+      "format": "token",
+      "help": "From the Discord Developer Portal: open your application, go to the Bot tab, and use Reset Token to reveal one — Discord shows a token exactly once and resetting invalidates the previous one. The bot must then be invited to each server you want to reach, with at least View Channels, Read Message History and Send Messages. Paste the token alone: the `Bot ` prefix Discord's documentation shows is added for you, and pasting it as part of the value breaks the header",
+      "label": "Discord bot token",
+      "level": "connection",
+      "name": "bot_token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "discord",
+  "default_auth": [
+    [
+      "discord.bot_token"
+    ]
+  ],
+  "description": "Discord bot API v10: read the bot's own identity, list the guilds it has joined, read one guild and its channels, read a channel's recent messages, and post a message. Every request authenticates as a bot — `Authorization: Bot <token>`, never `Bearer`, which is Discord's scheme word for a different credential with different reach. Every Discord id is a snowflake and is carried as a string, because a 64-bit id does not survive a JSON number. Discord rate-limits per route and answers 429 with a `Retry-After` header instead of queueing: honour it rather than retrying immediately",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "discord.bot_token"
+        ]
+      ],
+      "description": "Read the bot user this token authenticates as — its snowflake id, username and application flags. Takes no argument. Also this connector's `verify`: the cheapest call that proves the token, the `Bot ` scheme word and the base URL are all correct together, and the one to run first when any other operation returns 401",
+      "direction": "read",
+      "expose": true,
+      "id": "discord-current-user",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/users/@me"
+      },
+      "response_schema": {
+        "properties": {
+          "avatar": {
+            "description": "The avatar image hash, or null. Not a URL — Discord's CDN path is built from the id and this hash",
+            "type": "string"
+          },
+          "bot": {
+            "description": "True for the user behind a bot token. False here means the credential is not the bot token this connector expects",
+            "type": "boolean"
+          },
+          "discriminator": {
+            "description": "The legacy four-digit tag, `\"0\"` for an account migrated to Discord's unique-username system",
+            "type": "string"
+          },
+          "email": {
+            "description": "Present only for a token carrying the OAuth2 `email` scope; absent for a bot token. Identifies a named person when it does appear — read it for what the calling flow needs and do not persist it beyond that",
+            "type": "string"
+          },
+          "flags": {
+            "description": "The user's account flags as a bitfield. Fits a JSON number today, unlike a snowflake or a permission set",
+            "type": "integer"
+          },
+          "global_name": {
+            "description": "The display name, or null for a bot, which has none",
+            "type": "string"
+          },
+          "id": {
+            "description": "The bot user's snowflake id, as a string. A Discord id is a 64-bit integer and does not survive being parsed as a JSON number",
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "mfa_enabled": {
+            "type": "boolean"
+          },
+          "public_flags": {
+            "description": "The subset of `flags` Discord shows publicly — for a bot, its verification and badge state",
+            "type": "integer"
+          },
+          "system": {
+            "description": "True only for Discord's own official system account",
+            "type": "boolean"
+          },
+          "username": {
+            "description": "The bot's username, without the discriminator",
+            "type": "string"
+          },
+          "verified": {
+            "description": "Present only for a token carrying the OAuth2 `email` scope; absent for a bot token",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "username"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "discord.bot_token"
+        ]
+      ],
+      "description": "List the guilds (servers) this bot has been installed into — the complete set of guild ids the rest of this connector can address. Returns a partial guild object per entry, not the full one: call discord-guild-get for a guild's settings. Discord returns at most 200 per page and this connector does not page, so a bot in more guilds than that sees only the first 200",
+      "direction": "read",
+      "expose": true,
+      "id": "discord-guild-list",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/users/@me/guilds"
+      },
+      "response_schema": {
+        "description": "The guilds this bot is a member of, as partial guild objects",
+        "items": {
+          "properties": {
+            "banner": {
+              "description": "The banner image hash, or null",
+              "type": "string"
+            },
+            "features": {
+              "description": "The guild's enabled features, e.g. `COMMUNITY`, `NEWS`, `VANITY_URL`. An open set — Discord adds to it",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "icon": {
+              "description": "The icon image hash, or null. Not a URL",
+              "type": "string"
+            },
+            "id": {
+              "description": "The guild's snowflake id, as a string — pass this as `guild_id` to discord-guild-get and discord-guild-channels",
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            },
+            "name": {
+              "description": "The guild's display name",
+              "type": "string"
+            },
+            "owner": {
+              "description": "Whether this token's user owns the guild. False for a bot in almost every case — a bot is installed, not an owner",
+              "type": "boolean"
+            },
+            "permissions": {
+              "description": "The bot's permissions in this guild, as a decimal string. A 64-bit bitfield, serialized as a string for the same precision reason a snowflake is: reading it as a number loses the high bits, which are the recently-added permissions",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "discord.bot_token"
+        ]
+      ],
+      "description": "Read one guild's settings and current state by id — its name, owner, moderation levels and enabled features. Membership counts are not included: they require a query flag this connector does not send, and Discord documents them as approximate",
+      "direction": "read",
+      "expose": true,
+      "id": "discord-guild-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The guild's snowflake id, from discord-guild-list's `id`. A decimal string of digits, never a guild name and never a URL — Discord ids are 64-bit and are carried as strings",
+          "name": "guild_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/guilds/{guild_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "afk_channel_id": {
+            "description": "The voice channel idle members are moved to, or null",
+            "type": "string"
+          },
+          "afk_timeout": {
+            "description": "Seconds of inactivity before a member is moved to the AFK channel",
+            "type": "integer"
+          },
+          "application_id": {
+            "description": "The application that created this guild, or null for a guild a person created",
+            "type": "string"
+          },
+          "default_message_notifications": {
+            "description": "0 notifies on all messages, 1 on mentions only",
+            "type": "integer"
+          },
+          "description": {
+            "description": "The guild's public description, or null",
+            "type": "string"
+          },
+          "explicit_content_filter": {
+            "description": "Which members' attachments are scanned, 0 (none) to 2 (all)",
+            "type": "integer"
+          },
+          "features": {
+            "description": "The guild's enabled features. An open set — Discord adds to it",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "icon": {
+            "description": "The icon image hash, or null. Not a URL",
+            "type": "string"
+          },
+          "id": {
+            "description": "The guild's snowflake id, as a string",
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "mfa_level": {
+            "description": "Whether the guild requires two-factor authentication for moderator actions",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nsfw_level": {
+            "description": "Discord's own age-restriction classification of the guild",
+            "type": "integer"
+          },
+          "owner_id": {
+            "description": "The snowflake id of the guild's owner, as a string. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that",
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "preferred_locale": {
+            "description": "The locale of a Community guild, e.g. `en-US`",
+            "type": "string"
+          },
+          "premium_subscription_count": {
+            "description": "How many boosts the guild currently has",
+            "type": "integer"
+          },
+          "premium_tier": {
+            "description": "The guild's boost tier, 0 to 3",
+            "type": "integer"
+          },
+          "public_updates_channel_id": {
+            "description": "The channel Discord sends moderator updates to, or null",
+            "type": "string"
+          },
+          "roles": {
+            "description": "The guild's roles. Each carries a snowflake `id` and a decimal-string `permissions` bitfield; left otherwise untyped rather than enumerated in full, so this file states only what it can name with confidence",
+            "items": {
+              "properties": {
+                "id": {
+                  "description": "The role's snowflake id, as a string",
+                  "pattern": "^[0-9]+$",
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "permissions": {
+                  "description": "The role's permissions as a decimal string — a 64-bit bitfield, not a number",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "rules_channel_id": {
+            "description": "The rules channel of a Community guild, or null",
+            "type": "string"
+          },
+          "system_channel_id": {
+            "description": "The channel Discord posts join and boost notices into, or null",
+            "type": "string"
+          },
+          "verification_level": {
+            "description": "How verified a member must be to speak, 0 (none) to 4 (highest)",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "owner_id"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "discord.bot_token"
+        ]
+      ],
+      "description": "List every channel in a guild — text, voice, category and forum — in Discord's own ordering. This is where a channel id comes from: read `type` to find the text channels (type 0) discord-channel-messages and discord-message-create can address. Threads are not included; Discord returns them from a separate route this connector does not expose",
+      "direction": "read",
+      "expose": true,
+      "id": "discord-guild-channels",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The guild's snowflake id, from discord-guild-list's `id`. A decimal string of digits, never a guild name",
+          "name": "guild_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/guilds/{guild_id}/channels"
+      },
+      "response_schema": {
+        "description": "The guild's channels",
+        "items": {
+          "properties": {
+            "bitrate": {
+              "description": "Voice channels only",
+              "type": "integer"
+            },
+            "guild_id": {
+              "description": "The guild this channel belongs to, as a string",
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            },
+            "id": {
+              "description": "The channel's snowflake id, as a string — pass this as `channel_id` to discord-channel-messages and discord-message-create",
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            },
+            "last_message_id": {
+              "description": "The most recent message in the channel, or null. A snowflake, as a string",
+              "type": "string"
+            },
+            "name": {
+              "description": "The channel name without the leading `#`",
+              "type": "string"
+            },
+            "nsfw": {
+              "description": "Whether the channel is marked age-restricted",
+              "type": "boolean"
+            },
+            "parent_id": {
+              "description": "The category this channel sits under, or null. A snowflake, as a string",
+              "type": "string"
+            },
+            "permission_overwrites": {
+              "description": "Per-role and per-member permission overrides for this channel. Left untyped rather than enumerated; each entry carries a snowflake `id` and decimal-string `allow`/`deny` bitfields",
+              "items": {
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "position": {
+              "description": "The channel's sort position within the guild",
+              "type": "integer"
+            },
+            "rate_limit_per_user": {
+              "description": "Slowmode, in seconds between messages per member. 0 means no slowmode. This is a per-member setting of the channel and is unrelated to the API rate limits in this connector's own description",
+              "type": "integer"
+            },
+            "topic": {
+              "description": "The channel topic, or null",
+              "type": "string"
+            },
+            "type": {
+              "description": "The channel kind. 0 is a guild text channel — the only kind the message operations here accept. 2 is voice, 4 a category, 5 an announcement channel, 15 a forum. An open set; Discord has added kinds over time",
+              "type": "integer"
+            },
+            "user_limit": {
+              "description": "Voice channels only; 0 means unlimited",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id",
+            "type"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "discord.bot_token"
+        ]
+      ],
+      "description": "Read the most recent messages in a text channel, newest first. Requires the bot to have READ_MESSAGE_HISTORY in the channel; without it Discord answers 403 rather than an empty list. The response is personal content — what people said, with author identity attached — so read it for what the calling flow needs and do not persist it beyond that",
+      "direction": "read",
+      "expose": true,
+      "id": "discord-channel-messages",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The channel's snowflake id, from discord-guild-channels' `id`. A decimal string of digits, never a channel name like `#general` and never a Discord URL",
+          "name": "channel_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "How many messages to return, 1 to 100. Discord's default when omitted is 50",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          }
+        ],
+        "url": "{base}/channels/{channel_id}/messages"
+      },
+      "response_schema": {
+        "description": "The channel's most recent messages, newest first",
+        "items": {
+          "properties": {
+            "attachments": {
+              "description": "Files attached to the message. Left untyped rather than enumerated; each carries a snowflake `id`, a `filename`, a `size` and a CDN `url`",
+              "items": {
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "author": {
+              "description": "Who sent the message. Identifies a named person — read it for what the calling flow needs and do not persist it beyond that",
+              "properties": {
+                "bot": {
+                  "description": "True when another application sent this message",
+                  "type": "boolean"
+                },
+                "global_name": {
+                  "description": "The author's display name, or null",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The author's snowflake id, as a string",
+                  "pattern": "^[0-9]+$",
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "channel_id": {
+              "description": "The channel the message was posted in, as a string",
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            },
+            "content": {
+              "description": "The message text as Discord stores it, with mentions still in their raw `<@id>` form. Empty for a message that carries only an embed or an attachment — and empty for every message if the bot lacks the privileged MESSAGE_CONTENT intent, which is granted in the Developer Portal and has no representation in this connector",
+              "type": "string"
+            },
+            "edited_timestamp": {
+              "description": "When it was last edited, ISO 8601, or null if never",
+              "type": "string"
+            },
+            "embeds": {
+              "description": "Rich embeds on the message. Left untyped rather than enumerated — Discord's embed object is large and this file declares what it can name with confidence",
+              "items": {
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "id": {
+              "description": "The message's snowflake id, as a string",
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            },
+            "mention_everyone": {
+              "description": "Whether the message contained an @everyone or @here mention that actually applied",
+              "type": "boolean"
+            },
+            "mentions": {
+              "description": "The users this message mentioned, expanded",
+              "items": {
+                "properties": {
+                  "id": {
+                    "description": "The mentioned user's snowflake id, as a string",
+                    "pattern": "^[0-9]+$",
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "pinned": {
+              "type": "boolean"
+            },
+            "timestamp": {
+              "description": "When the message was sent, ISO 8601",
+              "type": "string"
+            },
+            "tts": {
+              "description": "Whether the message was sent as text-to-speech",
+              "type": "boolean"
+            },
+            "type": {
+              "description": "The message kind. 0 is a normal message; other values are Discord's own system notices, such as a join or a pin",
+              "type": "integer"
+            },
+            "webhook_id": {
+              "description": "Set when the message came from a webhook rather than a user, as a snowflake string",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "channel_id",
+            "content",
+            "timestamp"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "discord.bot_token"
+        ]
+      ],
+      "description": "Post a message to a text channel, visible to everyone in it and notifying whoever is watching. Requires the bot to have SEND_MESSAGES in the channel. Posting twice posts two messages — Discord offers no idempotency key on this route. Discord rate-limits this route per channel and does not publish the figure: on a 429, wait the number of seconds in the `Retry-After` header before retrying, rather than retrying immediately",
+      "direction": "write",
+      "expose": true,
+      "id": "discord-message-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The channel to post into, from discord-guild-channels' `id`. A decimal string of digits, never a channel name like `#general`. Confirm it is a text channel (`type` 0) before posting",
+          "name": "channel_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "The message text, up to 2000 characters. Discord renders it as Markdown, and `@everyone`, `@here` and `<@id>` inside it mention real people if the bot has permission to — so text assembled from untrusted input can notify a whole guild",
+          "name": "content",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Set true to have Discord read the message aloud to everyone in the channel who has text-to-speech enabled. Omit for a normal message; this needs the SEND_TTS_MESSAGES permission",
+          "name": "tts",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "content": {
+              "$param": "content"
+            },
+            "tts": {
+              "$param": "tts"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/channels/{channel_id}/messages"
+      },
+      "response_schema": {
+        "description": "The message as Discord stored it",
+        "properties": {
+          "attachments": {
+            "description": "Empty for a message posted through this connector, which sends no files",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "author": {
+            "description": "The bot user this token authenticates as",
+            "properties": {
+              "bot": {
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The bot's snowflake id, as a string",
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "channel_id": {
+            "description": "The channel the message landed in, as a string",
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "content": {
+            "description": "The message text as Discord stored it — echo it back to confirm what was posted",
+            "type": "string"
+          },
+          "edited_timestamp": {
+            "description": "Null on a message just created",
+            "type": "string"
+          },
+          "embeds": {
+            "description": "Empty for a message posted through this connector, which sends no embeds",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "id": {
+            "description": "The created message's snowflake id, as a string — what a later edit or delete would address it by, neither of which this connector offers",
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "mention_everyone": {
+            "description": "True if the posted text contained an @everyone or @here mention that actually applied — check this after posting text assembled from input the caller did not write",
+            "type": "boolean"
+          },
+          "mentions": {
+            "description": "The users the posted message mentioned, expanded",
+            "items": {
+              "properties": {
+                "id": {
+                  "pattern": "^[0-9]+$",
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "pinned": {
+            "description": "False on a message just created",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "When the message was sent, ISO 8601",
+            "type": "string"
+          },
+          "tts": {
+            "type": "boolean"
+          },
+          "type": {
+            "description": "The message kind; 0 for a normal message",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "channel_id",
+          "content",
+          "timestamp"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v10",
+      "base_url": "https://discord.com/api/v10",
+      "gid": "com.discord.api:v10",
+      "name": "default",
+      "tags": [
+        "messaging"
+      ]
+    }
+  ],
+  "vendor": "Discord",
+  "verify": "discord-current-user"
+}

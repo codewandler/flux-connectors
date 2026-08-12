@@ -1,0 +1,546 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Postmark Server API token, scoped to one server. Authenticates sending and that server's own message history; cannot list or manage servers",
+      "env": [
+        "POSTMARK_SERVER_TOKEN"
+      ],
+      "name": "postmark.server_token",
+      "scheme": {
+        "kind": "header",
+        "name": "X-Postmark-Server-Token"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.postmarkapp.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.postmark.server_token",
+      "docs_url": "https://postmarkapp.com/support/article/1008-what-are-the-account-server-api-tokens",
+      "format": "token",
+      "help": "Find it on the server's API Tokens tab in the Postmark dashboard. Grants sending and that server's own message history only — it cannot list or manage servers",
+      "label": "Postmark Server Token",
+      "level": "connection",
+      "name": "server_token",
+      "required": true,
+      "secret": true,
+      "service": "server"
+    }
+  ],
+  "connector": "postmark",
+  "default_auth": [
+    [
+      "postmark.server_token"
+    ]
+  ],
+  "description": "Postmark transactional email: send a message, read delivery stats and bounces. Listing and inspecting servers is withheld — the Account API returns live Server Tokens in plaintext (C-430)",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "postmark.server_token"
+        ]
+      ],
+      "description": "Send a single email immediately from the token's server. Delivered within seconds and cannot be recalled",
+      "direction": "write",
+      "expose": true,
+      "id": "postmark-email-send",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The sending address. Must be a Sender Signature or verified domain address on this server — the caller's own input, never an example value here",
+          "name": "from",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "From"
+        },
+        {
+          "description": "Recipient address(es), comma-separated, up to 50. The caller's own input, never an example value here",
+          "name": "to",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "To"
+        },
+        {
+          "description": "Additional recipients, comma-separated. The caller's own input, never an example value here",
+          "name": "cc",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "Cc"
+        },
+        {
+          "description": "Blind-copied recipients, comma-separated. The caller's own input, never an example value here",
+          "name": "bcc",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "Bcc"
+        },
+        {
+          "description": "The email's subject line",
+          "name": "subject",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "Subject"
+        },
+        {
+          "description": "The plain-text body. Postmark requires at least one of `text_body` or `html_body`; this schema cannot express that cross-field rule and does not enforce it",
+          "name": "text_body",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "TextBody"
+        },
+        {
+          "description": "The HTML body. Postmark requires at least one of `text_body` or `html_body`; this schema cannot express that cross-field rule and does not enforce it",
+          "name": "html_body",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "HtmlBody"
+        },
+        {
+          "description": "Reply-To address, when replies should not go to `from`. The caller's own input, never an example value here",
+          "name": "reply_to",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "ReplyTo"
+        },
+        {
+          "description": "A short label for categorizing this message in Postmark's activity view and statistics",
+          "name": "tag",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "Tag"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/ErrorCode",
+          "message_pointer": "/Message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "Bcc": {
+              "$param": "bcc"
+            },
+            "Cc": {
+              "$param": "cc"
+            },
+            "From": {
+              "$param": "from"
+            },
+            "HtmlBody": {
+              "$param": "html_body"
+            },
+            "ReplyTo": {
+              "$param": "reply_to"
+            },
+            "Subject": {
+              "$param": "subject"
+            },
+            "Tag": {
+              "$param": "tag"
+            },
+            "TextBody": {
+              "$param": "text_body"
+            },
+            "To": {
+              "$param": "to"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/email"
+      },
+      "response_schema": {
+        "properties": {
+          "ErrorCode": {
+            "description": "0 on success",
+            "type": "integer"
+          },
+          "Message": {
+            "description": "Human-readable status, \"OK\" on success",
+            "type": "string"
+          },
+          "MessageID": {
+            "description": "Postmark's id for this send; the handle for later bounce or delivery-stat lookups",
+            "type": "string"
+          },
+          "SubmittedAt": {
+            "description": "When Postmark accepted the message for delivery",
+            "type": "string"
+          },
+          "To": {
+            "description": "Echoes the recipient(s) this message was sent to — personal data, never an example value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "To",
+          "SubmittedAt",
+          "MessageID",
+          "ErrorCode",
+          "Message"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "server"
+    },
+    {
+      "auth": [
+        [
+          "postmark.server_token"
+        ]
+      ],
+      "description": "Get delivery statistics for this server: total inactive addresses and a breakdown of bounces by type. Also this connector's `verify` — a bounded read that runs unattended, needing no argument",
+      "direction": "read",
+      "expose": true,
+      "id": "postmark-deliverystats-get",
+      "idempotency": "idempotent",
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/ErrorCode",
+          "message_pointer": "/Message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/deliverystats"
+      },
+      "response_schema": {
+        "properties": {
+          "Bounces": {
+            "description": "One entry per bounce type, plus a leading \"All\" total with no `Type` field",
+            "items": {
+              "properties": {
+                "Count": {
+                  "type": "integer"
+                },
+                "Name": {
+                  "type": "string"
+                },
+                "Type": {
+                  "description": "Absent on the leading \"All\" total entry",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "Name",
+                "Count"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "InactiveMails": {
+            "description": "Recipient addresses currently marked inactive on this server",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "InactiveMails",
+          "Bounces"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "server"
+    },
+    {
+      "auth": [
+        [
+          "postmark.server_token"
+        ]
+      ],
+      "description": "List bounces recorded on this server, most recent first",
+      "direction": "read",
+      "expose": true,
+      "id": "postmark-bounce-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Number of bounces to return; Postmark requires this on every call",
+          "name": "count",
+          "position": "query",
+          "required": true,
+          "schema": {
+            "maximum": 500,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Number of bounces to skip, for paging; Postmark requires this on every call",
+          "name": "offset",
+          "position": "query",
+          "required": true,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/ErrorCode",
+          "message_pointer": "/Message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "count",
+            "value": {
+              "$param": "count"
+            }
+          },
+          {
+            "name": "offset",
+            "value": {
+              "$param": "offset"
+            }
+          }
+        ],
+        "url": "{base}/bounces"
+      },
+      "response_schema": {
+        "properties": {
+          "Bounces": {
+            "items": {
+              "properties": {
+                "BouncedAt": {
+                  "type": "string"
+                },
+                "CanActivate": {
+                  "type": "boolean"
+                },
+                "Description": {
+                  "type": "string"
+                },
+                "Details": {
+                  "type": "string"
+                },
+                "DumpAvailable": {
+                  "description": "Whether the raw SMTP dump can be fetched separately",
+                  "type": "boolean"
+                },
+                "Email": {
+                  "description": "The bounced recipient's own address — personal data, never an example value",
+                  "type": "string"
+                },
+                "From": {
+                  "description": "The sending address the bounced message used — never an example value",
+                  "type": "string"
+                },
+                "ID": {
+                  "type": "integer"
+                },
+                "Inactive": {
+                  "type": "boolean"
+                },
+                "MessageID": {
+                  "type": "string"
+                },
+                "Name": {
+                  "type": "string"
+                },
+                "ServerID": {
+                  "type": "integer"
+                },
+                "Subject": {
+                  "type": "string"
+                },
+                "Tag": {
+                  "description": "The message's tag, when it had one",
+                  "type": "string"
+                },
+                "Type": {
+                  "description": "e.g. HardBounce, SoftBounce, SpamComplaint",
+                  "type": "string"
+                },
+                "TypeCode": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "ID",
+                "Type",
+                "Name",
+                "Email",
+                "Inactive",
+                "CanActivate"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "TotalCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "TotalCount",
+          "Bounces"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "server"
+    },
+    {
+      "auth": [
+        [
+          "postmark.server_token"
+        ]
+      ],
+      "description": "Get one recorded bounce by id",
+      "direction": "read",
+      "expose": true,
+      "id": "postmark-bounce-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The bounce's id, from postmark-bounce-list or postmark-email-send's follow-up lookups",
+          "name": "bounce_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/ErrorCode",
+          "message_pointer": "/Message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/bounces/{bounce_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "BouncedAt": {
+            "type": "string"
+          },
+          "CanActivate": {
+            "type": "boolean"
+          },
+          "Description": {
+            "type": "string"
+          },
+          "Details": {
+            "type": "string"
+          },
+          "DumpAvailable": {
+            "type": "boolean"
+          },
+          "Email": {
+            "description": "The bounced recipient's own address — personal data, never an example value",
+            "type": "string"
+          },
+          "From": {
+            "description": "The sending address the bounced message used — never an example value",
+            "type": "string"
+          },
+          "ID": {
+            "type": "integer"
+          },
+          "Inactive": {
+            "type": "boolean"
+          },
+          "MessageID": {
+            "type": "string"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "ServerID": {
+            "type": "integer"
+          },
+          "Subject": {
+            "type": "string"
+          },
+          "Tag": {
+            "type": "string"
+          },
+          "Type": {
+            "type": "string"
+          },
+          "TypeCode": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ID",
+          "Type",
+          "Name",
+          "Email",
+          "Inactive",
+          "CanActivate"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "server"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "base_url": "https://api.postmarkapp.com",
+      "description": "Postmark's own \"Server API\" naming: send mail and read one server's delivery stats and bounces. Authenticates with the Server Token; the Account Token cannot reach this surface at all",
+      "name": "server",
+      "tags": [
+        "email"
+      ]
+    }
+  ],
+  "vendor": "Postmark",
+  "verify": "postmark-deliverystats-get"
+}

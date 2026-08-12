@@ -1,0 +1,488 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Webflow API token (a Site API token or an OAuth2 access token), sent as a bearer token, scoped to read sites, collections and items, and to publish",
+      "env": [
+        "WEBFLOW_TOKEN"
+      ],
+      "name": "webflow.token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.webflow.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.webflow.token",
+      "docs_url": "https://developers.webflow.com/data/reference/authentication",
+      "format": "token",
+      "help": "Generate a Site API token from your site's Settings -> Apps & Integrations -> API access, or register an OAuth app at developers.webflow.com for a token scoped across sites. A Site API token only ever sees the one site it was generated for; supply a per-site token for a single-site connection or an OAuth token for one that must span several",
+      "label": "Webflow API token",
+      "level": "connection",
+      "name": "token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "webflow",
+  "default_auth": [
+    [
+      "webflow.token"
+    ]
+  ],
+  "description": "Webflow sites and CMS: discover sites, read a collection's own field schema, read collection items of any tenant-defined shape, and publish a site live",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "webflow.token"
+        ]
+      ],
+      "description": "List the sites this token can see, with each site's id, display name, hosted subdomain and last-published time. The `id` returned here is what every other operation in this connector needs as `site_id`",
+      "direction": "read",
+      "expose": true,
+      "id": "webflow-site-list",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/sites"
+      },
+      "response_schema": {
+        "properties": {
+          "sites": {
+            "items": {
+              "properties": {
+                "createdOn": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The site's id — pass this as `site_id` to every other operation",
+                  "type": "string"
+                },
+                "lastPublished": {
+                  "description": "Absent or null when the site has never been published",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "lastUpdated": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "shortName": {
+                  "description": "The site's Webflow-hosted subdomain slug",
+                  "type": "string"
+                },
+                "workspaceId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "displayName",
+                "shortName"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sites"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "webflow.token"
+        ]
+      ],
+      "description": "List the CMS collections defined on a site, with each collection's id, display name and slug. Does not include a collection's fields — call webflow-collection-get for that. Returns Webflow's first page only; this connector declares no offset or limit parameter",
+      "direction": "read",
+      "expose": true,
+      "id": "webflow-collection-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The site's id, as returned by webflow-site-list",
+          "name": "site_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^[0-9a-f]{24}$",
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/sites/{site_id}/collections"
+      },
+      "response_schema": {
+        "properties": {
+          "collections": {
+            "items": {
+              "properties": {
+                "createdOn": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The collection's id — pass this as `collection_id` to every other collection operation",
+                  "type": "string"
+                },
+                "lastUpdated": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "singularName": {
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "displayName",
+                "slug"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "collections"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "webflow.token"
+        ]
+      ],
+      "description": "Get a collection's own schema: its display name, slug, and the full list of fields the site owner defined for it — each field's id, slug, display name, type, and whether it is required. This is the honest way to learn what an item's fieldData will contain, since that shape is tenant-defined and unknowable at compile time; this connector cannot type fieldData any more precisely than this lets a caller discover it",
+      "direction": "read",
+      "expose": true,
+      "id": "webflow-collection-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The collection's id, as returned by webflow-collection-list",
+          "name": "collection_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^[0-9a-f]{24}$",
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/collections/{collection_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "createdOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "fields": {
+            "description": "Every field this collection's items carry, tenant-defined — this is what makes an item's fieldData unknowable until this is fetched",
+            "items": {
+              "properties": {
+                "displayName": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "isEditable": {
+                  "type": "boolean"
+                },
+                "isRequired": {
+                  "type": "boolean"
+                },
+                "slug": {
+                  "description": "The key this field occupies inside an item's fieldData",
+                  "type": "string"
+                },
+                "type": {
+                  "description": "Webflow's field type, e.g. PlainText, RichText, Number, Bool, Date, Image, Link, Reference, MultiReference, Option, Color — not enumerated further as a closed set, since Webflow may add types this file does not yet know about",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "slug",
+                "type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastUpdated": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "singularName": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "slug",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "webflow.token"
+        ]
+      ],
+      "description": "List the items in a collection, in Webflow's default order. Each item's fieldData is a flat object keyed by that collection's own field slugs — call webflow-collection-get to discover them; this connector cannot type fieldData beyond that, because it is defined per-tenant, per-collection. Returns Webflow's first page only; this connector declares no offset or limit parameter",
+      "direction": "read",
+      "expose": true,
+      "id": "webflow-collection-item-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The collection's id, as returned by webflow-collection-list",
+          "name": "collection_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^[0-9a-f]{24}$",
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/collections/{collection_id}/items"
+      },
+      "response_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "cmsLocaleId": {
+                  "type": "string"
+                },
+                "createdOn": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "fieldData": {
+                  "description": "This item's custom fields, keyed by the collection's own field slugs. Genuinely unknowable at compile time — call webflow-collection-get to discover the keys and their types before reading this",
+                  "type": "object"
+                },
+                "id": {
+                  "description": "The item's id — pass this as `item_id` to webflow-collection-item-get",
+                  "type": "string"
+                },
+                "isArchived": {
+                  "type": "boolean"
+                },
+                "isDraft": {
+                  "type": "boolean"
+                },
+                "lastPublished": {
+                  "description": "Absent or null when this item has never been published",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "lastUpdated": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "fieldData"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "pagination": {
+            "description": "Offset/limit paging metadata; unusable here — this connector returns Webflow's first page only and declares no offset or limit parameter",
+            "type": "object"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "webflow.token"
+        ]
+      ],
+      "description": "Get one item from a collection. Its fieldData is a flat object keyed by that collection's own field slugs — call webflow-collection-get to discover them; this connector cannot type fieldData beyond that, because it is defined per-tenant, per-collection",
+      "direction": "read",
+      "expose": true,
+      "id": "webflow-collection-item-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The collection's id, as returned by webflow-collection-list",
+          "name": "collection_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^[0-9a-f]{24}$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "The item's id, as returned by webflow-collection-item-list",
+          "name": "item_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^[0-9a-f]{24}$",
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/collections/{collection_id}/items/{item_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "cmsLocaleId": {
+            "type": "string"
+          },
+          "createdOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fieldData": {
+            "description": "This item's custom fields, keyed by the collection's own field slugs. Genuinely unknowable at compile time — call webflow-collection-get to discover the keys and their types before reading this",
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "isArchived": {
+            "type": "boolean"
+          },
+          "isDraft": {
+            "type": "boolean"
+          },
+          "lastPublished": {
+            "description": "Absent or null when this item has never been published",
+            "format": "date-time",
+            "type": "string"
+          },
+          "lastUpdated": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fieldData"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "webflow.token"
+        ]
+      ],
+      "description": "Publish a site's currently staged changes to its live, public domains — every connected custom domain and the Webflow-hosted subdomain. This has immediate public effect: whatever is staged goes live for every visitor as soon as this call returns, with no separate confirmation step. Takes no body — Webflow's optional custom-domain selector is itself an array this connector cannot express (C-185), so this always publishes to every connected domain rather than a caller-chosen subset",
+      "direction": "write",
+      "expose": true,
+      "id": "webflow-site-publish",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The site's id, as returned by webflow-site-list",
+          "name": "site_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^[0-9a-f]{24}$",
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "url": "{base}/sites/{site_id}/publish"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v2",
+      "base_url": "https://api.webflow.com/v2",
+      "gid": "com.webflow.api:v2",
+      "name": "default",
+      "tags": [
+        "cms"
+      ]
+    }
+  ],
+  "vendor": "Webflow",
+  "verify": "webflow-site-list"
+}

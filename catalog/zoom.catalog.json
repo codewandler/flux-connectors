@@ -1,0 +1,229 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Zoom server-to-server OAuth access token, sent as a bearer. Minted outside flux and supplied through the environment; it expires within the hour and nothing here can refresh it",
+      "env": [
+        "ZOOM_ACCESS_TOKEN"
+      ],
+      "name": "zoom.access_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "us.zoom.api",
+  "connector": "zoom",
+  "default_auth": [
+    [
+      "zoom.access_token"
+    ]
+  ],
+  "description": "Zoom meeting administration: cancel a meeting, and read a user. Reading and creating a meeting are withheld — both return the host's ZAK token in `start_url` (C-430)",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "zoom.access_token"
+        ]
+      ],
+      "description": "Cancel a meeting. It is gone — Zoom offers no undelete, and the meeting id, its join URL and any registrations go with it. Whether Zoom emails the host or the registrants about the cancellation is left to Zoom's own default; this operation cannot ask for either",
+      "direction": "write",
+      "expose": true,
+      "id": "zoom-meeting-delete",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The numeric id of the meeting to cancel. A meeting UUID is not accepted: a Zoom UUID is base64 that can carry `/` and would have to be double URL-encoded, and nothing in this pipeline encodes a path",
+          "name": "meeting_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/code",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "DELETE",
+        "url": "{base}/v2/meetings/{meeting_id}"
+      },
+      "risk": "destructive",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "zoom.access_token"
+        ]
+      ],
+      "description": "Get one user — their id, email, name, timezone, licence type and personal meeting id. This is how `me` is resolved to the id a meeting is created under",
+      "direction": "read",
+      "expose": true,
+      "id": "zoom-user-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "`me` for the token's own user, a Zoom user id, or the user's email address",
+          "name": "user_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9@._+-]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/code",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v2/users/{user_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "created_at": {
+            "description": "ISO 8601, not Unix seconds. For a `pending` user Zoom's docs warn this reflects the time of the API call rather than account creation",
+            "format": "date-time",
+            "type": "string"
+          },
+          "dept": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "email": {
+            "description": "Personal data",
+            "format": "email",
+            "type": "string"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "id": {
+            "description": "The user's Zoom id — what `me` resolves to, and the `user_id` a meeting is created under",
+            "type": "string"
+          },
+          "job_title": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "last_client_version": {
+            "type": "string"
+          },
+          "last_login_time": {
+            "description": "ISO 8601, or absent for a user who never signed in",
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "personal_meeting_url": {
+            "description": "The join URL for the PMI. A participant link, not a host link — contrast `start_url` on a meeting",
+            "type": "string"
+          },
+          "phone_numbers": {
+            "description": "Each `{code, country, label, number, verified}`, where `label` is `Mobile`, `Office`, `Home` or `Fax` and `verified` here IS a boolean. Personal data. The flat `phone_number`/`phone_country` members are deprecated and are not declared",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "pmi": {
+            "description": "The personal meeting id — a standing meeting room. Reusing it means every past participant can rejoin",
+            "format": "int64",
+            "type": "integer"
+          },
+          "role_id": {
+            "type": "string"
+          },
+          "role_name": {
+            "description": "The Zoom role, e.g. `Owner`, `Admin`, `Member`",
+            "type": "string"
+          },
+          "status": {
+            "description": "`pending` means the person has never activated the account — a meeting created for them still exists, but they cannot host it",
+            "enum": [
+              "pending",
+              "active",
+              "inactive"
+            ],
+            "type": "string"
+          },
+          "timezone": {
+            "description": "IANA name, e.g. `Europe/Berlin`. A meeting created without an explicit timezone uses this one",
+            "type": "string"
+          },
+          "type": {
+            "description": "THE LICENCE, AS AN INTEGER: 1 Basic, 2 Licensed, 4 Unassigned without Meetings Basic. A Basic user's group meetings are time-capped, so this is what to check before scheduling one",
+            "enum": [
+              1,
+              2,
+              4
+            ],
+            "type": "integer"
+          },
+          "use_pmi": {
+            "description": "Whether new meetings default to the PMI rather than a fresh id",
+            "type": "boolean"
+          },
+          "verified": {
+            "description": "AN INTEGER, not a boolean: 1 verified, 0 not. The `verified` inside a `phone_numbers` entry *is* a boolean",
+            "enum": [
+              0,
+              1
+            ],
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v2",
+      "base_url": "https://api.zoom.us",
+      "gid": "us.zoom.api:v2",
+      "name": "default",
+      "tags": [
+        "video-conferencing",
+        "scheduling"
+      ]
+    }
+  ],
+  "vendor": "Zoom"
+}

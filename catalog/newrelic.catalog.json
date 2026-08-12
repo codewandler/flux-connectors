@@ -1,0 +1,637 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "New Relic User API key, authorizing REST v2 calls as the New Relic user it was created by. Travels as the `X-Api-Key` header on every request. A key is issued in one region and is not valid against the other region's host — a 401 from this connector is as likely to be a wrong `host` as a wrong key",
+      "env": [
+        "NEW_RELIC_API_KEY"
+      ],
+      "name": "newrelic.api_key",
+      "scheme": {
+        "kind": "header",
+        "name": "X-Api-Key"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.newrelic.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "endpoint.host",
+      "choices": [
+        {
+          "label": "United States",
+          "value": "api.newrelic.com"
+        },
+        {
+          "label": "European Union",
+          "value": "api.eu.newrelic.com"
+        }
+      ],
+      "docs_url": "https://docs.newrelic.com/docs/apis/rest-api-v2/get-started/introduction-new-relic-rest-api-v2/",
+      "example": "api.newrelic.com",
+      "format": "hostname",
+      "help": "Which region this New Relic account lives in. Pick United States for an account on api.newrelic.com or European Union for one on api.eu.newrelic.com — those are the only two, and an account is in exactly one of them from the day it was created. If you are not sure, look at the URL you log in at: one.newrelic.com is the US region and one.eu.newrelic.com is the EU region. Getting this wrong returns 401 on every call, exactly as a bad key would, so check it before you rotate anything",
+      "label": "New Relic API host",
+      "level": "connection",
+      "name": "host",
+      "required": true,
+      "secret": false,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "credential.newrelic.api_key",
+      "docs_url": "https://docs.newrelic.com/docs/apis/intro-apis/new-relic-api-keys/",
+      "format": "token",
+      "help": "A User API key from New Relic's API keys page (one.newrelic.com, Administration -> API keys). Create a User key, not a License or Ingest key — a License key does not authenticate REST v2 and returns 401. The key inherits the permissions of the New Relic user it was created by",
+      "label": "New Relic User API key",
+      "level": "connection",
+      "name": "api_key",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "newrelic",
+  "default_auth": [
+    [
+      "newrelic.api_key"
+    ]
+  ],
+  "description": "New Relic APM and alerting over the REST v2 API: list the applications an account is monitoring and read one in detail, read the account's alert policies and its current violations, and list or record deployment markers against an application. The account's region host is configured once, not chosen per call",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "newrelic.api_key"
+        ]
+      ],
+      "description": "List every application this account is monitoring with APM, each with its current health status and a summary of its response time, throughput and error rate. Takes no argument. Also this connector's `verify`: a bounded read that runs unattended and needs nothing beyond the configured host and key",
+      "direction": "read",
+      "endpoint": {
+        "host": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "newrelic-application-list",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/applications.json"
+      },
+      "response_schema": {
+        "properties": {
+          "applications": {
+            "description": "Every application the account monitors. An account with no APM agents reporting returns an empty array, not an error",
+            "items": {
+              "properties": {
+                "application_summary": {
+                  "description": "The APM rollup for the last few minutes: `response_time` (ms), `throughput` (requests per minute), `error_rate` (percent), `apdex_target`, `apdex_score`, `host_count`, `instance_count`, `concurrency`. Absent on an application that is not reporting",
+                  "type": "object"
+                },
+                "end_user_summary": {
+                  "description": "The browser-side rollup, where browser monitoring is enabled: `response_time`, `throughput`, `apdex_target`, `apdex_score`",
+                  "type": "object"
+                },
+                "health_status": {
+                  "description": "New Relic's rollup of the application's alert state: `green`, `yellow`, `red`, `gray` (nothing reporting) or `unknown`. This is the field to read to answer \"is anything wrong\"",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The application's id — what newrelic-application-get and the deployment operations address it by. An integer, not a string",
+                  "type": "integer"
+                },
+                "language": {
+                  "description": "The agent's language — `ruby`, `java`, `nodejs` and so on",
+                  "type": "string"
+                },
+                "last_reported_at": {
+                  "description": "When the agent last reported, as an ISO 8601 timestamp",
+                  "type": "string"
+                },
+                "links": {
+                  "description": "Related ids New Relic returns alongside — the alert policy, the application's hosts and instances. Ids only, not embedded objects",
+                  "type": "object"
+                },
+                "name": {
+                  "description": "The application name the agent reports under, as it reads in New Relic's UI",
+                  "type": "string"
+                },
+                "reporting": {
+                  "description": "Whether an agent has sent data recently. FALSE MEANS THE APPLICATION IS NOT SENDING DATA — its summary figures are stale, not zero",
+                  "type": "boolean"
+                },
+                "settings": {
+                  "description": "The application's Apdex thresholds and monitoring switches. Left untyped rather than enumerated; see New Relic's own Application object reference",
+                  "type": "object"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "applications"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "newrelic.api_key"
+        ]
+      ],
+      "description": "Get one application by id, with its current health status and the same summary figures the list returns. Use this to re-read one application after a deploy rather than listing the whole account",
+      "direction": "read",
+      "endpoint": {
+        "host": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "newrelic-application-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The application's id, from newrelic-application-list's `id`. A New Relic application id is an integer; pass it as it was returned",
+          "name": "application_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/applications/{application_id}.json"
+      },
+      "response_schema": {
+        "properties": {
+          "application": {
+            "properties": {
+              "application_summary": {
+                "description": "The APM rollup for the last few minutes — response time, throughput, error rate, Apdex, host and instance counts. Absent on an application that is not reporting",
+                "type": "object"
+              },
+              "end_user_summary": {
+                "description": "The browser-side rollup, where browser monitoring is enabled",
+                "type": "object"
+              },
+              "health_status": {
+                "description": "New Relic's rollup of the application's alert state: `green`, `yellow`, `red`, `gray` or `unknown`",
+                "type": "string"
+              },
+              "id": {
+                "description": "The application's id",
+                "type": "integer"
+              },
+              "language": {
+                "description": "The agent's language",
+                "type": "string"
+              },
+              "last_reported_at": {
+                "description": "When the agent last reported, as an ISO 8601 timestamp",
+                "type": "string"
+              },
+              "links": {
+                "description": "Related ids — the alert policy, the application's hosts and instances",
+                "type": "object"
+              },
+              "name": {
+                "description": "The application name the agent reports under",
+                "type": "string"
+              },
+              "reporting": {
+                "description": "Whether an agent has sent data recently. FALSE MEANS THE APPLICATION IS NOT SENDING DATA",
+                "type": "boolean"
+              },
+              "settings": {
+                "description": "The application's Apdex thresholds and monitoring switches. Left untyped rather than enumerated",
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "application"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "newrelic.api_key"
+        ]
+      ],
+      "description": "List the account's alert policies — the groupings New Relic evaluates conditions under, each with its incident rollup preference. Takes no argument. This lists the policies themselves, not the conditions inside them and not anything currently alerting; for that, read newrelic-alert-violation-list",
+      "direction": "read",
+      "endpoint": {
+        "host": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "newrelic-alert-policy-list",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/alerts_policies.json"
+      },
+      "response_schema": {
+        "properties": {
+          "policies": {
+            "items": {
+              "properties": {
+                "created_at": {
+                  "description": "When the policy was created, as an epoch timestamp in milliseconds — not seconds, and not an ISO string",
+                  "type": "integer"
+                },
+                "id": {
+                  "description": "The policy's id",
+                  "type": "integer"
+                },
+                "incident_preference": {
+                  "description": "How New Relic groups violations into incidents under this policy — `PER_POLICY`, `PER_CONDITION` or `PER_CONDITION_AND_TARGET`. It decides how many incidents one bad deploy produces",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The policy name, as it reads in New Relic's UI",
+                  "type": "string"
+                },
+                "updated_at": {
+                  "description": "When the policy was last changed, as an epoch timestamp in milliseconds",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "policies"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "newrelic.api_key"
+        ]
+      ],
+      "description": "List the account's alert violations from New Relic's default recent window. READ `closed_at` ON EVERY ENTRY: this returns closed violations as well as open ones, and a violation with a non-null `closed_at` has already resolved. Each entry names the policy and condition that fired and the entity that broke",
+      "direction": "read",
+      "endpoint": {
+        "host": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "newrelic-alert-violation-list",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/alerts_violations.json"
+      },
+      "response_schema": {
+        "properties": {
+          "violations": {
+            "description": "Violations in the default window, open and closed together",
+            "items": {
+              "properties": {
+                "closed_at": {
+                  "description": "When the violation closed, as an epoch timestamp in milliseconds, or null. NULL IS THE ONLY THING THAT MEANS STILL OPEN",
+                  "type": "integer"
+                },
+                "condition_name": {
+                  "description": "The condition inside that policy which fired",
+                  "type": "string"
+                },
+                "duration": {
+                  "description": "How long the violation lasted, in seconds. On an open violation this is how long it has been open so far",
+                  "type": "integer"
+                },
+                "entity": {
+                  "description": "What broke: `{product, type, group_id, id, name}`. `product` is `APM`, `Browser`, `Mobile` or `Infrastructure`, and `id` addresses the entity within that product — for an APM entity it is an application id newrelic-application-get takes",
+                  "type": "object"
+                },
+                "id": {
+                  "description": "The violation's id",
+                  "type": "integer"
+                },
+                "label": {
+                  "description": "New Relic's own one-line summary of what broke",
+                  "type": "string"
+                },
+                "links": {
+                  "description": "The `policy_id` and `condition_id` behind `policy_name` and `condition_name`. Ids only",
+                  "type": "object"
+                },
+                "opened_at": {
+                  "description": "When the violation opened, as an epoch timestamp in milliseconds",
+                  "type": "integer"
+                },
+                "policy_name": {
+                  "description": "The alert policy the violation belongs to — matches a `name` from newrelic-alert-policy-list",
+                  "type": "string"
+                },
+                "priority": {
+                  "description": "The condition's threshold severity — `Critical` or `Warning`",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "opened_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "violations"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "newrelic.api_key"
+        ]
+      ],
+      "description": "List the deployment markers recorded against one application, most recent first. These are the markers New Relic overlays on its charts — read them to answer \"what shipped before this went wrong\"",
+      "direction": "read",
+      "endpoint": {
+        "host": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "newrelic-deployment-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The application's id, from newrelic-application-list's `id`",
+          "name": "application_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/applications/{application_id}/deployments.json"
+      },
+      "response_schema": {
+        "properties": {
+          "deployments": {
+            "items": {
+              "properties": {
+                "changelog": {
+                  "description": "What changed, as free text, or null",
+                  "type": "string"
+                },
+                "description": {
+                  "description": "A one-line summary of the deployment, or null",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The deployment marker's id",
+                  "type": "integer"
+                },
+                "links": {
+                  "description": "The application id this marker belongs to",
+                  "type": "object"
+                },
+                "revision": {
+                  "description": "The version this deployment shipped, as the recorder spelled it — a commit sha, a tag or a build number",
+                  "type": "string"
+                },
+                "timestamp": {
+                  "description": "When the deployment was recorded, as an ISO 8601 timestamp",
+                  "type": "string"
+                },
+                "user": {
+                  "description": "Who recorded the deployment, as free text — whatever the recorder passed, not a verified New Relic identity. Identifies a person; read it for what the calling flow needs and do not persist it beyond that",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "timestamp"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "deployments"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "newrelic.api_key"
+        ]
+      ],
+      "description": "Record a deployment marker against an application, timestamped now. The marker appears on every chart for that application and is visible to everyone on the account; this connector cannot remove one once recorded. Calling this twice records two deployments",
+      "direction": "write",
+      "endpoint": {
+        "host": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "newrelic-deployment-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The application the deployment shipped to, from newrelic-application-list's `id`",
+          "name": "application_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The version that shipped — a commit sha, a tag or a build number. The only field New Relic requires, and the one every chart overlay is labelled with, so pass something a human can trace back to a build",
+          "name": "revision",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "deployment.revision"
+        },
+        {
+          "description": "What changed in this deployment, as free text. Shown when the marker is opened",
+          "name": "changelog",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "deployment.changelog"
+        },
+        {
+          "description": "A one-line summary of the deployment, shown on the marker itself",
+          "name": "description",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "deployment.description"
+        },
+        {
+          "description": "Who or what performed the deployment, as free text. New Relic records this verbatim and does not verify it against a New Relic identity — pass a service or pipeline name rather than a personal one unless the flow has a reason to name a person",
+          "name": "user",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "deployment.user"
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "deployment": {
+              "changelog": {
+                "$param": "changelog"
+              },
+              "description": {
+                "$param": "description"
+              },
+              "revision": {
+                "$param": "revision"
+              },
+              "user": {
+                "$param": "user"
+              }
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/applications/{application_id}/deployments.json"
+      },
+      "response_schema": {
+        "properties": {
+          "deployment": {
+            "properties": {
+              "changelog": {
+                "description": "The changelog as recorded, or null",
+                "type": "string"
+              },
+              "description": {
+                "description": "The description as recorded, or null",
+                "type": "string"
+              },
+              "id": {
+                "description": "The created marker's id",
+                "type": "integer"
+              },
+              "links": {
+                "description": "The application id this marker belongs to",
+                "type": "object"
+              },
+              "revision": {
+                "description": "The revision as recorded — echo it back to confirm the marker landed on the build you meant",
+                "type": "string"
+              },
+              "timestamp": {
+                "description": "When New Relic recorded the marker, as an ISO 8601 timestamp. New Relic sets this; it is not accepted from the request",
+                "type": "string"
+              },
+              "user": {
+                "description": "The user as recorded, verbatim and unverified",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "timestamp"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "deployment"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "2",
+      "base_url": "https://{host}/v2",
+      "gid": "com.newrelic.api:2",
+      "name": "default",
+      "tags": [
+        "observability"
+      ]
+    }
+  ],
+  "vendor": "New Relic",
+  "verify": "newrelic-application-list"
+}

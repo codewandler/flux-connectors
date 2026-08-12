@@ -1,0 +1,669 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Sentry auth token sent as a bearer — an organization, user or internal-integration token",
+      "env": [
+        "SENTRY_AUTH_TOKEN"
+      ],
+      "name": "sentry.auth_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "io.sentry.api",
+  "connector": "sentry",
+  "default_auth": [
+    [
+      "sentry.auth_token"
+    ]
+  ],
+  "description": "Sentry error tracking: read an issue and its latest event, triage an issue, read a project",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "sentry.auth_token"
+        ]
+      ],
+      "description": "Get one issue — its title, culprit, level, status, assignee, first and last seen timestamps and event counts. An issue is Sentry's group of like events, not a single occurrence; use `sentry-issue-event-latest` for the stack trace",
+      "direction": "read",
+      "expose": true,
+      "id": "sentry-issue-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The organization's slug as it appears in a Sentry URL (`acme-inc`), or its numeric id",
+          "name": "organization_id_or_slug",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "The issue's numeric id — the number in a Sentry issue URL, and the `issue_id` an alert payload carries. It is not the short id (`ACME-INC-7F`)",
+          "name": "issue_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/detail"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/"
+      },
+      "response_schema": {
+        "properties": {
+          "assignedTo": {
+            "description": "Who owns it: `{type: \"user\"|\"team\", id, name, email}`, or null when unassigned",
+            "type": "object"
+          },
+          "count": {
+            "description": "How many events are grouped in this issue — **a STRING, not a number**, per Sentry's own schema (its example is `\"150\"`). Compare it as a number only after converting",
+            "type": "string"
+          },
+          "culprit": {
+            "description": "Where Sentry attributes it — a function or transaction name. Null when it cannot attribute one",
+            "type": "string"
+          },
+          "firstSeen": {
+            "description": "When the first event of this group arrived",
+            "format": "date-time",
+            "type": "string"
+          },
+          "hasSeen": {
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The issue's numeric id, as a string",
+            "type": "string"
+          },
+          "isBookmarked": {
+            "type": "boolean"
+          },
+          "isSubscribed": {
+            "type": "boolean"
+          },
+          "isUnhandled": {
+            "description": "True when the error was not caught by application code",
+            "type": "boolean"
+          },
+          "lastSeen": {
+            "description": "When the most recent one did. This, not `count`, is what says whether the issue is still live",
+            "format": "date-time",
+            "type": "string"
+          },
+          "level": {
+            "description": "The severity of the grouped events",
+            "enum": [
+              "sample",
+              "debug",
+              "info",
+              "warning",
+              "error",
+              "fatal",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "metadata": {
+            "description": "Sentry's own grouping metadata — typically `{type, value, filename, function}`. Free-form in the vendor's schema, so no member is declared",
+            "type": "object"
+          },
+          "numComments": {
+            "type": "integer"
+          },
+          "permalink": {
+            "description": "The issue's page in Sentry — the link to give a human",
+            "format": "uri",
+            "type": "string"
+          },
+          "priority": {
+            "description": "`low`, `medium`, `high` or null — Sentry's own computed priority, distinct from `level`",
+            "type": "string"
+          },
+          "project": {
+            "description": "Which project it belongs to: `{id, name, slug, platform}`. Its `slug` is what `sentry-project-get` takes",
+            "type": "object"
+          },
+          "shortId": {
+            "description": "The human-facing id shown in Sentry's UI and in alert emails, e.g. `ACME-INC-7F`. It is not accepted by this connector's `issue_id` parameter",
+            "type": "string"
+          },
+          "status": {
+            "description": "The triage state. Note the last three: an issue can be mid-deletion, mid-merge or reprocessing, which is neither open nor closed",
+            "enum": [
+              "resolved",
+              "ignored",
+              "unresolved",
+              "pending_deletion",
+              "pending_merge",
+              "reprocessing"
+            ],
+            "type": "string"
+          },
+          "substatus": {
+            "description": "Why it is in that state: `new`, `ongoing`, `regressed`, `escalating`, `archived_until_escalating`, `archived_until_condition_met`, `archived_forever`, or null. `regressed` is the one that matters in a triage flow — it means a resolved issue came back",
+            "type": "string"
+          },
+          "title": {
+            "description": "The grouped error's title, e.g. `TypeError: undefined is not a function`",
+            "type": "string"
+          },
+          "userCount": {
+            "description": "How many distinct users hit it — an integer, unlike `count` beside it",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "sentry.auth_token"
+        ]
+      ],
+      "description": "Change an issue's triage state: resolve it, ignore it, or return it to unresolved. This is the state the whole organization triages against — a resolved issue leaves the unresolved queue, and an ignored one stops alerting until it recurs on Sentry's terms. Recorded in the issue's activity feed under the token's owner",
+      "direction": "write",
+      "expose": true,
+      "id": "sentry-issue-update",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The organization's slug as it appears in a Sentry URL (`acme-inc`), or its numeric id",
+          "name": "organization_id_or_slug",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "The issue's numeric id",
+          "name": "issue_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "`resolved` closes the issue, `ignored` mutes it until Sentry's own recurrence conditions fire, `unresolved` reopens it and puts it back in the team's queue",
+          "name": "status",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "enum": [
+              "resolved",
+              "ignored",
+              "unresolved"
+            ],
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/detail"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "status": {
+              "$param": "status"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "PUT",
+        "url": "{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/"
+      },
+      "response_schema": {
+        "properties": {
+          "assignedTo": {
+            "description": "`{type, id, name, email}`, or null",
+            "type": "object"
+          },
+          "count": {
+            "description": "Event count, a STRING here as on the read",
+            "type": "string"
+          },
+          "culprit": {
+            "type": "string"
+          },
+          "firstSeen": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "hasSeen": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "isBookmarked": {
+            "type": "boolean"
+          },
+          "isSubscribed": {
+            "type": "boolean"
+          },
+          "lastSeen": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "sample",
+              "debug",
+              "info",
+              "warning",
+              "error",
+              "fatal",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "permalink": {
+            "format": "uri",
+            "type": "string"
+          },
+          "priority": {
+            "description": "`low`, `medium`, `high` or null",
+            "type": "string"
+          },
+          "project": {
+            "description": "`{id, name, slug, platform}`",
+            "type": "object"
+          },
+          "shortId": {
+            "type": "string"
+          },
+          "status": {
+            "description": "The state **after** this call — read it to confirm the transition applied",
+            "enum": [
+              "resolved",
+              "ignored",
+              "unresolved",
+              "pending_deletion",
+              "pending_merge",
+              "reprocessing"
+            ],
+            "type": "string"
+          },
+          "statusDetails": {
+            "description": "How the status was reached — which release resolved it, or the conditions an archive is waiting on. Free-form in the vendor's schema",
+            "type": "object"
+          },
+          "substatus": {
+            "description": "`new`, `ongoing`, `regressed`, `escalating`, `archived_until_escalating`, `archived_until_condition_met`, `archived_forever`, or null. An `ignored` issue lands in one of the `archived_*` values, which is how the mute's terms are visible",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "userCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "sentry.auth_token"
+        ]
+      ],
+      "description": "Get one project — its name, slug, platform, teams, DSN-bearing client keys' status and whether it is currently accepting events. This is the project an issue belongs to, so it is how a triage flow finds out which service is broken",
+      "direction": "read",
+      "expose": true,
+      "id": "sentry-project-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The organization's slug as it appears in a Sentry URL (`acme-inc`), or its numeric id",
+          "name": "organization_id_or_slug",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "The project's slug as it appears in a Sentry URL (`backend-api`), or its numeric id",
+          "name": "project_id_or_slug",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/detail"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/0/projects/{organization_id_or_slug}/{project_id_or_slug}/"
+      },
+      "response_schema": {
+        "properties": {
+          "access": {
+            "description": "The permission scopes the token holds on this project",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "dateCreated": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "features": {
+            "description": "Enabled feature flags, as opaque strings",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "firstEvent": {
+            "description": "When this project first received an event, or null if it never has — which is the signal that an SDK was never wired up",
+            "format": "date-time",
+            "type": "string"
+          },
+          "hasAccess": {
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The project's numeric id, as a string",
+            "type": "string"
+          },
+          "isInternal": {
+            "type": "boolean"
+          },
+          "isMember": {
+            "description": "Whether the token's own user is a member of the project",
+            "type": "boolean"
+          },
+          "isPublic": {
+            "type": "boolean"
+          },
+          "latestRelease": {
+            "description": "`{version}` of the most recent release seen, or null. Useful for deciding whether an error predates a deploy",
+            "type": "object"
+          },
+          "name": {
+            "description": "The display name, which is not the slug",
+            "type": "string"
+          },
+          "options": {
+            "description": "Per-project settings, keyed by option name. Free-form in the vendor's schema",
+            "type": "object"
+          },
+          "organization": {
+            "description": "The owning organization, itself a large object; its `slug` is what every other operation here takes",
+            "type": "object"
+          },
+          "platform": {
+            "description": "The SDK platform, e.g. `python`, `javascript-react`, or null",
+            "type": "string"
+          },
+          "platforms": {
+            "description": "Every platform that has actually sent events to this project",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "processingIssues": {
+            "description": "How many processing problems the project has, e.g. missing debug symbols",
+            "type": "integer"
+          },
+          "slug": {
+            "description": "The URL slug, e.g. `backend-api` — what an issue's `project.slug` names and what this operation takes",
+            "type": "string"
+          },
+          "status": {
+            "description": "The project's own lifecycle state — `active`, `disabled`, `pending_deletion`, `deletion_in_progress`. A non-active project explains an issue that stopped updating",
+            "type": "string"
+          },
+          "team": {
+            "description": "`{id, name, slug}` — the owning team, or null. Deprecated in favour of `teams`",
+            "type": "object"
+          },
+          "teams": {
+            "description": "All owning teams, each `{id, name, slug}`. This is who to notify",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "sentry.auth_token"
+        ]
+      ],
+      "description": "Get the most recent event of an issue — the actual occurrence, with its stack trace, breadcrumbs, request context and tags. This is what makes an issue diagnosable rather than merely countable; the event list itself is excluded because it pages with an opaque cursor",
+      "direction": "read",
+      "expose": true,
+      "id": "sentry-issue-event-latest",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The organization's slug as it appears in a Sentry URL (`acme-inc`), or its numeric id",
+          "name": "organization_id_or_slug",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "The issue's numeric id",
+          "name": "issue_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/detail"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/0/organizations/{organization_id_or_slug}/issues/{issue_id}/events/latest/"
+      },
+      "response_schema": {
+        "properties": {
+          "contexts": {
+            "description": "Runtime context keyed by name (`browser`, `os`, `device`, `trace`). Free-form in the vendor's schema",
+            "type": "object"
+          },
+          "culprit": {
+            "type": "string"
+          },
+          "dateCreated": {
+            "description": "When the event occurred",
+            "format": "date-time",
+            "type": "string"
+          },
+          "dateReceived": {
+            "description": "When Sentry ingested it. Late-arriving events make these differ",
+            "format": "date-time",
+            "type": "string"
+          },
+          "entries": {
+            "description": "THE INTERESTING PART, and undocumented: the stack trace, breadcrumbs, HTTP request and message are all entries here, each shown in Sentry's examples as `{type, data}` with `type` naming which (`exception`, `stacktrace`, `breadcrumbs`, `request`, `message`). The vendor's schema declares the item as an empty schema, so nothing is asserted about `data`",
+            "items": {},
+            "type": "array"
+          },
+          "errors": {
+            "description": "Ingest-time problems with the event itself — a missing source map, an unparseable frame — each `{type, message, data}`. Not the error the event is about",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "eventID": {
+            "description": "The same event id again, under Sentry's other spelling",
+            "type": "string"
+          },
+          "groupID": {
+            "description": "The issue this event belongs to — the `issue_id` that fetched it. Nullable in the vendor's schema",
+            "type": "string"
+          },
+          "id": {
+            "description": "The event's id",
+            "type": "string"
+          },
+          "message": {
+            "description": "The log message, or null for an exception-only event",
+            "type": "string"
+          },
+          "nextEventID": {
+            "description": "The next event in the same issue, or null when this is the latest — which it is for this operation",
+            "type": "string"
+          },
+          "platform": {
+            "description": "The SDK platform that sent it",
+            "type": "string"
+          },
+          "previousEventID": {
+            "description": "The preceding event in the same issue, or null",
+            "type": "string"
+          },
+          "projectID": {
+            "type": "string"
+          },
+          "release": {
+            "description": "The release the event came from, or null",
+            "type": "object"
+          },
+          "sdk": {
+            "description": "`{name, version}` of the SDK that reported it, or null",
+            "type": "object"
+          },
+          "size": {
+            "description": "The stored event's size in bytes, or null",
+            "type": "integer"
+          },
+          "tags": {
+            "description": "The event's tags as `{key, value}` pairs — **an array, not a map**. `environment`, `release`, `server_name`, `url` and `level` all arrive here, so finding the environment means searching the array for `key == \"environment\"`",
+            "items": {
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "title": {
+            "description": "The event's title, usually the same as the issue's",
+            "type": "string"
+          },
+          "user": {
+            "description": "Who hit it: `{id, email, username, ip_address, name, geo, data}`, or null. **Personal data** — an IP address and an email — so read it only when the task needs it",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "eventID"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "0",
+      "base_url": "https://sentry.io",
+      "gid": "io.sentry.api:0",
+      "name": "default",
+      "tags": [
+        "observability"
+      ]
+    }
+  ],
+  "vendor": "Sentry"
+}

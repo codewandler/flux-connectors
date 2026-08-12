@@ -1,0 +1,635 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "LaunchDarkly API access token, sent as the entire value of the Authorization header with no scheme word in front of it — LaunchDarkly rejects a `Bearer `-prefixed value",
+      "env": [
+        "LAUNCHDARKLY_API_TOKEN"
+      ],
+      "name": "launchdarkly.api_token",
+      "scheme": {
+        "kind": "header",
+        "name": "Authorization"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.launchdarkly.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.launchdarkly.api_token",
+      "docs_url": "https://docs.launchdarkly.com/home/account/api",
+      "format": "token",
+      "help": "Create one under Account settings → Authorization → Access tokens in LaunchDarkly. Give it at least reader access to the projects this connection should reach, and writer access if launchdarkly-flag-toggle will be used. LaunchDarkly shows the token once",
+      "label": "LaunchDarkly API access token",
+      "level": "connection",
+      "name": "api_token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "launchdarkly",
+  "default_auth": [
+    [
+      "launchdarkly.api_token"
+    ]
+  ],
+  "description": "LaunchDarkly feature management: read projects, environments and feature flags, and toggle a flag on or off in one environment",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "launchdarkly.api_token"
+        ]
+      ],
+      "description": "List every project in the LaunchDarkly account. A project is the top-level grouping that owns environments and feature flags",
+      "direction": "read",
+      "expose": true,
+      "id": "launchdarkly-project-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Maximum number of projects to return per page",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Number of projects to skip, for paging past the first page",
+          "name": "offset",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          },
+          {
+            "name": "offset",
+            "value": {
+              "$param": "offset"
+            }
+          }
+        ],
+        "url": "{base}/projects"
+      },
+      "response_schema": {
+        "properties": {
+          "items": {
+            "description": "The account's projects",
+            "items": {
+              "properties": {
+                "environments": {
+                  "description": "A summary of this project's environments; use launchdarkly-environment-list for the full per-environment representation",
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "key": {
+                  "description": "The project's own key — pass this as `project_key` to the other operations below",
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "key",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "totalCount": {
+            "description": "Total projects in the account, which may exceed `items.length` on one page",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "launchdarkly.api_token"
+        ]
+      ],
+      "description": "List the environments (e.g. production, staging) that belong to one project",
+      "direction": "read",
+      "expose": true,
+      "id": "launchdarkly-environment-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The project's own key, from launchdarkly-project-list's `key` field",
+          "name": "project_key",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Maximum number of environments to return per page",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Number of environments to skip, for paging past the first page",
+          "name": "offset",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          },
+          {
+            "name": "offset",
+            "value": {
+              "$param": "offset"
+            }
+          }
+        ],
+        "url": "{base}/projects/{project_key}/environments"
+      },
+      "response_schema": {
+        "properties": {
+          "items": {
+            "description": "The project's environments",
+            "items": {
+              "properties": {
+                "color": {
+                  "description": "Hex color LaunchDarkly's UI displays this environment in",
+                  "type": "string"
+                },
+                "confirmChanges": {
+                  "type": "boolean"
+                },
+                "defaultTrackEvents": {
+                  "type": "boolean"
+                },
+                "defaultTtl": {
+                  "type": "integer"
+                },
+                "key": {
+                  "description": "This environment's own key, e.g. `production` — pass this as the `<environment_key>` inside launchdarkly-flag-toggle's JSON Patch path",
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "requireComments": {
+                  "type": "boolean"
+                },
+                "secureMode": {
+                  "type": "boolean"
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "key",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "totalCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "launchdarkly.api_token"
+        ]
+      ],
+      "description": "List the feature flags defined in one project",
+      "direction": "read",
+      "expose": true,
+      "id": "launchdarkly-flag-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The project's own key, from launchdarkly-project-list's `key` field",
+          "name": "project_key",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Restrict each returned flag's environment-specific fields (targeting, on/off state) to this one environment's key, e.g. `production`. Omit to receive every environment's representation",
+          "name": "env",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._-]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Maximum number of flags to return per page",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Number of flags to skip, for paging past the first page",
+          "name": "offset",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "env",
+            "value": {
+              "$param": "env"
+            }
+          },
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          },
+          {
+            "name": "offset",
+            "value": {
+              "$param": "offset"
+            }
+          }
+        ],
+        "url": "{base}/flags/{project_key}"
+      },
+      "response_schema": {
+        "properties": {
+          "items": {
+            "description": "The project's feature flags",
+            "items": {
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "environments": {
+                  "description": "Keyed by environment key (e.g. \"production\"); each value carries at least an `on` boolean plus targeting rules, prerequisites and a fallthrough variation this curated connector does not enumerate further — read `on` and pass the object through rather than assuming any deeper shape",
+                  "type": "object"
+                },
+                "key": {
+                  "description": "This flag's own key — pass this as `feature_flag_key` to launchdarkly-flag-get and launchdarkly-flag-toggle",
+                  "type": "string"
+                },
+                "kind": {
+                  "description": "`boolean` or `multivariate`",
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "temporary": {
+                  "description": "Whether this flag is meant to be short-lived, e.g. a rollout flag rather than a permanent switch",
+                  "type": "boolean"
+                },
+                "variations": {
+                  "description": "Every value this flag can serve, each `{value, name, description}`",
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "key",
+                "name",
+                "kind"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "totalCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "launchdarkly.api_token"
+        ]
+      ],
+      "description": "Get one feature flag's full definition, including its current on/off state and targeting per environment",
+      "direction": "read",
+      "expose": true,
+      "id": "launchdarkly-flag-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The project's own key, from launchdarkly-project-list's `key` field",
+          "name": "project_key",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The flag's own key, from launchdarkly-flag-list's `key` field",
+          "name": "feature_flag_key",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Restrict the returned environment-specific fields (targeting, on/off state) to this one environment's key, e.g. `production`. Omit to receive every environment's representation",
+          "name": "env",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._-]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "env",
+            "value": {
+              "$param": "env"
+            }
+          }
+        ],
+        "url": "{base}/flags/{project_key}/{feature_flag_key}"
+      },
+      "response_schema": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "environments": {
+            "description": "Keyed by environment key (e.g. \"production\"); each value carries at least an `on` boolean plus targeting rules, prerequisites and a fallthrough variation this curated connector does not enumerate further — read `on` and pass the object through rather than assuming any deeper shape",
+            "type": "object"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "description": "`boolean` or `multivariate`",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "temporary": {
+            "type": "boolean"
+          },
+          "variations": {
+            "description": "Every value this flag can serve, each `{value, name, description}`",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "launchdarkly.api_token"
+        ]
+      ],
+      "description": "Turn a feature flag on or off in one environment. This is a live production change: every SDK instance currently evaluating this flag in this environment — web, mobile and backend alike — switches to the other branch as soon as this call returns, for every real user it serves. It is reversible by toggling back, but it is not a private or staged edit",
+      "direction": "write",
+      "expose": true,
+      "id": "launchdarkly-flag-toggle",
+      "idempotency": "conditional",
+      "params": [
+        {
+          "description": "The project's own key, from launchdarkly-project-list's `key` field",
+          "name": "project_key",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The flag's own key, from launchdarkly-flag-list's `key` field",
+          "name": "feature_flag_key",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "name": "body",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "description": "A JSON Patch (RFC 6902) document with exactly one operation, setting a single environment's on/off state: `[{\"op\": \"replace\", \"path\": \"/environments/<environment_key>/on\", \"value\": true}]` turns the flag on in that environment, `\"value\": false` turns it off. `<environment_key>` is that environment's own key (from launchdarkly-environment-list's `key` field), written literally into the JSON Pointer string — it is not a request parameter LaunchDarkly could confuse with a URL segment",
+            "items": {
+              "properties": {
+                "op": {
+                  "description": "This connector's curated toggle uses only `replace`; LaunchDarkly's PATCH also accepts `add`, `remove` and `test`, none of which this connector exposes",
+                  "enum": [
+                    "replace"
+                  ],
+                  "type": "string"
+                },
+                "path": {
+                  "description": "A JSON Pointer to one environment's `on` bit: `/environments/{environment_key}/on`",
+                  "pattern": "^/environments/[A-Za-z0-9._-]+/on$",
+                  "type": "string"
+                },
+                "value": {
+                  "description": "`true` turns the flag on in that environment, `false` turns it off",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "op",
+                "path",
+                "value"
+              ],
+              "type": "object"
+            },
+            "maxItems": 1,
+            "minItems": 1,
+            "type": "array"
+          }
+        }
+      ],
+      "repeatability_condition": "the body schema admits exactly one JSON Patch `replace` onto one environment's `on` bit (maxItems 1, op pinned to `replace`, path pinned to `/environments/{key}/on`), so it sets an absolute value and never a toggle or a delta — re-sending it lands the flag where the caller asked, however many times it runs",
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "$param": "body"
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "PATCH",
+        "url": "{base}/flags/{project_key}/{feature_flag_key}"
+      },
+      "response_schema": {
+        "properties": {
+          "environments": {
+            "description": "The flag's environments after the patch was applied, in the same shape launchdarkly-flag-get returns — read the affected environment's `on` field back to confirm the toggle took effect",
+            "type": "object"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v2",
+      "base_url": "https://app.launchdarkly.com/api/v2",
+      "gid": "com.launchdarkly.api:v2",
+      "name": "default",
+      "tags": [
+        "developer-tools"
+      ]
+    }
+  ],
+  "vendor": "LaunchDarkly",
+  "verify": "launchdarkly-project-list"
+}

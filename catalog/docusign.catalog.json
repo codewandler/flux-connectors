@@ -1,0 +1,660 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "DocuSign OAuth2 access token sent as a bearer; already minted, supplied through the environment",
+      "env": [
+        "DOCUSIGN_ACCESS_TOKEN"
+      ],
+      "name": "docusign.access_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.docusign.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "endpoint.account_host",
+      "example": "demo.docusign.net",
+      "format": "hostname",
+      "help": "The host portion of this account's own API server, without the https:// prefix — read it from the base_uri field of the accounts[] entry in DocuSign's OAuth UserInfo response (https://account-d.docusign.com/oauth/userinfo in the developer sandbox, https://account.docusign.com/oauth/userinfo in production) for the account you are connecting. If that field reads https://demo.docusign.net, enter demo.docusign.net",
+      "label": "DocuSign account API host",
+      "level": "connection",
+      "name": "account_host",
+      "required": true,
+      "secret": false,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "endpoint.account_id",
+      "example": "00000000-0000-0000-0000-000000000000",
+      "format": "text",
+      "help": "This account's id (a GUID), from the same accounts[] entry of DocuSign's OAuth UserInfo response that account_host came from",
+      "label": "DocuSign account id",
+      "level": "connection",
+      "name": "account_id",
+      "required": true,
+      "secret": false,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "credential.docusign.access_token",
+      "format": "token",
+      "help": "An OAuth2 access token for this account — minted by DocuSign's own login flow or an integration key's JWT/authorization-code grant, and pasted here already-minted. It is short-lived; a call that starts failing with 401 usually means this needs refreshing",
+      "label": "Access token",
+      "level": "connection",
+      "name": "access_token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "docusign",
+  "default_auth": [
+    [
+      "docusign.access_token"
+    ]
+  ],
+  "description": "DocuSign eSignature REST API: list and read envelopes and their recipients, create an envelope from a template, and void one",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "docusign.access_token"
+        ]
+      ],
+      "description": "List the account's own top-level folders — Draft, Sent Items, Inbox, and any custom ones. Takes no parameters and succeeds for any account with API access, which is what makes it the connection check for a settings page's Test Connection button",
+      "direction": "read",
+      "endpoint": {
+        "account_host": [
+          "host"
+        ],
+        "account_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "docusign-verify",
+      "idempotency": "idempotent",
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errorCode",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/folders"
+      },
+      "response_schema": {
+        "description": "DocuSign's own folder structure, not envelope data",
+        "properties": {
+          "folders": {
+            "description": "Each folder's id and name, standard (Draft, Sent Items, Inbox, ...) and custom",
+            "items": {
+              "properties": {
+                "folderId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "uri": {
+                  "description": "This folder's own resource path",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "folderId",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "folders"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "docusign.access_token"
+        ]
+      ],
+      "description": "List envelopes whose status changed on or after a given date. DocuSign requires a from_date (or an explicit envelope_ids/transaction_ids list, which this operation does not offer) on every call to this resource — omitting it is a 400 from the vendor, not a limitation of this connector",
+      "direction": "read",
+      "endpoint": {
+        "account_host": [
+          "host"
+        ],
+        "account_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "docusign-envelope-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Only envelopes with a status change on or after this date, as YYYY-MM-DD. Required — DocuSign's own resource has no unfiltered form",
+          "name": "from_date",
+          "position": "query",
+          "required": true,
+          "schema": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errorCode",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "from_date",
+            "value": {
+              "$param": "from_date"
+            }
+          }
+        ],
+        "url": "{base}/envelopes"
+      },
+      "response_schema": {
+        "properties": {
+          "envelopes": {
+            "description": "Each envelope's own status summary — no recipient or document detail; see docusign-envelope-recipients-get for who is on it",
+            "items": {
+              "properties": {
+                "completedDateTime": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "emailSubject": {
+                  "type": "string"
+                },
+                "envelopeId": {
+                  "type": "string"
+                },
+                "sentDateTime": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "e.g. sent, delivered, completed, declined, voided, created",
+                  "type": "string"
+                },
+                "statusChangedDateTime": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "envelopeId",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "resultSetSize": {
+            "description": "A COUNT, RETURNED AS A STRING — DocuSign's own convention, not this connector's",
+            "type": "string"
+          },
+          "totalSetSize": {
+            "description": "Same convention as resultSetSize",
+            "type": "string"
+          }
+        },
+        "required": [
+          "envelopes"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "docusign.access_token"
+        ]
+      ],
+      "description": "Get one envelope's own status and metadata. No recipient or document detail — see docusign-envelope-recipients-get for who is on it",
+      "direction": "read",
+      "endpoint": {
+        "account_host": [
+          "host"
+        ],
+        "account_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "docusign-envelope-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The envelope's DocuSign id (a GUID), as returned by docusign-envelope-list or docusign-envelope-create-from-template",
+          "name": "envelope_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errorCode",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/envelopes/{envelope_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "completedDateTime": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "emailSubject": {
+            "type": "string"
+          },
+          "envelopeId": {
+            "type": "string"
+          },
+          "sentDateTime": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "description": "e.g. sent, delivered, completed, declined, voided, created",
+            "type": "string"
+          },
+          "statusChangedDateTime": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "voidedReason": {
+            "description": "Present only once the envelope has been voided",
+            "type": "string"
+          }
+        },
+        "required": [
+          "envelopeId",
+          "status"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "docusign.access_token"
+        ]
+      ],
+      "description": "Get every recipient on an envelope and their signing status. Recipient name and email are personal data — see this operation's own response_schema before logging, displaying or forwarding it",
+      "direction": "read",
+      "endpoint": {
+        "account_host": [
+          "host"
+        ],
+        "account_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "docusign-envelope-recipients-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The envelope's DocuSign id (a GUID)",
+          "name": "envelope_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errorCode",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/envelopes/{envelope_id}/recipients"
+      },
+      "response_schema": {
+        "description": "Every recipient list here carries personal data: name and email identify a real person DocuSign is asking to sign, view or receive a copy. No example value is given anywhere in this connector for either field",
+        "properties": {
+          "agents": {
+            "description": "Recipients who may view and forward the envelope without signing. Same personal-data shape as signers",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "carbonCopies": {
+            "description": "Recipients who receive a copy once the envelope completes. Same personal-data shape as signers",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "recipientCount": {
+            "description": "A COUNT, RETURNED AS A STRING — DocuSign's own convention",
+            "type": "string"
+          },
+          "signers": {
+            "description": "Recipients asked to sign",
+            "items": {
+              "properties": {
+                "declinedReason": {
+                  "type": "string"
+                },
+                "deliveredDateTime": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "email": {
+                  "description": "Personal data — the signer's own email address",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Personal data — the signer's own name",
+                  "type": "string"
+                },
+                "recipientId": {
+                  "type": "string"
+                },
+                "routingOrder": {
+                  "description": "A COUNT, RETURNED AS A STRING — DocuSign's own convention",
+                  "type": "string"
+                },
+                "signedDateTime": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "e.g. created, sent, delivered, completed, declined, autoresponded",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "recipientId",
+                "email",
+                "name",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "docusign.access_token"
+        ]
+      ],
+      "description": "Create an envelope from an existing template. When status is sent, DocuSign dispatches it immediately to every named recipient — a real, legally binding signature request to a real person. Use status created to save it as an editable draft that notifies nobody instead",
+      "direction": "write",
+      "endpoint": {
+        "account_host": [
+          "host"
+        ],
+        "account_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "docusign-envelope-create-from-template",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The template's id (a GUID) to generate the envelope from",
+          "name": "templateId",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "One entry per role the template defines, supplying the recipient DocuSign routes that role to. email, name and roleName are all required by DocuSign. No example is given here — a signer's name and email are personal data — and roleName must match a role the template itself declares",
+          "name": "templateRoles",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "items": {
+              "properties": {
+                "email": {
+                  "description": "Personal data. DocuSign routes and addresses the envelope using this address — a wrong value sends a real, legally binding signature request to the wrong person",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Personal data. The recipient's name as it will appear on the signed document",
+                  "type": "string"
+                },
+                "roleName": {
+                  "description": "Must match one of the roles the template itself defines",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "email",
+                "name",
+                "roleName"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        {
+          "description": "sent dispatches the envelope to every named recipient immediately; created saves it as an editable draft and notifies nobody",
+          "name": "status",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "enum": [
+              "sent",
+              "created"
+            ],
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errorCode",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "status": {
+              "$param": "status"
+            },
+            "templateId": {
+              "$param": "templateId"
+            },
+            "templateRoles": {
+              "$param": "templateRoles"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/envelopes"
+      },
+      "response_schema": {
+        "properties": {
+          "envelopeId": {
+            "description": "The new envelope's id — what docusign-envelope-get, docusign-envelope-recipients-get and docusign-envelope-void address it by",
+            "type": "string"
+          },
+          "status": {
+            "description": "Echoes the status just set: sent or created",
+            "type": "string"
+          },
+          "statusDateTime": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "uri": {
+            "description": "This envelope's own resource path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "envelopeId",
+          "status"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "docusign.access_token"
+        ]
+      ],
+      "description": "Void an envelope: cancel it permanently. Every recipient who has not yet finished signing is immediately locked out, and no further signing action is possible on this envelope id. Irreversible",
+      "direction": "write",
+      "endpoint": {
+        "account_host": [
+          "host"
+        ],
+        "account_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "docusign-envelope-void",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The envelope's DocuSign id (a GUID) to void",
+          "name": "envelope_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Why this envelope is being voided. DocuSign shows this to any recipient who already opened the envelope, so avoid putting anything sensitive in it",
+          "name": "voidedReason",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/errorCode",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "status": "voided",
+            "voidedReason": {
+              "$param": "voidedReason"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "PUT",
+        "url": "{base}/envelopes/{envelope_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "envelopeId": {
+            "type": "string"
+          },
+          "status": {
+            "description": "voided on success",
+            "type": "string"
+          }
+        },
+        "required": [
+          "envelopeId",
+          "status"
+        ],
+        "type": "object"
+      },
+      "risk": "destructive",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v2.1",
+      "base_url": "https://{account_host}/restapi/v2.1/accounts/{account_id}",
+      "gid": "com.docusign.api:v2.1",
+      "name": "default",
+      "tags": [
+        "e-signature"
+      ]
+    }
+  ],
+  "vendor": "DocuSign",
+  "verify": "docusign-verify"
+}

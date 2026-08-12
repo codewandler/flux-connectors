@@ -1,0 +1,572 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Front API token sent as a bearer",
+      "env": [
+        "FRONT_API_TOKEN"
+      ],
+      "name": "front.api_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.frontapp.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.front.api_token",
+      "docs_url": "https://dev.frontapp.com/docs/authentication",
+      "format": "token",
+      "help": "In Front, open Settings → API & Integrations → API, and create a new token. A token is scoped to the teammate who creates it and to the scopes granted when it is created — replying and tagging require write scopes, not just read ones",
+      "label": "API token",
+      "level": "connection",
+      "name": "api_token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "front",
+  "default_auth": [
+    [
+      "front.api_token"
+    ]
+  ],
+  "description": "Front shared inbox: read and reply to conversations, and tag them",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "front.api_token"
+        ]
+      ],
+      "description": "List one conversation, confirming the token resolves and carries at least read access. Takes no parameters other than the page bound",
+      "direction": "read",
+      "expose": true,
+      "id": "front-verify",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Records to fetch; one is enough to prove the credential works",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/_error/status",
+          "message_pointer": "/_error/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          }
+        ],
+        "url": "{base}/conversations"
+      },
+      "response_schema": {
+        "properties": {
+          "_results": {
+            "description": "Up to `limit` conversations. Empty is still a successful credential check — a company can genuinely have none yet",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "front.api_token"
+        ]
+      ],
+      "description": "List the company's conversations in reverse chronological order (most recently updated first), first page only — this connector cannot follow Front's next-page link (see providers/front.toml's header comment). Front's structured search filter (`q`) is not accepted here: it is a bracket-notation object this pipeline cannot encode as a query string",
+      "direction": "read",
+      "expose": true,
+      "id": "front-conversation-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Max conversations to return in this one page, up to Front's own cap of 100. Does not change how many pages exist, only how large this one is",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "default": 50,
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/_error/status",
+          "message_pointer": "/_error/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          }
+        ],
+        "url": "{base}/conversations"
+      },
+      "response_schema": {
+        "properties": {
+          "_pagination": {
+            "description": "Carries `next`, a full absolute URL to the following page when more conversations exist. This connector cannot follow it — Front's cursor is an opaque, server-issued token unconstructable by a caller, and unencodable here regardless (C-30) — so a non-null `next` means more conversations exist beyond this first page only",
+            "properties": {
+              "next": {
+                "description": "Unusable here; see this field's own description",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "_results": {
+            "description": "This page's conversations, each `{id, subject, status, assignee, recipient, tags, created_at, ...}`",
+            "items": {
+              "properties": {
+                "created_at": {
+                  "description": "Unix timestamp, seconds",
+                  "type": "number"
+                },
+                "id": {
+                  "description": "The conversation's id, prefixed `cnv_`",
+                  "pattern": "^cnv_[0-9a-z]+$",
+                  "type": "string"
+                },
+                "is_private": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "description": "Front's own conversation status, e.g. `assigned`, `unassigned`, `archived` or `deleted`",
+                  "type": "string"
+                },
+                "subject": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "front.api_token"
+        ]
+      ],
+      "description": "Get one conversation's metadata: subject, status, assignee, recipient and tags. Does not return its messages — use front-conversation-message-list for those",
+      "direction": "read",
+      "expose": true,
+      "id": "front-conversation-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The conversation's id, an opaque string prefixed `cnv_` (e.g. `cnv_55c8c149`) that a model must not invent — discover it from front-conversation-list or front-verify",
+          "name": "conversation_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^cnv_[0-9a-z]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/_error/status",
+          "message_pointer": "/_error/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/conversations/{conversation_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "assignee": {
+            "description": "The assigned teammate, `{id, email, first_name, last_name}` — absent (`null`) when unassigned",
+            "properties": {
+              "id": {
+                "pattern": "^tea_[0-9a-z]+$",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "created_at": {
+            "description": "Unix timestamp, seconds",
+            "type": "number"
+          },
+          "id": {
+            "pattern": "^cnv_[0-9a-z]+$",
+            "type": "string"
+          },
+          "is_private": {
+            "type": "boolean"
+          },
+          "recipient": {
+            "description": "The conversation's primary counterparty, `{name, handle, role}` — `handle` is an email address or phone number depending on the originating channel",
+            "properties": {
+              "handle": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "status": {
+            "description": "e.g. `assigned`, `unassigned`, `archived` or `deleted`",
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "tags": {
+            "description": "Tags currently applied, each `{id, name}`",
+            "items": {
+              "properties": {
+                "id": {
+                  "pattern": "^tag_[0-9a-z]+$",
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "front.api_token"
+        ]
+      ],
+      "description": "List the messages in a conversation in reverse chronological order (newest first), first page only — this connector cannot follow Front's next-page link (see providers/front.toml's header comment). Each message's `body`/`text` is the actual correspondence exchanged on this conversation",
+      "direction": "read",
+      "expose": true,
+      "id": "front-conversation-message-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The conversation's id, an opaque string prefixed `cnv_` (e.g. `cnv_55c8c149`) that a model must not invent — discover it from front-conversation-list or front-verify",
+          "name": "conversation_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^cnv_[0-9a-z]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Max messages to return in this one page, up to Front's own cap of 100",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "default": 50,
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/_error/status",
+          "message_pointer": "/_error/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          }
+        ],
+        "url": "{base}/conversations/{conversation_id}/messages"
+      },
+      "response_schema": {
+        "properties": {
+          "_pagination": {
+            "description": "Carries `next`, a full absolute URL to the following page. This connector cannot follow it — see front-conversation-list's own response_schema for why — so a non-null `next` means more messages exist beyond this first page only",
+            "properties": {
+              "next": {
+                "description": "Unusable here; see this field's own description",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "_results": {
+            "description": "This page's messages, each `{id, type, is_inbound, author, recipients, subject, body, text, created_at}`",
+            "items": {
+              "properties": {
+                "author": {
+                  "description": "The teammate who sent this message — absent (`null`) on an inbound message, since nobody on the team authored it",
+                  "properties": {
+                    "id": {
+                      "pattern": "^tea_[0-9a-z]+$",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "body": {
+                  "description": "The message content, HTML for most channels",
+                  "type": "string"
+                },
+                "created_at": {
+                  "description": "Unix timestamp, seconds",
+                  "type": "number"
+                },
+                "id": {
+                  "description": "The message's id, prefixed `msg_`",
+                  "pattern": "^msg_[0-9a-z]+$",
+                  "type": "string"
+                },
+                "is_inbound": {
+                  "description": "True for a message received from the outside party, false for one sent from Front",
+                  "type": "boolean"
+                },
+                "recipients": {
+                  "description": "Each `{name, handle, role}`; `role` is one of `from`, `to`, `cc`, `bcc` or `reply-to`",
+                  "items": {
+                    "properties": {
+                      "handle": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "role": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "text": {
+                  "description": "A plain-text rendering of `body`",
+                  "type": "string"
+                },
+                "type": {
+                  "description": "The channel kind this message travelled over, e.g. `email`, `sms` or `intercom`",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "front.api_token"
+        ]
+      ],
+      "description": "Reply to a conversation, using its own existing recipients, channel and sender identity — this connector cannot override any of those (see providers/front.toml's header comment). Front queues delivery: the response is an acknowledgement, not the sent message, and is not visible to the recipient until Front actually delivers it",
+      "direction": "write",
+      "expose": true,
+      "id": "front-conversation-reply",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The conversation's id, an opaque string prefixed `cnv_` (e.g. `cnv_55c8c149`) that a model must not invent — discover it from front-conversation-list or front-verify",
+          "name": "conversation_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^cnv_[0-9a-z]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "The reply's content. Sent as-is to the conversation's existing recipients over its existing channel — this operation cannot redirect it to a different recipient list, channel or sender (C-56; see providers/front.toml's header comment)",
+          "name": "body",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/_error/status",
+          "message_pointer": "/_error/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "body": {
+              "$param": "body"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/conversations/{conversation_id}/messages"
+      },
+      "response_schema": {
+        "description": "An acknowledgement that Front accepted the reply for delivery, not the sent message itself",
+        "properties": {
+          "message_uid": {
+            "description": "A resource alias for the queued message. Not a `msg_`-prefixed id and not usable as one — Front assigns the real id only once delivery completes",
+            "type": "string"
+          },
+          "status": {
+            "const": "accepted"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "front.api_token"
+        ]
+      ],
+      "description": "Apply one or more existing tags to a conversation. Applying a tag the conversation already carries changes nothing — Front does not duplicate it. Answers 204 with an empty body on success",
+      "direction": "write",
+      "expose": true,
+      "id": "front-conversation-tag-add",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The conversation's id, an opaque string prefixed `cnv_` (e.g. `cnv_55c8c149`) that a model must not invent — discover it from front-conversation-list or front-verify",
+          "name": "conversation_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^cnv_[0-9a-z]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "The existing tag ids to apply, each an opaque string prefixed `tag_` that a model must not invent — discover them from a conversation's own `tags` field (front-conversation-get) or from Front's tag settings",
+          "name": "tag_ids",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "items": {
+              "pattern": "^tag_[0-9a-z]+$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/_error/status",
+          "message_pointer": "/_error/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "tag_ids": {
+              "$param": "tag_ids"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/conversations/{conversation_id}/tags"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "base_url": "https://api2.frontapp.com",
+      "name": "default",
+      "tags": [
+        "support"
+      ]
+    }
+  ],
+  "vendor": "Front",
+  "verify": "front-verify"
+}

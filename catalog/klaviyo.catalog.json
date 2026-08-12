@@ -1,0 +1,848 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Klaviyo private API key for one account. Travels as the whole Authorization header behind Klaviyo's own scheme word. Keys are scoped per key: one minted without the scopes the shipped operations need will authenticate, pass verification, and fail on exactly the call that needs the missing scope",
+      "env": [
+        "KLAVIYO_API_KEY"
+      ],
+      "name": "klaviyo.api_key",
+      "scheme": {
+        "kind": "header",
+        "name": "Authorization",
+        "prefix": "Klaviyo-API-Key "
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.klaviyo.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.klaviyo.api_key",
+      "docs_url": "https://developers.klaviyo.com/en/docs/retrieve_api_credentials",
+      "format": "token",
+      "help": "Create one in Klaviyo under Settings > Account > API keys > Create Private API Key. Grant it these scopes and no more: accounts:read (for the connection test), profiles:read, profiles:write, lists:read and events:write. A key missing one of these still connects successfully and then fails on the single call that needs it. The key begins pk_ followed by a long hex string; it is shown once, so store it when it is created",
+      "label": "Klaviyo private API key",
+      "level": "connection",
+      "name": "api_key",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "klaviyo",
+  "default_auth": [
+    [
+      "klaviyo.api_key"
+    ]
+  ],
+  "description": "Klaviyo marketing platform: read the account a key belongs to, read and create customer profiles, read lists, and post an event that can trigger a flow. Every request carries a dated API revision the vendor requires",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "klaviyo.api_key"
+        ]
+      ],
+      "description": "Read the Klaviyo account this API key belongs to, with its timezone, currency, industry and contact details. Returns exactly one account — a private key is scoped to one — so this is the call that answers 'which account am I connected to'. Also this connector's verify: it takes no argument and needs only the accounts:read scope",
+      "direction": "read",
+      "expose": true,
+      "id": "klaviyo-account-list",
+      "idempotency": "idempotent",
+      "request": {
+        "headers": {
+          "revision": "2026-07-15"
+        },
+        "method": "GET",
+        "url": "{base}/accounts"
+      },
+      "response_schema": {
+        "properties": {
+          "data": {
+            "description": "Always exactly one account: a private API key belongs to one account and cannot see another",
+            "items": {
+              "properties": {
+                "attributes": {
+                  "properties": {
+                    "contact_information": {
+                      "description": "The sender identity and postal address Klaviyo puts in email footers: `default_sender_name`, `default_sender_email`, `organization_name`, `website_url`, and a `street_address` object (`address1`, `address2`, `city`, `region`, `country`, `zip`). Left untyped below the first level rather than enumerated in full",
+                      "type": "object"
+                    },
+                    "industry": {
+                      "description": "The industry the account selected at signup",
+                      "type": "string"
+                    },
+                    "locale": {
+                      "description": "The account's locale, e.g. `en-US`",
+                      "type": "string"
+                    },
+                    "preferred_currency": {
+                      "description": "ISO 4217 code the account reports revenue in. This is what an event's `value_currency` should normally match",
+                      "type": "string"
+                    },
+                    "public_api_key": {
+                      "description": "The six-character public site id, repeated from `id`. Public by design — it is embedded in the account's own web pages",
+                      "type": "string"
+                    },
+                    "test_account": {
+                      "description": "Whether this is a test account. A test account still accepts events and still runs flows",
+                      "type": "boolean"
+                    },
+                    "timezone": {
+                      "description": "The account's IANA timezone. Klaviyo renders every date in the UI in this zone, while the API returns UTC",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "test_account"
+                  ],
+                  "type": "object"
+                },
+                "id": {
+                  "description": "The account id, which is also Klaviyo's public (site) API key for this account — a browser-side identifier, not a secret",
+                  "type": "string"
+                },
+                "links": {
+                  "description": "`{self}` — the JSON:API link to this resource",
+                  "type": "object"
+                },
+                "type": {
+                  "const": "account"
+                }
+              },
+              "required": [
+                "type",
+                "id",
+                "attributes"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "links": {
+            "description": "JSON:API document links. `next` is absent here; an account list is never paginated",
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "klaviyo.api_key"
+        ]
+      ],
+      "description": "List customer profiles in the account, newest first. Returns the FIRST PAGE ONLY — Klaviyo pages with an opaque `page[cursor]` query parameter this connector cannot send, so there is no way to reach later pages and no way to filter. Every profile carries personal data: an email address, often a phone number and a postal location",
+      "direction": "read",
+      "expose": true,
+      "id": "klaviyo-profile-list",
+      "idempotency": "idempotent",
+      "request": {
+        "headers": {
+          "revision": "2026-07-15"
+        },
+        "method": "GET",
+        "url": "{base}/profiles"
+      },
+      "response_schema": {
+        "properties": {
+          "data": {
+            "description": "One entry per profile, first page only",
+            "items": {
+              "properties": {
+                "attributes": {
+                  "properties": {
+                    "created": {
+                      "description": "When the profile was first seen, in UTC",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "email": {
+                      "description": "The profile's email address, or null. Personal data",
+                      "format": "email",
+                      "type": "string"
+                    },
+                    "external_id": {
+                      "description": "The id this profile carries in the customer's own system, when one was supplied",
+                      "type": "string"
+                    },
+                    "first_name": {
+                      "type": "string"
+                    },
+                    "image": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "last_event_date": {
+                      "description": "When this profile last did anything Klaviyo recorded — the closest thing to an activity signal here",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "last_name": {
+                      "type": "string"
+                    },
+                    "locale": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "description": "`address1`, `address2`, `city`, `region`, `zip`, `country`, `timezone`, `ip`, and `latitude`/`longitude` which Klaviyo returns as either numbers or strings. Personal data, including a home address where one was collected",
+                      "type": "object"
+                    },
+                    "organization": {
+                      "type": "string"
+                    },
+                    "phone_number": {
+                      "description": "E.164 phone number, or null. Personal data",
+                      "type": "string"
+                    },
+                    "predictive_analytics": {
+                      "description": "Klaviyo's modelled figures (historic and predicted CLV, churn probability, expected date of next order). Present only on accounts with enough order history",
+                      "type": "object"
+                    },
+                    "properties": {
+                      "description": "Custom properties the account itself defined. Keys are chosen by whoever built the integration and are not knowable at build time; treat every value as potentially personal",
+                      "type": "object"
+                    },
+                    "subscriptions": {
+                      "description": "Consent state per channel — `email.marketing`, `sms.marketing`, `sms.transactional` — each with a `consent` value and timestamps. This connector reports it and never interprets it: deciding who may be contacted needs more than this shape",
+                      "type": "object"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "updated": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "id": {
+                  "description": "The profile's Klaviyo id — what klaviyo-profile-get addresses it by",
+                  "type": "string"
+                },
+                "links": {
+                  "type": "object"
+                },
+                "relationships": {
+                  "description": "JSON:API relationship links for `lists`, `segments`, `push-tokens` and `conversations`. Only links: this connector sends no `include`, so nothing is expanded",
+                  "type": "object"
+                },
+                "type": {
+                  "const": "profile"
+                }
+              },
+              "required": [
+                "type",
+                "id",
+                "attributes"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "links": {
+            "description": "`self`, and `next`/`prev` when more pages exist. **`next` is unusable here** — following it needs the `page[cursor]` query parameter (C-30)",
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "klaviyo.api_key"
+        ]
+      ],
+      "description": "Read one customer profile by its Klaviyo id, with its identifiers, custom properties, consent state and location. Returns personal data about a named individual",
+      "direction": "read",
+      "expose": true,
+      "id": "klaviyo-profile-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The profile's Klaviyo id, from klaviyo-profile-list's `id` or from klaviyo-profile-create's response. Not an email address — Klaviyo addresses a profile by id here, and looking one up by email needs the `filter` query parameter this connector cannot send",
+          "name": "id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "headers": {
+          "revision": "2026-07-15"
+        },
+        "method": "GET",
+        "url": "{base}/profiles/{id}"
+      },
+      "response_schema": {
+        "properties": {
+          "data": {
+            "properties": {
+              "attributes": {
+                "properties": {
+                  "created": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "email": {
+                    "description": "The profile's email address, or null. Personal data",
+                    "format": "email",
+                    "type": "string"
+                  },
+                  "external_id": {
+                    "description": "The id this profile carries in the customer's own system",
+                    "type": "string"
+                  },
+                  "first_name": {
+                    "type": "string"
+                  },
+                  "image": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "last_event_date": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "last_name": {
+                    "type": "string"
+                  },
+                  "locale": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "description": "Postal and network location — see klaviyo-profile-list for the field list. Personal data",
+                    "type": "object"
+                  },
+                  "organization": {
+                    "type": "string"
+                  },
+                  "phone_number": {
+                    "description": "E.164 phone number, or null. Personal data",
+                    "type": "string"
+                  },
+                  "predictive_analytics": {
+                    "description": "Modelled CLV and churn figures, when the account has enough history",
+                    "type": "object"
+                  },
+                  "properties": {
+                    "description": "Account-defined custom properties; keys are not knowable at build time",
+                    "type": "object"
+                  },
+                  "subscriptions": {
+                    "description": "Per-channel consent state. Reported, never interpreted",
+                    "type": "object"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "updated": {
+                    "format": "date-time",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "id": {
+                "description": "The profile's Klaviyo id, echoed back",
+                "type": "string"
+              },
+              "links": {
+                "type": "object"
+              },
+              "relationships": {
+                "description": "Relationship links only; nothing is expanded",
+                "type": "object"
+              },
+              "type": {
+                "const": "profile"
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "attributes"
+            ],
+            "type": "object"
+          },
+          "links": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "klaviyo.api_key"
+        ]
+      ],
+      "description": "Create a customer profile. At least one identifier is required — email, phone number or external id — and Klaviyo answers 409 Conflict if a profile with that identifier already exists, so this creates and never updates. The created profile can be marketed to only once it is subscribed, which this connector does not do",
+      "direction": "write",
+      "expose": true,
+      "id": "klaviyo-profile-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The profile's email address. Not required by Klaviyo on its own, but at least one of email, phone_number or external_id must be supplied or the call is rejected. Personal data about a named individual",
+          "name": "email",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "format": "email",
+            "type": "string"
+          },
+          "wire": "data.attributes.email"
+        },
+        {
+          "description": "Phone number in E.164 form, e.g. +15005550006. Klaviyo rejects other formats. Counts as an identifier",
+          "name": "phone_number",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "data.attributes.phone_number"
+        },
+        {
+          "description": "The id this person carries in the calling system — an order-system customer id, say. Counts as an identifier, and is the one that lets a later call find this profile without holding an email address",
+          "name": "external_id",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "data.attributes.external_id"
+        },
+        {
+          "description": "Given name, as it should appear in a message greeting",
+          "name": "first_name",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "data.attributes.first_name"
+        },
+        {
+          "description": "Family name",
+          "name": "last_name",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "data.attributes.last_name"
+        },
+        {
+          "description": "The company this person belongs to",
+          "name": "organization",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "data.attributes.organization"
+        },
+        {
+          "description": "Job title",
+          "name": "title",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "data.attributes.title"
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "data": {
+              "attributes": {
+                "email": {
+                  "$param": "email"
+                },
+                "external_id": {
+                  "$param": "external_id"
+                },
+                "first_name": {
+                  "$param": "first_name"
+                },
+                "last_name": {
+                  "$param": "last_name"
+                },
+                "organization": {
+                  "$param": "organization"
+                },
+                "phone_number": {
+                  "$param": "phone_number"
+                },
+                "title": {
+                  "$param": "title"
+                }
+              },
+              "type": "profile"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json",
+          "revision": "2026-07-15"
+        },
+        "method": "POST",
+        "url": "{base}/profiles"
+      },
+      "response_schema": {
+        "properties": {
+          "data": {
+            "properties": {
+              "attributes": {
+                "properties": {
+                  "created": {
+                    "description": "When Klaviyo created the profile, in UTC",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "email": {
+                    "description": "Echoes the address that was sent",
+                    "format": "email",
+                    "type": "string"
+                  },
+                  "external_id": {
+                    "type": "string"
+                  },
+                  "first_name": {
+                    "type": "string"
+                  },
+                  "last_event_date": {
+                    "description": "Null on a profile just created: it has done nothing yet",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "last_name": {
+                    "type": "string"
+                  },
+                  "locale": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "description": "Empty on a profile created by this operation, which sends no location",
+                    "type": "object"
+                  },
+                  "organization": {
+                    "type": "string"
+                  },
+                  "phone_number": {
+                    "type": "string"
+                  },
+                  "properties": {
+                    "description": "Empty unless the account has default properties",
+                    "type": "object"
+                  },
+                  "subscriptions": {
+                    "description": "**Not subscribed.** Creating a profile grants no marketing consent; the subscription endpoints this connector does not ship are what change this",
+                    "type": "object"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "updated": {
+                    "format": "date-time",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "id": {
+                "description": "The created profile's id — what klaviyo-profile-get reads back, and the only handle on it",
+                "type": "string"
+              },
+              "links": {
+                "type": "object"
+              },
+              "relationships": {
+                "type": "object"
+              },
+              "type": {
+                "const": "profile"
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "attributes"
+            ],
+            "type": "object"
+          },
+          "links": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "klaviyo.api_key"
+        ]
+      ],
+      "description": "List the account's lists — static, opt-in collections of profiles, as opposed to segments, which are live queries and are not shipped here. Returns the FIRST PAGE ONLY; Klaviyo's `page[cursor]` query parameter cannot be sent by this connector. Returns the lists themselves, not their members",
+      "direction": "read",
+      "expose": true,
+      "id": "klaviyo-list-list",
+      "idempotency": "idempotent",
+      "request": {
+        "headers": {
+          "revision": "2026-07-15"
+        },
+        "method": "GET",
+        "url": "{base}/lists"
+      },
+      "response_schema": {
+        "properties": {
+          "data": {
+            "description": "One entry per list, first page only",
+            "items": {
+              "properties": {
+                "attributes": {
+                  "properties": {
+                    "created": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "The list's name, as the account's marketers see it",
+                      "type": "string"
+                    },
+                    "opt_in_process": {
+                      "description": "How a profile joins: `single_opt_in`, or `double_opt_in` where Klaviyo sends a confirmation message first. A flow that adds members has to respect this, and this connector does not add members",
+                      "type": "string"
+                    },
+                    "updated": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "id": {
+                  "description": "The list's id, a six-character code. This is what Klaviyo's own UI shows in a list URL",
+                  "type": "string"
+                },
+                "links": {
+                  "type": "object"
+                },
+                "relationships": {
+                  "description": "Relationship links for `profiles`, `tags` and `flow-triggers`. Links only — nothing is expanded, and the profiles endpoint behind the first is deliberately not shipped",
+                  "type": "object"
+                },
+                "type": {
+                  "const": "list"
+                }
+              },
+              "required": [
+                "type",
+                "id",
+                "attributes"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "links": {
+            "description": "`self`, plus `next`/`prev` when more pages exist. `next` is unusable here (C-30)",
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "klaviyo.api_key"
+        ]
+      ],
+      "description": "Post an event about a customer — a purchase, a page view, anything the account measures. THIS CAN CAUSE A MESSAGE TO BE SENT: an event triggers any Klaviyo flow built on its metric, so an email or SMS may reach the named profile immediately. Klaviyo creates the metric and the profile on first use if they do not exist. Answers 202 Accepted with no body: the event is queued, not confirmed. Pass unique_id to make a retry safe — Klaviyo records only the first event with a given unique_id for the same profile and metric",
+      "direction": "write",
+      "expose": true,
+      "id": "klaviyo-event-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "What happened, as the account's marketers name it — `Placed Order`, `Viewed Product`. Klaviyo creates the metric on first use, so a typo silently creates a second metric nobody has built a flow on rather than failing",
+          "name": "metric_name",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "data.attributes.metric.data.attributes.name"
+        },
+        {
+          "description": "The email address of the person this event is about. Klaviyo matches an existing profile on it and creates one if there is none, so an address typed wrongly creates a new profile rather than failing. Personal data",
+          "name": "profile_email",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "format": "email",
+            "type": "string"
+          },
+          "wire": "data.attributes.profile.data.attributes.email"
+        },
+        {
+          "description": "The event's own detail, as a JSON object — order id, product names, values. Keys are whatever the account's flows and reports expect; Klaviyo imposes no shape. Pass an empty object when there is nothing to say",
+          "name": "properties",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "type": "object"
+          },
+          "wire": "data.attributes.properties"
+        },
+        {
+          "description": "The monetary value of the event, as a number, for revenue reporting. Omit it on an event that is not worth money",
+          "name": "value",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "number"
+          },
+          "wire": "data.attributes.value"
+        },
+        {
+          "description": "ISO 4217 code for `value`, e.g. EUR. Klaviyo converts to the account's preferred currency; omitting it means the account's own currency is assumed",
+          "name": "value_currency",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "data.attributes.value_currency"
+        },
+        {
+          "description": "A caller-chosen id that makes this event's delivery safe to retry: Klaviyo records only the first event with a given unique_id for the same profile and metric. Omitting it means a retry posts a second event and may trigger a second message",
+          "name": "unique_id",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "data.attributes.unique_id"
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "data": {
+              "attributes": {
+                "metric": {
+                  "data": {
+                    "attributes": {
+                      "name": {
+                        "$param": "metric_name"
+                      }
+                    },
+                    "type": "metric"
+                  }
+                },
+                "profile": {
+                  "data": {
+                    "attributes": {
+                      "email": {
+                        "$param": "profile_email"
+                      }
+                    },
+                    "type": "profile"
+                  }
+                },
+                "properties": {
+                  "$param": "properties"
+                },
+                "unique_id": {
+                  "$param": "unique_id"
+                },
+                "value": {
+                  "$param": "value"
+                },
+                "value_currency": {
+                  "$param": "value_currency"
+                }
+              },
+              "type": "event"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json",
+          "revision": "2026-07-15"
+        },
+        "method": "POST",
+        "url": "{base}/events"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "base_url": "https://a.klaviyo.com/api",
+      "name": "default",
+      "tags": [
+        "marketing"
+      ]
+    }
+  ],
+  "vendor": "Klaviyo",
+  "verify": "klaviyo-account-list"
+}

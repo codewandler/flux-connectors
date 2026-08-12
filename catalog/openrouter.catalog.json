@@ -1,0 +1,301 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "OpenRouter API key, sent as a bearer token",
+      "env": [
+        "OPENROUTER_API_KEY"
+      ],
+      "name": "openrouter.api_key",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "ai.openrouter.api",
+  "connector": "openrouter",
+  "default_auth": [
+    [
+      "openrouter.api_key"
+    ]
+  ],
+  "description": "OpenRouter model router: list models and their endpoints, create chat completions, and read credit balance",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "openrouter.api_key"
+        ]
+      ],
+      "description": "List every model OpenRouter routes to, with its context length, modalities and per-token pricing",
+      "direction": "read",
+      "expose": true,
+      "id": "openrouter-models-list",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/v1/models"
+      },
+      "response_schema": {
+        "properties": {
+          "data": {
+            "description": "One entry per model, each carrying at least `id` (`<author>/<slug>`), `name`, `created`, `description`, `context_length`, an `architecture` object and a `pricing` object whose per-token prices are decimal strings, not numbers",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "openrouter.api_key"
+        ]
+      ],
+      "description": "List the upstream provider endpoints serving one model, with each one's pricing, context length and quantization",
+      "direction": "read",
+      "expose": true,
+      "id": "openrouter-model-endpoints-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The model's author or organization, the part of a model id before the `/` — e.g. `openai`, `anthropic`, `meta-llama`",
+          "name": "author",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The model slug, the part of a model id after the `/` — e.g. `gpt-4`, `claude-3.5-sonnet`",
+          "name": "slug",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/v1/models/{author}/{slug}/endpoints"
+      },
+      "response_schema": {
+        "properties": {
+          "data": {
+            "description": "The model, with an `endpoints` array nested inside it — one entry per upstream provider serving it, each carrying its own `name`/`provider_name`, `context_length`, `pricing`, `quantization` and `supported_parameters`. This is a single object, not an array",
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "openrouter.api_key"
+        ]
+      ],
+      "description": "Create a chat completion through OpenRouter, routed to the named model. Billed per input and output token, so the caller must state a token budget via max_completion_tokens",
+      "direction": "write",
+      "expose": true,
+      "id": "openrouter-chat-completion",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The model to route to, as `<author>/<slug>` — e.g. `openai/gpt-4o` or `anthropic/claude-3.5-sonnet`",
+          "name": "model",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The conversation so far: a list of `{role, content}` objects, where role is one of system, developer, user, assistant or tool",
+          "name": "messages",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "items": {
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        {
+          "description": "Upper bound on generated tokens, including reasoning tokens. Required by this connector so that every call states its cost bound",
+          "name": "max_completion_tokens",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "max_completion_tokens": {
+              "$param": "max_completion_tokens"
+            },
+            "messages": {
+              "$param": "messages"
+            },
+            "model": {
+              "$param": "model"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/api/v1/chat/completions"
+      },
+      "response_schema": {
+        "properties": {
+          "choices": {
+            "description": "One entry per completion; this connector never sets `n`, so there is exactly one",
+            "items": {
+              "properties": {
+                "error": {
+                  "description": "Present when the upstream provider failed *after* routing succeeded: `{code, message, metadata}`, delivered with HTTP 200 and no content. Check for it before reading `message`",
+                  "type": "object"
+                },
+                "finish_reason": {
+                  "description": "The normalized reason generation stopped — `stop`, `length`, `tool_calls`, `content_filter`. Branch on this one",
+                  "type": "string"
+                },
+                "message": {
+                  "description": "The assistant's turn: `role`, `content`, and `tool_calls` when the model called a tool",
+                  "type": "object"
+                },
+                "native_finish_reason": {
+                  "description": "The upstream provider's own unmapped reason, whose vocabulary varies by provider",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "created": {
+            "description": "Unix seconds",
+            "type": "integer"
+          },
+          "id": {
+            "description": "The generation's id, which is also what `GET /api/v1/generation` would be queried by — an operation this connector cannot express (C-30)",
+            "type": "string"
+          },
+          "model": {
+            "description": "The model that actually served the request. It can differ from the one asked for when routing falls back",
+            "type": "string"
+          },
+          "object": {
+            "const": "chat.completion"
+          },
+          "provider": {
+            "description": "The upstream provider that served it, e.g. `Anthropic` or `Together`. OpenRouter's own addition to the OpenAI shape and not part of the documented response schema, so it is recorded as optional",
+            "type": "string"
+          },
+          "usage": {
+            "description": "`prompt_tokens`, `completion_tokens`, `total_tokens`, and OpenRouter's own `cost` — what the call charged in credits, the same unit `openrouter-credits-get` reports",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "model",
+          "choices"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "openrouter.api_key"
+        ]
+      ],
+      "description": "Read the account's total purchased credits and total usage, in credit units",
+      "direction": "read",
+      "expose": true,
+      "id": "openrouter-credits-get",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/v1/credits"
+      },
+      "response_schema": {
+        "properties": {
+          "data": {
+            "properties": {
+              "total_credits": {
+                "description": "Credits ever purchased on this account — a cumulative total, not a remaining balance",
+                "type": "number"
+              },
+              "total_usage": {
+                "description": "Credits ever spent. The remaining balance is `total_credits - total_usage`",
+                "type": "number"
+              }
+            },
+            "required": [
+              "total_credits",
+              "total_usage"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v1",
+      "base_url": "https://openrouter.ai",
+      "gid": "ai.openrouter.api:v1",
+      "name": "default",
+      "tags": [
+        "ai"
+      ]
+    }
+  ],
+  "vendor": "OpenRouter"
+}

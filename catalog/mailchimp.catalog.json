@@ -1,0 +1,915 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Mailchimp Marketing API key, granting whatever the account that issued it can do. Travels as `Authorization: Bearer <key>`, the alternative Mailchimp documents beside its Basic form. The key's trailing `-us14`-style suffix names the account's datacentre; that value is asked for separately as configuration and is never read back out of this credential",
+      "env": [
+        "MAILCHIMP_API_KEY"
+      ],
+      "name": "mailchimp.api_key",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.mailchimp.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "endpoint.dc",
+      "docs_url": "https://mailchimp.com/developer/marketing/docs/fundamentals/",
+      "example": "us14",
+      "format": "subdomain",
+      "help": "The short region code in front of `api.mailchimp.com` for your account, like us14 or us6. Find it three ways, whichever is easiest: it is the first part of the URL on your Mailchimp API keys page; it is the last part of your API key, after the final - character; or, on an OAuth connection, the OAuth metadata endpoint returns it. Enter the code alone, not a full URL",
+      "label": "Mailchimp datacentre",
+      "level": "connection",
+      "name": "server_prefix",
+      "required": true,
+      "secret": false,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "credential.mailchimp.api_key",
+      "docs_url": "https://mailchimp.com/developer/marketing/guides/quick-start/",
+      "format": "token",
+      "help": "Generate one under Account & billing, Extras, API keys in your Mailchimp account. It grants everything your Mailchimp user can do, so treat it as a password. Copy the datacentre code above from the same page before you leave it",
+      "label": "Mailchimp API key",
+      "level": "connection",
+      "name": "api_key",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "mailchimp",
+  "default_auth": [
+    [
+      "mailchimp.api_key"
+    ]
+  ],
+  "description": "Mailchimp Marketing API: check connectivity, read audiences and their contacts, add or update a contact, and list campaigns. Authenticates with a single API key sent as a bearer token, against a host whose datacentre label the operator supplies",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "mailchimp.api_key"
+        ]
+      ],
+      "description": "Check that the API is reachable and the credential works. Takes no argument and returns no account data — Mailchimp calls it a health check that returns nothing account-specific. Also this connector's `verify`: it is the one call that proves both halves of the configuration at once, because a wrong key and a wrong datacentre label both fail it",
+      "direction": "read",
+      "endpoint": {
+        "dc": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "mailchimp-ping",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/ping"
+      },
+      "response_schema": {
+        "properties": {
+          "health_status": {
+            "description": "Mailchimp's fixed cheerful string when everything is working. Its presence is the signal; its wording is not a contract and must not be matched on",
+            "type": "string"
+          }
+        },
+        "required": [
+          "health_status"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "mailchimp.api_key"
+        ]
+      ],
+      "description": "List the audiences in the account, with the id every contact operation takes. Returns Mailchimp's default first page only — this connector declares no paging parameters, so compare the number of entries against `total_items` before treating the result as complete",
+      "direction": "read",
+      "endpoint": {
+        "dc": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "mailchimp-audience-list",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/lists"
+      },
+      "response_schema": {
+        "properties": {
+          "lists": {
+            "description": "The audiences on this page",
+            "items": {
+              "properties": {
+                "campaign_defaults": {
+                  "description": "Default from-name, from-address, subject and language for campaigns sent to this audience. Left untyped rather than enumerated",
+                  "type": "object"
+                },
+                "contact": {
+                  "description": "The physical mailing address printed in campaign footers, required by anti-spam law. Left untyped rather than enumerated",
+                  "type": "object"
+                },
+                "date_created": {
+                  "description": "When the audience was created",
+                  "type": "string"
+                },
+                "email_type_option": {
+                  "description": "Whether contacts may choose plain-text or HTML",
+                  "type": "boolean"
+                },
+                "id": {
+                  "description": "The audience id — what every operation below calls `list_id`",
+                  "type": "string"
+                },
+                "list_rating": {
+                  "description": "Mailchimp's own 0-5 engagement rating for the audience",
+                  "type": "integer"
+                },
+                "name": {
+                  "description": "The audience name, as it reads in the UI",
+                  "type": "string"
+                },
+                "permission_reminder": {
+                  "description": "The line Mailchimp prints in every campaign reminding a contact why they are receiving it",
+                  "type": "string"
+                },
+                "stats": {
+                  "description": "Member counts and engagement averages. Left untyped rather than enumerated in full; `member_count` is the field most callers want",
+                  "type": "object"
+                },
+                "subscribe_url_long": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "subscribe_url_short": {
+                  "description": "The audience's hosted signup form — a link to give a human",
+                  "format": "uri",
+                  "type": "string"
+                },
+                "visibility": {
+                  "description": "`pub` or `prv` — whether the audience is listed publicly",
+                  "type": "string"
+                },
+                "web_id": {
+                  "description": "The id in Mailchimp's own web UI, which is not the API id",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total_items": {
+            "description": "How many audiences exist in total, which is how a caller sees that this page is a prefix",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "lists",
+          "total_items"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "mailchimp.api_key"
+        ]
+      ],
+      "description": "Get one audience by id, with its settings and current member counts",
+      "direction": "read",
+      "endpoint": {
+        "dc": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "mailchimp-audience-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The audience id, from mailchimp-audience-list's `id`. Not the `web_id` shown in Mailchimp's own UI",
+          "name": "list_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/lists/{list_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "campaign_defaults": {
+            "description": "Default from-name, from-address, subject and language for campaigns sent to this audience. Left untyped rather than enumerated",
+            "type": "object"
+          },
+          "contact": {
+            "description": "The physical mailing address printed in campaign footers, required by anti-spam law. Left untyped rather than enumerated",
+            "type": "object"
+          },
+          "date_created": {
+            "description": "When the audience was created",
+            "type": "string"
+          },
+          "email_type_option": {
+            "description": "Whether contacts may choose plain-text or HTML",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The audience id",
+            "type": "string"
+          },
+          "list_rating": {
+            "description": "Mailchimp's own 0-5 engagement rating for the audience",
+            "type": "integer"
+          },
+          "name": {
+            "description": "The audience name, as it reads in the UI",
+            "type": "string"
+          },
+          "permission_reminder": {
+            "description": "The line Mailchimp prints in every campaign reminding a contact why they are receiving it",
+            "type": "string"
+          },
+          "stats": {
+            "description": "Member counts and engagement averages. Left untyped rather than enumerated in full; `member_count` is the field most callers want",
+            "type": "object"
+          },
+          "subscribe_url_long": {
+            "format": "uri",
+            "type": "string"
+          },
+          "subscribe_url_short": {
+            "description": "The audience's hosted signup form — a link to give a human",
+            "format": "uri",
+            "type": "string"
+          },
+          "visibility": {
+            "description": "`pub` or `prv` — whether the audience is listed publicly",
+            "type": "string"
+          },
+          "web_id": {
+            "description": "The id in Mailchimp's own web UI, which is not the API id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "mailchimp.api_key"
+        ]
+      ],
+      "description": "List the contacts in an audience, subscribed and unsubscribed alike. Returns Mailchimp's default first page only — this connector declares no paging or status filter, so compare the number of entries against `total_items` before treating the result as complete. Every entry is personal data",
+      "direction": "read",
+      "endpoint": {
+        "dc": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "mailchimp-audience-member-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The audience id, from mailchimp-audience-list's `id`",
+          "name": "list_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/lists/{list_id}/members"
+      },
+      "response_schema": {
+        "properties": {
+          "list_id": {
+            "description": "The audience that was read",
+            "type": "string"
+          },
+          "members": {
+            "description": "The contacts on this page. Personal data: addresses, names and signup IPs",
+            "items": {
+              "properties": {
+                "contact_id": {
+                  "description": "Mailchimp's newer per-contact identifier",
+                  "type": "string"
+                },
+                "email_address": {
+                  "description": "The contact's address. Personal data",
+                  "type": "string"
+                },
+                "email_type": {
+                  "description": "`html` or `text`",
+                  "type": "string"
+                },
+                "full_name": {
+                  "description": "The contact's name, if the account collects one. Personal data",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The MD5 hash of the lowercase email address — this is the `subscriber_hash` the contact operations take, so a caller that has read a contact never has to compute one",
+                  "type": "string"
+                },
+                "interests": {
+                  "description": "Interest-group membership, keyed by group id. Left untyped rather than enumerated",
+                  "type": "object"
+                },
+                "ip_opt": {
+                  "description": "The IP the contact confirmed opt-in from. Personal data",
+                  "type": "string"
+                },
+                "ip_signup": {
+                  "description": "The IP the contact signed up from. Personal data; read it only if the flow genuinely needs it",
+                  "type": "string"
+                },
+                "language": {
+                  "type": "string"
+                },
+                "last_changed": {
+                  "description": "When this contact record last changed",
+                  "type": "string"
+                },
+                "list_id": {
+                  "description": "The audience this contact belongs to",
+                  "type": "string"
+                },
+                "location": {
+                  "description": "Approximate latitude, longitude and timezone. Left untyped rather than enumerated",
+                  "type": "object"
+                },
+                "member_rating": {
+                  "description": "Mailchimp's 1-5 engagement rating for this contact",
+                  "type": "integer"
+                },
+                "merge_fields": {
+                  "description": "The account's own merge tags and their values — FNAME, LNAME and whatever else the operator configured. Account-defined, so left untyped rather than enumerated. Frequently personal data",
+                  "type": "object"
+                },
+                "stats": {
+                  "description": "Open and click rates for this contact. Left untyped rather than enumerated",
+                  "type": "object"
+                },
+                "status": {
+                  "description": "`subscribed`, `unsubscribed`, `cleaned`, `pending`, `transactional` or `archived`. `cleaned` means Mailchimp stopped sending after hard bounces",
+                  "type": "string"
+                },
+                "tags": {
+                  "description": "The tags applied to this contact. Left untyped rather than enumerated",
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "timestamp_opt": {
+                  "description": "When the contact confirmed opt-in — the record that a double opt-in happened",
+                  "type": "string"
+                },
+                "timestamp_signup": {
+                  "type": "string"
+                },
+                "unique_email_id": {
+                  "description": "A stable id for the address across the account",
+                  "type": "string"
+                },
+                "vip": {
+                  "type": "boolean"
+                },
+                "web_id": {
+                  "description": "The id in Mailchimp's own web UI",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "email_address",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total_items": {
+            "description": "How many contacts the audience holds in total, which is how a caller sees that this page is a prefix",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "members",
+          "list_id",
+          "total_items"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "mailchimp.api_key"
+        ]
+      ],
+      "description": "Get one contact in an audience, including its subscription status and opt-in record. The contact is addressed by a hash of its own address, not by the address — see `subscriber_hash`. Returns personal data",
+      "direction": "read",
+      "endpoint": {
+        "dc": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "mailchimp-audience-member-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The audience id, from mailchimp-audience-list's `id`",
+          "name": "list_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The MD5 hash of the contact's email address, lowercased first — Mailchimp's own addressing scheme for contacts. It is NOT the email address, and passing one answers 404. Compute it caller-side, or read it from mailchimp-audience-member-list, where it is each contact's `id`",
+          "name": "subscriber_hash",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/lists/{list_id}/members/{subscriber_hash}"
+      },
+      "response_schema": {
+        "properties": {
+          "contact_id": {
+            "description": "Mailchimp's newer per-contact identifier",
+            "type": "string"
+          },
+          "email_address": {
+            "description": "The contact's address. Personal data",
+            "type": "string"
+          },
+          "email_type": {
+            "description": "`html` or `text`",
+            "type": "string"
+          },
+          "full_name": {
+            "description": "The contact's name, if the account collects one. Personal data",
+            "type": "string"
+          },
+          "id": {
+            "description": "The MD5 hash of the lowercase email address — the `subscriber_hash` this operation and the upsert take",
+            "type": "string"
+          },
+          "interests": {
+            "description": "Interest-group membership, keyed by group id. Left untyped rather than enumerated",
+            "type": "object"
+          },
+          "ip_opt": {
+            "description": "The IP the contact confirmed opt-in from. Personal data",
+            "type": "string"
+          },
+          "ip_signup": {
+            "description": "The IP the contact signed up from. Personal data; read it only if the flow genuinely needs it",
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "last_changed": {
+            "description": "When this contact record last changed",
+            "type": "string"
+          },
+          "list_id": {
+            "description": "The audience this contact belongs to",
+            "type": "string"
+          },
+          "location": {
+            "description": "Approximate latitude, longitude and timezone. Left untyped rather than enumerated",
+            "type": "object"
+          },
+          "member_rating": {
+            "description": "Mailchimp's 1-5 engagement rating for this contact",
+            "type": "integer"
+          },
+          "merge_fields": {
+            "description": "The account's own merge tags and their values. Account-defined, so left untyped rather than enumerated. Frequently personal data",
+            "type": "object"
+          },
+          "stats": {
+            "description": "Open and click rates for this contact. Left untyped rather than enumerated",
+            "type": "object"
+          },
+          "status": {
+            "description": "`subscribed`, `unsubscribed`, `cleaned`, `pending`, `transactional` or `archived`. `cleaned` means Mailchimp stopped sending after hard bounces",
+            "type": "string"
+          },
+          "tags": {
+            "description": "The tags applied to this contact. Left untyped rather than enumerated",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "timestamp_opt": {
+            "description": "When the contact confirmed opt-in — the record that a double opt-in happened",
+            "type": "string"
+          },
+          "timestamp_signup": {
+            "type": "string"
+          },
+          "unique_email_id": {
+            "description": "A stable id for the address across the account",
+            "type": "string"
+          },
+          "vip": {
+            "type": "boolean"
+          },
+          "web_id": {
+            "description": "The id in Mailchimp's own web UI",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "email_address",
+          "status",
+          "list_id"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "mailchimp.api_key"
+        ]
+      ],
+      "description": "Add a contact to an audience, or update the one already there. Creating with `status_if_new = \"pending\"` makes Mailchimp send its own opt-in confirmation and record the consent; creating with \"subscribed\" asserts that the account already holds that consent and sends nothing. Setting `status` on an existing contact changes whether they receive mail. This writes personal data about a third party and is not undone by calling it again",
+      "direction": "write",
+      "endpoint": {
+        "dc": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "mailchimp-audience-member-upsert",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The audience id, from mailchimp-audience-list's `id`",
+          "name": "list_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The MD5 hash of the contact's email address, lowercased first. It is NOT the email address. Compute it caller-side from the same address passed as `email_address`, or read it from mailchimp-audience-member-list, where it is each contact's `id`. A hash that does not match `email_address` addresses a different contact",
+          "name": "subscriber_hash",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The contact's email address. Must be the address `subscriber_hash` was computed from — Mailchimp addresses the record by the hash and takes this as the address to store",
+          "name": "email_address",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "format": "email",
+            "type": "string"
+          }
+        },
+        {
+          "description": "The status to give a contact this call creates; ignored when the contact already exists. \"pending\" makes Mailchimp send its own opt-in confirmation email and record the consent, and is the correct value unless the account already holds documented consent for this address; \"subscribed\" asserts that it does and sends nothing",
+          "name": "status_if_new",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "enum": [
+              "subscribed",
+              "unsubscribed",
+              "cleaned",
+              "pending"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "description": "The status to set on a contact that already exists. \"unsubscribed\" stops mail to them; \"subscribed\" resumes it and carries the same consent obligation as creating one. \"cleaned\" is Mailchimp's own marker for an address it gave up on and is not a value to set by hand",
+          "name": "status",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "enum": [
+              "subscribed",
+              "unsubscribed",
+              "cleaned",
+              "pending"
+            ],
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "email_address": {
+              "$param": "email_address"
+            },
+            "status": {
+              "$param": "status"
+            },
+            "status_if_new": {
+              "$param": "status_if_new"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "PUT",
+        "url": "{base}/lists/{list_id}/members/{subscriber_hash}"
+      },
+      "response_schema": {
+        "properties": {
+          "contact_id": {
+            "description": "Mailchimp's newer per-contact identifier",
+            "type": "string"
+          },
+          "email_address": {
+            "description": "The contact's address as stored. Personal data",
+            "type": "string"
+          },
+          "email_type": {
+            "description": "`html` or `text`",
+            "type": "string"
+          },
+          "full_name": {
+            "description": "The contact's name, if the account collects one. Personal data",
+            "type": "string"
+          },
+          "id": {
+            "description": "The MD5 hash of the lowercase email address — echo it back to confirm the call addressed the contact it meant to",
+            "type": "string"
+          },
+          "interests": {
+            "description": "Interest-group membership, keyed by group id. Left untyped rather than enumerated",
+            "type": "object"
+          },
+          "ip_opt": {
+            "description": "The IP the contact confirmed opt-in from. Personal data",
+            "type": "string"
+          },
+          "ip_signup": {
+            "description": "The IP the contact signed up from. Personal data",
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "last_changed": {
+            "description": "When this contact record last changed, which this call has just set",
+            "type": "string"
+          },
+          "list_id": {
+            "description": "The audience the contact was written to",
+            "type": "string"
+          },
+          "location": {
+            "description": "Approximate latitude, longitude and timezone. Left untyped rather than enumerated",
+            "type": "object"
+          },
+          "member_rating": {
+            "type": "integer"
+          },
+          "merge_fields": {
+            "description": "The account's own merge tags and their values. Account-defined, so left untyped rather than enumerated",
+            "type": "object"
+          },
+          "stats": {
+            "description": "Open and click rates for this contact. Left untyped rather than enumerated",
+            "type": "object"
+          },
+          "status": {
+            "description": "The contact's status after this call — `pending` means Mailchimp has sent a confirmation and is waiting for the person to answer it, so the write is not yet a subscription",
+            "type": "string"
+          },
+          "tags": {
+            "description": "The tags applied to this contact. Left untyped rather than enumerated",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "timestamp_opt": {
+            "description": "When the contact confirmed opt-in — the consent record this call may have just created",
+            "type": "string"
+          },
+          "timestamp_signup": {
+            "type": "string"
+          },
+          "unique_email_id": {
+            "type": "string"
+          },
+          "vip": {
+            "type": "boolean"
+          },
+          "web_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "email_address",
+          "status",
+          "list_id"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "mailchimp.api_key"
+        ]
+      ],
+      "description": "List the campaigns in the account — drafts, scheduled, sending and sent alike. Returns Mailchimp's default first page only, and this connector declares no status or date filter, so compare the number of entries against `total_items` before treating the result as complete",
+      "direction": "read",
+      "endpoint": {
+        "dc": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "mailchimp-campaign-list",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/campaigns"
+      },
+      "response_schema": {
+        "properties": {
+          "campaigns": {
+            "description": "The campaigns on this page",
+            "items": {
+              "properties": {
+                "archive_url": {
+                  "description": "The campaign's public archive page — a link to give a human",
+                  "format": "uri",
+                  "type": "string"
+                },
+                "content_type": {
+                  "description": "How the campaign's content was authored — `template`, `html` or `multichannel`",
+                  "type": "string"
+                },
+                "create_time": {
+                  "description": "When the campaign was created",
+                  "type": "string"
+                },
+                "emails_sent": {
+                  "description": "How many emails this campaign has delivered so far",
+                  "type": "integer"
+                },
+                "id": {
+                  "description": "The campaign id",
+                  "type": "string"
+                },
+                "long_archive_url": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "recipients": {
+                  "description": "The audience and segment this campaign targets; `list_id` and `recipient_count` are the fields most callers want. Left untyped rather than enumerated in full",
+                  "type": "object"
+                },
+                "report_summary": {
+                  "description": "Headline delivery statistics for a sent campaign — opens, clicks, unique rates. Absent on a campaign that has not been sent. Left untyped rather than enumerated",
+                  "type": "object"
+                },
+                "send_time": {
+                  "description": "When it was sent, or absent if it has not been",
+                  "type": "string"
+                },
+                "settings": {
+                  "description": "Subject line, title, from-name, reply-to and authoring options. Left untyped rather than enumerated in full",
+                  "type": "object"
+                },
+                "status": {
+                  "description": "`save`, `paused`, `schedule`, `sending` or `sent` — a draft and a delivered campaign are told apart here",
+                  "type": "string"
+                },
+                "tracking": {
+                  "description": "Which opens, clicks and third-party analytics this campaign records. Left untyped rather than enumerated",
+                  "type": "object"
+                },
+                "type": {
+                  "description": "`regular`, `plaintext`, `absplit`, `rss` or `variate`",
+                  "type": "string"
+                },
+                "web_id": {
+                  "description": "The id in Mailchimp's own web UI",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total_items": {
+            "description": "How many campaigns exist in total, which is how a caller sees that this page is a prefix",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "campaigns",
+          "total_items"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "3.0",
+      "base_url": "https://{dc}.api.mailchimp.com/3.0",
+      "gid": "com.mailchimp.api:3.0",
+      "name": "default",
+      "tags": [
+        "marketing"
+      ]
+    }
+  ],
+  "vendor": "Mailchimp",
+  "verify": "mailchimp-ping"
+}

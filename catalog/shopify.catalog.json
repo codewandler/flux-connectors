@@ -1,0 +1,675 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Shopify Admin API access token, sent as the whole value of X-Shopify-Access-Token, with read_orders, read_products, write_products, read_customers and read_inventory scopes",
+      "env": [
+        "SHOPIFY_ACCESS_TOKEN"
+      ],
+      "name": "shopify.access_token",
+      "scheme": {
+        "kind": "header",
+        "name": "X-Shopify-Access-Token"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.shopify.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "endpoint.shop",
+      "docs_url": "https://help.shopify.com/en/manual/domains",
+      "example": "acme",
+      "format": "subdomain",
+      "help": "The part of your `myshopify.com` address before the dot — for `acme.myshopify.com`, this is `acme`. Not your custom storefront domain",
+      "label": "Shop name",
+      "level": "connection",
+      "name": "shop",
+      "required": true,
+      "secret": false,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "credential.shopify.access_token",
+      "docs_url": "https://help.shopify.com/en/manual/apps/app-types/custom-apps",
+      "format": "token",
+      "help": "From your custom app's API credentials page in the Shopify admin. Starts with `shpat_`, and Shopify shows it once",
+      "label": "Admin API access token",
+      "level": "connection",
+      "name": "access_token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "shopify",
+  "default_auth": [
+    [
+      "shopify.access_token"
+    ]
+  ],
+  "description": "Shopify Admin REST API: read orders, products, customers and inventory levels, and update a product",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "shopify.access_token"
+        ]
+      ],
+      "description": "Get one order by id, with its line items, totals, fulfilment and financial status, and the customer and addresses attached to it. The response carries personal data: the customer's name, email, phone and shipping address",
+      "direction": "read",
+      "endpoint": {
+        "shop": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "shopify-order-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The order's numeric id — not its `#1001` order name",
+          "name": "order_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "format": "uint64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/errors"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/admin/api/2024-10/orders/{order_id}.json"
+      },
+      "response_schema": {
+        "properties": {
+          "order": {
+            "properties": {
+              "billing_address": {
+                "description": "Same shape. Personal data",
+                "type": "object"
+              },
+              "cancelled_at": {
+                "description": "When the order was cancelled, or null. This, not a status value, is how a cancelled order is identified",
+                "format": "date-time",
+                "type": "string"
+              },
+              "closed_at": {
+                "description": "When the order was archived, or null",
+                "format": "date-time",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "ISO 8601 with the shop's UTC offset, not a Unix timestamp",
+                "format": "date-time",
+                "type": "string"
+              },
+              "currency": {
+                "description": "ISO 4217 code the amounts are in. Read it before rendering money — a shop may sell in several",
+                "type": "string"
+              },
+              "customer": {
+                "description": "The buyer, or null on a guest checkout with no customer record. Personal data",
+                "type": "object"
+              },
+              "email": {
+                "description": "The buyer's email — personal data",
+                "type": "string"
+              },
+              "financial_status": {
+                "description": "`pending`, `authorized`, `partially_paid`, `paid`, `partially_refunded`, `refunded` or `voided`",
+                "type": "string"
+              },
+              "fulfillment_status": {
+                "description": "`fulfilled`, `partial`, `restocked` — or **null**, which is Shopify's spelling for unfulfilled. Null is the common case on a new order, so test for it explicitly",
+                "type": "string"
+              },
+              "id": {
+                "description": "The order's numeric id — what this operation takes",
+                "type": "integer"
+              },
+              "line_items": {
+                "description": "What was ordered: each entry carries `id`, `title`, `quantity`, `price` (a decimal string), `sku`, `variant_id` and `product_id`",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "name": {
+                "description": "The merchant-facing order name, e.g. `#1001`. This is what a human recognises and it does NOT address this endpoint",
+                "type": "string"
+              },
+              "note": {
+                "description": "The merchant's own note on the order, or null",
+                "type": "string"
+              },
+              "order_number": {
+                "description": "The number inside that name, without the prefix",
+                "type": "integer"
+              },
+              "shipping_address": {
+                "description": "Where it ships: `{name, address1, address2, city, province, country, zip, phone}`. Personal data, and null for a digital order",
+                "type": "object"
+              },
+              "subtotal_price": {
+                "description": "Decimal string, as above",
+                "type": "string"
+              },
+              "tags": {
+                "description": "A COMMA-SEPARATED STRING, not an array — e.g. `\"imported, vip\"`. Split it yourself",
+                "type": "string"
+              },
+              "total_price": {
+                "description": "The order total **as a decimal string**, e.g. `\"409.94\"`. Shopify's properties table states no JSON type for it and its example shows a quoted value; convert before comparing",
+                "type": "string"
+              },
+              "total_tax": {
+                "description": "Decimal string, as above",
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "order"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "shopify.access_token"
+        ]
+      ],
+      "description": "Get one product by id, with its title, description, status, vendor, options, variants and images",
+      "direction": "read",
+      "endpoint": {
+        "shop": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "shopify-product-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The product's numeric id — not its URL handle",
+          "name": "product_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "format": "uint64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/errors"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/admin/api/2024-10/products/{product_id}.json"
+      },
+      "response_schema": {
+        "properties": {
+          "product": {
+            "properties": {
+              "body_html": {
+                "description": "The description as HTML, or null",
+                "type": "string"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "handle": {
+                "description": "The URL slug on the storefront. Derived from the title, and it does NOT address this endpoint",
+                "type": "string"
+              },
+              "id": {
+                "description": "The product's numeric id",
+                "type": "integer"
+              },
+              "images": {
+                "description": "Each `{id, src, alt, width, height, position, variant_ids}`",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "options": {
+                "description": "The variant axes, each `{id, name, position, values}`",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "product_type": {
+                "type": "string"
+              },
+              "published_at": {
+                "description": "When it was published to the online store, or **null** for an active-but-unpublished product that no shopper can see",
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "description": "`active`, `draft` or `archived`. Only `active` can be sold, but see `published_at`",
+                "type": "string"
+              },
+              "tags": {
+                "description": "A COMMA-SEPARATED STRING, not an array",
+                "type": "string"
+              },
+              "title": {
+                "description": "The storefront title — what `shopify-product-update` overwrites",
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "variants": {
+                "description": "The purchasable variants, each with `id`, `title`, `price` (a decimal string), `sku`, `inventory_item_id` and `inventory_quantity`. `inventory_item_id` is what `shopify-inventory-level-list` reports stock against",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "vendor": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "product"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "shopify.access_token"
+        ]
+      ],
+      "description": "Rename a product. The new title is live on the public storefront as soon as this returns, on every sales channel the product is published to. Shopify applies only the fields sent, so nothing else about the product changes",
+      "direction": "write",
+      "endpoint": {
+        "shop": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "shopify-product-update",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The numeric id of the product to update",
+          "name": "product_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "format": "uint64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "The product's new title, as customers see it. Must not be blank",
+          "name": "title",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "product.title"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/errors"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "product": {
+              "title": {
+                "$param": "title"
+              }
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "PUT",
+        "url": "{base}/admin/api/2024-10/products/{product_id}.json"
+      },
+      "response_schema": {
+        "properties": {
+          "product": {
+            "properties": {
+              "body_html": {
+                "type": "string"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "handle": {
+                "description": "The storefront slug, which is not re-derived by a rename and so still reflects the previous title",
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "images": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "options": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "product_type": {
+                "type": "string"
+              },
+              "published_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "description": "`active`, `draft` or `archived` — unchanged by this call",
+                "type": "string"
+              },
+              "tags": {
+                "description": "A comma-separated string, not an array",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title **after** the update. Compare it against what was sent — a 200 alone does not prove the change applied",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "Moves on an accepted update",
+                "format": "date-time",
+                "type": "string"
+              },
+              "variants": {
+                "description": "Unchanged by this call. Note that each variant's `title` is the variant's own, not the product's",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "vendor": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "product"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "shopify.access_token"
+        ]
+      ],
+      "description": "Get one customer by id: name, email, phone, default address, marketing consent state and order count. This is personal data about a named individual — read it only when the task needs it, and do not repeat it further than the task requires",
+      "direction": "read",
+      "endpoint": {
+        "shop": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "shopify-customer-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The customer's numeric id",
+          "name": "customer_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "format": "uint64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/errors"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/admin/api/2024-10/customers/{customer_id}.json"
+      },
+      "response_schema": {
+        "properties": {
+          "customer": {
+            "properties": {
+              "addresses": {
+                "description": "Every saved address, each `{id, address1, city, province, country, zip, phone, default}`. Personal data",
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "default_address": {
+                "description": "The one marked default, in the same shape. Null when the customer has none",
+                "type": "object"
+              },
+              "email": {
+                "description": "Personal data. Null for a customer created without one",
+                "type": "string"
+              },
+              "email_marketing_consent": {
+                "description": "`{state, opt_in_level, consent_updated_at}` — whether this person may be marketed to. `state` is `subscribed`, `not_subscribed`, `pending` or `unsubscribed`, and it is the field to check before any send",
+                "type": "object"
+              },
+              "first_name": {
+                "description": "Personal data",
+                "type": "string"
+              },
+              "id": {
+                "description": "The customer's numeric id",
+                "type": "integer"
+              },
+              "last_name": {
+                "description": "Personal data",
+                "type": "string"
+              },
+              "last_order_id": {
+                "description": "The id of their most recent order, or null. Documented, unlike the aggregate counts this schema omits",
+                "type": "integer"
+              },
+              "note": {
+                "description": "The merchant's own note, or null",
+                "type": "string"
+              },
+              "phone": {
+                "description": "E.164, or null. Personal data",
+                "type": "string"
+              },
+              "state": {
+                "description": "The customer's account state — `disabled`, `invited`, `enabled` or `declined`. It is about the storefront account, not about marketing consent",
+                "type": "string"
+              },
+              "tags": {
+                "description": "A COMMA-SEPARATED STRING, not an array",
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "verified_email": {
+                "description": "Whether the address was confirmed. False does not mean invalid",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "customer"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "shopify.access_token"
+        ]
+      ],
+      "description": "List the inventory levels held at one location — the available quantity per inventory item. Returns the first page only, so a location stocking more items than one page holds is reported incompletely",
+      "direction": "read",
+      "endpoint": {
+        "shop": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "shopify-inventory-level-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The numeric id of the location whose stock to list",
+          "name": "location_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "format": "uint64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/errors"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/admin/api/2024-10/locations/{location_id}/inventory_levels.json"
+      },
+      "response_schema": {
+        "properties": {
+          "inventory_levels": {
+            "description": "One entry per inventory item stocked at this location. First page only — a location with more items than one page holds is reported incompletely, and nothing in the body says so",
+            "items": {
+              "properties": {
+                "available": {
+                  "description": "Units available to sell now. Can be negative when the shop oversold, and **null** for an item whose inventory is not tracked",
+                  "type": "integer"
+                },
+                "inventory_item_id": {
+                  "description": "The join key back to a product variant's `inventory_item_id`. This response carries no product or variant name",
+                  "type": "integer"
+                },
+                "location_id": {
+                  "description": "Echoes the location asked for",
+                  "type": "integer"
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "inventory_levels"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "2024-10",
+      "base_url": "https://{shop}.myshopify.com",
+      "gid": "com.shopify.api:2024-10",
+      "name": "default",
+      "tags": [
+        "ecommerce"
+      ]
+    }
+  ],
+  "vendor": "Shopify"
+}

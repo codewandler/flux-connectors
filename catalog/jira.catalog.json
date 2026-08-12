@@ -1,0 +1,636 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Atlassian API token; the user half is the account email that minted it",
+      "env": [
+        "JIRA_API_TOKEN"
+      ],
+      "name": "jira.api_token",
+      "scheme": {
+        "kind": "basic"
+      },
+      "subject": "unstated",
+      "user_env": [
+        "JIRA_USER"
+      ]
+    }
+  ],
+  "authority": "com.atlassian.jira",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "endpoint.site",
+      "docs_url": "https://support.atlassian.com/jira-software-cloud/docs/what-is-a-jira-site/",
+      "example": "acme",
+      "format": "subdomain",
+      "help": "The part of your Jira URL before `.atlassian.net` — if you sign in at `acme.atlassian.net`, this is `acme`",
+      "label": "Atlassian site name",
+      "level": "connection",
+      "name": "site",
+      "required": true,
+      "secret": false,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "username.jira.api_token",
+      "example": "you@acme.com",
+      "format": "email",
+      "help": "The email of the account that minted the API token. It travels as the username half of the request",
+      "label": "Atlassian account email",
+      "level": "connection",
+      "name": "email",
+      "required": true,
+      "secret": false,
+      "service": "default"
+    },
+    {
+      "approval": "none",
+      "binds": "credential.jira.api_token",
+      "docs_url": "https://id.atlassian.com/manage-profile/security/api-tokens",
+      "format": "token",
+      "help": "Create one at id.atlassian.com under Security → API tokens. Atlassian shows it once",
+      "label": "API token",
+      "level": "connection",
+      "name": "api_token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "jira",
+  "default_auth": [
+    [
+      "jira.api_token"
+    ]
+  ],
+  "description": "Jira Cloud issue tracking: read and create issues, comment on them, and drive workflow transitions",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "jira.api_token"
+        ]
+      ],
+      "description": "Read one Jira issue by key (`PROJ-123`) or numeric id — summary, description, status, assignee, reporter and every other configured field. Returns Jira's full default field set, including custom fields, because narrowing it needs the `fields` query parameter this connector cannot encode. Text fields are wiki markup, not rich content",
+      "direction": "read",
+      "endpoint": {
+        "site": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "jira-issue-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The issue key, e.g. `PROJ-123`, or its numeric id",
+          "name": "issue_key",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "issueIdOrKey"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/rest/api/2/issue/{issue_key}"
+      },
+      "response_schema": {
+        "properties": {
+          "changelog": {
+            "description": "Change history, when expanded. Not requested by this operation",
+            "type": "object"
+          },
+          "expand": {
+            "description": "Comma-separated names of the parts that *could* be expanded — a hint, not data",
+            "type": "string"
+          },
+          "fields": {
+            "description": "EVERY FIELD OF THE ISSUE, one level down — `summary`, `description`, `status`, `assignee`, `reporter`, `priority`, `issuetype`, `project`, `created`, `updated`, plus every custom field as `customfield_NNNNN`. Jira's schema declares no member of this map, because the members are whatever the site has configured, so nothing is enumerated here. `status` is a nested object (`{name, statusCategory}`), not a string, and text fields are wiki markup",
+            "type": "object"
+          },
+          "id": {
+            "description": "The issue's numeric id, **as a string** — Jira returns ids as strings throughout",
+            "type": "string"
+          },
+          "key": {
+            "description": "The issue key, e.g. `PROJ-123`. It changes if the issue moves project; the id does not",
+            "type": "string"
+          },
+          "renderedFields": {
+            "description": "The same fields rendered to HTML, when asked for. Not requested by this operation",
+            "type": "object"
+          },
+          "self": {
+            "description": "The issue's own API URL",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "jira.api_token"
+        ]
+      ],
+      "description": "Create a Jira issue in a project. Visible to everyone with access to the project and notifies its watchers. Only project, summary and issue type are set: a description cannot be sent yet (see the connector's notes), so file the detail as a comment afterwards. Returns the new issue's id, key and self URL",
+      "direction": "write",
+      "endpoint": {
+        "site": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "jira-issue-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "Key of the project to file the issue in, e.g. `PROJ`",
+          "name": "project_key",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "fields.project.key"
+        },
+        {
+          "description": "One-line issue summary; this is the issue's title",
+          "name": "summary",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "fields.summary"
+        },
+        {
+          "description": "Name of the issue type as the project defines it, e.g. `Task`, `Bug` or `Story`",
+          "name": "issue_type",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "fields.issuetype.name"
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "fields": {
+              "issuetype": {
+                "name": {
+                  "$param": "issue_type"
+                }
+              },
+              "project": {
+                "key": {
+                  "$param": "project_key"
+                }
+              },
+              "summary": {
+                "$param": "summary"
+              }
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/rest/api/2/issue"
+      },
+      "response_schema": {
+        "properties": {
+          "id": {
+            "description": "The new issue's numeric id, as a string",
+            "type": "string"
+          },
+          "key": {
+            "description": "The new issue's key, e.g. `PROJ-123`. This is what every following call addresses it by — nothing else in the response identifies it",
+            "type": "string"
+          },
+          "self": {
+            "format": "uri",
+            "type": "string"
+          },
+          "transition": {
+            "description": "Present when the create asked for a transition: its own `{status, errorCollection, warningCollection}`. A failure here does not fail the create, so a `201` can still mean the transition did not happen",
+            "type": "object"
+          },
+          "watchers": {
+            "description": "Same shape, for watchers the create asked to add",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "key"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "jira.api_token"
+        ]
+      ],
+      "description": "Read the comments on a Jira issue, oldest first. Returns Jira's first default-sized page only: paging needs the `startAt` and `maxResults` query parameters this connector cannot encode, so an issue with a long discussion is truncated. Comment bodies are wiki markup",
+      "direction": "read",
+      "endpoint": {
+        "site": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "jira-issue-comment-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The issue key, e.g. `PROJ-123`, or its numeric id",
+          "name": "issue_key",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "issueIdOrKey"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/rest/api/2/issue/{issue_key}/comment"
+      },
+      "response_schema": {
+        "properties": {
+          "comments": {
+            "description": "The comments, oldest first. Bodies are Jira wiki markup",
+            "items": {
+              "properties": {
+                "author": {
+                  "description": "Who wrote it: `{accountId, displayName, active, self}` — an `accountId`, never a username, and `emailAddress` only where the site's privacy settings expose it",
+                  "type": "object"
+                },
+                "body": {
+                  "description": "The comment text in wiki markup",
+                  "type": "string"
+                },
+                "created": {
+                  "description": "Jira's own timestamp format, e.g. `2021-01-17T12:34:00.000+0000` — not RFC 3339 with a colon in the offset",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The comment's id, as a string",
+                  "type": "string"
+                },
+                "jsdPublic": {
+                  "description": "On Jira Service Management, whether the customer on the portal can see this comment. False is an internal note",
+                  "type": "boolean"
+                },
+                "renderedBody": {
+                  "description": "The same body as HTML, when expanded",
+                  "type": "string"
+                },
+                "self": {
+                  "format": "uri",
+                  "type": "string"
+                },
+                "updateAuthor": {
+                  "description": "Who last edited it, which need not be the author",
+                  "type": "object"
+                },
+                "updated": {
+                  "type": "string"
+                },
+                "visibility": {
+                  "description": "Present when the comment is restricted to a role or group: `{type, value, identifier}`. Its absence means everyone who can see the issue can see the comment",
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "maxResults": {
+            "description": "How many comments the page could hold, chosen by Jira",
+            "type": "integer"
+          },
+          "startAt": {
+            "description": "The offset this page starts at — 0 here, since this operation cannot send one",
+            "type": "integer"
+          },
+          "total": {
+            "description": "How many comments the issue has in total. **Greater than the length of `comments` means the discussion is truncated**, and this operation cannot fetch the rest",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "comments"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "jira.api_token"
+        ]
+      ],
+      "description": "Add a comment to a Jira issue. The comment is visible to everyone who can see the issue — including customers on a service-management portal — and notifies its watchers; restricting it to a project role or group is not supported yet. The body is Jira wiki markup (`*bold*`, `{code}`), not Markdown and not rich content",
+      "direction": "write",
+      "endpoint": {
+        "site": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "jira-issue-comment-add",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The issue key, e.g. `PROJ-123`, or its numeric id",
+          "name": "issue_key",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "issueIdOrKey"
+        },
+        {
+          "description": "The comment text, in Jira wiki markup. Must not be blank",
+          "name": "body",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "body": {
+              "$param": "body"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/rest/api/2/issue/{issue_key}/comment"
+      },
+      "response_schema": {
+        "properties": {
+          "author": {
+            "description": "The account the token belongs to — a posted comment is attributed to it",
+            "type": "object"
+          },
+          "body": {
+            "description": "The comment as stored, in wiki markup",
+            "type": "string"
+          },
+          "created": {
+            "description": "Jira's timestamp format, e.g. `2021-01-17T12:34:00.000+0000`",
+            "type": "string"
+          },
+          "id": {
+            "description": "The new comment's id, as a string",
+            "type": "string"
+          },
+          "jsdPublic": {
+            "description": "On Jira Service Management, whether the portal customer can see it. Read it before treating a comment as internal",
+            "type": "boolean"
+          },
+          "self": {
+            "description": "The comment's own API URL. There is no browser link in this response — a human-facing link has to be built from the issue key",
+            "format": "uri",
+            "type": "string"
+          },
+          "updateAuthor": {
+            "type": "object"
+          },
+          "updated": {
+            "type": "string"
+          },
+          "visibility": {
+            "description": "Absent here, because this connector cannot restrict a comment. Absence means everyone who can see the issue can see it",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "body"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "jira.api_token"
+        ]
+      ],
+      "description": "List the workflow transitions available on a Jira issue right now, with the id and target status of each. Call this before `jira-issue-transition`: transition ids are per-workflow, not global, and only the transitions valid from the issue's current status are returned",
+      "direction": "read",
+      "endpoint": {
+        "site": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "jira-issue-transitions-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The issue key, e.g. `PROJ-123`, or its numeric id",
+          "name": "issue_key",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "issueIdOrKey"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/rest/api/2/issue/{issue_key}/transitions"
+      },
+      "response_schema": {
+        "properties": {
+          "expand": {
+            "description": "Expansion hint, absent from the vendor's example",
+            "type": "string"
+          },
+          "transitions": {
+            "description": "The transitions available from the issue's **current** status. An empty array means the workflow offers none to this user right now — not that the issue is closed",
+            "items": {
+              "properties": {
+                "fields": {
+                  "description": "What a screen would ask for, keyed by field id, each with its own metadata including whether it is required. A required field here is the reason a transition can be listed and still be refused",
+                  "type": "object"
+                },
+                "hasScreen": {
+                  "description": "True when Jira would show a form for this transition. It may then require fields this connector cannot send, and the call fails",
+                  "type": "boolean"
+                },
+                "id": {
+                  "description": "The transition id to send as `transition_id`. Per-workflow, not global, and a string",
+                  "type": "string"
+                },
+                "isAvailable": {
+                  "description": "Whether the transition can be executed now. Not present on every entry — the vendor's own examples omit it — so absence is not `false`",
+                  "type": "boolean"
+                },
+                "isConditional": {
+                  "type": "boolean"
+                },
+                "isGlobal": {
+                  "type": "boolean"
+                },
+                "isInitial": {
+                  "type": "boolean"
+                },
+                "looped": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "description": "The transition's label as the workflow names it, e.g. `Done` or `Start Progress`. Match on this rather than hard-coding an id",
+                  "type": "string"
+                },
+                "to": {
+                  "description": "The status the issue would land in: `{id, name, description, statusCategory}`, where `statusCategory` is `{id, key, name, colorName}` and its `key` is the coarse `new`/`indeterminate`/`done` grouping a flow can branch on",
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "transitions"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "jira.api_token"
+        ]
+      ],
+      "description": "Move a Jira issue through a workflow transition — the way an issue is closed, reopened or advanced. Get the transition id from `jira-issue-transitions-list` first; ids are per-workflow and only transitions valid from the current status are accepted. The status change is visible on every board showing the issue, notifies watchers, and may fire project automation. Answers `204` with an empty body on success",
+      "direction": "write",
+      "endpoint": {
+        "site": [
+          "host"
+        ]
+      },
+      "expose": true,
+      "id": "jira-issue-transition",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The issue key, e.g. `PROJ-123`, or its numeric id",
+          "name": "issue_key",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "issueIdOrKey"
+        },
+        {
+          "description": "Id of the transition to perform, as returned by `jira-issue-transitions-list`, e.g. `31`",
+          "name": "transition_id",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "transition.id"
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "transition": {
+              "id": {
+                "$param": "transition_id"
+              }
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/rest/api/2/issue/{issue_key}/transitions"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "2",
+      "base_url": "https://{site}.atlassian.net",
+      "gid": "com.atlassian.jira:2",
+      "name": "default",
+      "tags": [
+        "issue-tracking",
+        "project-management"
+      ]
+    }
+  ],
+  "vendor": "Jira"
+}

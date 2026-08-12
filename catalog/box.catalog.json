@@ -1,0 +1,473 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Box access token sent as a bearer — an OAuth2 access token or a Developer Console token",
+      "env": [
+        "BOX_ACCESS_TOKEN"
+      ],
+      "name": "box.access_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.box.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.box.access_token",
+      "docs_url": "https://developer.box.com/guides/authentication/",
+      "format": "token",
+      "help": "Create an app at box.com/developers/console. For a quick connection, generate a Developer Token from the app's Configuration tab — it lasts 60 minutes and is meant for testing. For a token that keeps working, complete the app's OAuth2 authorization flow and supply the resulting access token",
+      "label": "Access token",
+      "level": "connection",
+      "name": "access_token",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "box",
+  "default_auth": [
+    [
+      "box.access_token"
+    ]
+  ],
+  "description": "Box: browse folder contents, read file and folder metadata, create folders, and copy files",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "box.access_token"
+        ]
+      ],
+      "description": "Get the user this access token authenticates as, confirming the token resolves and naming the account it belongs to. Takes no parameters",
+      "direction": "read",
+      "expose": true,
+      "id": "box-user-me",
+      "idempotency": "idempotent",
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/code",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/2.0/users/me"
+      },
+      "response_schema": {
+        "properties": {
+          "id": {
+            "description": "The user's id",
+            "type": "string"
+          },
+          "login": {
+            "description": "The user's email address",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "const": "user"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "box.access_token"
+        ]
+      ],
+      "description": "Get one folder's metadata: name, size, timestamps and parent. Does not return its contents — use box-folder-items-list for that",
+      "direction": "read",
+      "expose": true,
+      "id": "box-folder-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The folder's id, an opaque numeric string — except the account's root folder, whose id is always the literal string \"0\". There is no other name or alias for the root; passing \"root\" or an empty string is a 404",
+          "name": "folder_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "default": "0",
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/code",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/2.0/folders/{folder_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "modified_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent": {
+            "description": "The parent folder's mini representation, `{type: \"folder\", id, name}` — absent (`null`) for the root folder, which has no parent",
+            "type": "object"
+          },
+          "size": {
+            "description": "Total size in bytes of the folder's contents",
+            "type": "integer"
+          },
+          "type": {
+            "const": "folder"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "box.access_token"
+        ]
+      ],
+      "description": "List the files and folders directly inside a folder, first page only (Box's own default page size). Each entry is a mini item representation — its type, id and name — not the full metadata box-file-get or box-folder-get returns",
+      "direction": "read",
+      "expose": true,
+      "id": "box-folder-items-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The folder's id, an opaque numeric string — except the account's root folder, whose id is always the literal string \"0\". Listing the root folder is how a first call discovers what is in the account at all",
+          "name": "folder_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "default": "0",
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/code",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/2.0/folders/{folder_id}/items"
+      },
+      "response_schema": {
+        "properties": {
+          "entries": {
+            "description": "This page's items, each `{type: \"file\"|\"folder\", id, name}`",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total_count": {
+            "description": "How many items the folder holds in total. This connector cannot fetch beyond the first page (C-30), so a value larger than entries.length means more exist",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "box.access_token"
+        ]
+      ],
+      "description": "Get one file's metadata: name, size, timestamps and parent folder. This does NOT return the file's content — Box serves file content from a signed, time-limited URL reached only through a 302 redirect this connector does not follow, so file content is out of scope entirely",
+      "direction": "read",
+      "expose": true,
+      "id": "box-file-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The file's id, an opaque numeric string assigned by Box on upload. Found in a folder listing's entries or in the file's Box URL",
+          "name": "file_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/code",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/2.0/files/{file_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "modified_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent": {
+            "description": "The parent folder's mini representation, `{type: \"folder\", id, name}`",
+            "type": "object"
+          },
+          "sha1": {
+            "description": "SHA-1 hash of the file's content, for verifying a download performed some other way",
+            "type": "string"
+          },
+          "size": {
+            "description": "Size in bytes",
+            "type": "integer"
+          },
+          "type": {
+            "const": "file"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "box.access_token"
+        ]
+      ],
+      "description": "Create a new, empty folder as a child of an existing folder. Naming a folder that already exists under the same parent answers 409 conflict rather than creating a duplicate",
+      "direction": "write",
+      "expose": true,
+      "id": "box-folder-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The new folder's name, unique among its parent's immediate children",
+          "name": "name",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The id of the existing folder to create this folder inside, an opaque numeric string — or the literal string \"0\" to create it directly under the account's root",
+          "name": "parent_id",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "default": "0",
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "wire": "parent.id"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/code",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "name": {
+              "$param": "name"
+            },
+            "parent": {
+              "id": {
+                "$param": "parent_id"
+              }
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/2.0/folders"
+      },
+      "response_schema": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "The created folder's id — what a later call addresses it by",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent": {
+            "type": "object"
+          },
+          "type": {
+            "const": "folder"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "box.access_token"
+        ]
+      ],
+      "description": "Copy an existing file into a different folder, keeping its original name. Each call creates a new, independent file — copying the same file twice produces two copies, not one",
+      "direction": "write",
+      "expose": true,
+      "id": "box-file-copy",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The id of the file to copy, an opaque numeric string",
+          "name": "file_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        },
+        {
+          "description": "The id of the destination folder, an opaque numeric string — or the literal string \"0\" to copy directly into the account's root",
+          "name": "parent_id",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "default": "0",
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "wire": "parent.id"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/code",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "parent": {
+              "id": {
+                "$param": "parent_id"
+              }
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/2.0/files/{file_id}/copy"
+      },
+      "response_schema": {
+        "properties": {
+          "id": {
+            "description": "The new copy's id, distinct from the source file's id",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent": {
+            "type": "object"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "type": {
+            "const": "file"
+          }
+        },
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "2.0",
+      "base_url": "https://api.box.com",
+      "gid": "com.box.api:2.0",
+      "name": "default",
+      "tags": [
+        "storage"
+      ]
+    }
+  ],
+  "vendor": "Box",
+  "verify": "box-user-me"
+}

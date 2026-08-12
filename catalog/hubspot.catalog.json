@@ -1,0 +1,477 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "HubSpot private-app access token (pat-…) with crm.objects.contacts.read/write, crm.objects.companies.read and crm.objects.deals.read",
+      "env": [
+        "HUBSPOT_ACCESS_TOKEN"
+      ],
+      "name": "hubspot.access_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.hubspot.api",
+  "connector": "hubspot",
+  "default_auth": [
+    [
+      "hubspot.access_token"
+    ]
+  ],
+  "description": "HubSpot CRM: read contacts, companies and deals, and create and update contact records",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "hubspot.access_token"
+        ]
+      ],
+      "description": "Read one contact by record id. Returns only HubSpot's default contact properties — name, email and record timestamps; a custom property needs a `properties` projection this connector cannot express yet",
+      "direction": "read",
+      "expose": true,
+      "id": "hubspot-contact-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The contact's HubSpot record id (`hs_object_id`), e.g. 512",
+          "name": "contact_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "format": "uint64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/category",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/crm/v3/objects/contacts/{contact_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "archived": {
+            "description": "True for a record in the recycle bin",
+            "type": "boolean"
+          },
+          "archivedAt": {
+            "description": "Present only on an archived record",
+            "format": "date-time",
+            "type": "string"
+          },
+          "associations": {
+            "description": "Related records — companies, deals, tickets — keyed by object type. Returned only when asked for. Present on this read schema and absent from the create's",
+            "type": "object"
+          },
+          "createdAt": {
+            "description": "When the record was created — an ISO timestamp here, unlike the epoch-milliseconds string the equivalent `createdate` property carries",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "The record id (`hs_object_id`) **as a string**, even though this operation takes it as a number",
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The contact's property values, keyed by HubSpot's internal property name (`email`, `firstname`, `lastname`, `createdate`, `lastmodifieddate`, `hs_object_id`). EVERY VALUE IS A STRING regardless of the property's configured type — a number is `\"17\"`, a checkbox `\"false\"`, a date the epoch-milliseconds string `\"1572480000000\"`. Which keys are present depends on the portal's own property set and on the `properties` projection this connector cannot send",
+            "type": "object"
+          },
+          "propertiesWithHistory": {
+            "additionalProperties": {
+              "items": {
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "description": "Previous values per property, each an array of `{value, timestamp, sourceType}`. Returned only when asked for, which this connector cannot do",
+            "type": "object"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "properties",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "hubspot.access_token"
+        ]
+      ],
+      "description": "Create a contact from an email address. HubSpot treats email as the contact's unique identifier and rejects a duplicate with 409. The new record is visible to everyone in the portal and can be enrolled by a workflow, which may send it marketing email",
+      "direction": "write",
+      "expose": true,
+      "id": "hubspot-contact-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The contact's email address — HubSpot's unique identifier for a contact",
+          "name": "email",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 3,
+            "type": "string"
+          },
+          "wire": "properties.email"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/category",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "properties": {
+              "email": {
+                "$param": "email"
+              }
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/crm/v3/objects/contacts"
+      },
+      "response_schema": {
+        "properties": {
+          "archived": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "The new record's id, as a string. This is the `contact_id` for a following update — and the update's parameter is a number, so it has to be converted",
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The created record's properties, keyed by internal name, EVERY VALUE A STRING. HubSpot fills in more than was sent — `createdate`, `lastmodifieddate` and `hs_object_id` at minimum",
+            "type": "object"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "warnings": {
+            "description": "Non-fatal complaints about the create — a property HubSpot ignored, for instance. Present only on the create schema, and worth reading: the call still succeeded",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "properties",
+          "createdAt",
+          "updatedAt",
+          "archived"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "hubspot.access_token"
+        ]
+      ],
+      "description": "Overwrite a contact's first and last name. Both are written on every call — this operation replaces them rather than merging, so re-send the one you are not changing (read it first with hubspot-contact-get). The change is visible to everyone in the portal and can trigger a workflow",
+      "direction": "write",
+      "expose": true,
+      "id": "hubspot-contact-update",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The contact's HubSpot record id (`hs_object_id`)",
+          "name": "contact_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "format": "uint64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "The contact's first name; written on every call",
+          "name": "firstname",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "properties.firstname"
+        },
+        {
+          "description": "The contact's last name; written on every call",
+          "name": "lastname",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "wire": "properties.lastname"
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/category",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "properties": {
+              "firstname": {
+                "$param": "firstname"
+              },
+              "lastname": {
+                "$param": "lastname"
+              }
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "PATCH",
+        "url": "{base}/crm/v3/objects/contacts/{contact_id}"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "hubspot.access_token"
+        ]
+      ],
+      "description": "Read one company by record id. Returns only HubSpot's default company properties — name, domain and record timestamps",
+      "direction": "read",
+      "expose": true,
+      "id": "hubspot-company-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The company's HubSpot record id (`hs_object_id`)",
+          "name": "company_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "format": "uint64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/category",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/crm/v3/objects/companies/{company_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "archived": {
+            "type": "boolean"
+          },
+          "archivedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "associations": {
+            "description": "Related contacts, deals and tickets. Returned only when asked for",
+            "type": "object"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "The company's record id, as a string",
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The company's property values, keyed by internal name (`name`, `domain`, `createdate`, `hs_lastmodifieddate`, `hs_object_id`). EVERY VALUE IS A STRING — including numeric properties such as `numberofemployees` and `annualrevenue`",
+            "type": "object"
+          },
+          "propertiesWithHistory": {
+            "additionalProperties": {
+              "items": {
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "description": "Returned only when asked for, which this connector cannot do",
+            "type": "object"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "properties",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "hubspot.access_token"
+        ]
+      ],
+      "description": "Read one deal by record id. Returns only HubSpot's default deal properties — name, amount, stage, pipeline and close date",
+      "direction": "read",
+      "expose": true,
+      "id": "hubspot-deal-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The deal's HubSpot record id (`hs_object_id`)",
+          "name": "deal_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "format": "uint64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "code_pointer": "/category",
+          "message_pointer": "/message"
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/crm/v3/objects/deals/{deal_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "archived": {
+            "type": "boolean"
+          },
+          "archivedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "associations": {
+            "description": "The contacts and companies on the deal. Returned only when asked for",
+            "type": "object"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "The deal's record id, as a string",
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The deal's property values, keyed by internal name (`dealname`, `amount`, `dealstage`, `pipeline`, `closedate`, `hs_object_id`). EVERY VALUE IS A STRING — `amount` arrives as `\"1500.00\"` and `closedate` as an ISO string, so a numeric or date comparison has to convert first. `dealstage` and `pipeline` are per-portal internal ids, not display names",
+            "type": "object"
+          },
+          "propertiesWithHistory": {
+            "additionalProperties": {
+              "items": {
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "description": "Returned only when asked for",
+            "type": "object"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "properties",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v3",
+      "base_url": "https://api.hubapi.com",
+      "gid": "com.hubspot.api:v3",
+      "name": "default",
+      "tags": [
+        "crm"
+      ]
+    }
+  ],
+  "vendor": "HubSpot"
+}

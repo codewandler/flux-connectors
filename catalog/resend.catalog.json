@@ -1,0 +1,479 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Resend API key, sent as a bearer token on every request. Minted in the Resend dashboard and scoped there to full access or sending only; this repository holds the reference, never the value",
+      "env": [
+        "RESEND_API_KEY"
+      ],
+      "name": "resend.api_key",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.resend.api",
+  "connector": "resend",
+  "default_auth": [
+    [
+      "resend.api_key"
+    ]
+  ],
+  "description": "Resend transactional email: send a message, read what happened to it, and list or inspect the domains a key may send from",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "resend.api_key"
+        ]
+      ],
+      "description": "Send one email immediately. Delivered within seconds and cannot be recalled once accepted. The sending domain must already be verified on this account — resend-domain-list names the ones that are",
+      "direction": "write",
+      "expose": true,
+      "id": "resend-email-send",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The sending address, on a domain verified for this account. Accepts a bare address, or `Name <address>` to attach a friendly name. The caller's own input, never an example value here",
+          "name": "from",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Recipient address, or an array of up to 50 addresses. The caller's own input, never an example value here",
+          "name": "to",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "oneOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "minItems": 1,
+                "type": "array"
+              }
+            ]
+          }
+        },
+        {
+          "description": "The email's subject line",
+          "name": "subject",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The message body, as HTML. Resend generates the plain-text alternative from it, so a plain-text-only message is sent by putting the text here",
+          "name": "html",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "from": {
+              "$param": "from"
+            },
+            "html": {
+              "$param": "html"
+            },
+            "subject": {
+              "$param": "subject"
+            },
+            "to": {
+              "$param": "to"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/emails"
+      },
+      "response_schema": {
+        "properties": {
+          "id": {
+            "description": "Resend's id for this message — the argument resend-email-get takes. The only field the send answers with",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "resend.api_key"
+        ]
+      ],
+      "description": "Read one sent message and its current delivery state. This is how a flow learns whether a send bounced, was delivered, or is still queued",
+      "direction": "read",
+      "expose": true,
+      "id": "resend-email-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The message's id, from resend-email-send's response",
+          "name": "email_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/emails/{email_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "bcc": {
+            "description": "Blind-copied recipients — personal data, never an example value",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cc": {
+            "description": "Copied recipients — personal data, never an example value",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "description": "When Resend accepted the message, as a space-separated UTC timestamp rather than strict RFC 3339",
+            "type": "string"
+          },
+          "from": {
+            "description": "The sending address used — never an example value",
+            "type": "string"
+          },
+          "html": {
+            "description": "The HTML body as sent",
+            "type": "string"
+          },
+          "id": {
+            "description": "The message's id, echoed back",
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_event": {
+            "description": "The most recent delivery event: queued, scheduled, sent, delivered, delivery_delayed, complained, bounced, or canceled. This is the field a flow branches on",
+            "type": "string"
+          },
+          "message_id": {
+            "description": "The RFC 5322 Message-ID Resend assigned, for correlating with a recipient's own mail logs",
+            "type": "string"
+          },
+          "object": {
+            "const": "email"
+          },
+          "reply_to": {
+            "description": "Reply-To addresses — personal data, never an example value",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scheduled_at": {
+            "description": "When a scheduled message is due, or null for an immediate send",
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "tags": {
+            "description": "The key/value metadata the send attached, if any",
+            "items": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "text": {
+            "description": "The plain-text alternative, or null when none was generated",
+            "type": "string"
+          },
+          "to": {
+            "description": "The recipients this message was sent to — personal data, never an example value",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "object",
+          "id",
+          "to",
+          "from",
+          "created_at",
+          "subject",
+          "last_event"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "resend.api_key"
+        ]
+      ],
+      "description": "List every sending domain on this account with its verification status. Also this connector's `verify` — a bounded read that runs unattended and needs nothing configured beyond the credential",
+      "direction": "read",
+      "expose": true,
+      "id": "resend-domain-list",
+      "idempotency": "idempotent",
+      "request": {
+        "method": "GET",
+        "url": "{base}/domains"
+      },
+      "response_schema": {
+        "properties": {
+          "data": {
+            "description": "One entry per sending domain",
+            "items": {
+              "properties": {
+                "capabilities": {
+                  "description": "Whether this domain may send and whether it may receive, each enabled or disabled",
+                  "type": "object"
+                },
+                "created_at": {
+                  "description": "As a space-separated UTC timestamp rather than strict RFC 3339",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The domain's id — what resend-domain-get addresses it by",
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The domain itself, as registered with Resend",
+                  "type": "string"
+                },
+                "region": {
+                  "description": "The sending region the domain was created in, e.g. us-east-1",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "not_started, pending, verified, failed or temporary_failure. Only a verified domain may appear in a send's `from`",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "status",
+                "created_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "has_more": {
+            "description": "Whether more domains exist beyond this page. This connector declares no cursor parameters, so it reads the unpaginated default, which returns every domain",
+            "type": "boolean"
+          },
+          "object": {
+            "const": "list"
+          }
+        },
+        "required": [
+          "object",
+          "data"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "resend.api_key"
+        ]
+      ],
+      "description": "Read one sending domain, including the DNS records it needs and the status of each. This is the diagnostic for a domain that will not verify, and therefore for a send refused with an invalid-from error",
+      "direction": "read",
+      "expose": true,
+      "id": "resend-domain-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The domain's id, from resend-domain-list",
+          "name": "domain_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/domains/{domain_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "capabilities": {
+            "description": "Whether this domain may send and whether it may receive, each enabled or disabled",
+            "type": "object"
+          },
+          "click_tracking": {
+            "description": "Whether Resend rewrites links to record clicks",
+            "type": "boolean"
+          },
+          "created_at": {
+            "description": "As a space-separated UTC timestamp rather than strict RFC 3339",
+            "type": "string"
+          },
+          "id": {
+            "description": "The domain's id",
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "description": "The domain itself, as registered with Resend",
+            "type": "string"
+          },
+          "object": {
+            "const": "domain"
+          },
+          "open_tracking": {
+            "description": "Whether Resend rewrites messages to record opens",
+            "type": "boolean"
+          },
+          "records": {
+            "description": "The DNS records this domain needs, each with its own verification status. A domain stuck at not_started is one whose records have not been published",
+            "items": {
+              "properties": {
+                "name": {
+                  "description": "The record's host name, relative to the domain",
+                  "type": "string"
+                },
+                "priority": {
+                  "description": "MX priority; absent on TXT and CNAME entries",
+                  "type": "integer"
+                },
+                "record": {
+                  "description": "Which mechanism the entry serves: SPF, DKIM or Tracking",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "This individual record's verification state",
+                  "type": "string"
+                },
+                "ttl": {
+                  "description": "Resend states this as text, e.g. \"Auto\", not as a number of seconds",
+                  "type": "string"
+                },
+                "type": {
+                  "description": "The DNS record type: MX, TXT or CNAME",
+                  "type": "string"
+                },
+                "value": {
+                  "description": "The value to publish",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "record",
+                "name",
+                "type",
+                "value",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "region": {
+            "description": "The sending region the domain was created in, e.g. us-east-1",
+            "type": "string"
+          },
+          "status": {
+            "description": "not_started, pending, verified, failed or temporary_failure. Only a verified domain may appear in a send's `from`",
+            "type": "string"
+          },
+          "tracking_subdomain": {
+            "description": "The subdomain link tracking is served from, when click tracking is on",
+            "type": "string"
+          }
+        },
+        "required": [
+          "object",
+          "id",
+          "name",
+          "status",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "base_url": "https://api.resend.com",
+      "name": "default",
+      "tags": [
+        "email"
+      ]
+    }
+  ],
+  "vendor": "Resend",
+  "verify": "resend-domain-list"
+}

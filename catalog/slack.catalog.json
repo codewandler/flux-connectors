@@ -1,0 +1,628 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Slack bot user OAuth token (xoxb-…) with chat:write, channels:history, users:read and reactions:write",
+      "env": [
+        "SLACK_BOT_TOKEN"
+      ],
+      "name": "slack.bot_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "app"
+    },
+    {
+      "description": "Slack app signing secret, used to verify inbound Events API requests. Never sent to Slack",
+      "env": [
+        "SLACK_SIGNING_SECRET"
+      ],
+      "name": "slack.signing_secret",
+      "scheme": {
+        "kind": "signing"
+      },
+      "subject": "app"
+    }
+  ],
+  "authority": "com.slack.api",
+  "channels": [
+    {
+      "delivery_id": {
+        "name": "event_id",
+        "source": "body"
+      },
+      "description": "Socket Mode — flux opens an outbound WebSocket and Slack pushes events down it. No public URL, and no signature: the connection is authenticated by the app-level token that opened it",
+      "discriminator": {
+        "name": "event.type",
+        "source": "body"
+      },
+      "events": [
+        "app_mention",
+        "message"
+      ],
+      "name": "socket",
+      "oip": "com.slack.api:v1#socket",
+      "payload": {
+        "channel": "event.channel",
+        "conversation": "event.thread_ts",
+        "text": "event.text",
+        "thread": "event.thread_ts",
+        "user": "event.user"
+      },
+      "reply": {
+        "bind": {
+          "channel": "channel",
+          "thread_ts": "thread"
+        },
+        "oip": "com.slack.api:v1#slack-chat-post-message",
+        "operation": "slack-chat-post-message",
+        "result": "text"
+      },
+      "service": "default",
+      "transport": "socket",
+      "verification": {
+        "kind": "connection",
+        "verified": true
+      }
+    },
+    {
+      "delivery_id": {
+        "name": "event_id",
+        "source": "body"
+      },
+      "description": "The Events API — Slack POSTs to an endpoint the operator exposes, signing each request. Use it when an outbound WebSocket is not an option; it needs a public URL and the signing secret",
+      "discriminator": {
+        "name": "event.type",
+        "source": "body"
+      },
+      "events": [
+        "app_mention",
+        "message"
+      ],
+      "name": "events-api",
+      "oip": "com.slack.api:v1#events-api",
+      "payload": {
+        "channel": "event.channel",
+        "conversation": "event.thread_ts",
+        "text": "event.text",
+        "thread": "event.thread_ts",
+        "user": "event.user"
+      },
+      "reply": {
+        "bind": {
+          "channel": "channel",
+          "thread_ts": "thread"
+        },
+        "oip": "com.slack.api:v1#slack-chat-post-message",
+        "operation": "slack-chat-post-message",
+        "result": "text"
+      },
+      "service": "default",
+      "setup": {
+        "docs_url": "https://docs.slack.dev/apis/events-api/",
+        "steps": [
+          "Open your app at api.slack.com/apps, or create one for this workspace",
+          "Under Event Subscriptions, turn on Enable Events",
+          "Paste the Request URL shown above and wait for Slack's `url_verification` challenge to pass",
+          "Under Subscribe to bot events, add the events you selected here",
+          "Copy the Signing Secret from Basic Information into this connection's signing secret field",
+          "Reinstall the app to the workspace so the new event scopes take effect"
+        ]
+      },
+      "transport": "webhook",
+      "verification": {
+        "hmac": {
+          "algorithm": "sha256",
+          "encoding": "hex",
+          "header": "X-Slack-Signature",
+          "prefix": "v0=",
+          "secret": "slack.signing_secret",
+          "signed": "v0:{timestamp}:{body}",
+          "timestamp": {
+            "name": "X-Slack-Request-Timestamp",
+            "source": "header"
+          },
+          "timestamp_format": "unix_seconds",
+          "tolerance": "5m"
+        },
+        "kind": "hmac",
+        "verified": true
+      }
+    }
+  ],
+  "connector": "slack",
+  "default_auth": [
+    [
+      "slack.bot_token"
+    ]
+  ],
+  "description": "Slack messaging: post messages, read conversation history, look up users, react",
+  "events": [
+    {
+      "default": true,
+      "description": "Someone @-mentioned the app in a channel it is a member of",
+      "group": "Messages",
+      "name": "app_mention",
+      "oip": "com.slack.api:v1#app_mention",
+      "schema": {
+        "properties": {
+          "channel": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "thread_ts": {
+            "type": "string"
+          },
+          "ts": {
+            "type": "string"
+          },
+          "type": {
+            "const": "app_mention"
+          },
+          "user": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "user",
+          "text",
+          "channel",
+          "ts"
+        ],
+        "type": "object"
+      },
+      "service": "default"
+    },
+    {
+      "default": false,
+      "description": "A message was posted in a channel the app is a member of. Fires for every human message, so a program that triggers on it should expect volume",
+      "group": "Messages",
+      "name": "message",
+      "oip": "com.slack.api:v1#message",
+      "schema": {
+        "properties": {
+          "bot_id": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "subtype": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "thread_ts": {
+            "type": "string"
+          },
+          "ts": {
+            "type": "string"
+          },
+          "type": {
+            "const": "message"
+          },
+          "user": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "channel",
+          "ts"
+        ],
+        "type": "object"
+      },
+      "service": "default"
+    }
+  ],
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "slack.bot_token"
+        ]
+      ],
+      "description": "Post a message to a Slack channel, visible to everyone in it. Slack answers HTTP 200 even on failure: check `ok` in the response body before treating the message as sent",
+      "direction": "write",
+      "expose": true,
+      "id": "slack-chat-post-message",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "Channel id (`C0123ABCDEF`) or name to post to. An id is preferred; a name resolves only for public channels",
+          "name": "channel",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Message text, in Slack's mrkdwn syntax",
+          "name": "text",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The `ts` of a parent message to reply to, threading the reply under it. Omit to post at channel level",
+          "name": "thread_ts",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "channel": {
+              "$param": "channel"
+            },
+            "text": {
+              "$param": "text"
+            },
+            "thread_ts": {
+              "$param": "thread_ts"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/api/chat.postMessage"
+      },
+      "response_schema": {
+        "properties": {
+          "channel": {
+            "description": "The channel the message landed in, always as an id (`C0123ABCDEF`) even when the request named it",
+            "type": "string"
+          },
+          "error": {
+            "description": "Present only when `ok` is false: Slack's machine-readable failure code, such as `channel_not_found`, `not_in_channel` or `msg_too_long`",
+            "type": "string"
+          },
+          "message": {
+            "description": "The message as Slack stored it: `text`, `type`, `subtype`, `ts`, `bot_id`, `username`, and `attachments` when there are any",
+            "type": "object"
+          },
+          "ok": {
+            "description": "False on failure, with HTTP still 200. Branch on this before reading anything else — it is the only member present in both outcomes",
+            "type": "boolean"
+          },
+          "ts": {
+            "description": "The posted message's timestamp id, e.g. `1503435956.000247`. This is what addresses the message afterwards — `slack-reactions-add`'s `timestamp`, and `thread_ts` to reply under it",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "slack.bot_token"
+        ]
+      ],
+      "description": "Read recent messages from a Slack channel, newest first. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `channel_not_found` appears at `error`",
+      "direction": "write",
+      "expose": true,
+      "id": "slack-conversations-history",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "Channel id to read (`C0123ABCDEF`)",
+          "name": "channel",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Maximum messages to return in one call, newest first. Slack's documented maximum is 999 and it advises far less",
+          "name": "limit",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "default": 100,
+            "maximum": 999,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Only messages after this `ts`, e.g. `1728394857.123456`. Omit for no lower bound",
+          "name": "oldest",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Only messages up to this `ts`. Omit for no upper bound",
+          "name": "latest",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "channel": {
+              "$param": "channel"
+            },
+            "latest": {
+              "$param": "latest"
+            },
+            "limit": {
+              "$param": "limit"
+            },
+            "oldest": {
+              "$param": "oldest"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/api/conversations.history"
+      },
+      "response_schema": {
+        "properties": {
+          "error": {
+            "description": "Present only when `ok` is false: `channel_not_found`, `not_in_channel` or `invalid_arguments`",
+            "type": "string"
+          },
+          "has_more": {
+            "description": "True when the channel holds older messages than this page returned. This connector cannot page — see the header comment on the missing cursor — so a true here means the caller is seeing a window, not the history",
+            "type": "boolean"
+          },
+          "messages": {
+            "description": "The messages, newest first. Each carries at least `type`, `ts` and `text`; a user message also carries `user`, and a bot or system message carries a `subtype` instead",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "ok": {
+            "description": "False on failure, with HTTP still 200. Branch on this first",
+            "type": "boolean"
+          },
+          "pin_count": {
+            "type": "integer"
+          },
+          "response_metadata": {
+            "description": "Carries `next_cursor`, the cursor for the following page. It cannot be sent back by this connector (C-30)",
+            "type": "object"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "slack.bot_token"
+        ]
+      ],
+      "description": "Look up one Slack user by id — display name, real name, time zone and whether they are a bot. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `user_not_found` appears at `error`",
+      "direction": "write",
+      "expose": true,
+      "id": "slack-users-info",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "User id to look up (`U0123ABCDEF`)",
+          "name": "user",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Also return the user's locale",
+          "name": "include_locale",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "include_locale": {
+              "$param": "include_locale"
+            },
+            "user": {
+              "$param": "user"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/api/users.info"
+      },
+      "response_schema": {
+        "properties": {
+          "error": {
+            "description": "Present only when `ok` is false: typically `user_not_found`",
+            "type": "string"
+          },
+          "ok": {
+            "description": "False on failure, with HTTP still 200. Branch on this first",
+            "type": "boolean"
+          },
+          "user": {
+            "description": "The user: `id`, `team_id`, `name`, `real_name`, `deleted`, `tz`, `tz_label`, `tz_offset`, `is_bot`, `is_admin`, `is_owner`, `updated`, and `profile` — which holds the display name, status and, with `users:read.email`, the email address",
+            "type": "object"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "slack.bot_token"
+        ]
+      ],
+      "description": "Add an emoji reaction to a message, visible to everyone in the channel. Slack answers HTTP 200 even on failure: check `ok` in the response body, where an error such as `already_reacted` appears at `error`",
+      "direction": "write",
+      "expose": true,
+      "id": "slack-reactions-add",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "Channel id containing the message (`C0123ABCDEF`)",
+          "name": "channel",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The `ts` of the message to react to, e.g. `1728394857.123456`",
+          "name": "timestamp",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "Emoji name without colons, e.g. `thumbsup` or `white_check_mark`",
+          "name": "name",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/error"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "channel": {
+              "$param": "channel"
+            },
+            "name": {
+              "$param": "name"
+            },
+            "timestamp": {
+              "$param": "timestamp"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/api/reactions.add"
+      },
+      "response_schema": {
+        "properties": {
+          "error": {
+            "description": "Present only when `ok` is false, with HTTP still 200: `already_reacted`, `message_not_found`, `invalid_name`, `channel_not_found` or `thread_locked`",
+            "type": "string"
+          },
+          "ok": {
+            "description": "True when the reaction was added. There is no other member on success — Slack returns no id for a reaction",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v1",
+      "base_url": "https://slack.com",
+      "gid": "com.slack.api:v1",
+      "name": "default",
+      "tags": [
+        "messaging"
+      ]
+    }
+  ],
+  "vendor": "Slack"
+}

@@ -1,0 +1,414 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "SendGrid API key sent as a bearer",
+      "env": [
+        "SENDGRID_API_KEY"
+      ],
+      "name": "sendgrid.api_key",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.sendgrid.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "credential.sendgrid.api_key",
+      "docs_url": "https://www.twilio.com/docs/sendgrid/ui/account-and-settings/api-keys",
+      "format": "token",
+      "help": "Create one under Settings → API Keys in the SendGrid dashboard. Restrict it to only the scopes this connector needs — Mail Send is unnecessary, since this connector never sends mail",
+      "label": "SendGrid API key",
+      "level": "connection",
+      "name": "api_key",
+      "required": true,
+      "secret": true,
+      "service": "default"
+    }
+  ],
+  "connector": "sendgrid",
+  "default_auth": [
+    [
+      "sendgrid.api_key"
+    ]
+  ],
+  "description": "SendGrid transactional email: read templates and bounce suppressions, validate an email address. Cannot send mail — see the header comment for why the send envelope is not expressible here",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "sendgrid.api_key"
+        ]
+      ],
+      "description": "List transactional templates (name, id, generation, and each template's versions). Also this connector's `verify` — a bounded read that runs unattended",
+      "direction": "read",
+      "expose": true,
+      "id": "sendgrid-template-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Restrict the list to `legacy`, `dynamic`, or `both` templates. SendGrid defaults to `dynamic` when this is omitted",
+          "name": "generations",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "legacy",
+              "dynamic",
+              "both"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "description": "Results per page; SendGrid caps this at 200",
+          "name": "page_size",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "generations",
+            "value": {
+              "$param": "generations"
+            }
+          },
+          {
+            "name": "page_size",
+            "value": {
+              "$param": "page_size"
+            }
+          }
+        ],
+        "url": "{base}/v3/templates"
+      },
+      "response_schema": {
+        "properties": {
+          "_metadata": {
+            "description": "Cursor pagination. `next`, when present, is the full URL of the following page — an opaque server-issued value this connector does not attempt to re-encode, the same reasoning that excludes Asana's `offset` and Notion's `start_cursor`",
+            "type": "object"
+          },
+          "result": {
+            "description": "The matching templates",
+            "items": {
+              "properties": {
+                "generation": {
+                  "enum": [
+                    "legacy",
+                    "dynamic"
+                  ],
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The template's id, e.g. `d-…` for a dynamic template",
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "versions": {
+                  "description": "The template's versions (subject, content, active flag) — not enumerated further here; see sendgrid-template-get",
+                  "type": "array"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "generation"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "sendgrid.api_key"
+        ]
+      ],
+      "description": "Get one transactional template by id, including every version's subject and content",
+      "direction": "read",
+      "expose": true,
+      "id": "sendgrid-template-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The template's id, e.g. `d-…` for a dynamic template — the `id` field from sendgrid-template-list",
+          "name": "template_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/v3/templates/{template_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "generation": {
+            "enum": [
+              "legacy",
+              "dynamic"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "versions": {
+            "description": "Every version of this template — its subject, its plain-text and HTML content, and which one is active. Not enumerated further here",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "generation"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "sendgrid.api_key"
+        ]
+      ],
+      "description": "List addresses that have bounced and are suppressed from receiving further mail. Each entry is personal data about a third party — read it only for what the calling flow needs",
+      "direction": "read",
+      "expose": true,
+      "id": "sendgrid-suppression-bounce-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Only bounces created at or after this Unix timestamp",
+          "name": "start_time",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Only bounces created at or before this Unix timestamp",
+          "name": "end_time",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "end_time",
+            "value": {
+              "$param": "end_time"
+            }
+          },
+          {
+            "name": "start_time",
+            "value": {
+              "$param": "start_time"
+            }
+          }
+        ],
+        "url": "{base}/v3/suppression/bounces"
+      },
+      "response_schema": {
+        "description": "The matching bounces",
+        "items": {
+          "properties": {
+            "created": {
+              "description": "Unix timestamp the bounce was recorded",
+              "type": "integer"
+            },
+            "email": {
+              "description": "The suppressed recipient's own address — personal data, never an example value",
+              "type": "string"
+            },
+            "reason": {
+              "description": "The bounce reason SendGrid recorded, e.g. an SMTP response",
+              "type": "string"
+            },
+            "status": {
+              "description": "The SMTP status code reported with the bounce",
+              "type": "string"
+            }
+          },
+          "required": [
+            "email",
+            "created",
+            "reason",
+            "status"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "default"
+    },
+    {
+      "auth": [
+        [
+          "sendgrid.api_key"
+        ]
+      ],
+      "description": "Check whether an email address is well-formed and likely deliverable, without sending it any mail. Requires SendGrid's Email Address Validation add-on to be enabled on the account",
+      "direction": "write",
+      "expose": true,
+      "id": "sendgrid-email-validate",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The address to check. This is the address a caller supplies for validation — not a recipient this connector addresses mail to, and never an example value here",
+          "name": "email",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "format": "email",
+            "type": "string"
+          }
+        },
+        {
+          "description": "A free-text label for where the check originated, e.g. `signup`. Purely descriptive; SendGrid does not validate its contents",
+          "name": "source",
+          "position": "body",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "quirks": {
+        "error_envelope": {
+          "message_pointer": "/errors/0/message"
+        }
+      },
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "email": {
+              "$param": "email"
+            },
+            "source": {
+              "$param": "source"
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/v3/validations/email"
+      },
+      "response_schema": {
+        "properties": {
+          "result": {
+            "properties": {
+              "email": {
+                "description": "Echoes the checked address — the caller's own input, never an example value",
+                "type": "string"
+              },
+              "host": {
+                "description": "The domain part of the address (after the `@`)",
+                "type": "string"
+              },
+              "local": {
+                "description": "The local part of the address (before the `@`)",
+                "type": "string"
+              },
+              "score": {
+                "description": "A confidence score between 0 and 1",
+                "type": "number"
+              },
+              "suggestion": {
+                "description": "A suggested correction, when SendGrid has one, otherwise null"
+              },
+              "verdict": {
+                "enum": [
+                  "Valid",
+                  "Risky",
+                  "Invalid"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "email",
+              "verdict"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "default"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "api_version": "v3",
+      "base_url": "https://api.sendgrid.com",
+      "gid": "com.sendgrid.api:v3",
+      "name": "default",
+      "tags": [
+        "email"
+      ]
+    }
+  ],
+  "vendor": "SendGrid",
+  "verify": "sendgrid-template-list"
+}

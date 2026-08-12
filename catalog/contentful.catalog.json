@@ -1,0 +1,559 @@
+{
+  "$schema": "https://github.com/codewandler/flux-connectors/catalog/connector-document.schema.json",
+  "auth": [
+    {
+      "description": "Contentful Content Delivery API (CDA) access token, sent as a bearer. Read-only: published content in one space only, and only the Delivery API accepts it",
+      "env": [
+        "CONTENTFUL_DELIVERY_TOKEN"
+      ],
+      "name": "contentful.delivery_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    },
+    {
+      "description": "Contentful Content Management API (CMA) access token, sent as a bearer. Read and write in one space; the Delivery API rejects it. Required only for contentful-entry-create and contentful-entry-publish — every read above uses the Delivery token instead",
+      "env": [
+        "CONTENTFUL_MANAGEMENT_TOKEN"
+      ],
+      "name": "contentful.management_token",
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "unstated"
+    }
+  ],
+  "authority": "com.contentful.api",
+  "config": [
+    {
+      "approval": "none",
+      "binds": "endpoint.space_id",
+      "docs_url": "https://www.contentful.com/developers/docs/references/authentication/",
+      "example": "a1b2c3d4e5f6",
+      "format": "text",
+      "help": "Found on the space's Settings > General settings page in the Contentful web app. Identifies which space the delivery token reads from",
+      "label": "Contentful space ID",
+      "level": "connection",
+      "name": "delivery_space_id",
+      "required": true,
+      "secret": false,
+      "service": "delivery"
+    },
+    {
+      "approval": "none",
+      "binds": "endpoint.environment_id",
+      "docs_url": "https://www.contentful.com/developers/docs/concepts/multiple-environments/",
+      "example": "master",
+      "format": "text",
+      "help": "The environment within the space to read from — commonly `master` unless this space uses staged environments",
+      "label": "Contentful environment",
+      "level": "connection",
+      "name": "delivery_environment_id",
+      "required": true,
+      "secret": false,
+      "service": "delivery"
+    },
+    {
+      "approval": "none",
+      "binds": "credential.contentful.delivery_token",
+      "docs_url": "https://www.contentful.com/developers/docs/references/authentication/",
+      "format": "token",
+      "help": "Create a Content Delivery API access token in the space under Settings > API keys. Read-only: published content in this space only",
+      "label": "Contentful Delivery API token",
+      "level": "connection",
+      "name": "delivery_token",
+      "required": true,
+      "secret": true,
+      "service": "delivery"
+    },
+    {
+      "approval": "none",
+      "binds": "endpoint.space_id",
+      "docs_url": "https://www.contentful.com/developers/docs/references/content-management-api/",
+      "example": "a1b2c3d4e5f6",
+      "format": "text",
+      "help": "Found on the space's Settings > General settings page in the Contentful web app. Identifies which space the management token writes to",
+      "label": "Contentful space ID",
+      "level": "connection",
+      "name": "management_space_id",
+      "required": true,
+      "secret": false,
+      "service": "management"
+    },
+    {
+      "approval": "none",
+      "binds": "endpoint.environment_id",
+      "docs_url": "https://www.contentful.com/developers/docs/concepts/multiple-environments/",
+      "example": "master",
+      "format": "text",
+      "help": "The environment within the space to write to — commonly `master` unless this space uses staged environments",
+      "label": "Contentful environment",
+      "level": "connection",
+      "name": "management_environment_id",
+      "required": true,
+      "secret": false,
+      "service": "management"
+    },
+    {
+      "approval": "none",
+      "binds": "credential.contentful.management_token",
+      "docs_url": "https://www.contentful.com/developers/docs/references/content-management-api/",
+      "format": "token",
+      "help": "Create a Content Management API token (a Personal Access Token) in the space under Settings > API keys > Content management tokens. Grants create and publish access in this space — never reuse the Delivery token here",
+      "label": "Contentful Management API token",
+      "level": "connection",
+      "name": "management_token",
+      "required": true,
+      "secret": true,
+      "service": "management"
+    }
+  ],
+  "connector": "contentful",
+  "default_auth": [
+    [
+      "contentful.delivery_token"
+    ]
+  ],
+  "description": "Contentful headless CMS: read published content from the Content Delivery API, and create and publish entries through the Content Management API — two different hosts and two different tokens for one vendor",
+  "generator": "flux-connectors 0.21.0",
+  "operations": [
+    {
+      "auth": [
+        [
+          "contentful.delivery_token"
+        ]
+      ],
+      "description": "Get one published entry by id, with its fields resolved to one locale",
+      "direction": "read",
+      "endpoint": {
+        "environment_id": [
+          "path"
+        ],
+        "space_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "contentful-entry-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The entry's id, from contentful-entries-list or the Contentful web app",
+          "name": "entry_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/entries/{entry_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "fields": {
+            "description": "The entry's own field values, keyed by this space's content-model field ids — chosen by whoever built the content type, and not knowable at build time. See contentful-entry-create's header comment for why this is described rather than enumerated",
+            "type": "object"
+          },
+          "sys": {
+            "description": "Envelope metadata: at least `id`, `type` (\"Entry\"), `createdAt`, `updatedAt`, `revision`, and links to this entry's content type, space and environment",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "const": "Entry"
+              }
+            },
+            "required": [
+              "id",
+              "type"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "sys",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "delivery"
+    },
+    {
+      "auth": [
+        [
+          "contentful.delivery_token"
+        ]
+      ],
+      "description": "List published entries in this space and environment, most recently updated first. This connector's `verify` — a bounded read that runs unattended: space and environment are already resolved from configuration, and `limit`/`skip` are optional, so no required argument is ever needed",
+      "direction": "read",
+      "endpoint": {
+        "environment_id": [
+          "path"
+        ],
+        "space_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "contentful-entries-list",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "Maximum entries to return. Contentful defaults to 100 and caps at 1000",
+          "name": "limit",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Number of entries to skip, for paging",
+          "name": "skip",
+          "position": "query",
+          "required": false,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "query": [
+          {
+            "name": "limit",
+            "value": {
+              "$param": "limit"
+            }
+          },
+          {
+            "name": "skip",
+            "value": {
+              "$param": "skip"
+            }
+          }
+        ],
+        "url": "{base}/entries"
+      },
+      "response_schema": {
+        "properties": {
+          "items": {
+            "description": "One entry per result, each shaped like contentful-entry-get's response",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "skip": {
+            "type": "integer"
+          },
+          "sys": {
+            "description": "The envelope's own type marker, e.g. `{\"type\": \"Array\"}`",
+            "type": "object"
+          },
+          "total": {
+            "description": "Total matching entries in the space, not just this page",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sys",
+          "total",
+          "items"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "delivery"
+    },
+    {
+      "auth": [
+        [
+          "contentful.delivery_token"
+        ]
+      ],
+      "description": "Get one published asset (an uploaded file, e.g. an image) by id, with its metadata resolved to one locale",
+      "direction": "read",
+      "endpoint": {
+        "environment_id": [
+          "path"
+        ],
+        "space_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "contentful-asset-get",
+      "idempotency": "idempotent",
+      "params": [
+        {
+          "description": "The asset's id, from an entry's own field links or the Contentful web app",
+          "name": "asset_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{base}/assets/{asset_id}"
+      },
+      "response_schema": {
+        "properties": {
+          "fields": {
+            "description": "At least `title` and `file`; `file` carries `url` (schemeless, prefix with `https:`), `fileName`, `contentType`, and a vendor `details` object (`size`, plus `image: {width, height}` for image assets). `description` is present when the asset has one",
+            "type": "object"
+          },
+          "sys": {
+            "description": "Envelope metadata: at least `id`, `type` (\"Asset\"), `createdAt`, `updatedAt`, `revision`",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "const": "Asset"
+              }
+            },
+            "required": [
+              "id",
+              "type"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "sys",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "risk": "low",
+      "semantic_effects": [],
+      "service": "delivery"
+    },
+    {
+      "auth": [
+        [
+          "contentful.management_token"
+        ]
+      ],
+      "description": "Create a new entry from a content type's field values. Contentful assigns the entry's id. The entry is created as a draft — it is not visible through the Delivery API until contentful-entry-publish publishes it",
+      "direction": "write",
+      "endpoint": {
+        "environment_id": [
+          "path"
+        ],
+        "space_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "contentful-entry-create",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The id of the content type this entry is an instance of. Required by Contentful on every create; there is no default",
+          "name": "content_type_id",
+          "position": "header",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "wire": "X-Contentful-Content-Type"
+        },
+        {
+          "name": "body",
+          "position": "body",
+          "required": true,
+          "schema": {
+            "description": "The entry's field values: `{\"fields\": {<field id>: {<locale>: <value>}}}`. Both the field ids and the locale keys (e.g. `en-US`) are this space's own content model and are not knowable at build time — see the header comment for why this is one opaque schema rather than named fields",
+            "type": "object"
+          }
+        }
+      ],
+      "request": {
+        "body": {
+          "encoding": "json",
+          "template": {
+            "$param": "body"
+          }
+        },
+        "headers": {
+          "X-Contentful-Content-Type": {
+            "$param": "content_type_id"
+          },
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "{base}/entries"
+      },
+      "response_schema": {
+        "properties": {
+          "fields": {
+            "description": "Echoes the field values just written",
+            "type": "object"
+          },
+          "sys": {
+            "description": "At least `id` (the new entry's id, for contentful-entry-publish), `type` (\"Entry\"), `version` (the optimistic-concurrency stamp contentful-entry-publish's `X-Contentful-Version` header needs), `createdAt`, `updatedAt`",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "const": "Entry"
+              },
+              "version": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "version"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "sys",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "risk": "medium",
+      "semantic_effects": [],
+      "service": "management"
+    },
+    {
+      "auth": [
+        [
+          "contentful.management_token"
+        ]
+      ],
+      "description": "Publish a draft entry, making it visible through the Delivery API. Sends no body",
+      "direction": "write",
+      "endpoint": {
+        "environment_id": [
+          "path"
+        ],
+        "space_id": [
+          "path"
+        ]
+      },
+      "expose": true,
+      "id": "contentful-entry-publish",
+      "idempotency": "non_idempotent",
+      "params": [
+        {
+          "description": "The entry's id, from contentful-entry-create or a prior read",
+          "name": "entry_id",
+          "position": "path",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        {
+          "description": "The entry's current `sys.version` (from contentful-entry-create or a subsequent read). Contentful rejects the request with a version conflict if this is stale, which is the optimistic-concurrency check that keeps a publish from clobbering someone else's more recent edit",
+          "name": "version",
+          "position": "header",
+          "required": true,
+          "schema": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "wire": "X-Contentful-Version"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Contentful-Version": {
+            "$param": "version"
+          }
+        },
+        "method": "PUT",
+        "url": "{base}/entries/{entry_id}/published"
+      },
+      "response_schema": {
+        "properties": {
+          "fields": {
+            "description": "The published field values",
+            "type": "object"
+          },
+          "sys": {
+            "description": "At least `id`, `type` (\"Entry\"), `version` (incremented by this call), `publishedVersion`, `publishedAt`, `publishedCounter`",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "publishedVersion": {
+                "type": "integer"
+              },
+              "type": {
+                "const": "Entry"
+              },
+              "version": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "type"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "sys",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "risk": "high",
+      "semantic_effects": [],
+      "service": "management"
+    }
+  ],
+  "runtime": "http",
+  "schema_version": 1,
+  "services": [
+    {
+      "base_url": "https://cdn.contentful.com/spaces/{space_id}/environments/{environment_id}",
+      "description": "Content Delivery API (CDA): read-only access to this space's published content. Authenticates with the delivery token; the management token cannot reach this surface",
+      "name": "delivery",
+      "tags": [
+        "cms"
+      ]
+    },
+    {
+      "base_url": "https://api.contentful.com/spaces/{space_id}/environments/{environment_id}",
+      "description": "Content Management API (CMA): create and publish entries. Authenticates with the management token; the delivery token cannot reach this surface",
+      "name": "management",
+      "tags": [
+        "cms"
+      ]
+    }
+  ],
+  "vendor": "Contentful",
+  "verify": "contentful-entries-list"
+}
