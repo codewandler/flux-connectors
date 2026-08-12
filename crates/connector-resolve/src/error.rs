@@ -2,6 +2,11 @@
 //!
 //! Every variant refuses; none repairs. They are the subset of `connector_pack::Error` that the
 //! **plan derivation** raises, carried here because this crate is where the derivation now lives.
+//! C-557 widened that derivation to the two **producers** — the endpoint resolver and the credential
+//! assembler — so the config refusals (`MissingConfig`, `UnapprovedConfig`, `UnsafeOrigin`) and the
+//! credential refusals (`MissingCredential`, `CredentialStore`, `NoCredentialAddress`,
+//! `CredentialAddress`, `UndeclaredCredential`, `MissingCredentialConfig`, `EmptyMechanism`) join
+//! the ones the template evaluator already raised, each still twinned with `connector_pack::Error`.
 //!
 //! # Two spellings, held together by a test rather than by care
 //!
@@ -114,5 +119,154 @@ pub enum Error {
         operation: String,
         /// The signing credential.
         credential: String,
+    },
+
+    // -- the endpoint resolver's refusals (C-557) ------------------------------------------------
+    /// **A connection setting the tenant has not supplied**, so the request cannot be composed.
+    #[error(
+        "`{operation}` needs `{field}` of service `{service}` of connector `{provider}` for tenant \
+         `{tenant}`, and the bound configuration supplies none, so no URL composes; the request \
+         was not sent"
+    )]
+    MissingConfig {
+        /// The operation id.
+        operation: String,
+        /// The connector whose configuration is incomplete.
+        provider: String,
+        /// The connector's service the value was looked up under.
+        service: String,
+        /// The tenant the value was looked up for.
+        tenant: String,
+        /// The missing field, as `binds` spells it.
+        field: String,
+    },
+
+    /// A connection-level value whose declaration requires deployment/operator approval has not been
+    /// approved. The value itself is intentionally absent from this diagnostic.
+    #[error(
+        "`{operation}` cannot activate configuration field `{field}` of service `{service}` of \
+         connector `{provider}` until deployment/operator policy approves and pins it; the request \
+         was not sent"
+    )]
+    UnapprovedConfig {
+        /// The operation id.
+        operation: String,
+        /// The connector the field belongs to.
+        provider: String,
+        /// The service the field belongs to.
+        service: String,
+        /// The configuration field, as `binds` spells it.
+        field: String,
+    },
+
+    /// A configured origin did not satisfy the declared HTTPS-origin grammar. The value is never
+    /// quoted into the refusal, logs or evidence.
+    #[error(
+        "`{operation}` cannot activate origin field `{field}` of service `{service}` of connector \
+         `{provider}`: {reason}; the request was not sent"
+    )]
+    UnsafeOrigin {
+        /// The operation id.
+        operation: String,
+        /// The connector the field belongs to.
+        provider: String,
+        /// The service the field belongs to.
+        service: String,
+        /// The origin field, as its declaration names it.
+        field: String,
+        /// Why the value is not a canonical HTTPS origin.
+        reason: String,
+    },
+
+    // -- the credential assembler's refusals (C-557) ---------------------------------------------
+    /// **No credential is stored where the operation's credential lives.** The request is not sent.
+    #[error(
+        "`{operation}` needs a credential and none is stored at `{path}` — the request was not \
+         sent ({alternatives} address(es) tried)"
+    )]
+    MissingCredential {
+        /// The operation id.
+        operation: String,
+        /// The path the store looked at, as the store's own layout renders it.
+        path: String,
+        /// How many alternative mechanisms were tried before giving up.
+        alternatives: usize,
+    },
+
+    /// The secret store answered, and not with a value.
+    #[error("`{operation}` could not resolve `{credential}`: {source}")]
+    CredentialStore {
+        /// The operation id.
+        operation: String,
+        /// The credential that could not be resolved.
+        credential: String,
+        /// What the store said.
+        #[source]
+        source: connector_secrets::StoreError,
+    },
+
+    /// The connector declares no `authority`, so its credential has no address.
+    #[error(
+        "`{operation}` needs `{credential}`, but connector `{provider}` declares no `authority`, so \
+         no credential address renders for it (C-37); the request was not sent"
+    )]
+    NoCredentialAddress {
+        /// The operation id.
+        operation: String,
+        /// The connector that declares no authority.
+        provider: String,
+        /// The credential that therefore cannot be addressed.
+        credential: String,
+    },
+
+    /// The address components do not compose into a valid `CredentialRef`.
+    #[error("`{operation}` cannot address `{credential}`: {reason}")]
+    CredentialAddress {
+        /// The operation id.
+        operation: String,
+        /// The credential in question.
+        credential: String,
+        /// `CredentialRef::new`'s own explanation.
+        reason: String,
+    },
+
+    /// An operation requiring a credential its connector does not declare.
+    #[error(
+        "`{operation}` requires `{credential}`, which connector `{provider}` does not declare; the \
+         catalogue's operations and its credentials disagree"
+    )]
+    UndeclaredCredential {
+        /// The operation id.
+        operation: String,
+        /// The credential named by the operation.
+        credential: String,
+        /// The connector that does not declare it.
+        provider: String,
+    },
+
+    /// A Basic credential whose **non-secret** user half is not configured.
+    #[error(
+        "`{operation}` needs the non-secret user half of `{credential}` for tenant `{tenant}`, and \
+         the bound configuration supplies none (elsewhere this value is called `{env}`); the \
+         request was not sent"
+    )]
+    MissingCredentialConfig {
+        /// The operation id.
+        operation: String,
+        /// The credential whose user half is missing.
+        credential: String,
+        /// The tenant it was looked up for.
+        tenant: String,
+        /// What the same value is called in the vendor's documentation and in flux's `AuthMethod`.
+        env: String,
+    },
+
+    /// A mechanism naming no credentials at all.
+    #[error(
+        "`{operation}` offers a mechanism that names no credentials, so it authenticates nothing"
+    )]
+    EmptyMechanism {
+        /// The operation id.
+        operation: String,
     },
 }

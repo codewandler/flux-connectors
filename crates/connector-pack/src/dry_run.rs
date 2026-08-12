@@ -30,7 +30,7 @@
 //!
 //! `~credential.<name>~` — the credential's own flat-namespace name, as the connector declares it,
 //! wrapped in a marker no vendor value carries. Every character is in RFC 3986's *unreserved* set,
-//! which is not decoration: [`crate::auth::placed_form`]'s percent-encoder is the identity over it,
+//! which is not decoration: [`connector_resolve::auth::placed_form`]'s percent-encoder is the identity over it,
 //! so a reference reads the same in a header and on a URL. That is what lets the dry run place
 //! credentials through the **real** [`crate::auth::place`] — the same header names, the same
 //! prefixes, the same `?`/`&` separator logic — instead of a second copy of that code that would
@@ -352,15 +352,16 @@ mod tests {
     ///
     /// A query placement percent-encodes, and the reason the dry run can go through the real
     /// [`auth::place`] rather than a copy of it is that the encoder is the identity over this
-    /// alphabet. Asserted against [`auth::placed_form`] itself — the single answer to "does this
-    /// placement transform the value" — so a change to the encoder fails here rather than quietly
-    /// producing two spellings of one reference.
+    /// alphabet. Asserted against [`connector_resolve::auth::placed_form`] itself — the single answer
+    /// to "does this placement transform the value" — so a change to the encoder fails here rather
+    /// than quietly producing two spellings of one reference.
     #[test]
     fn a_reference_is_unchanged_by_the_placement_encoder() {
         let reference = reference("acme.token");
         assert_eq!(reference, "~credential.acme.token~");
         assert_eq!(
-            auth::placed_form(Placement::Query { name: "api_key" }, &reference).as_deref(),
+            connector_resolve::auth::placed_form(Placement::Query { name: "api_key" }, &reference)
+                .as_deref(),
             Some(reference.as_str()),
             "a query placement escapes the reference, so it reads differently on a URL"
         );

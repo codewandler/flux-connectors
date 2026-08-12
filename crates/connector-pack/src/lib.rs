@@ -963,6 +963,102 @@ impl From<connector_resolve::Error> for Error {
                 operation,
                 credential,
             },
+            // The producers' refusals (C-557), each onto the identically-named and identically-worded
+            // one above. `Box<str>`-fielded variants take the core's `String` through `.into()`.
+            Refused::MissingConfig {
+                operation,
+                provider,
+                service,
+                tenant,
+                field,
+            } => Error::MissingConfig {
+                operation,
+                provider,
+                service,
+                tenant,
+                field,
+            },
+            Refused::UnapprovedConfig {
+                operation,
+                provider,
+                service,
+                field,
+            } => Error::UnapprovedConfig {
+                operation: operation.into(),
+                provider: provider.into(),
+                service: service.into(),
+                field: field.into(),
+            },
+            Refused::UnsafeOrigin {
+                operation,
+                provider,
+                service,
+                field,
+                reason,
+            } => Error::UnsafeOrigin {
+                operation: operation.into(),
+                provider: provider.into(),
+                service: service.into(),
+                field: field.into(),
+                reason: reason.into(),
+            },
+            Refused::MissingCredential {
+                operation,
+                path,
+                alternatives,
+            } => Error::MissingCredential {
+                operation,
+                path,
+                alternatives,
+            },
+            Refused::CredentialStore {
+                operation,
+                credential,
+                source,
+            } => Error::CredentialStore {
+                operation,
+                credential,
+                source,
+            },
+            Refused::NoCredentialAddress {
+                operation,
+                provider,
+                credential,
+            } => Error::NoCredentialAddress {
+                operation,
+                provider,
+                credential,
+            },
+            Refused::CredentialAddress {
+                operation,
+                credential,
+                reason,
+            } => Error::CredentialAddress {
+                operation,
+                credential,
+                reason,
+            },
+            Refused::UndeclaredCredential {
+                operation,
+                credential,
+                provider,
+            } => Error::UndeclaredCredential {
+                operation,
+                credential,
+                provider,
+            },
+            Refused::MissingCredentialConfig {
+                operation,
+                credential,
+                tenant,
+                env,
+            } => Error::MissingCredentialConfig {
+                operation,
+                credential,
+                tenant,
+                env,
+            },
+            Refused::EmptyMechanism { operation } => Error::EmptyMechanism { operation },
         }
     }
 }
@@ -1420,6 +1516,64 @@ pub(crate) mod tests {
             Refused::InboundCredential {
                 operation: operation(),
                 credential: "acme.signing_secret".to_owned(),
+            },
+            // The producers' refusals (C-557).
+            Refused::MissingConfig {
+                operation: operation(),
+                provider: "acme".to_owned(),
+                service: "default".to_owned(),
+                tenant: "t-1".to_owned(),
+                field: "endpoint.subdomain".to_owned(),
+            },
+            Refused::UnapprovedConfig {
+                operation: operation(),
+                provider: "acme".to_owned(),
+                service: "default".to_owned(),
+                field: "origin".to_owned(),
+            },
+            Refused::UnsafeOrigin {
+                operation: operation(),
+                provider: "acme".to_owned(),
+                service: "default".to_owned(),
+                field: "origin".to_owned(),
+                reason: "it is not https".to_owned(),
+            },
+            Refused::MissingCredential {
+                operation: operation(),
+                path: "tenants/t-1/com.acme.api/token".to_owned(),
+                alternatives: 2,
+            },
+            Refused::CredentialStore {
+                operation: operation(),
+                credential: "acme.token".to_owned(),
+                source: connector_secrets::StoreError::Unreachable {
+                    path: "tenants/t-1/com.acme.api/token".to_owned(),
+                    reason: "connection refused".to_owned(),
+                },
+            },
+            Refused::NoCredentialAddress {
+                operation: operation(),
+                provider: "acme".to_owned(),
+                credential: "acme.token".to_owned(),
+            },
+            Refused::CredentialAddress {
+                operation: operation(),
+                credential: "acme.token".to_owned(),
+                reason: "authority: not a reverse-DNS name".to_owned(),
+            },
+            Refused::UndeclaredCredential {
+                operation: operation(),
+                credential: "acme.token".to_owned(),
+                provider: "acme".to_owned(),
+            },
+            Refused::MissingCredentialConfig {
+                operation: operation(),
+                credential: "acme.token".to_owned(),
+                tenant: "t-1".to_owned(),
+                env: "ACME_USER".to_owned(),
+            },
+            Refused::EmptyMechanism {
+                operation: operation(),
             },
         ];
 

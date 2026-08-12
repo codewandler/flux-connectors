@@ -359,9 +359,11 @@ dependencies = [
  "codewandler-connector-address",
  "codewandler-connector-catalog",
  "codewandler-connector-catalog-reader",
+ "codewandler-connector-secrets",
  "serde",
  "serde_json",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

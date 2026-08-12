@@ -2,7 +2,7 @@
 id: C-557
 title: "Expose the engine-free plan producers so a host derives a RequestPlan without flux"
 pillar: Connector
-status: ready
+status: in-progress
 priority: 0
 design: docs/designs/catalog-artifact.md
 epic: catalog-artifact
@@ -28,34 +28,33 @@ taking a `&ToolContext`). This story closes that, keeping the enforcement topolo
 
 ## Acceptance
 
-- [ ] **An engine-free endpoint resolver**: given a document `Operation` and a bound config port
-      (the tenant's/operator's declared values — a trait the consumer implements, NOT a flux type),
-      it returns the resolved `BTreeMap<String, String>` `resolve` expects, applying the SAME logic
-      the live path applies today — declared defaults, `Approval::Operator`, `HttpsOrigin`
-      normalisation, slot checks, declared-authority validation. Same code, relocated/exposed; not a
-      second implementation.
-- [ ] **An engine-free credential assembler**: given a document `Operation` and a bound secret port
-      (resolve a `CredentialRef` address to a value — a trait, NOT a flux `ToolContext`), it returns
-      `Vec<Assembled>` **and the redaction set as data** (the `SensitiveText` list `RequestPlan`
-      already models), selecting the mechanism (source × acquisition × placement) and applying the
-      prefix/base64/placement enforcement through `Assembled`/`place`/`placed_form` exactly as
-      `Credentials::resolve` does today. The consumer registers the returned redactions with its own
-      redactor; the library never touches a flux redactor on this path.
-- [ ] Both producers live in an **engine-free** crate (`connector-resolve` or a new sibling) that
-      links no `codewandler-flux-*`; a dependency-direction test pins it (the `dependency_fence.rs`
-      pattern). Published metadata complete; it joins the derived publish closure.
-- [ ] **The differential gate extends to the engine-free producers**: for every catalogued
-      operation, the `RequestPlan` derived through the new engine-free producers is byte-identical to
-      the one the flux `ToolContext` path (`build_request_plan`) produces — request, subjects,
-      redaction set — failing-first against a seeded divergence. This is the evidence the enforcement
-      was relocated, not reimplemented.
-- [ ] `connector-pack`'s existing `ToolContext` producers become thin wrappers over the engine-free
-      ones (or delegate to them), so connector-pack's behaviour is unchanged and its tests pass
-      unmodified; nothing composes a request twice.
-- [ ] `connector-secrets`' `SecretStore` port is a candidate for the secret port; if it is used,
-      confirm the `connector-cli` offline fence (`no_network.rs`) still holds — the resolver crate
-      must not become reachable from the compiler. If a new port trait is cleaner, define it in the
-      engine-free crate and adapt.
+- [x] **An engine-free endpoint resolver**: `connector_resolve::resolve_endpoints`/`resolve_endpoint`
+      over the new `ConfigPort` trait return the resolved `BTreeMap<String, String>` `resolve` expects.
+      The declared-default, `Approval::Operator`, `HttpsOrigin` normalisation and declared-default
+      detection moved from `connector-pack`'s `Configuration::snapshot`/`Operation::endpoint` into
+      `crates/connector-resolve/src/endpoints.rs`; `connector-pack`'s `endpoint()` delegates. Slot
+      checks and declared-authority validation stay in `resolve`/`build_request` where they always ran.
+- [x] **An engine-free credential assembler**: `connector_resolve::assemble_credentials` over
+      `connector_secrets::SecretStore` (the secret port) + the `ConfigPort` (Basic user half) returns
+      `Assembly { credentials: Vec<Assembled>, redactions: Vec<Redaction> }`. The mechanism selection,
+      acquisition axis and C-159 redaction-form computation moved from `Credentials::resolve_mechanism`
+      into `crates/connector-resolve/src/credentials.rs`; it touches no redactor. `connector-pack`'s
+      `Credentials::resolve` delegates and registers the returned redactions with the flux redactor.
+- [x] Both producers live in `connector-resolve`, which still links no `codewandler-flux-*`
+      (`engine_free_core::the_plan_deriving_core_links_no_engine_crate` green). It is already in the
+      derived publish closure; `publish_closure.rs` recomputed the order (secrets now before resolve)
+      and passes.
+- [x] **The differential gate extends to the engine-free producers**: `catalogue_differential.rs`
+      gained a fourth arm and `engine_free_compared == byte_compared`; the plan the bare
+      `ConfigPort`/`SecretStore` producers derive is byte-identical (request, subjects, redaction set)
+      to the flux-derived one for every operation. Control `a_seeded_divergence_in_the_engine_free_producers_is_caught`.
+- [x] `connector-pack`'s producers are thin wrappers now: all 124 integration + 88 lib tests pass
+      unmodified except the mapped-refusals pin (extended for the relocated variants) and the
+      differential gate (the new arm). Nothing composes a request twice — the one derivation is
+      `resolve`, which both `connector-pack` and a bare consumer feed.
+- [x] Used `connector-secrets`' `SecretStore` as the secret port. Offline fence holds:
+      `dependency_fence::connector_cli_does_not_depend_on_connector_secrets` and `no_network::*` green —
+      `connector-cli` reaches neither `connector-resolve` nor, through it, `connector-secrets`.
 
 ## Progress
 
@@ -63,6 +62,19 @@ taking a `&ToolContext`). This story closes that, keeping the enforcement topolo
   0.25 must expose the engine-free plan producers (endpoint resolver + credential assembler) taking
   bound ports rather than a flux `ToolContext`. X-156 half 1 (the exchange 0.24 adoption) is done on
   its branch and resumes against the release this story ships.
+- 2026-08-13: Implemented on `impl/C-557`. Producers host: `connector-resolve` (extended). Two ports:
+  the new `connector_resolve::ConfigPort` trait (config) and `connector_secrets::SecretStore`
+  (secret). New public items: `ConfigField`, `ConfigValue`, `ConfigPort`, `resolve_endpoint`,
+  `resolve_endpoints`, `assemble_credentials`, `Assembly`, `Redaction`, plus ten relocated
+  `connector_resolve::Error` variants (`MissingConfig`, `UnapprovedConfig`, `UnsafeOrigin`,
+  `MissingCredential`, `CredentialStore`, `NoCredentialAddress`, `CredentialAddress`,
+  `UndeclaredCredential`, `MissingCredentialConfig`, `EmptyMechanism`) — none carries a credential
+  value, and the credential-derived redaction forms are guarded behind `SensitiveText`. New edge
+  `connector-resolve -> connector-secrets`; the derived publish order becomes
+  `connector-address, catalog-reader, connector-catalog, connector-secrets, connector-resolve,
+  connector-pack` (AGENTS.md's publishing-contract prose still lists the old order — coordinator-owned,
+  left untouched). Base proof: the extended gate did not compile at `4d371101` because the producers
+  were absent; the whole catalogue then agrees byte-for-byte through them.
 
 ## Notes
 
