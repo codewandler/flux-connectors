@@ -27,6 +27,10 @@ members = [
     "crates/connector-flux",
     "crates/connector-cli",
     "crates/catalog",
+    # The catalog-pack reader (C-537): the embedded pack and the dependency-free code that serves
+    # it. `crates/catalog` depends on it — the shim over the embedded pack — so it is in the
+    # publish closure by derivation, not by listing.
+    "crates/catalog-reader",
     "crates/connector-pack",
     "crates/connector-secrets",
     # The reference host (C-200). `publish = false`, and a **leaf**: nothing in this workspace may
@@ -63,6 +67,11 @@ connector-flux = { version = "0.21.0", path = "crates/connector-flux" }
 # the extern to the *lib* name; with one it binds to the *key*. Keying it `connector-catalog` here
 # therefore renames the extern to `connector_catalog` and breaks every `use catalog::` in the tree.
 catalog = { package = "codewandler-connector-catalog", version = "0.21.0", path = "crates/catalog" }
+# The catalog-pack reader (C-537): the pack `flux-connectors build` compiles from the canonical
+# documents, embedded behind a reader with zero non-optional dependencies. `catalog` re-exports it
+# as `catalog::reader` — the shim of Decision 0022 — and the resolver work (C-538) consumes it
+# directly. Keyed `catalog-reader`, so dependents bind the extern `catalog_reader`.
+catalog-reader = { package = "codewandler-connector-catalog-reader", version = "0.21.0", path = "crates/catalog-reader" }
 # The Tool pack (C-114): the flux interop layer. It is the one crate here that links flux's
 # *runtime* — see the note under `flux-runtime` below for why that does not contradict
 # "this repo compiles; flux executes".

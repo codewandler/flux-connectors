@@ -3,8 +3,9 @@
 //! This is flux-connectors made consumable with `cargo add` instead of by copying artifacts into
 //! `~/.flux/flows`. Adding the crate *is* getting the catalog: every operation's Flux source and
 //! the metadata a caller needs to decide whether to run it are `&'static` data baked into the
-//! binary by `include_str!` and a generated table. There is no filesystem lookup, no parsing, no
-//! initialization, and no dependency.
+//! binary by `include_str!` and a generated table. There is no filesystem lookup, no parsing and
+//! no initialization; the one dependency is [`reader`] — the embedded catalog pack, itself
+//! dependency-free (C-537).
 //!
 //! It stays inside the charter (`AGENTS.md`): a library that hands out **text**, not a runtime.
 //! Nothing here executes an operation or touches the network — flux does that, from the module it
@@ -66,13 +67,43 @@
 //! crate moves. There is deliberately no `From<&str>` for either: a bare string cannot say whether
 //! it is a symbol or an address, and guessing is exactly the ambiguity two identifiers exist to
 //! avoid.
+//!
+//! # The embedded pack, and what this crate is becoming (C-537)
+//!
+//! Decision 0022 (C-535) makes the compile destination a **catalog artifact**: one canonical JSON
+//! document per provider (C-536), compiled into one versioned, digest-carrying pack. This crate is
+//! the shim over that pack — it embeds it through [`reader`] and re-exports the reader whole, so
+//! every consumer of the catalogue already holds the document form of every operation:
+//!
+//! ```
+//! let show = catalog::reader::operation("zendesk-ticket-show").unwrap();
+//! assert_eq!(show.provider(), "zendesk");
+//! assert!(show.record().contains("\"id\": \"zendesk-ticket-show\""));
+//! ```
+//!
+//! The `&'static` tables beneath the API above remain generated Rust for now, because this API
+//! promises what the documents deliberately no longer carry — [`Operation::flux`], the emitted
+//! Flux text the documents replaced with a request template — and `connector-pack` still parses
+//! it. They reduce to the pack when C-540 retires the emitter; the deferral and its reasons are
+//! recorded in `docs/designs/catalog-artifact.md` §2. Nothing in this crate's public API moved to
+//! make room for the pack: the re-export is additive, which is what "no breaking change" means
+//! here, and `tests/consumer_api.rs` compiles the whole promised surface to hold that line.
+
+/// The catalog pack and its dependency-free reader, re-exported whole (C-537).
+///
+/// `catalog::reader::operation("zendesk-ticket-show")` serves the operation's canonical JSON
+/// record; `catalog::reader::Pack::load(path)` serves a newer pack than this crate was built
+/// with, refusing a wrong schema version or digest before serving any record. See
+/// `codewandler-connector-catalog-reader` for the format.
+pub use catalog_reader as reader;
 
 mod generated;
 
 /// How much damage an operation can do, in flux's own vocabulary.
 ///
-/// A mirror of `connector_spec::Risk`, not a re-export: this crate has no dependencies, which is
-/// what makes it cheap to add. The mapping is exhaustive at the point of generation
+/// A mirror of `connector_spec::Risk`, not a re-export: this crate resolves no machinery — its
+/// one dependency is the pack data behind [`reader`] — which is what makes it cheap to add. The
+/// mapping is exhaustive at the point of generation
 /// (`connector-cli`'s `catalog` module matches on every variant), so a variant added upstream is a
 /// compile error there rather than a silent omission here, and
 /// `tests/embedded_operations.rs::metadata_agrees_with_the_embedded_flux` pins every value against

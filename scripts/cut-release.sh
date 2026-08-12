@@ -103,6 +103,11 @@ done
 GENERATED_PATHS=(
   connectors
   connectors.lock
+  # The canonical per-provider documents (C-536) and the pack compiled from them (C-537): both
+  # carry the generator string, so a cut that regenerated them without committing them would leave
+  # the release commit disagreeing with its own working tree.
+  catalog
+  crates/catalog-reader/catalog.pack
   crates/catalog/ops
   crates/catalog/src/generated.rs
   crates/catalog/src/generated
@@ -120,12 +125,14 @@ done
 PUBLIC_PACKAGES=(
   codewandler-connector-address
   codewandler-connector-catalog
+  codewandler-connector-catalog-reader
   codewandler-connector-secrets
   codewandler-connector-pack
 )
 PUBLIC_README_PATHS=(
   crates/connector-address/README.md
   crates/catalog/README.md
+  crates/catalog-reader/README.md
   crates/connector-secrets/README.md
   crates/connector-pack/README.md
 )
@@ -384,7 +391,7 @@ replace_exact_line \
   crates/connector-secrets/README.md \
   "# codewandler-connector-secrets = { version = \"$OLD_PUBLIC_REQUIREMENT\", features = [\"vault\"] }" \
   "# codewandler-connector-secrets = { version = \"$NEW_PUBLIC_REQUIREMENT\", features = [\"vault\"] }"
-echo "   bumped 5 packaged README dependency example(s) $OLD_PUBLIC_REQUIREMENT -> $NEW_PUBLIC_REQUIREMENT"
+echo "   bumped $(( ${#PUBLIC_PACKAGES[@]} + 1 )) packaged README dependency example(s) $OLD_PUBLIC_REQUIREMENT -> $NEW_PUBLIC_REQUIREMENT"
 
 # 5e) Re-lock, so the workspace members' own entries in Cargo.lock carry $NEW. `--workspace` touches
 #     only those: third-party pins are not re-resolved by a release cut.

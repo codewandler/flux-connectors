@@ -191,6 +191,49 @@ pub fn plan_selected(
     // brings `crates/catalog/src/generated.rs` under it, which is what makes a provider-scoped run's
     // write set disjoint from another provider's and so lets provider stories run in parallel.
     if whole_catalogue {
+        // The catalog pack (C-537): every canonical document, compiled into the one distributable
+        // file `crates/catalog-reader` embeds. Whole-catalogue for the same reason the index is —
+        // a pack written from a scoped run would silently drop every provider the run never
+        // compiled — and compiled from the *planned* document contents rather than the committed
+        // files, so pack and documents are a fixed point together, exactly as the lockfile is
+        // with the artifacts it hashes.
+        //
+        // Before the lockfile below on purpose: the lockfile records the pack's hash, so the pack
+        // has to exist first.
+        let pack_text = {
+            let documents_dir = workspace.documents_dir();
+            let mut documents: Vec<(&str, &str)> = artifacts
+                .iter()
+                .filter_map(|artifact| {
+                    let provider = artifact
+                        .path
+                        .parent()
+                        .filter(|parent| *parent == documents_dir)
+                        .and_then(|_| artifact.path.file_name())
+                        .and_then(std::ffi::OsStr::to_str)
+                        .and_then(|name| {
+                            name.strip_suffix(&format!(".{}", crate::workspace::DOCUMENT_SUFFIX))
+                        })?;
+                    Some((provider, artifact.contents.as_str()))
+                })
+                .collect();
+            documents.sort_by(|a, b| a.0.cmp(b.0));
+            crate::pack::compile(&documents).context("cannot compile the catalog pack")?
+        };
+        lockfile.set_pack(connector_spec::LockPack {
+            path: workspace.artifact_key(&workspace.pack_path()),
+            schema_version: crate::document::SCHEMA_VERSION,
+            sha256: connector_spec::sha256_hex(pack_text.as_bytes()),
+        });
+        artifacts.push(planned(
+            workspace.pack_path(),
+            pack_text,
+            // One file a full run always writes, inside the reader crate; `crates/catalog-reader`
+            // is not an artifact root — it holds the hand-written reader — so the pack cannot be
+            // orphaned, only replaced. See [`Ownership::Singleton`].
+            Ownership::Singleton,
+        )?);
+
         // `connectors.lock` (C-7, written by C-189). One row per provider, so it is whole-catalogue
         // for exactly the reason the index is: written from a `--provider` run it would drop every
         // other provider's row, and `check` would then report the catalogue as clean because it no

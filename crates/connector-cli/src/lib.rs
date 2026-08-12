@@ -46,6 +46,7 @@ pub mod document;
 mod inbound;
 pub mod migration;
 pub mod net;
+pub mod pack;
 pub mod pipeline;
 pub mod png;
 pub mod scaffold;

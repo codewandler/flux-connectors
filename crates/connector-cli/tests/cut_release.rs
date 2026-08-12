@@ -78,6 +78,10 @@ const PUBLIC_READMES: &[(&str, &str)] = &[
     ),
     ("crates/catalog/README.md", "codewandler-connector-catalog"),
     (
+        "crates/catalog-reader/README.md",
+        "codewandler-connector-catalog-reader",
+    ),
+    (
         "crates/connector-secrets/README.md",
         "codewandler-connector-secrets",
     ),
@@ -457,6 +461,10 @@ fn assert_tree_unchanged(before: &Snapshot, after: &Snapshot, context: &str) {
 const GENERATOR_STAMPED: &[&str] = &[
     "connectors/acme.connector.toml",
     "connectors.lock",
+    // The canonical document (C-536) and the pack compiled from it (C-537), which the release
+    // paths must carry or a cut leaves its own regeneration uncommitted.
+    "catalog/acme.catalog.json",
+    "crates/catalog-reader/catalog.pack",
     "crates/catalog/src/generated.rs",
     "crates/catalog/src/generated/acme.rs",
     "web/public/catalog.json",

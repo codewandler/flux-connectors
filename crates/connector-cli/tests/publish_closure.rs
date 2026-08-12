@@ -68,6 +68,11 @@ const MACHINERY: &[&str] = &[
 const NOT_MACHINERY: &[&str] = &[
     "codewandler-connector-address",
     "codewandler-connector-catalog",
+    // The catalog-pack reader (C-537): generated data plus the dependency-free code that serves
+    // it, consumable on its own and published behind `connector-catalog`, which re-exports it. It
+    // is data, not the compiler — the crate that *writes* the pack is `connector-cli`, which stays
+    // in `MACHINERY` above.
+    "codewandler-connector-catalog-reader",
     "codewandler-connector-pack",
     "codewandler-connector-secrets",
     "connectors-api",

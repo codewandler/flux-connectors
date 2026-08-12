@@ -40,6 +40,12 @@ pub const DOCUMENT_SUFFIX: &str = "catalog.json";
 /// The committed JSON Schema the documents validate against, beside them under [`DOCUMENTS_DIR`].
 pub const DOCUMENT_SCHEMA_FILE: &str = "connector-document.schema.json";
 
+/// The dependency-free reader crate, which embeds the compiled catalog pack (C-537).
+pub const READER_DIR: &str = "crates/catalog-reader";
+
+/// The pack's file name inside the reader crate: `catalog.pack`.
+pub const PACK_FILE: &str = "catalog.pack";
+
 /// The `.flux` module extension.
 pub const MODULE_EXT: &str = "flux";
 
@@ -232,6 +238,18 @@ impl Workspace {
     /// once.
     pub fn catalog_index_path(&self) -> PathBuf {
         self.catalog_dir().join("src").join("generated.rs")
+    }
+
+    /// `<root>/crates/catalog-reader/catalog.pack` — the compiled catalog pack (C-537).
+    ///
+    /// Inside the reader crate for the same reason the renderings live inside `crates/catalog`:
+    /// the crate embeds the file with `include_bytes!`, and a path that escapes the package root
+    /// is one `cargo package` would not carry — a pack that resolved here and nowhere else.
+    ///
+    /// **Whole-catalogue**: one file holding every provider's canonical document, so only a full
+    /// run can write it honestly. See [`crate::pipeline::plan_selected`].
+    pub fn pack_path(&self) -> PathBuf {
+        self.root.join(READER_DIR).join(PACK_FILE)
     }
 
     /// `<root>/web/public/catalog.json` — the whole catalogue as one JSON document (C-42).

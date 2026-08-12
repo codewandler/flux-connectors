@@ -1,10 +1,12 @@
 //! **The whole-catalogue artifacts are a function of a full run, and only of a full run** (C-104).
 //!
-//! Five artifacts in this repository describe the catalogue *as a whole* rather than one provider:
+//! Six artifacts in this repository describe the catalogue *as a whole* rather than one provider:
 //! `crates/catalog/src/generated.rs` (the provider module index), `web/public/catalog.json` (the
 //! site's catalogue), `web/public/v1/**` (the published Flux core catalogue), the README's
-//! rendered SVGs, and `connectors.lock` (the drift record — C-189, one row per provider). None can
-//! be written honestly from a `--provider` or `--service` run, because such a
+//! rendered SVGs, `connectors.lock` (the drift record — C-189, one row per provider), and
+//! `crates/catalog-reader/catalog.pack` (the compiled catalog pack — C-537, every canonical
+//! document in one file). None can be written honestly from a `--provider` or `--service` run,
+//! because such a
 //! run compiled a subset — writing one anyway would drop every provider the run did not look at, and
 //! it would do so *successfully*. That is the worst available failure: a green build, a committed
 //! index, and sixteen connectors silently gone.
@@ -149,6 +151,11 @@ fn assert_every_member_was_produced(fixture: &Fixture) {
         "a full build must write {}; a lockfile nothing produces is the defect C-189 closed",
         connector_spec::LOCKFILE_NAME
     );
+    assert!(
+        fixture.exists("crates/catalog-reader/catalog.pack"),
+        "a full build must compile the catalog pack (C-537); without it this test asserts the \
+         scoping property over a member that was never produced"
+    );
 }
 
 /// **The property the whole story rests on.** A `--provider` run touches no whole-catalogue
@@ -158,7 +165,7 @@ fn assert_every_member_was_produced(fixture: &Fixture) {
 /// that follows compiles exactly one of them — and if any global document were a function of *that*
 /// run, it would come back naming one provider and having silently dropped two.
 ///
-/// The comparison is over the **entire tree**, so it covers all four members of the class and any
+/// The comparison is over the **entire tree**, so it covers every member of the class and any
 /// fifth that is ever added. Per-provider artifacts are covered too, and they are equal for a
 /// different reason: the full build already made them current, so the scoped rebuild is a no-op. The
 /// combined statement is the strong one — *a scoped rebuild of an up-to-date tree writes nothing at

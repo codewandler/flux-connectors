@@ -30,8 +30,12 @@ Adding the crate *is* getting the catalogue. Every operation's Flux source and t
 needs to decide whether to run it are `&'static` data baked into the binary by `include_str!` and a
 generated table: no filesystem lookup, no parsing, no initialization.
 
-**It has no dependencies, deliberately.** `cargo add codewandler-connector-catalog` costs you
-exactly one crate.
+**It resolves nothing but catalogue data, deliberately.** Its one dependency is
+[`codewandler-connector-catalog-reader`](https://crates.io/crates/codewandler-connector-catalog-reader)
+— the embedded **catalog pack**, every connector's canonical JSON document in one versioned,
+digest-checked file, itself dependency-free. It is re-exported as `catalog::reader`, so the
+document form of an operation is as close as its Flux form; hosts loading a newer pack from a path
+use `catalog::reader::Pack::load`.
 
 ## What it is not
 

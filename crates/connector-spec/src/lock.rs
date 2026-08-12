@@ -98,6 +98,13 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 pub struct Lockfile {
     /// The format version. See [`LOCKFILE_VERSION`].
     version: u32,
+    /// The compiled catalog pack, when a full build recorded one — see [`LockPack`] (C-537).
+    ///
+    /// Between `version` and the entries so the rendering stays valid TOML: a bare value after a
+    /// table would fail to serialize, and `[pack]` before the `[[provider]]` rows keeps the one
+    /// whole-catalogue record where a reader of the file sees it first.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pack: Option<LockPack>,
     /// One entry per provider, ordered by [`LockEntry::id`].
     #[serde(default, rename = "provider", skip_serializing_if = "Vec::is_empty")]
     entries: Vec<LockEntry>,
@@ -108,8 +115,21 @@ impl Lockfile {
     pub fn new() -> Self {
         Self {
             version: LOCKFILE_VERSION,
+            pack: None,
             entries: Vec::new(),
         }
+    }
+
+    /// Records the compiled catalog pack — see [`LockPack`] (C-537).
+    ///
+    /// Replacement, like [`insert`](Self::insert), so a rebuild records one pack both times.
+    pub fn set_pack(&mut self, pack: LockPack) {
+        self.pack = Some(pack);
+    }
+
+    /// The recorded catalog pack, when a full build wrote one.
+    pub fn pack(&self) -> Option<&LockPack> {
+        self.pack.as_ref()
     }
 
     /// Records an entry, replacing any entry already held for the same provider.
@@ -178,6 +198,37 @@ impl Lockfile {
         lockfile.entries.sort_by(|a, b| a.id.cmp(&b.id));
         Ok(lockfile)
     }
+}
+
+/// The compiled catalog pack, recorded as the lockfile's one **whole-catalogue** artifact (C-537).
+///
+/// A [`LockEntry`] is one provider's row, so the pack — every provider's canonical document,
+/// compiled into the single file the reader crate embeds — cannot live in any of them without
+/// being recorded 55 times or attributed to a provider it does not belong to. It is a section of
+/// its own instead, and deliberately the only one: the *other* whole-catalogue artifacts
+/// (`catalog.json`, the generated index, the README images) remain covered transitively through
+/// each row's `ir_sha256` and directly by `crates/connector-cli/tests/catalog_artifacts.rs`,
+/// exactly as before. The pack is recorded here because it is the one whole-catalogue artifact
+/// that is *distributed* — embedded in a published crate and loadable by a host from a path — so
+/// "which pack does this tree produce" is a question `check` (C-14) must answer from the lockfile
+/// alone.
+///
+/// # Two digests, one file, on purpose
+///
+/// [`sha256`](Self::sha256) hashes the pack file's **complete bytes**, the way every other
+/// artifact hash in this file is taken — so `check` rehashes the committed file with the same
+/// instrument it uses everywhere else. The digest *embedded in* the pack covers only the bytes
+/// after its own digest line, because a digest cannot cover itself. Equal content implies both
+/// match their regions; they are different values and neither substitutes for the other.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LockPack {
+    /// The pack, repository-relative and `/`-separated: `crates/catalog-reader/catalog.pack`.
+    pub path: String,
+    /// The document schema version the pack embeds — its payload's `schema_version`.
+    pub schema_version: u32,
+    /// Lowercase-hex SHA-256 of the pack file's bytes.
+    pub sha256: String,
 }
 
 /// One provider's row: everything `check` needs to prove the committed artifacts still follow from

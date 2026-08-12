@@ -135,7 +135,9 @@ pub use ir::{
     RateLimit, Risk, Role, Runtime, SemanticEffect, Service, Tag, CREDENTIAL_HANDLE_FIELD,
     FREE_FORM_BODY, MIN_REPEATABILITY_CONDITION,
 };
-pub use lock::{sha256_hex, LockEntry, LockSpec, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION};
+pub use lock::{
+    sha256_hex, LockEntry, LockPack, LockSpec, Lockfile, LOCKFILE_NAME, LOCKFILE_VERSION,
+};
 pub use openapi::{Diagnostic, Ingested, Server, ServerVariable, SpecOperation};
 pub use provider::{
     IngestedDocument, LoadedProvider, Naming, NamingRule, OperationPatch, OperationSelector,
