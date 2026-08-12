@@ -72,7 +72,7 @@ fn temporary_path(path: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::panic;
     use std::sync::{Arc, Mutex};
 
@@ -174,7 +174,12 @@ mod tests {
     ///
     /// It stands in for a `PathBuf` — same `Deref` and `AsRef<Path>` impls — so a test body reads
     /// exactly as it did before the guard existed.
-    struct Scratch {
+    ///
+    /// Reachable from the crate's other unit tests (`pipeline`'s, C-544) rather than copied into
+    /// them: where a fixture lives is one rule with two spellings already — this one and
+    /// `tests/common/mod.rs`'s, which `tests/main/fixture_hygiene.rs` holds to the same properties —
+    /// and a third would be the drift both of those docstrings warn about.
+    pub(crate) struct Scratch {
         path: PathBuf,
     }
 
@@ -210,7 +215,7 @@ mod tests {
     ///    under test. The build directory is per-worktree and already git-ignored.
     /// 2. **Removed on every path, including a panic** — hence a `Drop` impl rather than a call at
     ///    the end of each test, which only runs when the test passes.
-    fn scratch(label: &str) -> Scratch {
+    pub(crate) fn scratch(label: &str) -> Scratch {
         // The test binary is `<build>/<profile>/deps/<binary>`, so its own path names the build
         // directory. Deriving it this way follows `CARGO_TARGET_DIR` instead of assuming a layout.
         let root = std::env::current_exe()

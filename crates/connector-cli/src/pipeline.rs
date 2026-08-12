@@ -13,6 +13,8 @@ use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
 
 use anyhow::{Context, Result};
 use connector_spec::{LockEntry, Lockfile};
@@ -152,6 +154,22 @@ pub fn plan_selected(
     only: Option<&str>,
     service: Option<&str>,
 ) -> Result<Plan> {
+    plan_at_width(workspace, only, service, None)
+}
+
+/// [`plan_selected`], compiling `workers` providers at a time; `None` picks one per available core.
+///
+/// The width is a parameter because it is what the determinism contract is stated *over*: a width
+/// of 1 spawns no thread and is exactly the sequential build this pipeline was until C-544, so
+/// `tests::the_plan_is_identical_at_every_compile_width` can compare every concurrent plan against
+/// it on the same inputs. Nothing outside this module chooses a width — [`plan_selected`] is the
+/// whole public surface, and it passes `None`.
+fn plan_at_width(
+    workspace: &Workspace,
+    only: Option<&str>,
+    service: Option<&str>,
+    workers: Option<usize>,
+) -> Result<Plan> {
     let providers = discovery::discover(workspace, only)?;
 
     // A scoped run compiled a subset, so it can produce no whole-catalogue artifact — the lockfile
@@ -160,9 +178,6 @@ pub fn plan_selected(
     let whole_catalogue = only.is_none() && service.is_none();
 
     let mut artifacts = Vec::new();
-    let mut entries = Vec::new();
-    let mut diagnostics = Vec::new();
-    let mut lockfile = Lockfile::new();
 
     // The schema the canonical documents validate against (C-536). Planned on every run, scoped
     // ones included: it is a constant of the generator — no provider data, so a scoped run can
@@ -174,15 +189,20 @@ pub fn plan_selected(
         Ownership::Family(workspace.documents_dir()),
     )?);
 
-    for provider in &providers {
-        let compiled = compile(workspace, provider, service, whole_catalogue)?;
-        if let Some(entry) = compiled.lock {
-            lockfile.insert(entry);
-        }
-        artifacts.extend(compiled.artifacts);
-        entries.push(compiled.site);
-        diagnostics.extend(compiled.diagnostics);
-    }
+    let workers = workers.unwrap_or_else(|| worker_count(providers.len()));
+    let Merged {
+        artifacts: per_provider,
+        entries,
+        diagnostics,
+        mut lockfile,
+    } = merge(compile_all(
+        workspace,
+        &providers,
+        service,
+        whole_catalogue,
+        workers,
+    )?);
+    artifacts.extend(per_provider);
 
     // **The whole-catalogue artifacts.** Each covers every provider at once, so each is a function
     // of a **full** run only. A `--provider zendesk` build would have to drop the other sixteen to
@@ -414,6 +434,148 @@ struct Compiled {
     lock: Option<LockEntry>,
 }
 
+/// Every provider's contribution to the run, folded back in **provider order** (C-544).
+///
+/// A named step rather than the tail of the loop that produced it, because the order is the
+/// contract. [`compile_all`] compiles the providers concurrently, so the order they *finish* in is
+/// a property of the machine and of nothing else; folding in that order would hand it straight to
+/// [`entries`](Self::entries) and [`diagnostics`](Self::diagnostics), neither of which is sorted
+/// afterwards by anything. Taking a `Vec<Compiled>` that is already in provider order and folding
+/// it in one direction is what keeps every output a function of the inputs alone.
+struct Merged {
+    /// Every provider's own artifacts, concatenated in provider order.
+    ///
+    /// The plan sorts these by path before anyone reads them, so this order reaches no artifact —
+    /// but it decides which of two equal paths a stable sort keeps, and it is the order the pack
+    /// is compiled from before that sort happens.
+    artifacts: Vec<PlannedArtifact>,
+    /// One `catalog.json` entry per provider, in provider order.
+    ///
+    /// **This is the order the published document carries.** [`site::document_with_core`]
+    /// serialises the entries as it is handed them and sorts nothing, so a fold in completion order
+    /// would publish a provider array whose order was a property of the scheduler.
+    entries: Vec<ProviderEntry>,
+    /// What the vendored documents got wrong, in provider order — the order `build` and `diff`
+    /// print them in.
+    diagnostics: Vec<String>,
+    /// The `connectors.lock` rows. [`Lockfile::insert`] holds its own sorted order, so the row
+    /// order is already independent of this fold; it is folded here in provider order anyway,
+    /// because a determinism contract that relies on a callee's incidental sort is one refactor
+    /// from being false.
+    lockfile: Lockfile,
+}
+
+/// Fold the per-provider results into the run, **in the order given**.
+///
+/// Deliberately total and order-preserving: it decides nothing and sorts nothing, so the only thing
+/// that can make the output non-deterministic is being handed the results in a non-deterministic
+/// order — which is precisely what [`compile_all`] guarantees it is not, and what
+/// `tests::folding_in_completion_order_would_move_a_published_artifact` seeds the opposite of.
+fn merge(compiled: Vec<Compiled>) -> Merged {
+    let mut merged = Merged {
+        artifacts: Vec::new(),
+        entries: Vec::new(),
+        diagnostics: Vec::new(),
+        lockfile: Lockfile::new(),
+    };
+    for provider in compiled {
+        if let Some(entry) = provider.lock {
+            merged.lockfile.insert(entry);
+        }
+        merged.artifacts.extend(provider.artifacts);
+        merged.entries.push(provider.site);
+        merged.diagnostics.extend(provider.diagnostics);
+    }
+    merged
+}
+
+/// How many providers to compile at once: one per core this process may use, never more than there
+/// are providers and never zero.
+///
+/// [`std::thread::available_parallelism`] reports the affinity- and cgroup-aware figure rather than
+/// the machine's core count, so a one-core container gets 1 — which is [`compile_all`]'s sequential
+/// branch, spawning no thread at all. An error means the platform will not say, and the honest
+/// answer to that is the sequential build rather than a guess.
+fn worker_count(providers: usize) -> usize {
+    thread::available_parallelism()
+        .map_or(1, std::num::NonZeroUsize::get)
+        .clamp(1, providers.max(1))
+}
+
+/// Compile every provider, up to `workers` at a time, returning the results **in `providers`
+/// order** whatever order they finished in (C-544).
+///
+/// The providers are independent: each reads its own definition and its own vendored documents, and
+/// — because planning writes nothing — none of them can observe another. So the sequential loop
+/// this replaced was 55 compiles on one core, and it was the floor under every `build`, `diff` and
+/// whole-tree fixed-point test in the suite.
+///
+/// **Two properties carry the byte-determinism this repository's contract requires, and both are
+/// structural rather than a promise a later edit can quietly break:**
+///
+/// 1. *Order is restored by index.* Each worker records the index it claimed beside its result, and
+///    the sort below is the only thing that decides the order the caller sees. Nothing downstream
+///    can observe which provider finished first — see [`Merged`] for what would inherit it.
+/// 2. *A failure is the first one in provider order.* Collecting into a `Result<Vec<_>>` yields the
+///    earliest `Err` in that restored order, which is the provider a sequential run would have
+///    stopped at, carrying the message it carries today. A concurrent run does compile providers a
+///    sequential one would never have reached; compiling is pure and writes nothing, so the only
+///    cost of discarding their results is the work.
+fn compile_all(
+    workspace: &Workspace,
+    providers: &[Provider],
+    service: Option<&str>,
+    lock: bool,
+    workers: usize,
+) -> Result<Vec<Compiled>> {
+    if workers <= 1 {
+        return providers
+            .iter()
+            .map(|provider| compile(workspace, provider, service, lock))
+            .collect();
+    }
+
+    // The shared cursor is the whole of the scheduling: a worker claims the next index and keeps
+    // claiming until they run out, so one slow provider — babelforce compiles five vendored
+    // documents — cannot leave the rest queued behind it.
+    let next = AtomicUsize::new(0);
+    let batches = thread::scope(|scope| {
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                let next = &next;
+                scope.spawn(move || {
+                    let mut claimed = Vec::new();
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(provider) = providers.get(index) else {
+                            return claimed;
+                        };
+                        claimed.push((index, compile(workspace, provider, service, lock)));
+                    }
+                })
+            })
+            // Every worker is spawned before any is joined; collecting the handles is what makes
+            // that true, so this is not a needless collect.
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| {
+                // A panic inside a provider's compile is re-raised here rather than reported as a
+                // join error, so it surfaces exactly as it did when the compile ran on this thread.
+                handle
+                    .join()
+                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+            })
+            .collect::<Vec<_>>()
+    });
+
+    let mut claimed: Vec<(usize, Result<Compiled>)> = batches.into_iter().flatten().collect();
+    // The one line that decides the caller's order, and it reads the index the provider had — never
+    // anything about when its result arrived.
+    claimed.sort_by_key(|(index, _)| *index);
+    claimed.into_iter().map(|(_, result)| result).collect()
+}
+
 /// One provider's artifacts, compiled and compared.
 ///
 /// Two of them ship — the module and the manifest — and the rest is the catalog's (C-38): one
@@ -575,4 +737,282 @@ pub fn apply(plan: &Plan) -> Result<Vec<PathBuf>> {
         written.push(artifact.path.clone());
     }
     Ok(written)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+
+    use crate::artifact::tests::{scratch, Scratch};
+
+    /// A hand-authored provider definition the real loader accepts and the real emitter compiles,
+    /// carrying `operations` operations.
+    ///
+    /// The count is a parameter so a fixture can be **uneven**. One provider that takes visibly
+    /// longer than its siblings is what makes the order the providers finish in differ from the
+    /// order they were discovered in, and that difference is the whole of the hazard these tests
+    /// are about: with equal costs a completion-ordered plan could coincide with a provider-ordered
+    /// one by luck and the assertions below would prove nothing.
+    fn definition(id: &str, operations: usize) -> String {
+        let mut toml = format!(
+            "id = \"{id}\"\n\
+             vendor = \"{id} Inc.\"\n\
+             base_url = \"https://api.{id}.example\"\n\
+             description = \"A hand-authored fixture connector.\"\n"
+        );
+        for member in ('a'..).take(operations) {
+            toml.push_str(&format!(
+                "\n\
+                 [[operations]]\n\
+                 id = \"{id}-{member}-get\"\n\
+                 method = \"GET\"\n\
+                 direction = \"read\"\n\
+                 path = \"/v1/{member}/{{thing_id}}\"\n\
+                 description = \"Fetch one thing.\"\n\
+                 risk = \"low\"\n\
+                 idempotency = \"idempotent\"\n\
+                 \n\
+                 [[operations.params.path]]\n\
+                 name = \"thing_id\"\n\
+                 description = \"The thing to fetch.\"\n\
+                 required = true\n\
+                 schema = {{ type = \"integer\" }}\n"
+            ));
+        }
+        toml
+    }
+
+    /// A workspace holding `providers/` and nothing else, removed when it drops.
+    struct Fixture {
+        scratch: Scratch,
+    }
+
+    impl Fixture {
+        /// A fixture with one provider per `(name, operations)` pair.
+        fn with(label: &str, providers: &[(&str, usize)]) -> Self {
+            let scratch = scratch(label);
+            fs::create_dir_all(scratch.join(crate::workspace::PROVIDERS_DIR))
+                .expect("create the fixture's providers directory");
+            let fixture = Fixture { scratch };
+            for (name, operations) in providers {
+                fixture.write_provider(name, &definition(name, *operations));
+            }
+            fixture
+        }
+
+        fn write_provider(&self, name: &str, contents: &str) {
+            let path = self
+                .scratch
+                .join(crate::workspace::PROVIDERS_DIR)
+                .join(format!("{name}.toml"));
+            fs::write(path, contents).expect("write a fixture provider definition");
+        }
+
+        fn workspace(&self) -> Workspace {
+            Workspace::new(self.scratch.to_path_buf())
+        }
+    }
+
+    /// Everything a plan says, in the order it says it — one string two runs can be compared by.
+    ///
+    /// Deliberately not a hash: when two plans differ this prints the difference, so a
+    /// scheduling-ordered artifact is legible in the failure rather than being one hex digest
+    /// against another.
+    fn fingerprint(plan: &Plan) -> String {
+        let mut out = format!("providers: {}\n", plan.providers.join(" "));
+        for artifact in &plan.artifacts {
+            out.push_str(&format!(
+                "--- artifact {} ({:?})\n{}\n",
+                artifact.path.display(),
+                artifact.change,
+                artifact.contents
+            ));
+        }
+        for diagnostic in &plan.diagnostics {
+            out.push_str(&format!("--- diagnostic\n{diagnostic}\n"));
+        }
+        for orphan in &plan.orphans {
+            out.push_str(&format!("--- orphan {}\n", orphan.path.display()));
+        }
+        out
+    }
+
+    /// A seeded permutation of `items`, standing in for the order concurrent compiles finish in.
+    ///
+    /// Deterministic on purpose — a flaky proof that a determinism assertion has teeth would be
+    /// worth nothing — and a three-shift xorshift64 rather than a dependency.
+    fn seeded_shuffle<T>(mut items: Vec<T>) -> Vec<T> {
+        let mut state: u64 = 0xc544_c544_c544_c544;
+        for index in (1..items.len()).rev() {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            items.swap(index, (state % (index as u64 + 1)) as usize);
+        }
+        items
+    }
+
+    /// The providers a determinism fixture uses, uneven on purpose — see [`definition`].
+    const UNEVEN: &[(&str, usize)] = &[
+        ("alpha", 12),
+        ("bravo", 1),
+        ("charlie", 1),
+        ("delta", 1),
+        ("echo", 1),
+        ("foxtrot", 1),
+    ];
+
+    /// Acceptance (C-544): "artifact write order, diagnostic/refusal message order, and the
+    /// lockfile row order are identical to the sequential build's".
+    ///
+    /// Width 1 **is** the sequential build — [`compile_all`] spawns no thread there — so this
+    /// compares every concurrent plan against exactly what this code produced before the story, on
+    /// the same inputs and in the same process.
+    #[test]
+    fn the_plan_is_identical_at_every_compile_width() {
+        let fixture = Fixture::with("pipeline-width", UNEVEN);
+        let workspace = fixture.workspace();
+
+        let sequential = fingerprint(
+            &plan_at_width(&workspace, None, None, Some(1)).expect("the sequential plan compiles"),
+        );
+
+        for width in [2, 3, 6, 64] {
+            let concurrent = plan_at_width(&workspace, None, None, Some(width))
+                .unwrap_or_else(|error| panic!("the plan at width {width} compiles: {error:#}"));
+            assert_eq!(
+                sequential,
+                fingerprint(&concurrent),
+                "compiling at width {width} produced a different plan from the sequential one"
+            );
+        }
+    }
+
+    /// "Output ordering stays defined by content, never by completion order."
+    ///
+    /// `web/public/catalog.json` is where that is load-bearing rather than incidental:
+    /// [`site::document_with_core`] serialises the entries in the order it is handed them and sorts
+    /// nothing, so the published provider array *is* the fold order. The plan's artifact list
+    /// cannot show this — it is sorted by path — which is why this reads inside the document.
+    #[test]
+    fn the_published_catalogue_lists_the_providers_in_provider_order() {
+        let fixture = Fixture::with("pipeline-order", UNEVEN);
+        let workspace = fixture.workspace();
+
+        let plan = plan_at_width(&workspace, None, None, Some(8)).expect("the plan compiles");
+        let published = plan
+            .artifacts
+            .iter()
+            .find(|artifact| artifact.path == workspace.site_catalog_path())
+            .expect("a whole-catalogue plan writes catalog.json");
+        let document: serde_json::Value =
+            serde_json::from_str(&published.contents).expect("catalog.json is JSON");
+        let ids: Vec<&str> = document["providers"]
+            .as_array()
+            .expect("catalog.json carries a provider array")
+            .iter()
+            .map(|provider| {
+                provider["id"]
+                    .as_str()
+                    .expect("every published provider carries an id")
+            })
+            .collect();
+
+        let expected: Vec<&str> = UNEVEN.iter().map(|(name, _)| *name).collect();
+        assert_eq!(
+            ids, expected,
+            "the published provider array follows the order the compiles finished in"
+        );
+    }
+
+    /// The seeded ordering hazard, kept as a test so the assertions above cannot quietly lose their
+    /// teeth.
+    ///
+    /// It folds one run's results in a seeded permutation — standing in for the order the providers
+    /// happened to finish in — and requires the output to move. If this ever stops holding, [`merge`]
+    /// has stopped being what orders the output, and
+    /// [`the_plan_is_identical_at_every_compile_width`] would be green on a build whose published
+    /// artifacts followed the scheduler.
+    #[test]
+    fn folding_in_completion_order_would_move_a_published_artifact() {
+        let fixture = Fixture::with("pipeline-hazard", UNEVEN);
+        let workspace = fixture.workspace();
+        let providers = discovery::discover(&workspace, None).expect("the fixture has providers");
+
+        let ordered = merge(
+            compile_all(&workspace, &providers, None, true, 1).expect("the providers compile"),
+        );
+        let shuffled = merge(seeded_shuffle(
+            compile_all(&workspace, &providers, None, true, 1).expect("the providers compile"),
+        ));
+
+        let paths = |merged: &Merged| {
+            merged
+                .artifacts
+                .iter()
+                .map(|artifact| artifact.path.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_ne!(
+            paths(&ordered),
+            paths(&shuffled),
+            "the seeded permutation left the fold order alone, so it proves nothing"
+        );
+        assert_ne!(
+            site::document_with_core(ordered.entries, None).expect("the ordered document renders"),
+            site::document_with_core(shuffled.entries, None)
+                .expect("the shuffled document renders"),
+            "a completion-ordered fold produced the same catalog.json as a provider-ordered one, so \
+             the determinism assertions in this module cannot see a scheduling-ordered artifact"
+        );
+    }
+
+    /// "A refusal raised by one provider must surface identically regardless of scheduling", and
+    /// "a provider's compile failure still fails the build loudly with the same message it fails
+    /// with today".
+    ///
+    /// Two providers are broken, so the question has a wrong answer available: a concurrent run
+    /// compiles both and could report whichever failed first. They sit behind a twelve-operation
+    /// provider, so both failures are raised while `alpha` is still compiling.
+    #[test]
+    fn a_refusal_is_the_first_one_in_provider_order_at_every_width() {
+        let fixture = Fixture::with("pipeline-refusal", &[("alpha", 12), ("zulu", 1)]);
+        fixture.write_provider(
+            "broken-one",
+            "vendor = \"No id Inc.\"\nbase_url = \"https://api.one.example\"\n",
+        );
+        fixture.write_provider(
+            "broken-two",
+            "id = \"broken-two\"\nvendor = \"No base URL Inc.\"\n",
+        );
+        let workspace = fixture.workspace();
+
+        let sequential = format!(
+            "{:#}",
+            plan_at_width(&workspace, None, None, Some(1))
+                .expect_err("a broken provider fails the plan")
+        );
+        assert!(
+            sequential.contains("provider `broken-one`"),
+            "the sequential refusal does not name the first broken provider: {sequential}"
+        );
+        assert!(
+            !sequential.contains("broken-two"),
+            "the sequential refusal reports past the first failure: {sequential}"
+        );
+
+        for width in [2, 4, 64] {
+            let concurrent = format!(
+                "{:#}",
+                plan_at_width(&workspace, None, None, Some(width))
+                    .expect_err("a broken provider fails the plan")
+            );
+            assert_eq!(
+                sequential, concurrent,
+                "the refusal at width {width} is not the one a sequential build raises"
+            );
+        }
+    }
 }
