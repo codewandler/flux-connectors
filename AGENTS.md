@@ -289,15 +289,15 @@ implementor runs is scoped and does not include a full build:**
 cargo run -p connector-cli -- build --provider <id>   # per-provider artifacts only
 cargo run -p connector-cli -- diff  --provider <id>   # must report no drift
 cargo build --workspace
-cargo test --workspace --no-fail-fast
+cargo nextest run --workspace --no-fail-fast
+cargo test --workspace --doc
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
 
-`--no-fail-fast` is not optional here. Plain `cargo test --workspace` stops at the first failing
-binary; since C-533 each crate links **one** integration-test binary (`tests/main.rs`), so the
-expected failures below live in two of them — `catalog`'s and `connector-cli`'s — and a run
-without the flag stops at whichever fails first and reports a number that is simply wrong — see
+`--no-fail-fast` is not optional here. Without it a run stops at the first failure and reports a
+number that is simply wrong; the expected failures below span two crates' binaries — `catalog`'s
+and `connector-cli`'s (one integration binary each since C-533) — see
 [Validation](#validation).
 
 **A story that adds a new provider leaves exactly nine tests red, and that is the design
@@ -305,7 +305,7 @@ working.** They are whole-catalogue staleness checks, and every one is red preci
 because the implementor correctly did *not* write a whole-catalogue file. Measured, not predicted —
 re-measured on 2026-08-01 when C-189 made `connectors.lock` the fifth whole-catalogue artifact and
 so added the ninth row: add `providers/<id>.toml` + `specs/<id>/v1.json`, run
-`build --provider <id>`, then `cargo test --workspace --no-fail-fast`. **The nine predate
+`build --provider <id>`, then `cargo nextest run --workspace --no-fail-fast`. **The nine predate
 C-536/C-537**: the canonical-document and pack fixed-point checks
 (`catalog_document::the_committed_documents_are_a_fixed_point_of_a_build`,
 `catalog_pack::the_committed_pack_is_byte_identical_to_a_fresh_compile`) assert over a full plan
@@ -348,8 +348,8 @@ configured the substitution rewrote the document. The implementor could not have
 `#[non_exhaustive]` so no synthetic one can be built outside the `catalog` crate, and the index that
 carries a real one is a whole-catalogue artifact that does not name a new provider until integration.
 
-**`cargo test --workspace --no-fail-fast` now answers it, with nothing extra to run and nothing to
-write.** `crates/connector-pack/tests/request.rs::every_declared_operation_composes_a_request_from_its_declared_configuration`
+**The workspace test run now answers it, with nothing extra to run and nothing to
+write.** `crates/connector-pack/tests/main/request.rs::every_declared_operation_composes_a_request_from_its_declared_configuration`
 enumerates `connectors/*.connector.toml` and reads each operation's Flux from
 `crates/catalog/ops/<provider>/`. Both are **per-provider** artifacts that
 `build --provider <id>` writes, so a connector that is not in the index yet is covered anyway. For
@@ -982,10 +982,33 @@ The Rust workspace gate is:
 ```bash
 cargo fmt --all
 cargo build --workspace
-cargo test --workspace --no-fail-fast
+cargo nextest run --workspace --no-fail-fast
+cargo test --workspace --doc
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
+
+> **The test runner is `cargo-nextest`, and it is pinned** (C-543). `cargo test` runs one test
+> *binary* at a time, and the serialisation is total rather than partial: measured 2026-08-12 at
+> `108fd7a4` on this 20-core machine, `cargo test --workspace --no-fail-fast` took **792.14s**
+> while the sum of its own per-target `finished in` figures was **790.63s** — 0.2% apart, so
+> nothing overlaps anything, and three of C-533's nine binaries carried 774.58s. The same suite
+> under nextest took **365.01s**, plus **2.06s** for the doc-tests: **2.16×** (the honest floor on
+> a contended machine is ~1.6×). Install it with
+> `cargo install cargo-nextest --locked --version 0.9.143`; `scripts/cut-release.sh` refuses to
+> cut without it, naming that line, before anything is touched.
+>
+> **Two things about that pair of commands are load-bearing, and both are ways the surface could
+> have shrunk silently.**
+> - **nextest runs no doc-tests** — it executes test binaries, and rustdoc runs those. The counts
+>   were diffed before adoption and reconcile exactly: `cargo test --workspace -- --list`
+>   **1892**; `cargo nextest list --workspace` **1877**; the difference is **12** doc-tests and
+>   **3** `#[ignore]`d tests, the latter accounted for by `--run-ignored all` (**1880**). Neither
+>   list holds a test the other does not.
+> - **`--no-fail-fast` is still not optional**, and `.config/nextest.toml` sets
+>   `fail-fast = false` so a narrowed run behaves the same. The runner is version-pinned there
+>   because nextest *warns* rather than refuses on an unrecognised config key, so without the pin
+>   one file could mean two things on two machines.
 
 CI keeps that complete Linux gate and retains a supplementary cross-compilation matrix for
 `connector-secrets`. The required evidence is the native matrix: it asserts the runtime host triple
@@ -1009,15 +1032,16 @@ green, and its only test suite had never executed. CI would have caught it; the 
 report would not have. **If your change touches `crates/connectors-api/ui/` or `web/`, run
 `npm ci && npm test` there and quote the output** — a suite that cannot run is green by absence.
 
-Read `cargo test --workspace` correctly: it stops at the first failing test binary. A count of green
-summaries does not prove the remaining binaries ran. Since C-533 each crate's integration tests
-link as **one** binary — `crates/<crate>/tests/main.rs`, with every former `tests/<file>.rs` a
-`#[path]` module under `tests/main/` — so the workspace runs 9 integration binaries instead of
-~200, and a single test is addressed as
-`cargo test -p <package> --test main <module>::<test>`. As a diagnostic, this must print nothing:
+Since C-533 each crate's integration tests link as **one** binary —
+`crates/<crate>/tests/main.rs`, with every former `tests/<file>.rs` a `#[path]` module under
+`tests/main/` — so the workspace runs 9 integration binaries instead of ~200, and a single test is
+addressed as `cargo test -p <package> --test main <module>::<test>` or the nextest filter
+`cargo nextest run -p <package> -E 'test(<module>::)'`. nextest ends a full run with one
+whole-workspace summary line, so the count is the run's own rather than something to add up from
+per-binary summaries. As a diagnostic, this must print nothing:
 
 ```bash
-cargo test --workspace 2>&1 | grep -E "FAILED|error: test failed|panicked at"
+cargo nextest run --workspace --no-fail-fast 2>&1 | grep -E "^ *FAIL|error: test run failed"
 ```
 
 The public site has a separate Node 22+ gate:

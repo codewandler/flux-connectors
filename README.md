@@ -234,10 +234,16 @@ The workspace requires:
 
 ```bash
 cargo build --workspace
-cargo test --workspace
+cargo nextest run --workspace --no-fail-fast
+cargo test --workspace --doc
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
+
+The test suite runs through [cargo-nextest](https://nexte.st), which executes each test in its own
+process across every core rather than one test binary at a time. Install it once:
+`cargo install cargo-nextest --locked --version 0.9.143`. nextest runs no doc-tests, so
+`cargo test --workspace --doc` stays in the gate beside it.
 
 The documentation site is a separate Node 22+ build and does not participate in the Cargo
 workspace:

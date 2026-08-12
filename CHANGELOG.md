@@ -9,6 +9,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The workspace gate runs tests as parallel processes through pinned cargo-nextest** (C-543,
+  second delivery of C-546's test-cost program). `cargo test` runs one test binary at a time and
+  its serialisation is total — 792.14 s wall clock against a 790.63 s sum of its own per-target
+  times (0.2 % apart); the same suite under nextest 0.9.143 runs in 365 s plus 2 s of doc-tests,
+  2.16× on an uncontended machine (~1.6× under load). The verified surface is proven not to
+  shrink: 1892 = 1877 nextest + 3 ignored + 12 doc-tests, reconciled by `comm` in both
+  directions, with doc-tests kept explicitly (`cargo test --workspace --doc`) and
+  `fail-fast = false` pinned in `.config/nextest.toml`. `ci.yml`, `scripts/cut-release.sh` (whose
+  preflight now refuses to cut before touching anything if the runner is absent, naming the
+  install command), AGENTS.md § Validation and README convert together. The connector-secrets CI
+  matrix jobs deliberately stay on plain `cargo test` so the root-privileged ownership proofs
+  cannot become silent skips. The remaining wall-clock floor — one 284–386 s conformance test —
+  is filed as C-549.
+
 - **The test suite links one binary per crate, not one per file** (C-533, first delivery of
   C-546's test-cost program). The workspace's 201 integration-test files are now `#[path]` modules
   of nine `tests/main.rs` roots — no test deleted, merged or weakened, proven by name-level
