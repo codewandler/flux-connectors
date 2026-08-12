@@ -44,10 +44,19 @@
 //! # What is derived here, and what is the caller's
 //!
 //! Derived here: the method, the URL with its structured query, the headers, the body, the
-//! permission subjects, and the set of strings a redactor must hold. Resolved by the caller and
-//! handed in: the tenant's endpoint values (a bound configuration port) and the assembled
-//! credentials (a bound secret store). Those are ports a host owns, and a crate that reached for
-//! them would be a crate that had opinions about where a tenant's secrets live.
+//! permission subjects, and the set of strings a redactor must hold. Its two data inputs — the
+//! tenant's resolved endpoint map and the assembled credentials — are **produced here too** as of
+//! C-557, from bound ports the caller implements: [`resolve_endpoints`] over a [`ConfigPort`], and
+//! [`assemble_credentials`] over a [`connector_secrets::SecretStore`]. The ports say *what this
+//! tenant's value is*; the producers apply the enforcement — declared defaults, operator approval,
+//! origin normalisation, mechanism selection, the acquisition axis, the redaction set — on top. A
+//! crate that reached past the ports for a value would be a crate that had opinions about where a
+//! tenant's secrets live, which is why the ports exist.
+//!
+//! The producers are the whole point of the split for a host: they were `pub(crate)` in the
+//! flux-coupled `connector-pack`, so no engine-free consumer could produce a plan. `connector-pack`'s
+//! own `Configuration`/`Credentials` producers now delegate here, and the whole-catalogue
+//! differential gate holds the two to one plan.
 //!
 //! # The refusals are the safety property
 //!
@@ -57,7 +66,10 @@
 #![deny(missing_docs)]
 
 pub mod auth;
+mod config;
+mod credentials;
 pub mod document;
+mod endpoints;
 mod error;
 mod plan;
 mod request;
@@ -65,6 +77,9 @@ mod resolve;
 mod slot;
 mod template;
 
+pub use config::{ConfigField, ConfigPort, ConfigValue};
+pub use credentials::{assemble_credentials, Assembly, Redaction};
+pub use endpoints::{resolve_endpoint, resolve_endpoints};
 pub use error::Error;
 pub use plan::{RequestPlan, SensitiveText};
 pub use request::{Request, DEFAULT_USER_AGENT};

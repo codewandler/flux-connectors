@@ -42,6 +42,21 @@ catalog.workspace = true
 # in Exchange (C-523). Reached for exactly as `connector-pack` reaches for it today.
 connector-address.workspace = true
 
+# **The secret port** (C-557). The engine-free credential assembler resolves a `CredentialRef` to a
+# value through `SecretStore` — the trait a host already binds — and its refusals carry that store's
+# own `StoreError`. `connector-secrets` links no `codewandler-flux-*` crate, so this edge keeps the
+# engine fence `crates/connector-cli/tests/main/engine_free_core.rs` pins; and it is unreachable from
+# `connector-cli`, so the offline fence `dependency_fence.rs` holds — the compiler reaches neither
+# this crate nor, through it, the store. `CredentialRef`/`InstanceId` arrive re-exported through here
+# rather than from a second addressing edge.
+connector-secrets.workspace = true
+
 serde = { workspace = true }
 serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+# A runtime to drive the async credential assembler in this crate's own unit tests, and the in-memory
+# store to seed it. `rt` + `macros` only — nothing here needs threads. Test-only, so it does not
+# reach the consumer graph the engine fence reads.
+tokio = { workspace = true, features = ["rt", "macros"] }

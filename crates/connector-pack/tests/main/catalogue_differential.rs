@@ -79,6 +79,7 @@ use connector_pack::{
     Rehearsal, Request, RequestPlan, Secret, SecretStore, SensitiveText, Slot,
 };
 use connector_resolve::auth::{acquire, place, placed_form, Assembled};
+use connector_resolve::{ConfigField, ConfigPort, ConfigValue};
 use flux_runtime::{Tool, ToolContext};
 use flux_system::{System, Workspace};
 use serde_json::{json, Map, Value};
@@ -259,10 +260,21 @@ fn usernames_for(
 /// one. A connector declaring no `authority` has no address to seed — its operations refuse
 /// identically on both arms — so the reference is skipped rather than unwrapped.
 async fn seeded_credentials(entry: &'static catalog::Operation) -> Credentials {
+    Credentials::new(seeded_store(entry).await as Arc<dyn SecretStore>, TENANT)
+        .expect("a valid tenant id")
+}
+
+/// **The raw store behind [`seeded_credentials`]**, for the engine-free producers arm (C-557).
+///
+/// The engine-free credential assembler takes a bare [`SecretStore`], not a `Credentials` port, so
+/// this hands back the seeded store itself. It carries the sentinel at every address this connector
+/// declares — the same seeding [`seeded_credentials`] does — so the alternative-selection rule is
+/// exercised rather than a store that could only resolve one mechanism.
+async fn seeded_store(entry: &'static catalog::Operation) -> Arc<MemoryStore> {
     let store = Arc::new(MemoryStore::new());
-    let credentials =
-        Credentials::new(store.clone() as Arc<dyn SecretStore>, TENANT).expect("a valid tenant id");
     if let Some(provider) = catalog::provider(ProviderKey::id(entry.provider)) {
+        let credentials = Credentials::new(store.clone() as Arc<dyn SecretStore>, TENANT)
+            .expect("a valid tenant id");
         for credential in provider.auth {
             let Ok(reference) = credentials.reference(entry.id, provider, credential) else {
                 continue;
@@ -273,7 +285,69 @@ async fn seeded_credentials(entry: &'static catalog::Operation) -> Credentials {
                 .expect("an in-memory put cannot fail");
         }
     }
-    credentials
+    store
+}
+
+/// **A bare [`ConfigPort`] over the same values the other arms bind** (C-557).
+///
+/// The engine-free endpoint resolver and the Basic user half both read this — the endpoint variables
+/// by their placeholder name, the user halves by credential name — exactly as a consumer that never
+/// touches `connector-pack`'s `Configuration` would supply them. Everything is `proposed`, which is
+/// enough because [`value_for`] hands an operator-approved field its reviewed default, and a declared
+/// default satisfies the approval check without an approval flag.
+struct MapConfigPort<'a> {
+    values: &'a BTreeMap<String, String>,
+    usernames: &'a BTreeMap<&'static str, String>,
+}
+
+impl ConfigPort for MapConfigPort<'_> {
+    fn resolve(&self, field: ConfigField<'_>) -> Option<ConfigValue> {
+        match field {
+            ConfigField::Endpoint(name) => self
+                .values
+                .get(name)
+                .map(|value| ConfigValue::proposed(value.clone())),
+            ConfigField::Username(name) => self
+                .usernames
+                .get(name)
+                .or_else(|| self.values.get(&format!("username.{name}")))
+                .map(|value| ConfigValue::proposed(value.clone())),
+        }
+    }
+}
+
+/// **The plan the engine-free producers derive** — the seam X-156 takes (C-557).
+///
+/// No `connector-pack`, no `ToolContext`: `resolve_endpoints` over a bare [`ConfigPort`],
+/// `assemble_credentials` over a bare [`SecretStore`], and `resolve`. It is the same plan the flux
+/// path composes or the enforcement was reimplemented rather than relocated.
+async fn engine_free_plan(
+    entry: &'static catalog::Operation,
+    config: &MapConfigPort<'_>,
+    params: &Value,
+) -> Result<RequestPlan, Box<dyn std::error::Error>> {
+    let provider = catalog::provider(ProviderKey::id(entry.provider))
+        .ok_or("the operation names a provider the catalogue carries")?;
+    let document = connector_resolve::document::operation(entry.id)
+        .ok_or("the pack carries the operation's document")?;
+    let endpoints = connector_resolve::resolve_endpoints(document, provider, TENANT, config)?;
+    let store = seeded_store(entry).await;
+    let assembly = connector_resolve::assemble_credentials(
+        entry,
+        provider,
+        TENANT,
+        None,
+        store.as_ref(),
+        config,
+    )
+    .await?;
+    Ok(connector_resolve::resolve(
+        document,
+        base_url_of(entry),
+        params,
+        &endpoints,
+        &assembly.credentials,
+    )?)
 }
 
 /// A `ToolContext` for the published arm, whose redactor every resolved credential is registered
@@ -374,6 +448,7 @@ async fn the_document_and_the_flux_derivations_agree_for_every_operation() {
     let mut compared = 0usize;
     let mut byte_compared = 0usize;
     let mut published_compared = 0usize;
+    let mut engine_free_compared = 0usize;
     let mut refused: Vec<String> = Vec::new();
     let ctx = context();
 
@@ -577,6 +652,49 @@ async fn the_document_and_the_flux_derivations_agree_for_every_operation() {
                 from_flux.method, from_flux.url
             )),
         }
+
+        // ---- and the plan the engine-free producers derive (C-557) ------------------------------
+        //
+        // The seam X-156 actually takes: no `connector-pack`, no `ToolContext`. The endpoints come
+        // from `resolve_endpoints` over a bare `ConfigPort`, the credentials from
+        // `assemble_credentials` over a bare `SecretStore`, and the plan from `resolve`. It must be
+        // the same plan the flux path composes — request, subjects and redaction set — which is the
+        // evidence the enforcement was relocated into the engine-free crate rather than
+        // reimplemented. `connector-pack`'s own producers now delegate here, so a divergence would be
+        // a divergence in the relocated logic itself.
+        let ef_config = MapConfigPort {
+            values: &values,
+            usernames: &usernames,
+        };
+        match engine_free_plan(entry, &ef_config, &params).await {
+            Ok(engine_free) => {
+                engine_free_compared += 1;
+                divergences.extend(disagreements(
+                    id,
+                    "engine-free producers",
+                    &engine_free.request,
+                    &from_flux,
+                ));
+                if engine_free.permission_subjects != flux_subjects {
+                    divergences.push(format!(
+                        "`{id}`: permission subjects {:?} (engine-free producers) vs \
+                         {flux_subjects:?} (flux)",
+                        engine_free.permission_subjects
+                    ));
+                }
+                if exposed(&engine_free.redactions) != expected {
+                    divergences.push(format!(
+                        "`{id}`: redaction set {:?} (engine-free producers) vs {expected:?} (flux)",
+                        exposed(&engine_free.redactions)
+                    ));
+                }
+            }
+            Err(error) => divergences.push(format!(
+                "`{id}`: the engine-free producers refuse where the flux derivation builds \
+                 `{} {}` — {error}",
+                from_flux.method, from_flux.url
+            )),
+        }
     }
 
     assert_eq!(
@@ -615,6 +733,14 @@ async fn the_document_and_the_flux_derivations_agree_for_every_operation() {
     assert_eq!(
         published_compared, byte_compared,
         "the published plan seam was compared for {published_compared} of {byte_compared} \
+         operations, so the rest reached no comparison at all"
+    );
+    // **And what the engine-free producers actually yielded** (C-557), on the identical argument as
+    // the published count above: a plan the bare `ConfigPort`/`SecretStore` producers derived was
+    // byte-compared against the Flux-derived request exactly as often as the document-derived one.
+    assert_eq!(
+        engine_free_compared, byte_compared,
+        "the engine-free producers were compared for {engine_free_compared} of {byte_compared} \
          operations, so the rest reached no comparison at all"
     );
     assert!(
@@ -791,6 +917,69 @@ async fn a_seeded_divergence_in_the_published_plan_is_caught() {
         "{found:?}"
     );
     assert!(found[0].contains("published"), "{found:?}");
+}
+
+/// **The control for the engine-free producers arm** (C-557), and a separate one on purpose.
+///
+/// [`a_seeded_divergence_in_the_published_plan_is_caught`] proves the comparator can see a divergence
+/// in a plan reached through `connector-pack`'s bound ports. This one proves it for the plan reached
+/// through the **engine-free producers** — `resolve_endpoints` and `assemble_credentials` over bare
+/// ports, the path X-156 takes with no `connector-pack` and no `ToolContext`. A green 835-operation
+/// run of that arm would otherwise be indistinguishable from an arm that cannot tell.
+///
+/// The honest derivation exercises the real producers end to end; the seed then moves one URL
+/// segment and requires [`disagreements`] — the gate's own comparison — to report it named.
+#[tokio::test]
+async fn a_seeded_divergence_in_the_engine_free_producers_is_caught() {
+    const OPERATION: &str = "zendesk-ticket-show";
+
+    let entry = catalog::operation(OperationKey::id(OPERATION)).expect("a shipped operation");
+    let values = BTreeMap::from([("subdomain".to_string(), PLAIN.to_string())]);
+    let usernames = usernames_for(entry, &values);
+    let config = MapConfigPort {
+        values: &values,
+        usernames: &usernames,
+    };
+    let params = json!({"ticket_id": 1});
+
+    let engine_free = engine_free_plan(entry, &config, &params)
+        .await
+        .expect("the engine-free producers derive a plan");
+
+    // The Flux derivation, with its credentials placed — the reference the gate compares against.
+    let configuration = configured(entry, &values, &usernames);
+    let mut flux = Rehearsal::of(OPERATION, entry.provider, entry.service, entry.flux)
+        .expect("the emitted declaration rehearses")
+        .request(&configuration, &params)
+        .expect("the flux derivation composes");
+    let credentials = assembled_credentials(entry, &usernames);
+    for credential in &credentials {
+        place(OPERATION, credential, &mut flux).expect("the credential places");
+    }
+
+    // The gate as it stands: the engine-free producers agree with the flux derivation.
+    assert!(
+        disagreements(
+            OPERATION,
+            "engine-free producers",
+            &engine_free.request,
+            &flux
+        )
+        .is_empty(),
+        "the shipped catalogue must agree with itself before a seed means anything"
+    );
+
+    // The seed: one URL segment moved. The producers' own output is what the gate compares, so a
+    // divergence in it must surface, named for the operation and the field.
+    let mut seeded = engine_free.clone();
+    seeded.request.url = seeded.request.url.replace("/tickets/", "/users/");
+    let found = disagreements(OPERATION, "engine-free producers", &seeded.request, &flux);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(
+        found[0].contains(OPERATION) && found[0].contains("url"),
+        "{found:?}"
+    );
+    assert!(found[0].contains("engine-free producers"), "{found:?}");
 }
 
 /// A divergence in the *configuration surface* is caught too, and separately: a request comparison

@@ -65,7 +65,7 @@ use connector_secrets::{
 use flux_runtime::ToolContext;
 
 use crate::auth::{self, Assembled};
-use crate::config::{Field, Snapshot};
+use crate::config::{Field, Snapshot, SnapshotPort};
 use crate::Error;
 
 /// The reserved service name [`CredentialRef::new`] elides, spelled here because a credential is
@@ -231,7 +231,14 @@ impl Credentials {
         secret: &str,
     ) -> Result<CredentialRef, Error> {
         let reference = self.reference(operation.id, provider, credential)?;
-        register(ctx, operation.id, credential, &reference, secret)?;
+        register(
+            ctx,
+            operation.id,
+            credential.name,
+            reference.tenant(),
+            reference.authority(),
+            secret,
+        )?;
         self.store
             .put(&reference, &Secret::new(secret))
             .await
@@ -272,35 +279,39 @@ impl Credentials {
         provider: &'static catalog::Provider,
         settings: &Snapshot,
     ) -> Result<Vec<Assembled>, Error> {
-        // An explicitly unauthenticated operation — a health check, a ping. Distinct from "nothing
-        // resolved", and the IR keeps the two apart precisely so this branch can exist.
-        if operation.credentials.is_empty() {
-            return Ok(Vec::new());
+        // **Delegated to the engine-free assembler** (C-557). The alternative-selection rule, the
+        // acquisition axis and the C-159 redaction-form computation moved to `connector-resolve`,
+        // resolving the secret through the same `Arc<dyn SecretStore>` this port holds and the Basic
+        // user half through the frozen [`Snapshot`]. What stays here is the one thing that path
+        // deliberately does not do — register the forms with the flux redactor the host bound, and
+        // apply flux's own "will this value actually be held" refusal.
+        let assembly = connector_resolve::assemble_credentials(
+            operation,
+            provider,
+            &self.tenant,
+            self.instance.as_ref(),
+            self.store.as_ref(),
+            &SnapshotPort(settings),
+        )
+        .await?;
+
+        // **Before any request exists**, which is the C-116/C-152 ordering — a failure between here
+        // and dispatch cannot surface a value the redactor has not been told about. The assembler
+        // collected every form that travels (the stored value, the acquired one, the placed one), so
+        // each is registered, and a value flux's redactor would silently decline to hold is
+        // [`Error::UnredactableCredential`] rather than a request.
+        for redaction in &assembly.redactions {
+            register(
+                ctx,
+                operation.id,
+                redaction.credential(),
+                &self.tenant,
+                provider.authority.unwrap_or_default(),
+                redaction.expose(),
+            )?;
         }
 
-        let mut unmet: Vec<String> = Vec::new();
-        for mechanism in operation.credentials {
-            match self
-                .resolve_mechanism(ctx, operation, provider, mechanism, settings)
-                .await
-            {
-                Ok(assembled) => return Ok(assembled),
-                // Only "this tenant has not connected it" moves on to the next alternative.
-                Err(Error::MissingCredential { path, .. }) => unmet.push(path),
-                Err(other) => return Err(other),
-            }
-        }
-
-        // Every alternative was unmet. The first mechanism's first missing address is quoted, since
-        // it is the one a connector's own documentation tells an operator to provision.
-        Err(Error::MissingCredential {
-            operation: operation.id.to_owned(),
-            path: unmet
-                .first()
-                .cloned()
-                .unwrap_or_else(|| "<no address>".to_owned()),
-            alternatives: unmet.len(),
-        })
+        Ok(assembly.credentials)
     }
 
     /// Resolve one channel handshake's declared alternatives without constructing transport state.
@@ -369,99 +380,6 @@ impl Credentials {
                 .unwrap_or_else(|| "<no address>".to_owned()),
             alternatives: unmet.len(),
         })
-    }
-
-    /// One mechanism: every credential in it, all or nothing.
-    async fn resolve_mechanism(
-        &self,
-        ctx: &ToolContext,
-        operation: &'static catalog::Operation,
-        provider: &'static catalog::Provider,
-        mechanism: &'static [&'static str],
-        settings: &Snapshot,
-    ) -> Result<Vec<Assembled>, Error> {
-        // A mechanism naming nothing would authenticate nothing while looking satisfied. The loader
-        // refuses a degenerate empty mechanism; this is the second lock, because "the request went
-        // out unauthenticated" is the failure that looks like success.
-        if mechanism.is_empty() {
-            return Err(Error::EmptyMechanism {
-                operation: operation.id.to_owned(),
-            });
-        }
-
-        let mut assembled = Vec::with_capacity(mechanism.len());
-        for name in mechanism {
-            let credential =
-                provider
-                    .credential(name)
-                    .ok_or_else(|| Error::UndeclaredCredential {
-                        operation: operation.id.to_owned(),
-                        credential: (*name).to_owned(),
-                        provider: provider.id.to_owned(),
-                    })?;
-
-            // Refused before the store is touched. A signing secret never leaves, so reading one in
-            // order to discover that is a round trip whose only possible outcome is this error.
-            if matches!(credential.place, catalog::Placement::Inbound) {
-                return Err(Error::InboundCredential {
-                    operation: operation.id.to_owned(),
-                    credential: credential.name.to_owned(),
-                });
-            }
-
-            let reference = self.reference(operation.id, provider, credential)?;
-            let secret = self.store.get(&reference).await.map_err(|source| {
-                if source.is_not_found() {
-                    Error::MissingCredential {
-                        operation: operation.id.to_owned(),
-                        path: not_found_path(&source),
-                        alternatives: 1,
-                    }
-                } else {
-                    Error::CredentialStore {
-                        operation: operation.id.to_owned(),
-                        credential: credential.name.to_owned(),
-                        source,
-                    }
-                }
-            })?;
-
-            // **Before any request exists, and before the fallible step below.** C-116 stated the
-            // ordering as "registered before the request is constructed"; registering here rather
-            // than after `user_half` — which consults the configuration port and can fail — closes
-            // the window in which the value was in memory and the redactor had not been told
-            // (C-152, finding 4). Nothing in that window could surface it, and the point is that the
-            // code now says so.
-            register(
-                ctx,
-                operation.id,
-                credential,
-                &reference,
-                secret.expose_secret(),
-            )?;
-
-            let user = user_half(operation.id, credential, settings)?;
-            let value = auth::acquire(credential, secret.expose_secret(), user.as_deref());
-
-            // The second string: `base64(user:secret)` is as good as the secret to anyone holding it
-            // and is the one that actually travels, so it is registered on its own terms.
-            if value != secret.expose_secret() {
-                register(ctx, operation.id, credential, &reference, &value)?;
-            }
-
-            // **And the third, when the placement transforms the value too** (C-159, finding 2).
-            // A query placement percent-encodes on its way onto the URL, and `+`, `/` and `=` — a
-            // base64 credential's whole alphabet — do not survive that, so the string on the wire
-            // shared no substring with either string above. [`auth::placed_form`] is the single
-            // answer to "does this placement transform"; a header prefix answers `None`, because it
-            // surrounds the value and a redactor holding the bare form already covers it.
-            if let Some(travelling) = auth::placed_form(credential.place, &value) {
-                register(ctx, operation.id, credential, &reference, &travelling)?;
-            }
-
-            assembled.push(Assembled::new(credential.name, value, credential.place));
-        }
-        Ok(assembled)
     }
 }
 
@@ -556,8 +474,9 @@ fn user_half(
 /// contains neither half), and so can *placement* (a query parameter is percent-encoded, and a
 /// header prefix is not). The rule that covers all three is the one
 /// [`crate::auth`] states — **the redactor holds every form that is not recoverable from a form it
-/// already holds** — and [`Credentials::resolve_mechanism`] registers each such form. The older
-/// claim, "every value this pack puts on a request goes through here", was true of the door and
+/// already holds** — and `connector-resolve`'s `assemble_credentials` collects each such form into
+/// the [`Redaction`](connector_resolve::Redaction) set [`Credentials::resolve`] registers here. The
+/// older claim, "every value this pack puts on a request goes through here", was true of the door and
 /// false of the bytes: it read as though a placement could only surround.
 ///
 /// # Registering twice is a no-op, and it is verified rather than remembered
@@ -589,8 +508,9 @@ fn user_half(
 fn register(
     ctx: &ToolContext,
     operation: &str,
-    credential: &'static catalog::Credential,
-    reference: &CredentialRef,
+    credential: &str,
+    tenant: &str,
+    authority: &str,
     value: &str,
 ) -> Result<(), Error> {
     if !holds(ctx, value) {
@@ -599,9 +519,9 @@ fn register(
     if !holds(ctx, value) {
         return Err(Error::UnredactableCredential {
             operation: operation.to_owned(),
-            credential: credential.name.to_owned(),
-            tenant: reference.tenant().to_owned(),
-            authority: reference.authority().to_owned(),
+            credential: credential.to_owned(),
+            tenant: tenant.to_owned(),
+            authority: authority.to_owned(),
         });
     }
     Ok(())

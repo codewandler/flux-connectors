@@ -4,7 +4,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use connector_address::HttpsOrigin;
 use flux_runtime::{Tool, ToolContext, ToolResult};
 use flux_spec::{
     Intent, IntentBehavior, IntentCertainty, IntentRole, IntentSet, IntentTarget,
@@ -12,7 +11,7 @@ use flux_spec::{
 };
 use serde_json::Value;
 
-use crate::config::{Field, Snapshot};
+use crate::config::{Field, Snapshot, SnapshotPort};
 use crate::dry_run::{DryRun, DryRunTransport, Transport};
 use crate::mint;
 use crate::request::{self, Request};
@@ -411,56 +410,18 @@ impl Operation {
     /// and turning that into a custom-origin proposal would ask an operator to approve a change
     /// nobody made.
     fn endpoint(&self, variable: &str) -> Result<String, Error> {
-        let field = Field::from_placeholder(variable);
-        let resolved = self
-            .settings
-            .resolved(field)
-            .ok_or_else(|| Error::MissingConfig {
-                operation: self.entry.id.to_owned(),
-                provider: self.provider.id.to_owned(),
-                service: self.entry.service.to_owned(),
-                tenant: self.settings.tenant().to_owned(),
-                field: format!("endpoint.{variable}"),
-            })?;
-        let mut value = resolved.value().to_owned();
-        if let Some(declaration) = endpoint_declaration(self.provider, self.entry.service, variable)
-        {
-            let mut is_declared_default = declaration.default == Some(resolved.value());
-            if declaration.format == "origin" {
-                let origin = HttpsOrigin::parse(resolved.value()).map_err(|refusal| {
-                    Error::UnsafeOrigin {
-                        operation: self.entry.id.into(),
-                        provider: self.provider.id.into(),
-                        service: self.entry.service.into(),
-                        field: declaration.name.into(),
-                        reason: refusal.to_string().into(),
-                    }
-                })?;
-                // The declared default is canonical — the loader refuses a declaration that is not
-                // — so parsing it cannot fail; a `None` here is a connector that declares no
-                // default, which is not the reviewed destination either way.
-                is_declared_default = declaration
-                    .default
-                    .and_then(|default| HttpsOrigin::parse(default).ok())
-                    .is_some_and(|default| default == origin);
-                value = origin.into_string();
-            }
-            match declaration.approval {
-                catalog::Approval::None => {}
-                catalog::Approval::Operator
-                    if !is_declared_default && !resolved.is_operator_approved() =>
-                {
-                    return Err(Error::UnapprovedConfig {
-                        operation: self.entry.id.into(),
-                        provider: self.provider.id.into(),
-                        service: self.entry.service.into(),
-                        field: declaration.name.into(),
-                    });
-                }
-                catalog::Approval::Operator => {}
-            }
-        }
-        Ok(value)
+        // **Delegated to the engine-free resolver** (C-557). The declared-default detection, the
+        // `HttpsOrigin` normalisation and the operator-approval gate moved to `connector-resolve`,
+        // reading this operation's frozen settings through the [`SnapshotPort`]. This crate adds the
+        // flux `Tool` projection above it and nothing to the resolution itself.
+        Ok(connector_resolve::resolve_endpoint(
+            self.entry.id,
+            self.provider,
+            self.entry.service,
+            self.settings.tenant(),
+            variable,
+            &SnapshotPort(&self.settings),
+        )?)
     }
 
     /// The catalogue entry behind this tool.

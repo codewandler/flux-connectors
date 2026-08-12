@@ -10,9 +10,12 @@
 //! own documentation carry the reasoning in full: why a **prefixed** header registers the bare
 //! credential and not the prefixed form, why a **query** placement registers a second string
 //! (percent-encoding does not preserve `+`, `/` and `=`, which is a base64 credential's whole
-//! alphabet), and why [`placed_form`] is the single exhaustive answer to "does this placement
-//! transform the value" rather than a rule each caller re-derives.
+//! alphabet), and why [`connector_resolve::auth::placed_form`] is the single exhaustive answer to
+//! "does this placement transform the value" rather than a rule each caller re-derives.
 //!
 //! This shim exists so that the crate's own call sites and doc links keep one spelling for the seam.
+//! `placed_form` is **not** re-exported here since C-557 relocated credential assembly: the one place
+//! this crate consulted it — `Credentials::resolve_mechanism` — moved to `connector-resolve`'s
+//! `assemble_credentials`, so its remaining reader is a `dry_run` test that names the source directly.
 
-pub(crate) use connector_resolve::auth::{acquire, place, placed_form, query_encode, Assembled};
+pub(crate) use connector_resolve::auth::{acquire, place, query_encode, Assembled};

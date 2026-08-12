@@ -572,6 +572,34 @@ impl Snapshot {
     }
 }
 
+/// **Adapts a frozen [`Snapshot`] to the engine-free [`connector_resolve::ConfigPort`]** (C-557).
+///
+/// The endpoint resolver and the Basic user half both moved to `connector-resolve`, and they read
+/// their tenant values through this port. Wrapping the already-read [`Snapshot`] rather than the
+/// live [`Configuration`] is what keeps the C-198 guarantee: the store was consulted once, at
+/// projection, and this only re-presents the frozen result — a divergence between the gate and the
+/// request cannot open here because there is nothing left to read.
+pub(crate) struct SnapshotPort<'a>(pub(crate) &'a Snapshot);
+
+impl connector_resolve::ConfigPort for SnapshotPort<'_> {
+    fn resolve(
+        &self,
+        field: connector_resolve::ConfigField<'_>,
+    ) -> Option<connector_resolve::ConfigValue> {
+        let field = match field {
+            connector_resolve::ConfigField::Endpoint(name) => Field::Endpoint(name),
+            connector_resolve::ConfigField::Username(name) => Field::Username(name),
+        };
+        self.0.resolved(field).map(|resolved| {
+            if resolved.is_operator_approved() {
+                connector_resolve::ConfigValue::operator_approved(resolved.value())
+            } else {
+                connector_resolve::ConfigValue::proposed(resolved.value())
+            }
+        })
+    }
+}
+
 /// **An in-memory [`ConfigStore`]**, for a host that already holds its settings and for tests.
 ///
 /// The counterpart of [`MemoryStore`](connector_secrets::MemoryStore) on the credential side, and
