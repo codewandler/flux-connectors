@@ -242,10 +242,34 @@ pub struct OAuth2Spec {
     /// allow-list is what admits the token exchange through flux's egress gate.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub endpoint: String,
+    /// The declared service name whose base URL the [`token_path`](Self::token_path) resolves
+    /// against, when the token endpoint lives on a **different host** from the authorize endpoint
+    /// (C-556). Empty — the default and every shipped declaration's value — means the token exchange
+    /// resolves against [`endpoint`](Self::endpoint), which is today's behaviour byte-for-byte.
+    ///
+    /// # Why a second service *name* and never a URL
+    ///
+    /// Anthropic's subscription flow authorizes on `claude.ai` and redeems its token on
+    /// `platform.claude.com`; one `endpoint` cannot express two hosts. A URL here would name a host
+    /// nothing had admitted — the host set is derived from **declared services**, so `http_hosts`,
+    /// declared-authority validation and X-154's `NoDeclaredDefault` composition rule all keep
+    /// working only because this is a reference into that set. The loader refuses a name no
+    /// `[[services]]` entry declares, for exactly the reason a bare URL is unacceptable.
+    ///
+    /// # The consumer contract (X-154)
+    ///
+    /// A host redeems the token by joining [`token_path`](Self::token_path) onto **this** service's
+    /// base URL when it is set, and onto [`endpoint`](Self::endpoint)'s otherwise — the declared
+    /// defaults rule applies to it identically. The authorize leg is unaffected: it always resolves
+    /// against [`endpoint`](Self::endpoint).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub token_endpoint: String,
     /// The authorize endpoint path, joined onto the endpoint base URL.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub authorize_path: String,
-    /// The token endpoint path (every grant and refresh POSTs here).
+    /// The token endpoint path (every grant and refresh POSTs here). It resolves against
+    /// [`token_endpoint`](Self::token_endpoint)'s service base URL when that is set, and against
+    /// [`endpoint`](Self::endpoint)'s otherwise.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub token_path: String,
     /// The OAuth2 client id. Never a secret — the client *secret* is resolved from env like any
@@ -261,6 +285,30 @@ pub struct OAuth2Spec {
     /// The loopback redirect for the `authorization_code` login flow.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub redirect: Option<OAuthRedirect>,
+    /// **Whether this is a public PKCE client that issues and uses no client secret** (C-556).
+    ///
+    /// `false` — the default and every shipped declaration's value — is a *confidential* client: it
+    /// registers a client secret, which a hosted product supplies once at the operator level. A
+    /// public client (Anthropic's Console OAuth is the first) authenticates the token exchange with
+    /// PKCE alone, so there is no secret for an operator to supply and asking for one would collect a
+    /// value nothing uses.
+    ///
+    /// # The consumer contract
+    ///
+    /// A public client still needs a `client_id`, which is public by specification, but must **not**
+    /// be required to publish a `client_secret`. `auth_archetypes.rs` reads this discriminator: it
+    /// requires the secret operator-level `oauth.client_secret` config field only when the client is
+    /// confidential. The flag is a property of *how the client authenticates*, on the acquisition
+    /// axis, independent of grant, placement and subject.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub public_client: bool,
+}
+
+/// `skip_serializing_if` for a `bool` that defaults to `false`, so a confidential OAuth2 client — the
+/// case every shipped declaration is in — serializes with no `public_client` key and no already
+/// published artifact moves.
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// **A named weakness in how a credential is obtained** (C-440).

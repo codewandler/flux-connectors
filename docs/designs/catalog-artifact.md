@@ -91,6 +91,24 @@ carries the complete published surface — the IR minus nothing:
   declares the operator-level `oauth_client_id` config field binding `oauth.client_id`. The
   document publishes the registration **requirement** through that existing `binds` grammar and
   never a value; the vestigial `client_id` value field does not survive into the document.
+  - **Two hosts for one grant (C-556).** `OAuth2Spec.token_endpoint` optionally names a *second*
+    declared service, so a connector whose token endpoint lives on a different host from its
+    authorize endpoint — Anthropic's subscription flow authorizes on `claude.ai` and redeems on
+    `platform.claude.com` — is expressible. It is a service **name** and never a URL, so the host
+    set stays derived from declared services and X-154's `NoDeclaredDefault` composition holds: a
+    host joins `token_path` onto `token_endpoint`'s service base URL when set, and `endpoint`'s
+    otherwise (the declared-defaults rule applies to the token leg identically). The loader refuses a
+    name no `[[services]]` entry declares. Absent — every shipped declaration — is single-host
+    behaviour byte-for-byte, so no committed document moves.
+  - **Public vs confidential clients (C-556).** `OAuth2Spec.public_client` (default `false`)
+    declares a PKCE public client that issues and uses no client secret. A confidential client
+    registers a secret an operator supplies once; a public client needs only its `client_id`. The
+    archetype form matrix (`auth_archetypes.rs`) reads this discriminator: it requires the secret
+    operator-level `oauth.client_secret` config field only of a *confidential*
+    `authorization_code` client. Both fields are additive-optional, skipped when absent/false, so
+    every shipped document and manifest is byte-identical; the document schema gains the two
+    optional properties (an additive minor bump under the C-537 forward-compat contract, which an
+    older reader tolerates).
 - **Config**: every field with label/help/format/choices/level/approval and its `binds` targets.
 - **`verify`**, **events**, **channel bindings** (transport, verification matrix, payload maps,
   reply, subscription/setup), **runtime bindings** (C-497 vocabulary as it lands).

@@ -1168,17 +1168,25 @@
           "type": "string",
           "description": "The declared endpoint whose base URL the paths below resolve against; its host allow-list is what admits the token exchange."
         },
+        "token_endpoint": {
+          "type": "string",
+          "description": "The declared service whose base URL `token_path` resolves against, when the token endpoint lives on a different host from the authorize endpoint. A service NAME and never a URL, so the host set stays derived from declared services. Empty (the default) means the token exchange resolves against `endpoint`, which is today's behaviour byte-for-byte. The loader refuses a name no `[[services]]` entry declares."
+        },
         "authorize_path": {
           "type": "string",
           "description": "The authorize endpoint path, joined onto the endpoint base URL."
         },
         "token_path": {
           "type": "string",
-          "description": "The token endpoint path. Every grant and refresh POSTs here."
+          "description": "The token endpoint path. Every grant and refresh POSTs here. Resolves against `token_endpoint`'s service base URL when set, and `endpoint`'s otherwise."
         },
         "client_id": {
           "type": "string",
           "description": "The OAuth2 client id. Never a secret — the client secret resolves from the environment like any other credential."
+        },
+        "public_client": {
+          "type": "boolean",
+          "description": "Whether this is a public PKCE client that issues and uses no client secret. Defaults to false (a confidential client, which registers a client secret an operator supplies). A public client still needs a client_id but must not be required to publish a client_secret."
         },
         "scopes": {
           "type": "array",

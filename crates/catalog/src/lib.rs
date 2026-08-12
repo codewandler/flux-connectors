@@ -460,9 +460,20 @@ pub struct OAuth2 {
     /// It is a name rather than a URL because the endpoint's host allow-list is what admits the
     /// token exchange through the egress gate; a bare URL would name a host nothing had admitted.
     pub endpoint: &'static str,
+    /// The declared service name whose base URL [`token_path`](Self::token_path) resolves against
+    /// when the token endpoint lives on a **different host** from the authorize endpoint (C-556).
+    /// Empty — every shipped declaration's value — means the token exchange resolves against
+    /// [`endpoint`](Self::endpoint), which is a connector's single-host behaviour unchanged.
+    ///
+    /// A host joins [`token_path`](Self::token_path) onto this service's base URL when it is set, and
+    /// onto [`endpoint`](Self::endpoint)'s otherwise. It is a name and never a URL, for the same
+    /// reason [`endpoint`](Self::endpoint) is: the host set is derived from declared services.
+    pub token_endpoint: &'static str,
     /// The authorize endpoint path, joined onto the endpoint base URL.
     pub authorize_path: &'static str,
-    /// The token endpoint path. Every grant and every refresh POSTs here.
+    /// The token endpoint path. Every grant and every refresh POSTs here. It resolves against
+    /// [`token_endpoint`](Self::token_endpoint)'s base URL when that is set, and
+    /// [`endpoint`](Self::endpoint)'s otherwise.
     pub token_path: &'static str,
     /// The OAuth2 client id. Public by specification — see the type's own documentation.
     pub client_id: &'static str,
@@ -473,6 +484,11 @@ pub struct OAuth2 {
     pub grants: &'static [OAuthGrant],
     /// The loopback redirect an [`OAuthGrant::AuthorizationCode`] login binds.
     pub redirect: Option<OAuthRedirect>,
+    /// Whether this is a public PKCE client that issues and uses no client secret (C-556). `false`
+    /// — every shipped declaration's value — is a confidential client, which registers a client
+    /// secret an operator supplies. A public client needs a [`client_id`](Self::client_id) but no
+    /// secret, so a host must not require one.
+    pub public_client: bool,
 }
 
 /// One token grant an [`OAuth2`] credential allows. Mirrors `connector_spec::OAuthGrant`.
