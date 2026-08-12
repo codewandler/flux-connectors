@@ -44,6 +44,11 @@ const ADMIN: &str = "admin";
 /// The credential every Admin operation names, overriding the connector's `default_auth`.
 const ADMIN_KEY: &str = "anthropic.admin_key";
 
+/// The OAuth2 sibling of [`ADMIN_KEY`], carrying the `org:admin` scope (C-555). An admin operation
+/// admits either — they are alternatives, not a pair — and the property this file actually defends
+/// is that neither of them is the *regular* key.
+const ADMIN_OAUTH: &str = "anthropic.console_oauth_admin";
+
 /// **The whole exposed read surface of the `admin` service**, in file order.
 ///
 /// The first three shipped with C-122; the remaining six are C-441's. Adding an operation to the
@@ -215,8 +220,19 @@ fn every_admin_operation_is_an_authenticated_idempotent_read() {
             .collect();
         assert_eq!(
             credentials,
-            vec![ADMIN_KEY],
-            "{id} must authenticate with exactly {ADMIN_KEY}"
+            vec![ADMIN_KEY, ADMIN_OAUTH],
+            "{id} must authenticate with exactly the two admin-privileged credentials, as \
+             alternatives: the Admin API key or the org:admin OAuth token"
+        );
+        // The load-bearing half, stated separately so it survives the list above being extended
+        // again: an admin operation must never admit the *regular* key or the workspace-scoped
+        // OAuth token. That is the escalation boundary this whole file exists to hold.
+        assert!(
+            !credentials.contains(&"anthropic.api_key")
+                && !credentials.contains(&"anthropic.console_oauth"),
+            "{id} admits an unprivileged credential {credentials:?}. The Admin API needs the admin \
+             role or the org:admin scope; admitting the model-catalogue credential here would let \
+             a token provisioned for reading models read the organization"
         );
 
         let envelope = operation

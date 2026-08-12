@@ -24,6 +24,59 @@
         "name": "x-api-key"
       },
       "subject": "unstated"
+    },
+    {
+      "description": "Anthropic Console OAuth2 access token (sk-ant-oat01-), obtained on behalf of a signed-in user and sent as a bearer. Workspace-scoped: enough for the model catalogue, and deliberately not enough for the Admin API",
+      "name": "anthropic.console_oauth",
+      "oauth2": {
+        "authorize_path": "/oauth/authorize",
+        "endpoint": "login",
+        "grants": [
+          "authorization_code",
+          "refresh_token"
+        ],
+        "token_path": "/v1/oauth/token"
+      },
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "user",
+      "token_endpoint_quirks": [
+        {
+          "attribution": "Anthropic's own CLI docs (https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication) describe the flow as \"a browser-based OAuth flow against the Claude Console\" and publish no URLs. The URLs come from third-party implementations of the same flow — github.com/querymt/anthropic-auth records the Console authorize endpoint as `console.anthropic.com/oauth/authorize` (pre-rename) alongside the subscription flow's `claude.ai/oauth/authorize` — and from the live-host check recorded in NousResearch/hermes-agent#49821, where the console token host 404s and the platform host answers. Not confirmed against a vendor specification, because none is published.",
+          "behaviour": "Anthropic documents that this flow exists and what it is for, but publishes no authorize or token URL for it on any page under platform.claude.com/docs or code.claude.com/docs. Both values above are therefore measured rather than quoted. The token endpoint additionally MOVED: `console.anthropic.com/v1/oauth/token` now returns 404, and the live endpoint is `platform.claude.com/v1/oauth/token`, following the console.anthropic.com to platform.claude.com rename. A host that hard-codes the legacy console host from an older integration will 404 on fresh logins while token *refresh* keeps working, which is how the migration usually presents.",
+          "grant": "authorization_code",
+          "measured": "2026-08-12"
+        }
+      ]
+    },
+    {
+      "description": "Anthropic Console OAuth2 access token carrying the org:admin scope, sent as a bearer. Required for the Admin API operations; issued only to an organization member holding the admin, owner or primary-owner role",
+      "name": "anthropic.console_oauth_admin",
+      "oauth2": {
+        "authorize_path": "/oauth/authorize",
+        "endpoint": "login",
+        "grants": [
+          "authorization_code",
+          "refresh_token"
+        ],
+        "scopes": [
+          "org:admin"
+        ],
+        "token_path": "/v1/oauth/token"
+      },
+      "scheme": {
+        "kind": "bearer"
+      },
+      "subject": "user",
+      "token_endpoint_quirks": [
+        {
+          "attribution": "See `anthropic.console_oauth`'s measurement for the full provenance: Anthropic's CLI docs describe the flow without URLs; the values come from third-party implementations of the same flow and a live-host check.",
+          "behaviour": "Same measured endpoints as `anthropic.console_oauth` — Anthropic publishes no authorize or token URL for the Console flow, and the token host moved from console.anthropic.com to platform.claude.com. Recorded again here rather than cross-referenced because a quirk is read per credential.",
+          "grant": "authorization_code",
+          "measured": "2026-08-12"
+        }
+      ]
     }
   ],
   "authority": "com.anthropic.api",
@@ -53,12 +106,42 @@
       "required": true,
       "secret": true,
       "service": "admin"
+    },
+    {
+      "approval": "none",
+      "binds": "oauth.client_id",
+      "docs_url": "https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication",
+      "format": "text",
+      "help": "The OAuth client ID this deployment authorizes as. Anthropic does not currently operate a public client-registration program for third-party applications, so a deployment supplies the id it has been issued; the value is public, and PKCE rather than a client secret protects the exchange",
+      "label": "Anthropic OAuth client ID",
+      "level": "operator",
+      "name": "oauth_client_id",
+      "required": false,
+      "secret": false,
+      "service": "login"
+    },
+    {
+      "approval": "none",
+      "binds": "oauth.redirect_uri",
+      "docs_url": "https://platform.claude.com/docs/en/cli-sdks-libraries/cli/authentication",
+      "example": "https://exchange.internal/api/oauth/callback",
+      "format": "url",
+      "help": "The callback address this deployment serves, registered against the client ID above. Anthropic's own clients use a loopback callback and fall back to displaying the code for manual paste when no loopback is reachable",
+      "label": "Anthropic OAuth callback URL",
+      "level": "operator",
+      "name": "oauth_redirect_uri",
+      "required": false,
+      "secret": false,
+      "service": "login"
     }
   ],
   "connector": "anthropic",
   "default_auth": [
     [
       "anthropic.api_key"
+    ],
+    [
+      "anthropic.console_oauth"
     ]
   ],
   "description": "Anthropic platform: the live model catalogue, and organization info, members, workspaces, workspace members, API keys and outstanding invites from the Admin API — all read-only",
@@ -68,6 +151,9 @@
       "auth": [
         [
           "anthropic.api_key"
+        ],
+        [
+          "anthropic.console_oauth"
         ]
       ],
       "description": "List the models available to this API key, most recently released first. Unpaginated — this connector cannot request a further page",
@@ -142,6 +228,9 @@
       "auth": [
         [
           "anthropic.api_key"
+        ],
+        [
+          "anthropic.console_oauth"
         ]
       ],
       "description": "Retrieve one model by id, or resolve an alias to the model id it currently points at",
@@ -217,6 +306,9 @@
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "Get the organization this Admin API key belongs to. Takes no parameters; useful for confirming which organization a key resolves to",
@@ -264,6 +356,9 @@
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "List the people in this organization, with each member's name, email address, organization role and the date they joined. Returns personal data about real individuals. Unpaginated — this connector cannot request a further page, so on an organization larger than one page this is a sample and not a roster",
@@ -349,6 +444,9 @@
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "Retrieve one organization member by user id, returning their name, email address, organization role and join date. Returns personal data about a real individual",
@@ -422,6 +520,9 @@
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "List the organization's workspaces. Unpaginated and excludes archived workspaces by default — this connector cannot request a further page or ask for archived ones",
@@ -496,6 +597,9 @@
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "Retrieve one workspace by id, including its name, creation date, whether it is archived, and its data-residency configuration. Unlike anthropic-workspaces-list this reaches an archived workspace, since the id is given rather than filtered for",
@@ -597,6 +701,9 @@
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "List who belongs to one workspace and the role each holds in it. Returns the user ids of real individuals; resolve one to a name and email with anthropic-organization-member-get. Unpaginated — this connector cannot request a further page, so on a workspace larger than one page this is a sample and not a roster",
@@ -685,6 +792,9 @@
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "Retrieve one person's membership of one workspace, and the role they hold in it. This is the direct answer to whether a given user is in a given workspace; it returns the user id of a real individual",
@@ -759,6 +869,9 @@
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "List the organization's API keys, with each key's name, status and a redacted hint — never the key itself. Unpaginated and unfiltered",
@@ -837,6 +950,9 @@
       "auth": [
         [
           "anthropic.admin_key"
+        ],
+        [
+          "anthropic.console_oauth_admin"
         ]
       ],
       "description": "List the organization's invites, with the email address invited, the role offered, and whether the invite is still pending. Returns personal data — an email address for a real person. Unpaginated and unfiltered by status, so a `pending` invite must be selected from the returned entries rather than asked for",
@@ -962,6 +1078,13 @@
       "tags": [
         "ai"
       ]
+    },
+    {
+      "api_version": "v1",
+      "base_url": "https://platform.claude.com",
+      "description": "Anthropic's Console OAuth2 authorize and token endpoints, served by platform.claude.com rather than by the API host.",
+      "gid": "com.anthropic.api/login:v1",
+      "name": "login"
     }
   ],
   "vendor": "Anthropic",

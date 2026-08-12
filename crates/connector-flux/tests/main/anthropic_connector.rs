@@ -283,21 +283,43 @@ fn the_models_service_claims_llm_catalogue_without_reshaping() {
     assert!(model_members.iter().any(|id| id.ends_with("get")));
 }
 
-/// Auth is two `x-api-key` credentials, never a bearer — and the `verify` operation only ever
-/// needs the regular one, so pressing "Test connection" never demands organization-admin access.
+/// The `verify` operation only ever needs the regular key, so pressing "Test connection" never
+/// demands organization-admin access.
+///
+/// **This test said "two `x-api-key` credentials, never a bearer" until C-555, and that premise is
+/// now false by design rather than by drift.** The connector declares four credentials: the two
+/// Console-minted API keys, which still travel as `x-api-key` and are still the only two that do,
+/// and the two Console OAuth2 tokens, which travel as bearers because that is how Anthropic accepts
+/// an OAuth token. The claim worth keeping is the *pairing* — which scheme each credential uses, and
+/// that `verify` needs the unprivileged one — so that is what is asserted now. A future credential
+/// added to either group without a deliberate edit here is still caught.
 #[test]
 fn the_connector_verifies_with_the_regular_key_over_x_api_key() {
     let connector = anthropic();
 
-    let credentials: Vec<&str> = connector
-        .auth
-        .iter()
-        .map(|entry| entry.name.as_str())
-        .collect();
+    let by_scheme = |wanted: fn(&connector_spec::AuthScheme) -> bool| -> Vec<&str> {
+        connector
+            .auth
+            .iter()
+            .filter(|entry| wanted(&entry.scheme))
+            .map(|entry| entry.name.as_str())
+            .collect()
+    };
+
     assert_eq!(
-        credentials,
+        by_scheme(|scheme| matches!(
+            scheme,
+            connector_spec::AuthScheme::Header { name, .. } if name == "x-api-key"
+        )),
         ["anthropic.api_key", "anthropic.admin_key"],
-        "two distinct x-api-key credentials: the regular key and the Admin API key"
+        "two distinct x-api-key credentials: the regular key and the Admin API key. Anthropic \
+         authenticates a key with a custom header and never with `Authorization: Bearer`, so a key \
+         that moved to a bearer would be sending the right secret the wrong way"
+    );
+    assert_eq!(
+        by_scheme(|scheme| matches!(scheme, connector_spec::AuthScheme::Bearer)),
+        ["anthropic.console_oauth", "anthropic.console_oauth_admin"],
+        "the OAuth2-acquired tokens, and only those, travel as bearers (C-555)"
     );
 
     assert_eq!(
@@ -362,6 +384,170 @@ fn no_anthropic_operation_declares_a_query_parameter() {
                 .iter()
                 .map(|param| param.name.as_str())
                 .collect::<Vec<_>>()
+        );
+    }
+}
+
+/// **The Console OAuth2 acquisition, declared as two credentials because privilege differs** (C-555).
+///
+/// Anthropic runs two browser OAuth flows and this connector declares exactly one of them: the
+/// Console flow that `ant auth login` performs, whose authorize and token legs share one origin and
+/// which is therefore expressible by today's single-`endpoint` `OAuth2Spec`. The subscription flow
+/// (authorize on `claude.ai`, token on `platform.claude.com`) is two-host and is deliberately absent
+/// — see `the_two_host_subscription_flow_is_not_half_declared` below.
+///
+/// The split into two credentials is the substantive claim. The Admin API needs `org:admin`; the
+/// model catalogue does not, and this file already refuses to make the catalogue ask for
+/// organization-admin access (`verify` is pinned to the models read for exactly that reason). One
+/// OAuth credential carrying `org:admin` for both surfaces would undo that one line at a time, so a
+/// regression that merges them is caught here.
+#[test]
+fn the_console_oauth_grant_is_declared_as_two_credentials_split_by_privilege() {
+    let connector = anthropic();
+
+    let credential = |name: &str| {
+        connector
+            .auth
+            .iter()
+            .find(|method| method.name == name)
+            .unwrap_or_else(|| panic!("credential `{name}` should be declared"))
+    };
+
+    for name in ["anthropic.console_oauth", "anthropic.console_oauth_admin"] {
+        let method = credential(name);
+        let spec = method
+            .oauth2
+            .as_ref()
+            .unwrap_or_else(|| panic!("`{name}` should declare an `[auth.oauth2]` grant"));
+
+        assert_eq!(
+            method.subject,
+            connector_spec::Subject::User,
+            "`{name}` is issued to the person who completed the grant and is bounded by their own \
+             permissions, not the organization's — a token that acted as the organization would be \
+             the API key, not this"
+        );
+        assert_eq!(
+            spec.endpoint, "login",
+            "`{name}` must resolve its paths against the declared `login` service, so the token \
+             exchange stays inside the egress allow-list `http_hosts` derives from declared base URLs"
+        );
+        assert_eq!(spec.authorize_path, "/oauth/authorize");
+        assert_eq!(spec.token_path, "/v1/oauth/token");
+        assert!(
+            spec.grants
+                .contains(&connector_spec::OAuthGrant::AuthorizationCode)
+                && spec
+                    .grants
+                    .contains(&connector_spec::OAuthGrant::RefreshToken),
+            "`{name}` declares grants {:?}. This flow issues refresh tokens and an unattended \
+             deployment outlives the access token, so both grants are required",
+            spec.grants
+        );
+        assert!(
+            spec.client_id.is_empty(),
+            "`{name}` carries a client id value. A registration value is deployment configuration \
+             and never a declaration field — the `oauth_client_id` config field binding \
+             `oauth.client_id` is where a deployment supplies it"
+        );
+    }
+
+    assert!(
+        credential("anthropic.console_oauth")
+            .oauth2
+            .as_ref()
+            .expect("a grant")
+            .scopes
+            .is_empty(),
+        "the workspace-scoped credential requests no named scope. Anthropic documents the default \
+         as workspace-scoped and names a scope only for the Admin API, so a scope word invented \
+         here is one the authorize endpoint has never seen"
+    );
+    assert_eq!(
+        credential("anthropic.console_oauth_admin")
+            .oauth2
+            .as_ref()
+            .expect("a grant")
+            .scopes,
+        vec!["org:admin".to_string()],
+        "the admin credential requests exactly the one scope Anthropic names for the Admin API — \
+         no comfortable superset"
+    );
+}
+
+/// **Every base URL the composition needs is a literal** — X-154's `NoDeclaredDefault` contract.
+///
+/// Exchange composes the authorize URL from the artifact alone. A `{placeholder}` in the `login`
+/// service's base URL with no declared default would leave it with nothing to resolve, and a
+/// templated auth host is the one a consumer cannot fill in.
+#[test]
+fn the_login_service_base_url_is_resolvable_without_configuration() {
+    let connector = anthropic();
+
+    let login = connector
+        .services
+        .iter()
+        .find(|service| service.name == "login")
+        .expect("the `login` service should be declared");
+    let base_url = login
+        .base_url
+        .as_deref()
+        .expect("the `login` service should declare its own base URL, not inherit the API host");
+
+    assert_eq!(base_url, "https://platform.claude.com");
+    assert!(
+        !base_url.contains('{'),
+        "the login base URL {base_url:?} is templated. X-154's consumer contract is that a base URL \
+         the composition needs is non-templated or carries a declared default; Anthropic serves one \
+         Console origin for everyone, so there is nothing here to parameterise"
+    );
+    assert!(
+        login.base_url.as_deref() != Some(connector.base_url.as_str()),
+        "the auth host and the API host are different hosts, which is the whole reason the `login` \
+         service exists"
+    );
+}
+
+/// **The two-host subscription flow is absent rather than half-declared** (C-555, blocked on C-556).
+///
+/// Anthropic's Claude Pro/Max sign-in authorizes on `claude.ai` and exchanges on
+/// `platform.claude.com`. `OAuth2Spec` binds both legs to one `endpoint` service and therefore to
+/// one origin, so the flow cannot be stated truthfully today.
+///
+/// This test exists because the half-declaration would not otherwise be caught: nothing in the
+/// loader requires `authorize_path` or `token_path` to be present, so a block naming one host and
+/// omitting the other loads clean and composes the missing leg against the wrong origin — and the
+/// wrong origin here is a *live endpoint* (`platform.claude.com/oauth/authorize` is the Console
+/// authorize page), so the failure would be a plausible URL for the wrong flow rather than a 404.
+#[test]
+fn the_two_host_subscription_flow_is_not_half_declared() {
+    let connector = anthropic();
+
+    for service in &connector.services {
+        if let Some(base_url) = service.base_url.as_deref() {
+            assert!(
+                !base_url.contains("claude.ai"),
+                "service `{}` declares the subscription flow's authorize host {base_url:?}. That \
+                 flow's token leg is on a different origin, which `OAuth2Spec`'s single `endpoint` \
+                 cannot express — declaring half of it is what this test refuses. The spec \
+                 extension is C-556",
+                service.name
+            );
+        }
+    }
+
+    for method in &connector.auth {
+        let Some(spec) = &method.oauth2 else {
+            continue;
+        };
+        assert!(
+            !spec.authorize_path.is_empty() && !spec.token_path.is_empty(),
+            "credential `{}` declares an OAuth2 grant with an empty leg (authorize {:?}, token \
+             {:?}). The loader does not require either path, so an omitted one is silently composed \
+             against whatever origin `endpoint` names — state both legs or declare no grant",
+            method.name,
+            spec.authorize_path,
+            spec.token_path
         );
     }
 }
