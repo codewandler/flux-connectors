@@ -226,6 +226,97 @@ async fn assemble_mechanism(
     })
 }
 
+/// **Resolve one channel handshake's declared credential alternatives** (C-558).
+///
+/// The channel twin of [`assemble_credentials`], relocated from `connector-pack`'s
+/// `Credentials::resolve_channel`: the first mechanism whose credentials all resolve wins, the
+/// acquisition axis is applied, and the placed forms are handed back as [`Assembled`] for the channel
+/// producer to put on the URL or the headers. It collects **no** redaction set of its own — the
+/// channel plan carries its secret-bearing fields as [`SensitiveText`], so the redaction posture is
+/// the plan's, not a returned `Vec`.
+///
+/// `operation` is the `provider#binding` label every refusal names; `requirements` is the channel's
+/// `connect.auth` mechanisms; `secrets` is the port the credential is resolved through and `config`
+/// supplies the Basic user half (with the channel's declared defaults already overlaid by the
+/// caller).
+///
+/// # Errors
+///
+/// The same refusals [`assemble_credentials`] raises, for the channel's declared alternatives; none
+/// sends anything, and none carries a credential value.
+pub(crate) async fn resolve_channel(
+    operation: &str,
+    provider: &'static catalog::Provider,
+    requirements: &'static [&'static [&'static str]],
+    tenant: &str,
+    instance: Option<&InstanceId>,
+    secrets: &dyn SecretStore,
+    config: &dyn ConfigPort,
+) -> Result<Vec<Assembled>, Error> {
+    // An explicitly unauthenticated handshake. Distinct from "nothing resolved".
+    if requirements.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut unmet: Vec<String> = Vec::new();
+    for mechanism in requirements {
+        let mut assembled = Vec::with_capacity(mechanism.len());
+        let mut missing = None;
+        for name in *mechanism {
+            let credential =
+                provider
+                    .credential(name)
+                    .ok_or_else(|| Error::UndeclaredCredential {
+                        operation: operation.to_owned(),
+                        credential: (*name).to_owned(),
+                        provider: provider.id.to_owned(),
+                    })?;
+            // A signing secret never leaves — refused before the store is touched.
+            if matches!(credential.place, catalog::Placement::Inbound) {
+                return Err(Error::InboundCredential {
+                    operation: operation.to_owned(),
+                    credential: credential.name.to_owned(),
+                });
+            }
+            let reference = reference(operation, provider, tenant, instance, credential)?;
+            let secret = match secrets.get(&reference).await {
+                Ok(secret) => secret,
+                // Only "this tenant has not connected it" moves on to the next alternative.
+                Err(source) if source.is_not_found() => {
+                    missing = Some(not_found_path(&source));
+                    break;
+                }
+                Err(source) => {
+                    return Err(Error::CredentialStore {
+                        operation: operation.to_owned(),
+                        credential: credential.name.to_owned(),
+                        source,
+                    });
+                }
+            };
+            let user = user_half(operation, credential, tenant, config)?;
+            assembled.push(Assembled::new(
+                credential.name,
+                auth::acquire(credential, secret.expose_secret(), user.as_deref()),
+                credential.place,
+            ));
+        }
+        if let Some(path) = missing {
+            unmet.push(path);
+        } else {
+            return Ok(assembled);
+        }
+    }
+
+    Err(Error::MissingCredential {
+        operation: operation.to_owned(),
+        path: unmet
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "<no address>".to_owned()),
+        alternatives: unmet.len(),
+    })
+}
+
 /// Where `credential` of `provider` is kept for `tenant`'s selected connection.
 fn reference(
     operation: &str,
@@ -321,6 +412,8 @@ mod tests {
         fn resolve(&self, field: ConfigField<'_>) -> Option<ConfigValue> {
             let name = match field {
                 ConfigField::Endpoint(name) | ConfigField::Username(name) => name,
+                // No operation-path credential reads a channel query; the assembler never asks.
+                ConfigField::ChannelQuery { parameter, .. } => parameter,
             };
             self.0.get(name).map(ConfigValue::proposed)
         }

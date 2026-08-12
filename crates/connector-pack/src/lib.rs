@@ -1059,6 +1059,14 @@ impl From<connector_resolve::Error> for Error {
                 env,
             },
             Refused::EmptyMechanism { operation } => Error::EmptyMechanism { operation },
+            // The channel-handshake producer's refusals (C-558), each onto the identically-named and
+            // identically-worded one above.
+            Refused::NotSocketChannel { provider, binding } => {
+                Error::NotSocketChannel { provider, binding }
+            }
+            Refused::VendorSocketChannel { provider, binding } => {
+                Error::VendorSocketChannel { provider, binding }
+            }
         }
     }
 }
@@ -1574,6 +1582,15 @@ pub(crate) mod tests {
             },
             Refused::EmptyMechanism {
                 operation: operation(),
+            },
+            // The channel-handshake producer's refusals (C-558).
+            Refused::NotSocketChannel {
+                provider: "acme".to_owned(),
+                binding: "events".to_owned(),
+            },
+            Refused::VendorSocketChannel {
+                provider: "acme".to_owned(),
+                binding: "socket".to_owned(),
             },
         ];
 

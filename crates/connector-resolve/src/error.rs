@@ -269,4 +269,26 @@ pub enum Error {
         /// The operation id.
         operation: String,
     },
+
+    // -- the channel-handshake producer's refusals (C-558) ---------------------------------------
+    /// A binding whose transport is not `socket` cannot be composed as a WebSocket handshake.
+    #[error("connector `{provider}` binding `{binding}` is not a socket channel")]
+    NotSocketChannel {
+        /// The connector the binding belongs to.
+        provider: String,
+        /// The channel binding that is not a socket.
+        binding: String,
+    },
+
+    /// A vendor-specific socket carries no generic RFC 6455 `connect` declaration to compose from.
+    #[error(
+        "connector `{provider}` binding `{binding}` is vendor-specific and has no generic connect \
+         plan"
+    )]
+    VendorSocketChannel {
+        /// The connector the binding belongs to.
+        provider: String,
+        /// The vendor-specific socket binding.
+        binding: String,
+    },
 }
