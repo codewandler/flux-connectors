@@ -32,6 +32,11 @@ const COMPILER_CRATES: &[&str] = &[
     "codewandler-connector-spec",
     "connector-flux",
     "codewandler-connector-catalog",
+    // The catalog-pack reader (C-537): like `connector-catalog`, a leaf the pipeline writes into —
+    // it embeds the compiled pack — with zero non-optional dependencies of its own. It is in this
+    // bucket for the same reason the catalog is: `connector-catalog` links it, so a socket
+    // reachable from it would end the offline guarantee from below.
+    "codewandler-connector-catalog-reader",
     "codewandler-connector-address",
 ];
 

@@ -321,7 +321,16 @@ dependencies = [
 name = "codewandler-connector-catalog"
 version = "0.21.0"
 dependencies = [
+ "codewandler-connector-catalog-reader",
  "codewandler-flux-lang",
+]
+
+[[package]]
+name = "codewandler-connector-catalog-reader"
+version = "0.21.0"
+dependencies = [
+ "serde_json",
+ "sha2 0.10.9",
 ]
 
 [[package]]

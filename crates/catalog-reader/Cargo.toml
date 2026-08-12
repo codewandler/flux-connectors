@@ -1,0 +1,37 @@
+# The catalog-pack reader (C-537): the embedded pack, and the code that serves it.
+#
+# The package carries the `connector-` prefix the workspace uses on the registry; the library is
+# `catalog_reader`, so consumers write `catalog_reader::operation(…)`. Same split as
+# `codewandler-connector-catalog` / `catalog`.
+
+[package]
+name = "codewandler-connector-catalog-reader"
+description = "Dependency-free reader for the flux-connectors catalog pack: every connector's canonical document in one embedded, versioned, digest-checked file."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/codewandler-connector-catalog-reader"
+keywords = ["flux", "connector", "catalog", "api"]
+categories = ["api-bindings", "data-structures", "parser-implementations"]
+
+[lib]
+name = "catalog_reader"
+path = "src/lib.rs"
+
+# Zero non-optional dependencies is this crate's acceptance criterion (C-537), not a habit: the
+# pack exists so catalogue data stops riding code releases, and reading it must cost a consumer
+# nothing but this crate. The digest check that would ordinarily be a `sha2` dependency is vendored
+# instead (`src/sha256.rs`), cross-checked against `sha2` in tests below.
+[dependencies]
+
+[dev-dependencies]
+# Cross-checks the vendored SHA-256 against the implementation everything else in this workspace
+# hashes with. Dev-only: the zero-dependency property above is about what a consumer resolves.
+sha2.workspace = true
+# Proves in tests that every record this reader slices is the JSON it claims to be. Dev-only for
+# the same reason — interpreting records is the consumer's business, not this crate's.
+serde_json.workspace = true
