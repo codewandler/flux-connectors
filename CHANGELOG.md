@@ -7,6 +7,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The compile destination is a catalog artifact, not Flux source** (C-535, adopting flux-roadmap
+  Decision 0022; program in C-534). The repository contract now states the destination everywhere
+  it stated the old north star: the build will lower the IR to one canonical committed document per
+  provider and a compressed pack the resolver reads, instead of emitting Flux that
+  `connector-pack` parses back. The vision's "compiled, never interpreted" north star is superseded
+  in place with the dated owner amendment quoting the original; `AGENTS.md`, `README.md` and
+  `docs/integrating-with-flux.md` describe the destination while stating plainly that none of it
+  has shipped — the emitter still runs and every artifact still ships until C-536…C-540 land
+  behind the byte-identical differential gate. C-10 (`$auth` injection) and C-15 (the module
+  installer) are closed as superseded, never implemented: Flux never grows a connector module
+  loader. The `.flux`-module half of C-41/`connector-bundle.md` is annotated as superseded; the
+  bundle-directory grouping idea survives. No behavior, artifact byte, or safety invariant changed.
+
 ## [0.21.0] — 2026-08-12
 
 ### Added

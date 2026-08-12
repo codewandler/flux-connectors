@@ -2,7 +2,7 @@
 id: C-535
 title: "Adopt Decision 0022 across the repository contract"
 pillar: Bridge
-status: ready
+status: done
 priority: 0
 design: docs/designs/catalog-artifact.md
 epic: catalog-artifact
@@ -31,7 +31,7 @@ the C-507 precedent.
       without claiming undelivered capability.
 - [x] C-10 and C-15 are closed as superseded with honest historical notes (the C-496 pattern); the
       `.flux`-module half of C-41/`docs/designs/connector-bundle.md` is annotated as superseded.
-- [ ] The generated board and documentation checks pass. This is a contract correction; no
+- [x] The generated board and documentation checks pass. This is a contract correction; no
       failing-first behavioral test applies and no new runtime capability is claimed.
 
 ## Progress
@@ -48,6 +48,10 @@ the C-507 precedent.
   the bundle-directory half intact. **The board is deliberately not regenerated here** — it is
   coordinator-owned at integration, and the status changes to C-10/C-15 make it stale until then,
   which is the last acceptance box's remaining half.
+- 2026-08-12 (integration): merged as `ccd31a97` after an independent PASS review; full Rust gate
+  (`GATE_GREEN`) and the Node web gate (`WEB_GATE_GREEN`, 0 skipped) green on the integration
+  branch; board regenerated in the ledger commit. The reviewer's one substantive finding — every
+  emitted manifest's header still points at C-10 as pending — is filed as C-542.
 
 ## Notes
 

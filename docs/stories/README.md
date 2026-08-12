@@ -66,10 +66,10 @@ _The generalized-provider vocabulary so far names things a service *is* or *hold
 - [C-448 — A contract cannot require a derived value, and nothing says so](C-448-a-contract-cannot-require-a-derived-value.md) · Spec · found via openrouter: its balance is `total_credits - total_usage`, arithmetic this repository has no way to express — AGENTS.md refuses formulas outright. Conformance can map INPUTS; nothing can derive an OUTPUT, and no design records the limit
 
 ### the catalog artifact
-- [C-535 — Adopt Decision 0022 across the repository contract](C-535-adopt-decision-0022.md) · Bridge · Contract correction: amend the vision north star, close C-10/C-15 as superseded, restate Path C and the artifact table for the catalog-artifact destination
 - [C-536 — Emit the canonical catalog document per provider](C-536-canonical-catalog-document.md) · Codegen · One deterministic committed catalog/<name>.catalog.json per provider carrying the complete surface incl. the request template and the four surfaces that reach no artifact today
 - [C-537 — Compile the pack and publish the reader](C-537-compile-the-pack-and-reader.md) · Build · One versioned, digest-carrying compressed pack derived from the canonical documents; a dependency-free reader preserving the catalog API; the catalog crate becomes a shim over the embedded pack
 - [C-538 — Resolve requests from the document, not the Flux](C-538-resolve-from-the-document.md) · Connector · connector-pack derives the request plan from the request template; the parse at spec.rs:250 and the AST walk leave the resolve path behind a whole-catalogue byte-identical differential gate
+- [C-542 — The emitted manifest header cites a superseded story](C-542-manifest-header-cites-a-superseded-story.md) · Codegen · seam.rs writes '# Auth and the http_hosts allowlist land in C-10.' into all 67 manifests; C-10 is closed as superseded (C-535), so the generated comment now points readers at a story that is never coming
 
 ### channel bindings — generalize a flux `channel` over a connector
 _[inbound-events.md](inbound-events.md) models an **event** — the vendor calls us — and stops there._
@@ -112,7 +112,6 @@ _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-56 — Omit an optional body field instead of sending an explicit null](C-56-omit-optional-body-fields.md) · Codegen · query params get a `when` guard; body fields do not
 - [C-67 — Declare the scopes an operation requires](C-67-required-scopes.md) · Spec · least privilege, and mechanical 403 diagnosis
 - [C-68 — Bind a service's endpoint to operator configuration](C-68-endpoint-binding.md) · Spec · closes the SCHEMA GAP every shipped provider records in a comment
-- [C-10 — Emit the $auth marker and the connector manifest](C-10-auth-injection-and-manifest.md) · Codegen · pairs with C-16 · the second generated artifact
 - [C-57 — Let the quirk model describe a success predicate and a body-carried cursor](C-57-quirks-beyond-http-shape.md) · Spec · Slack answers `{"ok": false}` with HTTP 200; its cursor is a body field
 - [C-11 — Prove every generated module parses and analyzes](C-11-parse-and-analyze-gate.md) · Codegen · **load-bearing** · without it invalid Flux can be committed
 - [C-17 — Author provider configs for zendesk, freshdesk and babelforce](C-17-provider-configs.md) · Spec · **the goal** · three configs that compile to executable .flux
@@ -222,7 +221,7 @@ _[inbound-events.md](inbound-events.md) models an **event** — the vendor calls
 
 ### the connector bundle
 _A connector is more than a set of callable operations. It also has **schemas** (what goes in, what_
-- [C-41 — Move build output to a per-provider bundle directory](C-41-bundle-layout.md) · Build · breaking layout change — C-13, C-27 and C-33 all assume the flat shape
+- [C-41 — Move build output to a per-provider bundle directory](C-41-bundle-layout.md) · Build · breaking layout change — C-13, C-27 and C-33 all assume the flat shape. PARTIALLY SUPERSEDED 2026-08-12 by Decision 0022 (C-535): the `.flux`-as-installable-unit half is gone — the compiled form becomes a catalog artifact and the module retires under C-540. The grouping idea survives; re-scope it against the artifact set before implementing
 
 ### Connector Config
 - [C-86 — The connector configuration surface — enough declared data to generate the UI (epic)](C-86-connector-configuration-epic.md) · Spec · EPIC — the two-level configuration vocabulary landed; catalogue projection and hosted OAuth remain explicit backlog stories
@@ -239,7 +238,6 @@ _Owner-stated 2026-08-01: *"it would be great to have something like a security 
 ### Connectors v1 — spec to Flux
 _Prove the whole thesis on two real providers, end to end against a live flux._
 - [C-12 — Compile quirks into Flux control flow](C-12-quirks-as-control-flow.md) · Codegen · the payoff for targeting a real language
-- [C-15 — Install into flux and prove milestone 1 end to end](C-15-install-and-live-e2e.md) · Build · milestone 1 · needs the $auth seam released in ../flux
 - [C-23 — Make operation names a stable public contract](C-23-operation-naming-contract.md) · Codegen · op names are what users and models call — renaming one silently breaks callers
 - [C-24 — Verify generated connectors against recorded HTTP fixtures](C-24-fixture-verification.md) · Build · proves a connector *works*, not merely that it parses — without live credentials
 - [C-46 — Generic connectors — http, a2a, mcp and friends](C-46-generic-connectors.md) · Spec · charter resolved by C-495 — a connector may describe a protocol or technology; mysql still waits on the runtime binding designed by C-47/C-497
@@ -304,7 +302,9 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-7 — Record provenance and write connectors.lock](C-7-provenance-lockfile.md) · Spec
 - [C-8 — Emit a Flux op for a GET with path and query params](C-8-flux-op-emitter.md) · Codegen · first end-to-end slice of codegen
 - [C-9 — Emit request bodies, headers, and response handling](C-9-bodies-and-responses.md) · Codegen
+- [C-10 — Emit the $auth marker and the connector manifest](C-10-auth-injection-and-manifest.md) · Codegen · CLOSED 2026-08-12 as superseded by flux-roadmap Decision 0022 (adopted by C-535), never implemented. Flux never grows a connector module loader, so a module naming a credential for flux to resolve has no consumer; auth assembly landed in Rust instead (C-114/C-115/C-116) and the manifest half ships today. Kept as honest history
 - [C-13 — Build and diff from the vendored spec cache](C-13-cli-build-and-diff.md) · Build
+- [C-15 — Install into flux and prove milestone 1 end to end](C-15-install-and-live-e2e.md) · Build · CLOSED 2026-08-12 as superseded by flux-roadmap Decision 0022 (adopted by C-535), never implemented. Flux never grows a connector module loader, so there is nothing for an installer to install into ~/.flux/flows; `install` still exits with an error pointing here, which now reads as honest history. The live proof this story wanted happened on the host path instead (connectors-api, C-200)
 - [C-16 — Design the $auth seam and file its stories on flux's board](C-16-design-auth-seam.md) · Bridge · design settled + verified against flux v0.38.0 · filing split to C-26
 - [C-18 — Vendor the babelforce spec and curate the provider operation inventory](C-18-vendor-specs-and-inventory.md) · Spec · inventory delivered · spec vendoring split to C-25 (credential literals)
 - [C-25 — Vendor the babelforce spec without publishing credentials](C-25-vendor-babelforce-spec.md) · Spec · DONE through C-415 — five scrubbed documents, a deterministic allowlist-shaped vendoring script, per-document provenance, and tests that refuse credential-shaped or identifying examples
@@ -529,6 +529,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-530 — GitLab authenticates as the integration or on behalf of a user](C-530-gitlab-delegated-oauth.md) · Connector · the first shipped OAuth2 connector — an org-wide static token or a per-user grant, declared as alternatives, with one operator-approved origin serving both the API and the OAuth endpoints of gitlab.com or a self-hosted instance
 - [C-531 — A hosted deployment can be asked for its redirect URI](C-531-a-redirect-uri-is-part-of-the-app-registration.md) · Spec · OAuth2Spec::redirect models a loopback port and path — the native-app shape — so a service reached at https://exchange.internal/... had nowhere to put its callback
 - [C-532 — Internal infrastructure markers leave the public repository](C-532-internal-markers-leave-the-public-repo.md) · Surfaces · docs/designs/spec-front-end.md quoted the internal forge host and the repository paths that its own leak-marker regex names as strings which must never be published
+- [C-535 — Adopt Decision 0022 across the repository contract](C-535-adopt-decision-0022.md) · Bridge · Contract correction: amend the vision north star, close C-10/C-15 as superseded, restate Path C and the artifact table for the catalog-artifact destination
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->
