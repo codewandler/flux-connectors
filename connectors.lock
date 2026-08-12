@@ -3,6 +3,11 @@
 
 version = 1
 
+[pack]
+path = "crates/catalog-reader/catalog.pack"
+schema_version = 1
+sha256 = "7670fe864c96c615b9cc6c4aa21d6813309dc6701b2e31905d43db5c7422b220"
+
 [[provider]]
 id = "airtable"
 generator = "flux-connectors 0.21.0"
