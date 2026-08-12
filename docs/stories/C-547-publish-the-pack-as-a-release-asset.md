@@ -2,7 +2,7 @@
 id: C-547
 title: "Publish the catalog pack as a verifiable release asset"
 pillar: Build
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/catalog-artifact.md
 epic: catalog-artifact
@@ -62,6 +62,11 @@ place to fetch from.
   construction it is a different number from the whole-file one. The workflow therefore checks
   both — whole file against the lockfile, header against its own content — and the README states
   the two-digest split rather than papering over it.
+- 2026-08-12 — Integrated (merge of `impl/C-547`); coordinator-reviewed inline, every line of the
+  write-scoped workflow read (injection-safe env passing, SHA-pinned checkout,
+  `persist-credentials: false`, no PR-triggered path). Scoped gate green post-merge: web 54/54,
+  `cut_release` 11/11. Once this reaches the default branch, a `workflow_dispatch` for v0.22.0
+  replaces the hand-attached assets with mechanically attested identical bytes.
 
 ## Notes
 

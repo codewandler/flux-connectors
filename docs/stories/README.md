@@ -68,7 +68,6 @@ _The generalized-provider vocabulary so far names things a service *is* or *hold
 
 ### the catalog artifact
 - [C-538 — Resolve requests from the document, not the Flux](C-538-resolve-from-the-document.md) · Connector · connector-pack derives the request plan from the request template; the parse at spec.rs:250 and the AST walk leave the resolve path behind a whole-catalogue byte-identical differential gate
-- [C-547 — Publish the catalog pack as a verifiable release asset](C-547-publish-the-pack-as-a-release-asset.md) · Build · Operator-proposed 2026-08-12: attach catalog.pack (+ out-of-band sha256) to the GitHub release so a client fetches the catalogue without cargo; Pack::load(path) already refuses a wrong digest or schema version, so the verification half exists
 - [C-545 — The status route serves a machine-readable pointer to a superseded story](C-545-the-status-route-cites-a-superseded-story.md) · Host · status.rs serves Issue { story: \"C-10\" } behind CREDENTIALS_REACH_THE_REQUEST = false; C-535 closed C-10 as superseded, so a machine-readable consumer is pointed at work that is never coming — found by C-542's implementor
 
 ### channel bindings — generalize a flux `channel` over a connector
@@ -537,6 +536,7 @@ _Every connector we will ever ship differs from its neighbours mostly in **how i
 - [C-536 — Emit the canonical catalog document per provider](C-536-canonical-catalog-document.md) · Codegen · One deterministic committed catalog/<name>.catalog.json per provider carrying the complete surface incl. the request template and the four surfaces that reach no artifact today
 - [C-537 — Compile the pack and publish the reader](C-537-compile-the-pack-and-reader.md) · Build · One versioned, digest-carrying compressed pack derived from the canonical documents; a dependency-free reader preserving the catalog API; the catalog crate becomes a shim over the embedded pack
 - [C-542 — The emitted manifest header cites a superseded story](C-542-manifest-header-cites-a-superseded-story.md) · Codegen · seam.rs writes '# Auth and the http_hosts allowlist land in C-10.' into all 67 manifests; C-10 is closed as superseded (C-535), so the generated comment now points readers at a story that is never coming
+- [C-547 — Publish the catalog pack as a verifiable release asset](C-547-publish-the-pack-as-a-release-asset.md) · Build · Operator-proposed 2026-08-12: attach catalog.pack (+ out-of-band sha256) to the GitHub release so a client fetches the catalogue without cargo; Pack::load(path) already refuses a wrong digest or schema version, so the verification half exists
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

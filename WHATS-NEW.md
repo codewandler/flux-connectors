@@ -14,6 +14,14 @@
 
 ## [Unreleased]
 
+### New
+
+- **The catalogue file is now downloadable from every release page, with its checksum beside
+  it.** You no longer need any of our tooling to obtain the full connector catalogue: fetch the
+  file and its checksum from the release, verify the checksum, and read it — from any language.
+  Each release's file is attached automatically and is refused, loudly, if it does not match what
+  that release's own records say it should be.
+
 ## [0.22.0] — 2026-08-12
 
 ### New

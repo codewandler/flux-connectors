@@ -1069,6 +1069,11 @@ version number is burned, and a wrong `description`, `readme` or `keywords` is f
   [`.github/workflows/crates-io.yml`](.github/workflows/crates-io.yml) does the rest. It needs one
   secret, `CARGO_REGISTRY_TOKEN`, checked before anything is packaged, and holds a `concurrency`
   group so two runs cannot race. `workflow_dispatch` resumes a run that died partway.
+- **The same tag also triggers [`release-assets.yml`](.github/workflows/release-assets.yml)**
+  (C-547): it attaches `catalog.pack` + `catalog.pack.sha256` to the GitHub release, refusing a
+  pack whose digest disagrees with the tag's `connectors.lock` `[pack]` row. It is deliberately a
+  sibling workflow — the publish must gain no new way to go red, and it alone holds
+  `contents: write`. `web/test/release_assets.test.mjs` pins it.
 - **The publish closure is five crates** (C-537 added the reader). `connector-address`,
   `catalog-reader`, `connector-catalog`, `connector-secrets`, `connector-pack` — that is the
   topological order `scripts/publish-crates-io.sh --print-order` derives. `connector-cli`,
@@ -1192,7 +1197,10 @@ against the diff, not against memory.
    does.
 6. **Only once the publish is actually green**, `gh release create vX.Y.Z` with notes derived from
    the changelog entries — headed `## Release Notes` and using the customer voice, as flux's releases
-   do. A release announcing crates that failed to upload is worse than a late one.
+   do. A release announcing crates that failed to upload is worse than a late one. Publishing the
+   release is also what fires `release-assets.yml`'s `release: published` trigger, which attaches
+   the verified `catalog.pack` assets (C-547) — a green *tag-push* run of that workflow is not yet
+   evidence of attachment; the release-event run is.
 
 **What is genuinely not the agent's**: `cargo publish` by hand, in any form other than `--dry-run`.
 That is CI's, and the contract below says why.

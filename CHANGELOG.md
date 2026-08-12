@@ -7,6 +7,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The catalog pack is a verifiable GitHub release asset** (C-547, operator-proposed). Every
+  `vX.Y.Z` release carries `catalog.pack` and `catalog.pack.sha256`, attached mechanically by the
+  new tag-triggered `.github/workflows/release-assets.yml` — a client with no Rust toolchain and
+  no clone fetches the catalogue from the release and verifies it twice: `sha256sum -c` against
+  the out-of-band digest (which equals the tag's `connectors.lock` `[pack]` row), then
+  `Pack::load`'s embedded digest and schema-version refusals. The workflow refuses to attach a
+  pack the tag's lockfile does not vouch for, handles the release-created-after-publish ordering
+  without ever creating a release itself, and holds `contents: write` alone so the crates.io
+  publish gains no new failure mode. The client contract is documented in the reader's README;
+  `web/test/release_assets.test.mjs` pins the workflow against silent narrowing (mutation-tested
+  against seven seeded narrowings). v0.22.0's assets were attached at integration with the digest
+  verified against its tag (`e6c1f242…`).
+
 ## [0.22.0] — 2026-08-12
 
 ### Added
