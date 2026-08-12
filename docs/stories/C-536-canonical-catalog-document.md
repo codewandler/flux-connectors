@@ -35,6 +35,12 @@ template and the surfaces the op grammar cannot say today.
 - [ ] Each document is hashed per provider in `connectors.lock`; the lockfile invariants
       (byte-stable, no credential, no resolved endpoint) hold — extend
       `tests/lockfile.rs::the_lockfile_carries_no_credential_and_no_endpoint` to the new rows.
+- [ ] The document carries **no OAuth2 registration value**: `client_id`/`client_secret`/redirect
+      URI are per-deployment, published only as the operator-level configuration requirement
+      through the existing `binds = "oauth.client_id"` grammar. The vestigial empty `client_id`
+      value (`client_id: ""` for gitlab and babelforce in today's generated catalogue) does not
+      survive into the document; a provider TOML declaring a non-empty one is a build error, not
+      emitted data.
 - [ ] The document schema is published as a versioned JSON Schema and validated in the build, the
       way `core_catalog.rs` validates `web/public/v1/**`.
 - [ ] A failing-first differential test proves, for at least one provider, that the request

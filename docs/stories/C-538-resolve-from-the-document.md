@@ -20,15 +20,21 @@ fail-closed refusal, and the exact bytes on the wire.
 
 ## Acceptance
 
-- [ ] `resolve(entry, egress, credentials, configuration)` and `project(entry)` keep their
-      signatures; `build_request` reads the request template instead of walking a parsed module;
-      `spec.rs`'s `parse_str` and `request.rs`'s AST evaluation are unreachable from the resolve
-      path (a dependency-direction test pins it, the `dependency_fence.rs` pattern).
+- [ ] The plan-deriving core lives in an **engine-free** crate: its `resolve` returns the request
+      plan as data (secret-bearing fields on the redacted-`Debug` pattern), it carries no
+      `codewandler-flux-*` dependency, and a dependency-direction test pins that (the
+      `dependency_fence.rs` pattern). `connector-pack`'s existing `resolve`/`project`/`pack`
+      signatures survive as a thin wrapper over the core, so no consumer breaks; the wrapper's
+      retirement belongs to Exchange's plan-API adoption (X-151), not this story.
+- [ ] `build_request` reads the request template instead of walking a parsed module; `spec.rs`'s
+      `parse_str` and `request.rs`'s AST evaluation are unreachable from the resolve path.
 - [ ] **The differential gate:** a workspace test proves, for every operation in the catalogue,
       that the document-derived plan is byte-identical to the Flux-derived plan — method, URL,
-      headers, query, body, `permission_subjects`, and the registered redaction set. The gate
-      lands failing-first against a seeded divergence and runs in CI until C-540 deletes the old
-      derivation.
+      headers, query, body, `permission_subjects`, and the registered redaction set — **and** that
+      the document-backed configuration surface (endpoint variables, slots, caller path
+      parameters) agrees with the Flux-derived `Rehearsal`'s, because Exchange's settings and
+      connection-verification paths consume that surface. The gate lands failing-first against a
+      seeded divergence and runs in CI until C-540 deletes the old derivation.
 - [ ] Every `connector_pack::Error` variant keeps its name and its trigger; the auth assembly,
       checked redactor registration, endpoint substitution with declared-authority validation, and
       channel plans are untouched in behaviour (their existing tests keep passing unmodified).

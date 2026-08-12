@@ -80,7 +80,13 @@ carries the complete published surface — the IR minus nothing:
   no spelling in the template either.
 - **Auth**: every credential with scheme, acquisition, placement, subject, hazard, user-half
   binding, and the **complete** `OAuth2Spec` (grants, paths, redirect, scopes) plus token-endpoint
-  quirks — ending the `oauth2: bool` collapse.
+  quirks — ending the `oauth2: bool` collapse. **Registration identity is not vendor truth**:
+  `client_id`, `client_secret` and the redirect URI are per-deployment — both shipped OAuth2
+  connectors carry `client_id: ""` in the generated catalogue
+  (`grep 'client_id' crates/catalog/src/generated/{gitlab,babelforce}.rs`) while gitlab already
+  declares the operator-level `oauth_client_id` config field binding `oauth.client_id`. The
+  document publishes the registration **requirement** through that existing `binds` grammar and
+  never a value; the vestigial `client_id` value field does not survive into the document.
 - **Config**: every field with label/help/format/choices/level/approval and its `binds` targets.
 - **`verify`**, **events**, **channel bindings** (transport, verification matrix, payload maps,
   reply, subscription/setup), **runtime bindings** (C-497 vocabulary as it lands).
@@ -108,15 +114,25 @@ a `load` constructor that verifies schema version and digest before serving a si
 
 ### 3. The resolver — the pack minus the parse
 
-`connector-pack` keeps its name, its enforcement topology and its entire assembly path — credential
+`connector-pack` keeps its enforcement topology and its entire assembly path — credential
 resolution ordering, checked redactor registration, scheme placement, endpoint substitution with
 declared-authority validation, channel plans, and every fail-closed `Error` variant by name. What it
 loses is `spec.rs`'s parse and `request.rs`'s AST walk: `build_request` reads the request template
-off the document. `Rehearsal` is replaced by a document-backed equivalent with the same signature
+off the document. `Rehearsal` is replaced by a document-backed equivalent with the same observable
 semantics so Exchange's settings/verify paths migrate mechanically.
 
-`resolve(entry, egress, credentials, configuration)` and `project(entry)` keep their signatures.
-The output gains nothing and loses nothing — the differential gate (below) is the proof.
+The semantics keep their contract; the **signatures shed the engine**. Today
+`connector_pack::resolve` returns `flux_core::Result<Arc<dyn Tool>>`
+(`crates/connector-pack/src/lib.rs:956`), which couples every consumer to one `codewandler-flux-*`
+line even when no catalogue content changed. The plan-deriving core moves to an **engine-free**
+crate — its `resolve` returns the request plan as data, the same unit the differential gate
+compares, with secret-bearing fields on the `SensitiveText`/redacted-`Debug` pattern the channel
+plan already uses. Dispatch and the `Tool`/`ToolSpec` projection are the consumer's: Exchange
+depends on the engine directly for its own workflows and wraps the plan there.
+`connector-pack`'s existing `resolve`/`project`/`pack` surface survives the migration as a thin
+wrapper over the core so no consumer breaks mid-flight; the wrapper retires when Exchange adopts
+the plan API (X-151 in `../flux-exchange`). A dependency-direction test pins the core's engine
+freedom the way `dependency_fence.rs` pins the compiler's offline guarantee.
 
 ## Compatibility projections
 
@@ -133,7 +149,14 @@ The output gains nothing and loses nothing — the differential gate (below) is 
 Old and new derivations run side by side: for every operation in the catalogue (835 today,
 `ls crates/catalog/ops/*/ | grep -c '\.flux$'`), the document-derived request plan must be
 byte-identical to the Flux-derived one — method, URL, headers, query, body, `permission_subjects`,
-and the registered redaction set. The gate is a workspace test, not a promise. Only after it holds,
+and the registered redaction set. The gate covers the **configuration surface** too: the
+document-backed `Rehearsal` equivalent must agree with the Flux-derived one — endpoint variables,
+slots, caller path parameters — across the whole catalogue, because Exchange's settings and
+connection-verification paths consume that surface and the request-plan comparison alone would not
+prove it. (Exchange independently characterizes its current `Rehearsal`-derived behaviour before
+the swap — X-152 in `../flux-exchange` — which needs nothing from this repository and is the
+evidence "same semantics" is checked rather than trusted.) The gate is a workspace test, not a
+promise. Only after it holds,
 and Exchange consumes the reader/resolver release, does C-540 delete the emitter and the `.flux`
 artifacts — deletion in the same release train as proven adoption, per Decision 0022.
 

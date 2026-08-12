@@ -23,10 +23,14 @@ rule and the Decision 0008 schema-release contract.
 - [ ] A `codewandler-connector-*` release carries the pack, reader and document-backed resolver;
       its notes name the schema version and the exact consumer action, and the four-crate publish
       closure still derives (`scripts/publish-crates-io.sh --print-order`).
-- [ ] Adoption stories are filed in `../flux-exchange` covering: swapping the catalogue routes to
-      the reader, replacing the four `Rehearsal` call sites in
-      `crates/exchange-host/src/settings.rs` (416, 471, 1457, 3449 — re-measure before filing),
-      and preserving the grant-gated `Granted::resolve`/`Admitted::resolve` topology unchanged.
+- [ ] Adoption stories are merged in `../flux-exchange`: X-151…X-154 exist on
+      `backlog/catalog-artifact-adoption` (commit 5135304, 2026-08-12) covering the reader, the
+      four `Rehearsal` call sites in `crates/exchange-host/src/settings.rs`, and OAuth2 from the
+      artifact — this item closes when they land on Exchange's main with the grant-gated
+      `Granted::resolve`/`Admitted::resolve` topology stated unchanged.
+- [ ] Exchange's X-152 characterization of today's `Rehearsal`-derived configuration surface runs
+      **before** the swap — it needs nothing from this repository and is the evidence that "same
+      semantics" was checked rather than trusted.
 - [ ] After Exchange's adoption release: `grep -rn 'Rehearsal' ../flux-exchange/crates` reports
       zero production call sites, and Exchange's own gate proves invoke behaviour unchanged
       against its existing fixtures.
