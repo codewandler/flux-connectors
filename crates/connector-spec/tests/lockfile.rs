@@ -430,6 +430,57 @@ ir_sha256 = "cc61fb34bdffc46fea5d86a18cd30917724e87d36e7c4ee4d9a944ecd44553f0"
 "zendesk.flux" = "120970d812836f19888625587a4606a5ad23cef31c8684e601771552548fc6b9"
 "#;
 
+/// The catalog pack's `[pack]` section (C-537): rendered between the version and the provider
+/// rows, round-tripping exactly, and absent — not defaulted — from a lockfile no full build gave
+/// one.
+#[test]
+fn the_pack_section_renders_and_round_trips() {
+    // A pre-C-537 lockfile parses, and its absence of a pack is an absence.
+    let vintage = Lockfile::parse(EXPECTED_RENDERING).expect("an old lockfile still parses");
+    assert!(
+        vintage.pack().is_none(),
+        "a lockfile without a [pack] section records no pack"
+    );
+
+    let mut lockfile = Lockfile::new();
+    lockfile.set_pack(connector_spec::LockPack {
+        path: "crates/catalog-reader/catalog.pack".into(),
+        schema_version: 1,
+        sha256: "c".repeat(64),
+    });
+    let mut connector = bare(Provenance::default());
+    connector.id = "zendesk".into();
+    lockfile.insert(LockEntry::for_connector(&connector, GENERATOR).expect("entry"));
+
+    let rendered = lockfile.to_toml().expect("render");
+    let pack_at = rendered
+        .find("[pack]")
+        .expect("a [pack] section is rendered");
+    let provider_at = rendered
+        .find("[[provider]]")
+        .expect("the provider rows follow");
+    assert!(
+        pack_at < provider_at,
+        "the one whole-catalogue record renders before the per-provider rows:\n{rendered}"
+    );
+
+    let reparsed = Lockfile::parse(&rendered).expect("parse");
+    assert_eq!(reparsed.pack(), lockfile.pack(), "the section round-trips");
+    assert_eq!(
+        rendered,
+        reparsed.to_toml().expect("render"),
+        "parse-then-render is the identity with a pack recorded, as without one"
+    );
+
+    // Recording again replaces, so a rebuild records one pack both times.
+    lockfile.set_pack(connector_spec::LockPack {
+        path: "crates/catalog-reader/catalog.pack".into(),
+        schema_version: 1,
+        sha256: "d".repeat(64),
+    });
+    assert_eq!(lockfile.pack().expect("recorded").sha256, "d".repeat(64));
+}
+
 // ---------------------------------------------------------------------------------------------
 // One hash per input
 // ---------------------------------------------------------------------------------------------
