@@ -14,6 +14,14 @@
 
 ## [Unreleased]
 
+### New
+
+- **GitHub and Anthropic connections can be authorized by signing in, not just by pasting a token.**
+  Like GitLab already offered, a person can now grant a GitHub or Anthropic connection with their
+  own account through a standard browser sign-in, so calls are made with their own permissions. For
+  Anthropic both the Console sign-in and the Claude subscription sign-in are described. The
+  older arrangement — providing an access token directly — still works unchanged.
+
 ## [0.23.0] — 2026-08-12
 
 ### New
