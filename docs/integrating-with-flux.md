@@ -21,10 +21,12 @@ ports are the transport (`Egress`), the secret store (`Credentials`), and the co
 |---|---|---|
 | **A — the Tool pack** (`connector-pack`) | Every operation as a first-class flux `Tool`, dotted (`zendesk.ticket.show`), individually gated, authenticated, executed through *your* `http.request`. | **Yes**, once you supply an `http.request` implementation — see [Gap 1](#gaps). This is the primary path. |
 | **B — the catalogue** (`connector-catalog` / `catalog.json`) | Read-only metadata: operations, schemas, risk, credentials, hosts, and the emitted Flux as text. No execution. | **Yes.** Dependency-free, and there is a JSON form for non-Rust hosts. |
-| **C — the `.flux` modules** (`connectors/*.flux`) | The human-readable contract flux loads from `~/.flux/flows`. | **No** — the modules are unauthenticated and there is no installer. See [Gap 5](#gaps). |
+| **C — the `.flux` modules** (`connectors/*.flux`) | The human-readable contract flux would have loaded from `~/.flux/flows`. | **No, and it is no longer a destination** — the modules are unauthenticated, there is no installer, and Decision 0022 superseded both closing stories. See [Gap 5](#gaps). |
 
 Paths A and B are complementary: B tells a host *what exists*, A makes it *run*. Path C is a
-different execution model that is not finished; do not plan around it.
+retired destination, not an unfinished one — flux-roadmap Decision 0022 (2026-08-12) makes the
+compiled form of a connector a catalog artifact, and Flux never grows a connector module loader.
+Do not plan around Path C.
 
 ---
 
@@ -306,18 +308,24 @@ securely at request time"*. That is a true statement about **Path C**, and it is
 
 ## Path C — the `.flux` modules
 
-`connectors/<provider>.flux` remains the human-readable contract and the artifact flux would load from
-`~/.flux/flows`. It is **not** an integration path today:
+`connectors/<provider>.flux` remains the human-readable contract and, historically, the artifact flux
+would have loaded from `~/.flux/flows`. It is **not** an integration path, and since flux-roadmap
+Decision 0022 (2026-08-12, adopted by [C-535](stories/C-535-adopt-decision-0022.md)) it is a retired
+destination rather than an unfinished one:
 
 - The modules are **unauthenticated**. `$auth` — a module naming a credential and having flux resolve
-  and place it — is [C-10](stories/C-10-auth-injection-and-manifest.md), and it is not landed.
-- There is **no installer**. `flux-connectors install` exits with an error pointing at
-  [C-15](stories/C-15-install-and-live-e2e.md).
+  and place it — was [C-10](stories/C-10-auth-injection-and-manifest.md), now closed as superseded:
+  Flux never grows a connector module loader.
+- There is **no installer**, and none is coming. `flux-connectors install` exits with an error
+  pointing at [C-15](stories/C-15-install-and-live-e2e.md), now closed as superseded.
 
-`$auth` is not obsolete and is not this repository's to land: it is what would keep a generated module
-executable *as Flux* by a host that has never heard of `connector-pack`. But it is off the critical
-path for Path A, and [docs/designs/auth-seam.md](designs/auth-seam.md) now records a road not taken
-rather than a blocker.
+What replaced the destination: the compiled form of a connector becomes a versioned catalog
+artifact — data the resolver (today's `connector-pack` assembly path) reads, instead of Flux text it
+parses back. The program is [C-534](stories/C-534-catalog-artifact-epic.md) with the schema design
+in [designs/catalog-artifact.md](designs/catalog-artifact.md); none of it has shipped, and the
+`.flux` modules keep being emitted until its differential gate proves the document-derived requests
+byte-identical. [designs/auth-seam.md](designs/auth-seam.md) already recorded `$auth` as a road not
+taken rather than a blocker; the supersession makes that permanent.
 
 ---
 
@@ -346,7 +354,7 @@ before "fixing" one.
 | 2 | ~~**The crates are unpublished.**~~ **Closed, and proved consumable.** All four are on crates.io — first 2026-07-31 (0.7.0), now **0.17.0**. A crate built outside this workspace against the registry versions compiles and runs: `catalog::operation`, `connector_pack::pack(&["zendesk"], …)`, one Flux engine line, no HTTP client. | None. Depend on `codewandler-connector-*` from the registry, and read [Step 0](#step-0--get-the-crates) for the engine line you are thereby committing to. | [C-190](stories/C-190-publish-catalog-pack-secrets.md) |
 | 3 | **Six declared surfaces reach no artifact.** `config` (112 fields / 40 providers), `verify` (40 providers), service `roles`, `quirks.pagination`, `graphs`, `quirks.rate_limit` are in the IR and validated by the loader, and appear in neither the manifest nor the catalogue. | A host **cannot render a settings page**, cannot discover the "Test connection" operation, cannot page a list — for connectors that declare all of it. You must supply endpoint values (Step 3) knowing only the variable names, read off each operation's emitted Flux. `site.rs` also collapses the whole `OAuth2Spec` to `oauth2: bool`, so **no host can build an authorize URL from the published catalogue.** | [C-87](stories/C-87-configuration-codegen.md) `ready`, [connector-surfaces.md](designs/connector-surfaces.md) |
 | 4 | **Published `status.works` remains dominated by the catalog-scoped `credential-not-injected` issue** describing the module path. `unbound-base-url-template` reads as stale too, since C-193 closed it for the pack. | A host filtering the catalogue on `works` omits operations the pack executes correctly. Filter on issue `code`/`scope`; treat `no-credential` as real and `credential-not-injected` as Path-C-only. The retired `unencodable-query-value` token may occur only in older catalogue documents. | none filed — worth one |
-| 5 | **The `.flux` module path is unauthenticated and uninstallable.** | Path C is unavailable. | [C-10](stories/C-10-auth-injection-and-manifest.md), [C-15](stories/C-15-install-and-live-e2e.md) |
+| 5 | **The `.flux` module path is unauthenticated, uninstallable — and now a retired destination.** Decision 0022 makes the compiled form a catalog artifact and closes [C-10](stories/C-10-auth-injection-and-manifest.md) and [C-15](stories/C-15-install-and-live-e2e.md) as superseded; the modules keep being emitted until [C-534](stories/C-534-catalog-artifact-epic.md)'s differential gate holds. | Path C is unavailable and stays so. Plan on Path A; the coming resolver keeps Path A's surface and reads document data instead of parsed Flux. | [C-534](stories/C-534-catalog-artifact-epic.md); the closed stories remain as honest history |
 | 6 | **No inbound adapter.** Events and channels are published and unconsumed. | Webhooks, Socket Mode and polling are yours to build. | [C-118](stories/C-118-connector-channel-adapter.md) `ready` |
 | 7 | **Form bodies still lack percent-encoding.** C-30 closed query injection with Flux 0.54's structured query field; form pairs remain text assembled by the emitter. | Keep unconstrained form values out until the body encoder published upstream as `L-101` reaches flux-lang. | [query-encoding-flux-stories.md](designs/query-encoding-flux-stories.md) |
 | 8 | **Freshdesk declares no credential**, deliberately: its API key occupies the Basic *username* position, which the model treats as non-secret config, so emitting it would bypass secret gating and redaction. | All 9 of its operations fail closed with a `401`. | [C-16](stories/C-16-design-auth-seam.md) |

@@ -73,10 +73,27 @@ and reaches official integrations only through its embedded Exchange client.
 
 ## North star
 
-**A connector is compiled, never interpreted.** The TOML is input to a compiler; the artifact that
-runs is Flux — a real typed language with an analyzer, a formatter, and first-class `retry`,
-`throttle`, `saga`, and approval gates. Any proposal that moves behavior back into config the runtime
-reads directly is wrong, however convenient it looks.
+**A connector compiles to a catalog artifact; behaviour stays in Flux.** The TOML is input to a
+compiler, and what the compiler produces is closed, total, declarative data — an explicit request
+template the resolver evaluates. Behaviour — composition, `retry`, `throttle`, `saga`, approval —
+stays in Flux-Lang, authored at the Flux layer against projected tools, never baked into a
+connector. Any proposal that moves *behaviour* into config a runtime reads directly is still wrong,
+however convenient it looks; request shaping sits on the data side of that line, deliberately.
+
+**Historical context:** this north star was amended on 2026-08-12, by the owner, when flux-roadmap
+[Decision 0022](../../flux-roadmap/decisions/0022-connectors-compile-to-a-catalog-artifact.md) was
+accepted ([C-535](stories/C-535-adopt-decision-0022.md) is the adoption). It previously read: *"A
+connector is compiled, never interpreted. The TOML is input to a compiler; the artifact that runs
+is Flux — a real typed language with an analyzer, a formatter, and first-class `retry`, `throttle`,
+`saga`, and approval gates. Any proposal that moves behavior back into config the runtime reads
+directly is wrong, however convenient it looks."* That sentence was written for a world where Flux
+loads `connectors/<name>.flux` from `~/.flux/flows` and resolves credentials in-language via
+`$auth`; that world was never built, and the shipped system recovers every request by parsing the
+emitted Flux back out of the catalogue (`connector-pack`'s deliberately closed AST walk). The
+prohibition stands for behaviour and is redrawn honestly for request shaping. Nothing has shipped
+against the new destination yet: the build still emits `.flux` modules, and keeps doing so until
+[C-534](stories/C-534-catalog-artifact-epic.md)'s differential gate proves the document-derived
+requests byte-identical — see [designs/catalog-artifact.md](designs/catalog-artifact.md).
 
 ## Principles
 

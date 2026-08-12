@@ -2,11 +2,11 @@
 id: C-15
 title: Install into flux and prove milestone 1 end to end
 pillar: Build
-status: backlog
+status: done
 design: docs/designs/connectors-v1.md
 epic: connectors-v1
 areas: [connector-cli, flux-bridge]
-note: milestone 1 · needs the $auth seam released in ../flux
+note: "CLOSED 2026-08-12 as superseded by flux-roadmap Decision 0022 (adopted by C-535), never implemented. Flux never grows a connector module loader, so there is nothing for an installer to install into ~/.flux/flows; `install` still exits with an error pointing here, which now reads as honest history. The live proof this story wanted happened on the host path instead (connectors-api, C-200)"
 ---
 
 # Install into flux and prove milestone 1 end to end
@@ -29,9 +29,24 @@ Anthropic ops register, appear as LLM tools, and call the live APIs successfully
       substantiating the plugin-replacement claim.
 
 ## Progress
-- (not started)
+- **2026-08-12 — closed as superseded by Decision 0022
+  (`../flux-roadmap/decisions/0022-connectors-compile-to-a-catalog-artifact.md`), adopted by
+  [C-535](C-535-adopt-decision-0022.md). Nothing above was implemented, and the acceptance boxes
+  stay unticked deliberately** — that is the honest history (the C-496 pattern). This story's
+  premise was flux loading installed `.flux` modules from `~/.flux/flows` through the `$auth` seam;
+  Decision 0022 rule 5 states Flux never grows a connector module loader, C-10 is closed with this
+  story, and the compiled form of a connector becomes a catalog artifact
+  ([C-534](C-534-catalog-artifact-epic.md)). What it wanted proven arrived on the host path
+  instead: operations register as flux Tools through `connector-pack`, and the first live,
+  authenticated vendor call is recorded in `crates/connectors-api/README.md` §"The live leg,
+  performed and labelled". `flux-connectors install` keeps its explicit error pointing here rather
+  than gaining best-effort behaviour; whether it acquires a catalog-artifact meaning is C-534's
+  program to decide.
 
 ## Notes
+- **Superseded without implementation** by Decision 0022 via [C-535](C-535-adopt-decision-0022.md);
+  see Progress. The notes below are kept as written — they describe the module-loading world this
+  story was filed for, and the `done` status records the close, not delivery.
 - **Blocked on `C-16`**: the live run needs the `$auth` seam shipped in a `../flux` release. Every
   other story in the epic is independent of it, so this is the only place the cross-repo dependency
   bites.

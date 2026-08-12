@@ -2,12 +2,12 @@
 id: C-10
 title: Emit the $auth marker and the connector manifest
 pillar: Codegen
-status: ready
+status: done
 priority: 7
 design: docs/designs/auth-seam.md
 epic: connectors-v1
 areas: [connector-flux, flux-bridge]
-note: pairs with C-16 · the second generated artifact
+note: "CLOSED 2026-08-12 as superseded by flux-roadmap Decision 0022 (adopted by C-535), never implemented. Flux never grows a connector module loader, so a module naming a credential for flux to resolve has no consumer; auth assembly landed in Rust instead (C-114/C-115/C-116) and the manifest half ships today. Kept as honest history"
 ---
 
 # Emit the $auth marker and the connector manifest
@@ -38,9 +38,24 @@ plugin's are.
 - [ ] Generated ops declare the `network` effect.
 
 ## Progress
-- (not started)
+- **2026-08-12 — closed as superseded by Decision 0022
+  (`../flux-roadmap/decisions/0022-connectors-compile-to-a-catalog-artifact.md`), adopted by
+  [C-535](C-535-adopt-decision-0022.md). Nothing above was implemented, and the
+  acceptance boxes stay unticked deliberately** — that is the honest history (the C-496 pattern).
+  The `$auth` marker assumed flux would load `connectors/<name>.flux` as a module and resolve the
+  credential in-language; that world was never built, Decision 0022 rule 5 states Flux never grows
+  a connector module loader, and the compiled form of a connector becomes a catalog artifact
+  ([C-534](C-534-catalog-artifact-epic.md)). What this story wanted arrived by other routes: auth
+  assembly moved into Rust in `connector-pack` (C-114/C-115/C-116 — the prefix, the base64 pair,
+  query placement, redactor registration), and the manifest half ships today —
+  `connectors/*.connector.toml` carries `[[auth]]` entries and derived hosts (67 manifests on
+  2026-08-12: `ls connectors/ | grep -c '.connector.toml'` → `67`). The no-credential-value
+  guarantee it asked a test for is vision principle 4, enforced across artifacts and lockfile.
 
 ## Notes
+- **Superseded without implementation** by Decision 0022 via [C-535](C-535-adopt-decision-0022.md);
+  see Progress. The notes below are kept as written — they describe the module-loading world this
+  story was filed for, and the `done` status records the close, not delivery.
 - Blocked on nothing here — the *generated text* can be produced and golden-tested before flux
   understands `$auth`. Only the live run (`C-15`) needs the seam released.
 - Object keys quote losslessly in Flux text (`fmt_obj_key`,

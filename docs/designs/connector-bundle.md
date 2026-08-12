@@ -1,6 +1,19 @@
 # Design: the connector bundle
 
-**Status:** proposed · **Pillar:** Codegen · **Stories:** C-39 … C-41
+**Status:** proposed, **partially superseded** · **Pillar:** Codegen · **Stories:** C-39 … C-41
+
+> **Partially superseded (2026-08-12) by flux-roadmap Decision 0022, adopted by
+> [C-535](../stories/C-535-adopt-decision-0022.md).** Everything below that treats
+> `connectors/<name>.flux` as the installable unit is superseded: the compiled form of a connector
+> is a versioned catalog artifact ([catalog-artifact.md](catalog-artifact.md)), Flux never grows a
+> connector module loader, and the emitted module retires under
+> [C-540](../stories/C-540-retire-connector-flux.md)'s differential gate. That takes with it the
+> premise of "What the `.flux` file is for" (parse cost at session start), the two synthetic
+> introspection ops as module members — the canonical document *is* the introspection surface —
+> and the settled note that "the final build artifact is one `.flux` per provider". What survives
+> unchanged: the bundle as a **directory** grouping a connector's artifacts, icons alongside and
+> never embedded, the trademark/licensing answer (C-437), and the observation that output schemas
+> are the weak link. The text is kept as written below, as honest history.
 
 ## Why
 
