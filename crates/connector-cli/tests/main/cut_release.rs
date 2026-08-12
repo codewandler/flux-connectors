@@ -41,6 +41,20 @@
 //!
 //! The publish path is deliberately not modelled at all — the stub *fails* on `cargo publish`, so
 //! "the cut never publishes" is a property of the run rather than of a grep over the source.
+//!
+//! # One real thing this file needs on the machine: `cargo-nextest`
+//!
+//! Since C-543 the gate runs the suite through `cargo nextest run`, and the script refuses to cut
+//! on a machine without the runner — with the install line, rather than with cargo's bare
+//! `no such command: nextest`. That preflight asks `command -v cargo-nextest`, which reaches the
+//! **real** binary on `PATH` and not the stub, because the question is whether the runner is
+//! installed and the stub cannot answer it honestly. So every green-cut test here needs
+//! `cargo-nextest` present; without it they fail at the preflight, which is the same refusal a
+//! developer would get and names its own fix:
+//!
+//! ```text
+//! cargo install cargo-nextest --locked --version 0.9.143
+//! ```
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -270,10 +284,16 @@ case "${{1:-}}" in
   update)
     sed -i -E "s/^version = \"[0-9]+\.[0-9]+\.[0-9]+\"/version = \"$(workspace_version)\"/" Cargo.lock
     ;;
-  fmt | build | test | clippy)
+  fmt | build | test | clippy | nextest)
+    # `nextest` joins the gate verbs in C-543: the suite runs through `cargo nextest run`, and
+    # doc-tests stay behind `cargo test --workspace --doc`, so a cut invokes both spellings.
+    #
     # A gate step is a *direct* child of the script, so $PPID is the script itself — which is what
     # makes "a fatal signal mid-cut" reproducible at a known point rather than by racing a pipe.
-    if [ -n "${{STUB_SIGNAL:-}}" ] && [ "$1" = "test" ]; then
+    # The signal rides on `nextest` rather than `test`, so it still lands on the FIRST gate step
+    # that runs tests; keying it on `test` would now fire at the doc-test step instead, one step
+    # later and for no stated reason.
+    if [ -n "${{STUB_SIGNAL:-}}" ] && [ "$1" = "nextest" ]; then
       kill -"$STUB_SIGNAL" "$PPID"
       exit 0
     fi
@@ -768,9 +788,13 @@ fn a_cut_regenerates_every_artifact_and_stamps_the_new_version() {
         .iter()
         .position(|line| line.contains("connector-cli -- build"))
         .expect("the cut regenerated");
+    // Pinned to the runner the gate actually names (C-543). This was `test --workspace`, which a
+    // nextest gate still satisfies by prefix through its `test --workspace --doc` step — so it
+    // would have kept passing while asserting about a step this comment never meant, which is the
+    // drift the assertion exists to catch wearing the assertion's own clothes.
     let gate = invocations
         .iter()
-        .position(|line| line.starts_with("test --workspace"))
+        .position(|line| line.starts_with("nextest run --workspace"))
         .expect("the cut ran the gate");
     assert!(
         build < gate,
