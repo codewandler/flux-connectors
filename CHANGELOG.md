@@ -7,6 +7,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The test suite links one binary per crate, not one per file** (C-533, first delivery of
+  C-546's test-cost program). The workspace's 201 integration-test files are now `#[path]` modules
+  of nine `tests/main.rs` roots — no test deleted, merged or weakened, proven by name-level
+  identity of the before/after `cargo test --workspace -- --list` output (1892 = 1892, identical
+  per-package multisets). Executables in `target/debug/deps` fall 792 → 38 and integration link
+  targets 201 → 9; a full clean workspace test run completes in 473 s. The shared
+  `shipped_provider`/`origin_corpus` support modules are declared once per consuming binary
+  instead of `#[path]`-included 88 times. A single test is now addressed as
+  `cargo test -p <package> --test main <module>::<test>`; AGENTS.md's expected-staleness table and
+  gate advice were reconciled in the same change.
+
 ### Added
 
 - **The catalog pack is a verifiable GitHub release asset** (C-547, operator-proposed). Every

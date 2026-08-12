@@ -295,27 +295,37 @@ cargo fmt --all --check
 ```
 
 `--no-fail-fast` is not optional here. Plain `cargo test --workspace` stops at the first failing
-binary, and the expected failures below are spread across **six** of them, so a run without it
-reports a number that is simply wrong — see [Validation](#validation).
+binary; since C-533 each crate links **one** integration-test binary (`tests/main.rs`), so the
+expected failures below live in two of them — `catalog`'s and `connector-cli`'s — and a run
+without the flag stops at whichever fails first and reports a number that is simply wrong — see
+[Validation](#validation).
 
-**A story that adds a new provider leaves exactly nine tests red across six binaries, and that is
-the design working.** They are whole-catalogue staleness checks, and every one is red precisely
+**A story that adds a new provider leaves exactly nine tests red, and that is the design
+working.** They are whole-catalogue staleness checks, and every one is red precisely
 because the implementor correctly did *not* write a whole-catalogue file. Measured, not predicted —
 re-measured on 2026-08-01 when C-189 made `connectors.lock` the fifth whole-catalogue artifact and
 so added the ninth row: add `providers/<id>.toml` + `specs/<id>/v1.json`, run
-`build --provider <id>`, then `cargo test --workspace --no-fail-fast`.
+`build --provider <id>`, then `cargo test --workspace --no-fail-fast`. **The nine predate
+C-536/C-537**: the canonical-document and pack fixed-point checks
+(`catalog_document::the_committed_documents_are_a_fixed_point_of_a_build`,
+`catalog_pack::the_committed_pack_is_byte_identical_to_a_fresh_compile`) assert over a full plan
+and, read from their sources on 2026-08-12, join this family for a new provider — re-measure and
+update this table at the next new-provider integration rather than trusting either count.
 
-| red test | binary | what it is reporting |
+The module column names the test's module inside its crate's single `main` test target (C-533);
+run one with `cargo test -p <package> --test main <module>::`.
+
+| red test | binary and module | what it is reporting |
 |---|---|---|
-| `the_provider_list_matches_the_repository` | `catalog::embedded_operations` | the committed index does not yet name the new provider |
-| `the_catalog_is_not_empty` | `catalog::embedded_operations` | the provider and rendering counts disagree with `providers/` and `ops/` |
-| `the_committed_tree_is_a_fixed_point_of_a_build` | `connector-cli::catalog_artifacts` | a full build would write the index and `catalog.json` |
-| `a_build_plans_both_readme_images_and_they_are_current` | `connector-cli::readme_snippet` | same whole-tree fixed-point assertion, reached from the README images |
-| `the_shipped_artifacts_are_byte_identical` | `connector-cli::service_units` | same again; it excludes only `catalog.json`, so the stale index surfaces here |
-| `the_published_catalogue_carries_the_service` | `connector-cli::service_units` | committed `catalog.json` does not carry the new provider's service |
-| `every_shipped_operation_carries_its_metadata_and_its_flux` | `connector-cli::site_catalog` | committed `catalog.json` is missing the new provider's operations |
-| `the_build_writes_and_checks_site_catalog_json` | `connector-cli::site_catalog` | same, from the document-level check |
-| `the_committed_lockfile_is_a_fixed_point_of_a_build` | `connector-cli::lockfile` | committed `connectors.lock` has no row for the new provider (C-189) |
+| `the_provider_list_matches_the_repository` | `catalog::main`, `embedded_operations` | the committed index does not yet name the new provider |
+| `the_catalog_is_not_empty` | `catalog::main`, `embedded_operations` | the provider and rendering counts disagree with `providers/` and `ops/` |
+| `the_committed_tree_is_a_fixed_point_of_a_build` | `connector-cli::main`, `catalog_artifacts` | a full build would write the index and `catalog.json` |
+| `a_build_plans_both_readme_images_and_they_are_current` | `connector-cli::main`, `readme_snippet` | same whole-tree fixed-point assertion, reached from the README images |
+| `the_shipped_artifacts_are_byte_identical` | `connector-cli::main`, `service_units` | same again; it excludes only `catalog.json`, so the stale index surfaces here |
+| `the_published_catalogue_carries_the_service` | `connector-cli::main`, `service_units` | committed `catalog.json` does not carry the new provider's service |
+| `every_shipped_operation_carries_its_metadata_and_its_flux` | `connector-cli::main`, `site_catalog` | committed `catalog.json` is missing the new provider's operations |
+| `the_build_writes_and_checks_site_catalog_json` | `connector-cli::main`, `site_catalog` | same, from the document-level check |
+| `the_committed_lockfile_is_a_fixed_point_of_a_build` | `connector-cli::main`, `lockfile` | committed `connectors.lock` has no row for the new provider (C-189) |
 
 Four of the nine are the *same* whole-tree fixed-point assertion written in four places; the rest
 are `catalog.json`, index and lockfile staleness. Report them and stop; do **not** run a full build
@@ -998,7 +1008,11 @@ report would not have. **If your change touches `crates/connectors-api/ui/` or `
 `npm ci && npm test` there and quote the output** — a suite that cannot run is green by absence.
 
 Read `cargo test --workspace` correctly: it stops at the first failing test binary. A count of green
-summaries does not prove the remaining binaries ran. As a diagnostic, this must print nothing:
+summaries does not prove the remaining binaries ran. Since C-533 each crate's integration tests
+link as **one** binary — `crates/<crate>/tests/main.rs`, with every former `tests/<file>.rs` a
+`#[path]` module under `tests/main/` — so the workspace runs 9 integration binaries instead of
+~200, and a single test is addressed as
+`cargo test -p <package> --test main <module>::<test>`. As a diagnostic, this must print nothing:
 
 ```bash
 cargo test --workspace 2>&1 | grep -E "FAILED|error: test failed|panicked at"
@@ -1052,7 +1066,7 @@ one the page answers for, in both directions. It needs no Node and runs in `carg
 with everything else.
 
 For a truly docs-only change, narrower checks are acceptable. State exactly what ran. Changes to
-README Flux examples must run `cargo test -p connector-cli --test readme_snippet`. Changes under
+README Flux examples must run `cargo test -p connector-cli --test main readme_snippet::`. Changes under
 `web/` must run the site build and tests. Changes to `crates/connectors-api/src/index.html` — or to
 anything under `crates/connectors-api/ui/` — must run the host-page gate above. Changes to generated
 public catalogue data or Rust emitters are not docs-only and require the relevant Rust tests plus
