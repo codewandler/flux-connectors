@@ -62,11 +62,18 @@ const_headers = { "Accept" = "application/vnd.github+json" }
 
 description = "GitHub REST API: discover the authenticated user, their organisations and reachable repositories; read repositories, commits, issues, pull requests and Actions workflow runs; and write issues and issue comments"
 
-# One credential covers the whole selection. GitHub Apps' installation tokens, fine-grained personal
-# access tokens and classic PATs all present identically as `Authorization: Bearer <token>`, so the
-# token *type* is operator configuration rather than connector shape; what differs between them is
-# which scopes the token carries, which is not something this file can or should assert.
-default_auth = [{ credentials = ["github.token"] }]
+# Either credential authenticates every operation, and the two are alternatives rather than a pair
+# (C-554): a deployment provisions one static token org-wide, or each user completes an OAuth2 grant
+# and acts as themselves. A host picks; this file only says both are valid.
+#
+# The static token's own note is unchanged and still applies to it: GitHub Apps' installation tokens,
+# fine-grained personal access tokens and classic PATs all present identically as
+# `Authorization: Bearer <token>`, so the token *type* is operator configuration rather than
+# connector shape.
+default_auth = [
+  { credentials = ["github.oauth_token"] },
+  { credentials = ["github.token"] },
+]
 
 # The "Test connection" button (C-527). `GET /user` takes no parameters and cannot do anything
 # except prove the token resolves — it returns the authenticated user, which is also what a settings
@@ -86,6 +93,10 @@ verify = "github-user-get"
 # ---------------------------------------------------------------------------------------------
 
 [spec]
+# Every operation this document contributes joins the published `default` service. Stated rather
+# than implied because the `login` service below makes omission a loud error (C-458), which is what
+# stops a selected operation drifting into the address-elided service by silence.
+service = "default"
 path = "specs/github/api.github.com.2022-11-28-2026-08-02.openapi.json"
 source_url = "https://raw.githubusercontent.com/github/rest-api-description/5e28810649ba41b5483753ba74f976f83856a504/descriptions/api.github.com/api.github.com.2022-11-28.json"
 upstream_version = "1.1.4"
@@ -213,9 +224,141 @@ omit.query = ["since", "before"]
 [[auth]]
 name = "github.token"
 scheme = "bearer"
-# The sole secret. Gated and registered with flux's redactor by the host; never read here.
+# The static secret. Gated and registered with flux's redactor by the host; never read here.
 env = ["GITHUB_TOKEN"]
 description = "GitHub token sent as a bearer — a GitHub App installation token, a fine-grained PAT, or a classic PAT"
+
+[[auth]]
+# **The delegated credential: an operator registers one OAuth application, and each person grants
+# it** (C-554). The static token above stays for the org-wide arrangement where one credential is
+# provisioned once; this is the "on behalf of" arrangement, where a signed-in user completes the
+# grant and the host stores the result for that user alone.
+#
+# Both are declared because they are genuinely different deployments of the same connector, and
+# `default_auth` admits either. Nothing here chooses between them — that is the host's, and it is
+# why `subject` exists.
+name = "github.oauth_token"
+scheme = "bearer"
+subject = "user"
+description = "GitHub OAuth2 access token obtained on behalf of a signed-in user. Bounded by that user's own permissions, never by the application's"
+
+# The host runs every grant; nothing this repository emits performs OAuth. `endpoint` names the
+# declared `login` service rather than carrying a URL, which is the property that keeps the token
+# exchange inside the egress allow-list — `http_hosts` derives from declared base URLs, so a URL
+# written here would name a host nothing had admitted.
+#
+# ---------------------------------------------------------------------------------------------
+# VERIFIED AGAINST GITHUB'S PUBLISHED DOCUMENTATION, 2026-08-12. Every endpoint fact below was read
+# from the vendor's own pages on that date rather than recalled:
+#
+#   - Authorizing OAuth apps —
+#     https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps
+#     gives the browser leg as `GET https://github.com/login/oauth/authorize` and the exchange as
+#     `POST https://github.com/login/oauth/access_token`, and describes `scope` as "A space-delimited
+#     list of scopes."
+#   - Scopes for OAuth apps —
+#     https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps
+#     is the source for every scope definition quoted below.
+#
+# **The auth host is not the API host, which is the whole reason `login` exists.** Every operation
+# in this connector goes to `api.github.com`; the two paths below are served by `github.com`. The
+# same page shows the split directly — it documents the token being used against
+# `GET https://api.github.com/user` after being obtained from `github.com`.
+# ---------------------------------------------------------------------------------------------
+[auth.oauth2]
+endpoint = "login"
+authorize_path = "/login/oauth/authorize"
+token_path = "/login/oauth/access_token"
+
+# ---------------------------------------------------------------------------------------------
+# SCOPES — the minimum the thirteen operations below need, derived one at a time from GitHub's own
+# per-endpoint statements rather than chosen as a comfortable superset.
+#
+# Only three of the thirteen endpoints document a classic scope at all; for the rest the requirement
+# comes from the canonical scope definitions, and that difference is recorded here rather than
+# smoothed over.
+#
+# `repo` — "Grants full access to public and private repositories including read and write access to
+#   code, commit statuses, repository invitations, collaborators, deployment statuses, and repository
+#   webhooks." Documented *explicitly* for `github-workflow-run-list`: the workflow-runs page
+#   (https://docs.github.com/en/rest/actions/workflow-runs) says "OAuth app tokens and personal
+#   access tokens (classic) need the repo scope to use this endpoint with a private repository."
+#   It covers every other repository-scoped read here and both writes.
+#
+#   **It is broader than this connector is, and there is no narrower classic scope that reaches a
+#   private repository at all.** `public_repo` is defined as "Limits access to public repositories",
+#   and GitHub's classic model publishes no read-only private-repository scope — so a connector that
+#   must read a private repository asks for `repo` or asks for nothing usable. The narrowing GitHub
+#   does offer is fine-grained permissions, which belong to a *different* app model that takes no
+#   scopes at all (see the grant note below). Recorded because a reader should know this is the
+#   vendor's floor and not this file's convenience.
+#
+# `read:org` — "Read-only access to organization membership, organization projects, and team
+#   membership." Documented *explicitly* for `github-org-list`: the orgs page
+#   (https://docs.github.com/en/rest/orgs/orgs) says "this API requires at least user or read:org
+#   scope for OAuth app tokens and personal access tokens (classic). Requests with insufficient
+#   scope will receive a 403 Forbidden response." Of the two the vendor names, `read:org` is the
+#   read-only one, so it is the one requested.
+#
+# THREE SCOPES DELIBERATELY NOT REQUESTED, each because a documented requirement does not exist:
+#
+#   - `read:user` / `user`. No REST page for any operation here names `read:user`. The users page
+#     (https://docs.github.com/en/rest/users/users) says only that "OAuth app tokens and personal
+#     access tokens (classic) need the `user` scope in order for the response to include private
+#     profile information" — so the public profile needs no scope, and `github-user-get` declares no
+#     private profile field. `user` is additionally defined as "read/write access to profile info",
+#     which is write access this connector has no operation for.
+#   - `public_repo`. Strictly weaker than `repo` and would exclude every private repository, so
+#     requesting it beside `repo` adds nothing.
+#   - `workflow`. Defined as "Grants the ability to add and update GitHub Actions workflow files".
+#     `github-workflow-run-list` *reads* runs, which the vendor's own sentence above places under
+#     `repo`; nothing here commits a workflow file.
+# ---------------------------------------------------------------------------------------------
+scopes = ["repo", "read:org"]
+
+# ---------------------------------------------------------------------------------------------
+# GRANTS — `authorization_code` only, and the absence of `refresh_token` is a decision with a
+# source, not an omission.
+#
+# **GitHub has two app models and they differ on exactly these two fields.** Verified 2026-08-12:
+#
+#   - A **classic OAuth app** takes `scope` on the authorize request, and its user access token does
+#     not expire on a timer and comes with no refresh token. GitHub's token-expiration page
+#     (https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/token-expiration-and-revocation)
+#     states the only lifetime it has: "GitHub will automatically revoke an OAuth token or personal
+#     access token when the token hasn't been used in one year."
+#   - A **GitHub App** issues expiring user access tokens *with* refresh tokens — "User access tokens
+#     created by a GitHub App will expire after eight hours by default, and then must be regenerated
+#     using the included refresh token", with `grant_type=refresh_token` POSTed to the same
+#     `https://github.com/login/oauth/access_token`
+#     (https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/refreshing-user-access-tokens).
+#     Two conditions attach: it is opt-in — "You will only receive a refresh token if your GitHub App
+#     has opted in to expiring user access tokens" — and, decisively for this file, that model takes
+#     **no scopes**: "Unlike a traditional OAuth token, the user access token does not use scopes.
+#     Instead, it uses fine-grained permissions"
+#     (https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app).
+#
+# **`scopes` above is what settles it.** A declaration carrying scopes describes the classic OAuth
+# app, and a classic OAuth app's token does not refresh. Declaring `refresh_token` anyway would be a
+# promise the vendor will not honour — a host would store a refresh token it was never issued and
+# schedule a renewal that cannot succeed — and this repository's rule is that a marking nothing reads
+# is worse than none.
+#
+# The counterpart is worth stating so the decision is reversible on purpose rather than by drift:
+# **targeting the GitHub App model instead means deleting `scopes`, not adding a grant.** The two
+# fields are alternatives in the vendor's own design, and a declaration carrying both would describe
+# no GitHub app that exists.
+#
+# GitLab's `refresh_token` is not a precedent for adding one here: its access token expires in two
+# hours and its refresh grant is what keeps an unattended fleet alive. GitHub's classic token has no
+# such clock.
+# ---------------------------------------------------------------------------------------------
+grants = ["authorization_code"]
+
+# NO `client_id` VALUE, and none is possible: a registration identity is per-deployment, the
+# canonical document has no field for one, and the loader refuses a declared value naming that rule
+# (C-536). The requirement reaches an operator as `[[config]]` instead — see the three
+# `oauth.*`-binding fields at the end of this file.
 
 # ---------------------------------------------------------------------------------------------
 # Operations — 13: five established calls, four spec-backed collection reads, and four discovery
@@ -254,10 +397,41 @@ description = "GitHub token sent as a bearer — a GitHub App installation token
 # to a service, and there is no other service here to attach it to. It carries `tags` and
 # nothing else, which is what keeps `default` implicit and this file emitting the same
 # `github.flux` it emitted before.
+#
+# `legacy = true` (C-458) is what preserves that after `login` was added below: it keeps the
+# published, address-elided `default` service exactly as it was while a named sibling exists, at the
+# cost of every member having to state `service` explicitly — which is the point, since a new member
+# must not enter the address-elided service by silence.
 name = "default"
+legacy = true
 tags = ["source-control", "issue-tracking"]
 
+[[services]]
+# **The vendor's OAuth2 endpoints, which are not on the API host** (C-554).
+#
+# Declared as a service because that is how this repository names an endpoint whose base URL differs
+# from the connector's, and because `http_hosts` derives from declared base URLs — a token exchange
+# against a host nothing declared is one the egress gate refuses. `OAuth2Spec.endpoint` above names
+# this service rather than carrying a URL of its own, which is the property that keeps it that way:
+# a field holding a destination is a field that can hold a destination somebody chose.
+#
+# **The base URL is a literal, and that is the consumer contract** (X-154's `NoDeclaredDefault`).
+# Exchange composes the authorize URL at startup from the artifact alone, so a `{placeholder}` with
+# no declared default is a composition that cannot complete. Here the honest declaration *is* a
+# literal: `github.com` is one fixed host, exactly as `api.github.com` is at connector level.
+# (GitHub Enterprise Server would be a different connector — its API paths differ, not just its
+# host — so there is no self-managed origin for this value to vary over, which is the one way this
+# differs from gitlab's `{origin}`.)
+#
+# It declares no operations, and must not. An authorize endpoint is a browser redirect and a token
+# endpoint's response body *is* a credential, so neither is a connector operation — AGENTS.md
+# § Authentication contract. The host runs the grant; this service exists so the host knows where.
+name = "login"
+description = "GitHub's OAuth2 authorize and token endpoints, served by github.com rather than by the API host."
+base_url = "https://github.com"
+
 [[operations]]
+service = "default"
 id = "github-repo-get"
 method = "GET"
 direction = "read"
@@ -317,6 +491,7 @@ properties = { id = { type = "integer", description = "The repository's global i
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "github-issue-get"
 method = "GET"
 direction = "read"
@@ -368,6 +543,7 @@ properties = { id = { type = "integer", description = "The issue's global id. Fo
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "github-pull-get"
 method = "GET"
 direction = "read"
@@ -431,6 +607,7 @@ properties = { id = { type = "integer", description = "The pull request's own id
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "github-issue-create"
 method = "POST"
 direction = "write"
@@ -498,6 +675,7 @@ properties = { id = { type = "integer", description = "The new issue's global id
 # ---------------------------------------------------------------------------------------------
 
 [[operations]]
+service = "default"
 id = "github-issue-comment-add"
 method = "POST"
 direction = "write"
@@ -548,3 +726,61 @@ schema = { type = "string", minLength = 1 }
 type = "object"
 required = ["id", "body"]
 properties = { id = { type = "integer", description = "The comment's own id — not the issue's" }, node_id = { type = "string" }, body = { type = "string", description = "The comment as posted" }, user = { type = "object", description = "The commenting account, which is whoever the token belongs to" }, author_association = { type = "string", description = "The commenter's standing in the repository: `OWNER`, `MEMBER`, `COLLABORATOR`, `CONTRIBUTOR`, `NONE` and so on" }, html_url = { type = "string", format = "uri", description = "Link to this comment, anchored — not to the issue" }, issue_url = { type = "string", format = "uri", description = "API URL of the issue or pull request that was commented on" }, url = { type = "string", format = "uri" }, created_at = { type = "string", format = "date-time" }, updated_at = { type = "string", format = "date-time" }, reactions = { type = "object", description = "Reaction rollup counts, all zero on a new comment" } }
+
+# ---------------------------------------------------------------------------------------------
+# Configuration — the OAuth application, registered once by whoever runs the product (C-554).
+#
+# This connector had no `[[config]]` at all before, because its one credential is a token a tenant
+# pastes and nothing else had to be supplied. An `authorization_code` grant changes that: the three
+# fields below are the registration triple, and without them a host has a grant it cannot start.
+#
+# These are **operator** level and the level is derived, never authored: it is a consequence of
+# binding `oauth.*`. That derivation is the thing protecting an end user here — asking a tenant for a
+# client secret would hand them the product's own credential, which the configuration contract calls
+# out as a real defect in both directions.
+#
+# The client id is public by specification (RFC 6749 §2.2) and the secret is not, which is the whole
+# difference between the first two declarations below.
+#
+# No token field joins them. The static `github.token` credential stays exactly as it was — a value
+# a host resolves from its secret store or `GITHUB_TOKEN`, never a form field this file invents on
+# the way past.
+# ---------------------------------------------------------------------------------------------
+
+[[config]]
+name = "oauth_client_id"
+service = "default"
+label = "GitHub OAuth application client ID"
+help = "Register an OAuth app under Settings -> Developer settings -> OAuth Apps, with the callback URL your deployment serves. This is the client ID, which is public"
+format = "text"
+required = false
+docs_url = "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app"
+binds = "oauth.client_id"
+
+[[config]]
+name = "oauth_redirect_uri"
+service = "default"
+# **GitHub does not match this string exactly, and the help says so.** Its own documentation states
+# the rule: "The redirect URL's host (excluding sub-domains) and port must exactly match the callback
+# URL. The redirect URL's path must reference a subdirectory of the callback URL."
+# (https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps, read
+# 2026-08-12.) That is looser than GitLab's exact match, and an operator who assumes GitLab's rule
+# here will register a URL that works and not know why.
+label = "GitHub OAuth callback URL"
+help = "The callback address this deployment serves, registered on the app above. GitHub matches the host (excluding sub-domains) and port exactly and requires the path to be at or below the registered callback URL's path — so a registered `https://host/api/oauth` admits `https://host/api/oauth/callback` but not `https://host/`"
+example = "https://exchange.internal/api/oauth/callback"
+format = "url"
+required = false
+docs_url = "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps"
+binds = "oauth.redirect_uri"
+
+[[config]]
+name = "oauth_client_secret"
+service = "default"
+label = "GitHub OAuth application client secret"
+help = "The client secret issued beside the ID above. GitHub shows it once at generation and never again. Supplied by whoever runs this deployment, never by an end user"
+format = "token"
+secret = true
+required = false
+docs_url = "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app"
+binds = "oauth.client_secret"

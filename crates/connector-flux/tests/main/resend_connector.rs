@@ -285,7 +285,19 @@ fn no_configuration_surface_is_declared_and_the_connector_still_holds() {
     // configuration field disprove it, and — unlike a count — they say *which* ones, so a reviewer
     // can check the finding rather than trust it. If one of these grows a `[[config]]` field the
     // evidence genuinely weakens and this test should say so.
-    let predecessors = ["slack", "github", "openai"];
+    //
+    // **`github` left this list on 2026-08-12, and this is it saying so** (C-554). It grew the
+    // three-field OAuth application registration an `authorization_code` grant owes an operator, so
+    // it is no longer evidence about the empty surface — which is the designed outcome of naming
+    // predecessors rather than counting them: the claim failed loudly on the connector that changed,
+    // rather than staying true by arithmetic.
+    //
+    // `openrouter` replaces it and keeps the evidence at three. It is a genuine predecessor by the
+    // same measure the original three were chosen on —
+    // `git log --diff-filter=A --format=%as -1 -- providers/openrouter.toml` is 2026-07-30 against
+    // resend's 2026-07-31 — and it declares no `[[config]]` and no `[auth.oauth2]`, so it has no
+    // registration surface pending that would repeat github's departure.
+    let predecessors = ["slack", "openrouter", "openai"];
     for id in predecessors {
         let earlier = load_provider(id);
         assert!(

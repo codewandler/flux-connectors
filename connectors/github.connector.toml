@@ -46,5 +46,52 @@ scheme = "bearer"
 env = ["GITHUB_TOKEN"]
 description = "GitHub token sent as a bearer — a GitHub App installation token, a fine-grained PAT, or a classic PAT"
 
+[[auth]]
+name = "github.oauth_token"
+scheme = "bearer"
+description = "GitHub OAuth2 access token obtained on behalf of a signed-in user. Bounded by that user's own permissions, never by the application's"
+subject = "user"
+
+[auth.oauth2]
+endpoint = "login"
+authorize_path = "/login/oauth/authorize"
+token_path = "/login/oauth/access_token"
+scopes = ["repo", "read:org"]
+grants = ["authorization_code"]
+
+[[default_auth]]
+credentials = ["github.oauth_token"]
+
 [[default_auth]]
 credentials = ["github.token"]
+
+[[config]]
+name = "oauth_client_id"
+label = "GitHub OAuth application client ID"
+help = "Register an OAuth app under Settings -> Developer settings -> OAuth Apps, with the callback URL your deployment serves. This is the client ID, which is public"
+required = false
+docs_url = "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app"
+binds = "oauth.client_id"
+level = "operator"
+
+[[config]]
+name = "oauth_redirect_uri"
+label = "GitHub OAuth callback URL"
+help = "The callback address this deployment serves, registered on the app above. GitHub matches the host (excluding sub-domains) and port exactly and requires the path to be at or below the registered callback URL's path — so a registered `https://host/api/oauth` admits `https://host/api/oauth/callback` but not `https://host/`"
+example = "https://exchange.internal/api/oauth/callback"
+format = "url"
+required = false
+docs_url = "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps"
+binds = "oauth.redirect_uri"
+level = "operator"
+
+[[config]]
+name = "oauth_client_secret"
+label = "GitHub OAuth application client secret"
+help = "The client secret issued beside the ID above. GitHub shows it once at generation and never again. Supplied by whoever runs this deployment, never by an end user"
+format = "token"
+required = false
+secret = true
+docs_url = "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app"
+binds = "oauth.client_secret"
+level = "operator"
