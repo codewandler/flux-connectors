@@ -74,6 +74,11 @@ const NOT_MACHINERY: &[&str] = &[
     // in `MACHINERY` above.
     "codewandler-connector-catalog-reader",
     "codewandler-connector-pack",
+    // The plan-deriving core (C-538): the canonical document in, the request plan out. It is
+    // published because `connector-pack` depends on it — a consumer of the pack does not resolve
+    // without it — and it joins the closure by that derived edge rather than by being a root. It is
+    // not the compiler: it reads the artifact the compiler writes and never a provider file.
+    "codewandler-connector-resolve",
     "codewandler-connector-secrets",
     "connectors-api",
 ];

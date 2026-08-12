@@ -174,11 +174,7 @@ impl DryRunTransport {
             let reference = reference(credential.name);
             auth::place(
                 entry.id,
-                &Assembled {
-                    credential: credential.name,
-                    value: reference.clone(),
-                    place: credential.place,
-                },
+                &Assembled::new(credential.name, reference.clone(), credential.place),
                 &mut request,
             )?;
             credentials.push(CredentialReference {

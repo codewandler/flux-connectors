@@ -8,12 +8,25 @@
 //!
 //! # The two artifacts, and why comparing them is not circular
 //!
-//! `crates/connector-pack/src/request.rs` builds a request by *evaluating* the operation's own
-//! emitted Flux rather than re-lowering the IR, which already removes one drift axis. But the Flux
-//! it evaluates is `catalog::Operation::flux` — `include_str!` over
+//! `crates/connector-pack/src/request.rs` builds a request by *evaluating* an operation's emitted
+//! Flux rather than re-lowering the IR, which already removes one drift axis. But the Flux the
+//! catalogue embeds is `catalog::Operation::flux` — `include_str!` over
 //! **`crates/catalog/ops/<provider>/<id>.flux`** — and the human-readable contract this repository
 //! ships is a different file: **`connectors/<provider>.flux`**. Two generated artifacts, one
 //! emitter, and nothing until now compared them.
+//!
+//! # It goes through `Rehearsal` since C-538, and that is what keeps it an assertion
+//!
+//! `Operation::build_request` reads the **canonical document** now, so projecting two entries whose
+//! only difference is their embedded Flux would produce two identical requests and this whole file
+//! would pass while comparing nothing. The Flux evaluator it was written for is still reachable —
+//! from [`Rehearsal`], which takes the module text and nothing else — so the comparison moved there
+//! rather than being deleted or, worse, left green and vacuous.
+//! **So this file no longer exercises the production request path at all**, and that is worth
+//! stating plainly rather than leaving a reader to infer it from a `use` line: what it compares is
+//! two runs of the *retiring* Flux evaluator over two Flux artifacts, and it retires with them in
+//! C-540. `tests/catalogue_differential.rs` is the production-path gate — the document-derived plan
+//! `Operation::build_request` actually returns, against the Flux-derived one, for every operation.
 //!
 //! `catalog::Operation::flux`'s own documentation states they are the same bytes. That claim is
 //! exactly the kind that is true when written and quietly false after a partial regeneration — one
@@ -34,10 +47,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use connector_pack::{
-    Configuration, Credentials, Egress, MemoryConfig, MemoryStore, Operation, Request,
-};
-use flux_runtime::Tool;
+use connector_pack::{Configuration, MemoryConfig, Rehearsal, Request, Slot};
 use serde_json::{json, Value};
 
 const TENANT: &str = "t-differential";
@@ -46,60 +56,36 @@ const TENANT: &str = "t-differential";
 /// the path is stated once here rather than discovered.
 const MODULES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../connectors");
 
-/// A stand-in for flux's `http.request`. Nothing here reaches it — every request below is compared
-/// before it would be sent, which is the whole reason this check runs offline.
-fn http() -> Egress {
-    Egress::new(flux_runtime::tool_fn(
-        flux_spec::ToolSpec {
-            name: "http.request".into(),
-            description: "a stand-in no comparison reaches".into(),
-            input_schema: json!({"type": "object"}),
-            output_schema: None,
-            effects: vec![flux_spec::Effect::Network],
-            risk: flux_spec::Risk::Medium,
-            idempotency: flux_spec::Idempotency::NonIdempotent,
-            access: vec![flux_spec::AccessKind::Network],
-            group: None,
-        },
-        |params| async move { Ok(params) },
-    ))
-}
-
-fn credentials() -> Credentials {
-    Credentials::new(Arc::new(MemoryStore::new()), TENANT).expect("a valid tenant id")
-}
-
-fn unconfigured() -> Configuration {
-    Configuration::new(Arc::new(MemoryConfig::new()), TENANT).expect("a valid tenant id")
+/// The rehearsal of one operation's emitted Flux, from whichever artifact carries it.
+fn rehearse(entry: &'static catalog::Operation, flux: &str) -> Result<Rehearsal, String> {
+    Rehearsal::of(entry.id, entry.provider, entry.service, flux).map_err(|error| error.to_string())
 }
 
 /// A configuration port covering every endpoint variable the catalogue declares, discovered from
 /// the catalogue itself so a connector shipped later is compared rather than skipped.
 ///
-/// # This is the same discovered-input shape C-232 removed from `request.rs`, and it is sound here
+/// # This is a discovered-input shape, and it is sound here
 ///
-/// C-232's note asks whether this test shares the hole, and it did: a value manufactured for every
-/// *discovered* variable is a value that can never be missing. Two things make it harmless in this
-/// file rather than merely smaller.
+/// A value manufactured for every *discovered* variable is a value that can never be missing, which
+/// would be a hole if this file asked "does it compose". It does not: it compares one artifact's
+/// request against the *other* artifact's request for the same operation, and both sides read the
+/// same configuration — so the values are a fixed point of the comparison rather than an input to
+/// it, and any value at all, including a wrong one, still detects a divergence.
 ///
-/// **The scan can no longer discover a third kind.** `endpoint_variables` now reports placeholders
-/// only from the two declared literal shapes, and an operation binding anything else is refused by
-/// `Operation::project` above — so this loop panics on a C-110-shaped connector instead of
-/// fabricating names out of its query document.
-///
-/// **And what this file asserts is not "does it compose".** It compares the pack's request against
-/// the *shipped module's* request for the same operation. Both sides read the same configuration, so
-/// the values are a fixed point of the comparison rather than an input to it: any value at all,
-/// including a wrong one, still detects a divergence. Deriving them from `providers/*.toml` here
-/// would add a reader without adding an assertion. `request.rs` is where "does an operator's own
-/// configuration compose a request" is answered.
+/// An origin slot gets a value its grammar accepts, because a value it refuses would make both
+/// sides refuse identically, which is agreement about nothing.
 fn configuration() -> Configuration {
     let mut values = MemoryConfig::new();
     for entry in catalog::operations() {
-        let operation = Operation::project(entry, http(), credentials(), unconfigured())
-            .unwrap_or_else(|error| panic!("`{}`: {error}", entry.id));
-        for variable in operation.endpoint_variables() {
-            values = values.with_endpoint(TENANT, entry.provider, entry.service, variable, "acme");
+        let Ok(rehearsal) = rehearse(entry, entry.flux) else {
+            continue;
+        };
+        for (variable, slot) in rehearsal.endpoint_slots() {
+            let value = match slot {
+                Slot::Origin => "https://acme.example",
+                _ => "acme",
+            };
+            values = values.with_endpoint(TENANT, entry.provider, entry.service, variable, value);
         }
     }
     Configuration::new(Arc::new(values), TENANT).expect("a valid tenant id")
@@ -122,38 +108,28 @@ fn the_pack_and_the_shipped_module_agree_on_every_operations_request() {
             continue;
         };
 
-        // The catalogue entry with its embedded Flux replaced by the module's own text. Everything
-        // else — the id, the service, the declared hosts, the credentials — is the real entry, so
-        // the only thing that can differ between the two projections is the artifact under test.
-        let mut doctored = *entry;
-        doctored.flux = Box::leak(source.clone().into_boxed_str());
-        let doctored: &'static catalog::Operation = Box::leak(Box::new(doctored));
-
+        // Two rehearsals of one operation, differing only in which artifact's text they were given.
+        // Everything else — the id, the service, the configuration they resolve through — is the
+        // same, so the only thing that can differ is the artifact under test.
         let from_catalogue =
-            Operation::project(entry, http(), credentials(), configuration.clone())
-                .unwrap_or_else(|error| panic!("`{}`: {error}", entry.id));
-        let from_module =
-            match Operation::project(doctored, http(), credentials(), configuration.clone()) {
-                Ok(operation) => operation,
-                Err(error) => {
-                    divergences.push(format!(
-                        "`{}`: the module's declaration does not project — {error}",
-                        entry.id
-                    ));
-                    continue;
-                }
-            };
+            rehearse(entry, entry.flux).unwrap_or_else(|error| panic!("`{}`: {error}", entry.id));
+        let from_module = match rehearse(entry, source) {
+            Ok(rehearsal) => rehearsal,
+            Err(error) => {
+                divergences.push(format!(
+                    "`{}`: the module's declaration does not rehearse — {error}",
+                    entry.id
+                ));
+                continue;
+            }
+        };
 
         // The params come from the *catalogue's* schema, so a module declaring a different
         // parameter set surfaces below as a refusal rather than being papered over by asking each
         // artifact for its own arguments.
         let params = params_from_schema(&from_catalogue);
-        let catalogue = from_catalogue
-            .dry_run(&params)
-            .map(|dry| dry.request().clone());
-        let module = from_module
-            .dry_run(&params)
-            .map(|dry| dry.request().clone());
+        let catalogue = from_catalogue.request(&configuration, &params);
+        let module = from_module.request(&configuration, &params);
 
         match (catalogue, module) {
             (Ok(catalogue), Ok(module)) => {
@@ -204,7 +180,7 @@ fn the_pack_and_the_shipped_module_agree_on_every_operations_request() {
 /// bug report rather than a red square.
 ///
 /// The doctoring is at the level the drift would actually occur at: the module's own source text,
-/// projected and evaluated by the same code path as the real one.
+/// rehearsed and evaluated by the same code path as the real one.
 #[test]
 fn a_divergence_is_reported_and_names_the_operation() {
     const OPERATION: &str = "trello-board-get";
@@ -220,22 +196,18 @@ fn a_divergence_is_reported_and_names_the_operation() {
         "the doctoring did not apply, so this control proves nothing"
     );
 
-    let mut doctored = *entry;
-    doctored.flux = Box::leak(source.into_boxed_str());
-    let doctored: &'static catalog::Operation = Box::leak(Box::new(doctored));
-
     let configuration = configuration();
     let params = json!({"id": "b-1"});
-    let catalogue = Operation::project(entry, http(), credentials(), configuration.clone())
-        .expect("the entry projects")
-        .dry_run(&params)
-        .expect("the entry rehearses");
-    let module = Operation::project(doctored, http(), credentials(), configuration)
-        .expect("the doctored declaration projects")
-        .dry_run(&params)
-        .expect("the doctored declaration rehearses");
+    let catalogue = rehearse(entry, entry.flux)
+        .expect("the entry rehearses")
+        .request(&configuration, &params)
+        .expect("the entry composes");
+    let module = rehearse(entry, &source)
+        .expect("the doctored declaration rehearses")
+        .request(&configuration, &params)
+        .expect("the doctored declaration composes");
 
-    let found = disagreements(OPERATION, catalogue.request(), module.request());
+    let found = disagreements(OPERATION, &catalogue, &module);
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].contains(OPERATION), "{}", found[0]);
     assert!(found[0].contains("url"), "{}", found[0]);
@@ -352,8 +324,8 @@ fn shipped_declarations() -> BTreeMap<String, String> {
 }
 
 /// A plausible value for every parameter an operation declares, from its own input schema.
-fn params_from_schema(operation: &Operation) -> Value {
-    let spec = operation.spec();
+fn params_from_schema(rehearsal: &Rehearsal) -> Value {
+    let spec = rehearsal.spec();
     let mut params = serde_json::Map::new();
     if let Some(properties) = spec
         .input_schema

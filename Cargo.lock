@@ -340,6 +340,7 @@ dependencies = [
  "async-trait",
  "codewandler-connector-address",
  "codewandler-connector-catalog",
+ "codewandler-connector-resolve",
  "codewandler-connector-secrets",
  "codewandler-flux-core",
  "codewandler-flux-lang",
@@ -349,6 +350,18 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "codewandler-connector-resolve"
+version = "0.22.0"
+dependencies = [
+ "codewandler-connector-address",
+ "codewandler-connector-catalog",
+ "codewandler-connector-catalog-reader",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

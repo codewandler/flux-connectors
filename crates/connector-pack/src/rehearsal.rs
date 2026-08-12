@@ -128,6 +128,22 @@ impl Rehearsal {
         self.declaration.meta.expose
     }
 
+    /// **Where each of this operation's configuration variables lands on the request** (C-214).
+    ///
+    /// Exposed alongside [`Self::endpoint_variables`] because the two together are the
+    /// configuration surface a settings page renders and a connection check consumes — and because
+    /// C-538's differential gate compares exactly this surface against the document-backed
+    /// [`crate::DocumentRehearsal`]'s.
+    pub fn endpoint_slots(&self) -> &BTreeMap<String, Slot> {
+        &self.slots
+    }
+
+    /// **Caller-visible parameters this operation's emitted body places in a URL path segment**
+    /// (C-478) — the third member of that surface.
+    pub fn caller_path_parameters(&self) -> &BTreeSet<String> {
+        &self.caller_path_parameters
+    }
+
     /// The configuration variables this operation's URL carries, in stable order — the same answer
     /// [`crate::Operation::endpoint_variables`] gives for a shipped one.
     pub fn endpoint_variables(&self) -> &[String] {
